@@ -1,9 +1,8 @@
 #pragma once	//NOLINT
 
-#include "baseTerm.hpp"
-
-#include <string>
 #include <cassert>
+
+#include "baseTerm.hpp"
 
 namespace bmath::intern {
 
@@ -16,7 +15,7 @@ namespace bmath::intern {
 		Value(double re, double im) :std::complex<double>(re, im) {}
 		virtual ~Value() {} //no pointers to other terms are owned -> nothing to do here
 
-		virtual void to_str(std::string& str, int caller_operator_precedence) const override { str.append("value"); }
+		virtual void to_str(std::string& str, Derived_Type parent_type) const override { str.append("value"); }
 
 		virtual /*constexpr*/ Derived_Type get_type() const override { return Derived_Type::value; }
 
@@ -34,7 +33,7 @@ namespace bmath::intern {
 	public:
 		const std::string name;
 
-		virtual void to_str(std::string& str, int caller_operator_precedence) const override { str.append(this->name); }
+		virtual void to_str(std::string& str, Derived_Type parent_type) const override { str.append(this->name); }
 
 		virtual /*constexpr*/ Derived_Type get_type() const override { return Derived_Type::variable; }
 
@@ -49,7 +48,7 @@ namespace bmath::intern {
 
 		Regular_Term* matched_term;
 
-		virtual void to_str(std::string& str, int caller_operator_precedence) const override { str.append('{' + this->name + '}'); }
+		virtual void to_str(std::string& str, Derived_Type parent_type) const override { str.append('{' + this->name + '}'); }
 
 		virtual /*constexpr*/ Derived_Type get_type() const override { return Derived_Type::variable; }
 
