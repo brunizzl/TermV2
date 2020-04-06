@@ -12,14 +12,14 @@ namespace bmath::intern {
 			//there are no two different types with same uniqueness_rank.
 			const auto uniqueness_rank = [](Type type) -> std::size_t {
 				switch (type) {
-				case Type::par_operator:			   return 9;   //most unique (likely different op_type and op_type is always given)
-				case Type::logarithm:			       return 8;   //second most unique (base is always base, argument always argument)
-				case Type::power:					   return 7;   //also second most unique (base is always base, exponent always exponent)
-				case Type::product:				       return 5;   //third most unique (operands can vary in the positioning relative to each other)
-				case Type::sum:					       return 4;   //also third most unique
-				case Type::variadic_comprehension:     return 3;   //not tecnically part of order, but stands for sum or product -> also third most unique
-				case Type::value:					   return 1;   //fourth most unique (value can take a practically infinite amount of states)
-				case Type::variable:				   return 0;   //for regular: as unique as value, for pattern: least unique, as it may represent any other type
+				case Type::par_operator:			   return 0;  //most unique (likely different op_type and op_type is always given)
+				case Type::logarithm:			       return 1;  //second most unique (base is always base, argument always argument)
+				case Type::power:					   return 2;  //also second most unique (base is always base, exponent always exponent)
+				case Type::product:				       return 4;  //third most unique (operands can vary in the positioning relative to each other)
+				case Type::sum:					       return 5;  //also third most unique
+				case Type::variadic_comprehension:     return 6;  //not tecnically part of order, but stands for sum or product -> also third most unique
+				case Type::value:					   return 8;  //fourth most unique (value can take a practically infinite amount of states)
+				case Type::variable:				   return 9;  //for regular: as unique as value, for pattern: least unique, as it may represent any other type
 				default:
 					assert(false);	//all types need to be listed above
 					return -1;

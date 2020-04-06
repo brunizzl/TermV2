@@ -3,6 +3,7 @@
 #include <cassert>
 
 #include "baseTerm.hpp"
+#include "internalFunctions.hpp"
 
 namespace bmath::intern {
 
@@ -14,7 +15,7 @@ namespace bmath::intern {
 	public:
 		std::complex<double> number;
 
-		Value(double re, double im) :number(re, im) {}
+		Value(std::complex<double> number_) :number(number_) {}
 		virtual ~Value() {} //no pointers to other terms are owned -> nothing to do here
 
 		virtual void to_str(std::string& str, Type parent_type) const override { str.append("value"); }
@@ -42,6 +43,17 @@ namespace bmath::intern {
 				}
 			}
 		}
+
+		virtual /*constexpr*/ bool equals(const Base_Term<modifier>& snd) const override
+		{
+			if (this->get_type() != snd.get_type()) {
+				return false;
+			}
+			else {
+				const Value* const snd_value = Value::down_cast(&snd);
+				return this->number == snd_value->number;
+			}
+		}
 	};
 
 	using Regular_Value = Value<Modifier::regular>;
@@ -53,6 +65,9 @@ namespace bmath::intern {
 	public:
 		const std::string name;
 
+		Regular_Variable(std::string_view name_) : name(name_) {}
+		~Regular_Variable() {}
+
 		virtual void to_str(std::string& str, Type parent_type) const override { str.append(this->name); }
 
 		virtual /*constexpr*/ Type get_type() const override { return Type::variable; }
@@ -62,12 +77,19 @@ namespace bmath::intern {
 
 		static /*constexpr*/ const Regular_Variable* down_cast(const Regular_Term* base_ptr)
 			{ assert(base_ptr->get_type() == Type::variable); return static_cast<const Regular_Variable*>(base_ptr); }
+
+		virtual /*constexpr*/ std::partial_ordering lexicographical_compare(const Regular_Term& snd) const override;
+
+		virtual /*constexpr*/ bool equals(const Regular_Term& snd) const override;
 	};
 
 	class Pattern_Variable final : public Pattern_Term
 	{
 	public:
 		const std::string name;
+
+		Pattern_Variable(std::string_view name_) : name(name_) {}
+		~Pattern_Variable() {}
 
 		Regular_Term* matched_term;
 
@@ -80,6 +102,10 @@ namespace bmath::intern {
 
 		static /*constexpr*/ const Pattern_Variable* down_cast(const Pattern_Term* base_ptr)
 			{ assert(base_ptr->get_type() == Type::variable); return static_cast<const Pattern_Variable*>(base_ptr); }
+
+		virtual /*constexpr*/ std::partial_ordering lexicographical_compare(const Pattern_Term& snd) const override;
+
+		virtual /*constexpr*/ bool equals(const Pattern_Term& snd) const override;
 	};
 
 } //namespace bmath::intern

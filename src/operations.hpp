@@ -109,6 +109,17 @@ namespace bmath::intern {
 				}
 			}
 		}
+
+		virtual /*constexpr*/ bool equals(const Base_Term<modifier>& snd) const
+		{
+			if (this->get_type() != snd.get_type()) {
+				return false;
+			}
+			else {
+				const Parenthesis_Operator* const snd_par_op = Parenthesis_Operator::down_cast(&snd);
+				return this->op_type == snd_par_op->op_type && this->argument->equals(*snd_par_op->argument);
+			}
+		}
 	};
 
 	using Regular_Par_Op = Parenthesis_Operator<Modifier::regular>;
@@ -157,6 +168,17 @@ namespace bmath::intern {
 				}
 			}
 		}
+
+		virtual /*constexpr*/ bool equals(const Base_Term<modifier>& snd) const override
+		{
+			if (this->get_type() != snd.get_type()) {
+				return false;
+			}
+			else {
+				const Logarithm* const snd_log = Logarithm::down_cast(&snd);
+				return this->base->equals(*snd_log->base) && this->argument->equals(*snd_log->argument);
+			}
+		}
 	};
 
 	using Regular_Log = Logarithm<Modifier::regular>;
@@ -190,7 +212,6 @@ namespace bmath::intern {
 		static /*constexpr*/ const Power* down_cast(const Base_Term<modifier>* base_ptr)
 			{ assert(base_ptr->get_type() == Type::power); return static_cast<const Power*>(base_ptr); }
 
-
 		virtual /*constexpr*/ std::partial_ordering lexicographical_compare(const Base_Term<modifier>& snd) const override
 		{
 			if (const auto compare_types = order::compare_uniqueness(this->get_type(), snd.get_type()); compare_types != std::partial_ordering::equivalent) {
@@ -204,6 +225,17 @@ namespace bmath::intern {
 				else {
 					return this->exponent->lexicographical_compare(*snd_power->exponent);
 				}
+			}
+		}
+
+		virtual /*constexpr*/ bool equals(const Base_Term<modifier>& snd) const override
+		{
+			if (this->get_type() != snd.get_type()) {
+				return false;
+			}
+			else {
+				const Power* const snd_power = Power::down_cast(&snd);
+				return this->base->equals(*snd_power->base) && this->exponent->equals(*snd_power->exponent);
 			}
 		}
 	};

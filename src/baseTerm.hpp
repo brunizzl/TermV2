@@ -44,6 +44,8 @@ namespace bmath::intern {
 
 		virtual /*constexpr*/ std::partial_ordering lexicographical_compare(const Base_Term& snd) const = 0;
 
+		virtual /*constexpr*/ bool equals(const Base_Term& snd) const = 0;
+
 	};
 
 	using Regular_Term = Base_Term<Modifier::regular>;
