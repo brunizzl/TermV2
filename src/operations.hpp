@@ -4,6 +4,7 @@
 #include <string_view>
 
 #include "baseTerm.hpp"
+#include "internalFunctions.hpp"
 
 namespace bmath::intern {
 
@@ -68,43 +69,63 @@ namespace bmath::intern {
 		return {};
 	}
 
-	template<Base_Type base_type>
-	class Parentheses_Operator final : public Base_Term<base_type>
+	template<Modifier modifier>
+	class Parenthesis_Operator final : public Base_Term<modifier>
 	{
 	public:
 		Par_Op_Type op_type;
-		Base_Term<base_type>* argument;
+		Base_Term<modifier>* argument;
 
-		~Parentheses_Operator() { delete this->argument; }
+		Parenthesis_Operator(Par_Op_Type op_type_, Base_Term<modifier>* argument_) :op_type(op_type_), argument(argument_) {}
+		~Parenthesis_Operator() { delete this->argument; }
 
-		virtual void to_str(std::string& str, Derived_Type parent_type) const override
+		virtual void to_str(std::string& str, Type parent_type) const override
 		{
 			str.append(name_of(this->op_type));
 			this->argument->to_str(str, this->get_type());
-			str.append(')');
+			str.push_back(')');
 		}
 
-		virtual /*constexpr*/ Derived_Type get_type() const override { return Derived_Type::par_operator; }
+		virtual /*constexpr*/ Type get_type() const override { return Type::par_operator; }
 
-		static /*constexpr*/ Parentheses_Operator* down_cast(Base_Term<base_type>* base_ptr)
-			{ assert(base_ptr->get_type() == Derived_Type::par_operator); return static_cast<Parentheses_Operator*>(base_ptr); }
+		static /*constexpr*/ Parenthesis_Operator* down_cast(Base_Term<modifier>* base_ptr)
+			{ assert(base_ptr->get_type() == Type::par_operator); return static_cast<Parenthesis_Operator*>(base_ptr); }
+
+		static /*constexpr*/ const Parenthesis_Operator* down_cast(const Base_Term<modifier>* base_ptr)
+			{ assert(base_ptr->get_type() == Type::par_operator); return static_cast<const Parenthesis_Operator*>(base_ptr); }
+
+		virtual /*constexpr*/ std::partial_ordering lexicographical_compare(const Base_Term<modifier>& snd) const override
+		{
+			if (const auto compare_types = order::compare_uniqueness(this->get_type(), snd.get_type()); compare_types != std::partial_ordering::equivalent) {
+				return compare_types;
+			}
+			else {
+				const Parenthesis_Operator* const snd_par_op = Parenthesis_Operator::down_cast(&snd);
+				if (this->op_type != snd_par_op->op_type) {
+					return this->op_type <=> snd_par_op->op_type;
+				}
+				else {
+					return this->argument->lexicographical_compare(*snd_par_op->argument);
+				}
+			}
+		}
 	};
 
-	using Regular_Par_Op = Parentheses_Operator<Base_Type::regular>;
-	using Pattern_Par_Op = Parentheses_Operator<Base_Type::pattern>;
-	static_assert(!std::is_same<Regular_Par_Op, Pattern_Par_Op>::value);
+	using Regular_Par_Op = Parenthesis_Operator<Modifier::regular>;
+	using Pattern_Par_Op = Parenthesis_Operator<Modifier::pattern>;
 
 
-	template<Base_Type base_type>
-	class Logarithm final : public Base_Term<base_type>
+	template<Modifier modifier>
+	class Logarithm final : public Base_Term<modifier>
 	{
 	public:
-		Base_Term<base_type>* base;
-		Base_Term<base_type>* argument;
+		Base_Term<modifier>* base;
+		Base_Term<modifier>* argument;
 
+		Logarithm(Base_Term<modifier>* base_, Base_Term<modifier>* argument_) : base(base_), argument(argument_) {}
 		~Logarithm() { delete this->base; delete this->argument; }
 
-		virtual void to_str(std::string& str, Derived_Type parent_type) const override
+		virtual void to_str(std::string& str, Type parent_type) const override
 		{
 			str.append("log(");
 			this->base->to_str(str, this->get_type());
@@ -113,27 +134,46 @@ namespace bmath::intern {
 			str.push_back(')');
 		}
 		
-		virtual /*constexpr*/ Derived_Type get_type() const override { return Derived_Type::generic_log; }
+		virtual /*constexpr*/ Type get_type() const override { return Type::logarithm; }
 
-		static /*constexpr*/ Logarithm* down_cast(Base_Term<base_type>* base_ptr)
-			{ assert(base_ptr->get_type() == Derived_Type::generic_log); return static_cast<Logarithm*>(base_ptr); }
+		static /*constexpr*/ Logarithm* down_cast(Base_Term<modifier>* base_ptr)
+			{ assert(base_ptr->get_type() == Type::logarithm); return static_cast<Logarithm*>(base_ptr); }
+
+		static /*constexpr*/ const Logarithm* down_cast(const Base_Term<modifier>* base_ptr)
+			{ assert(base_ptr->get_type() == Type::logarithm); return static_cast<const Logarithm*>(base_ptr); }
+
+		virtual /*constexpr*/ std::partial_ordering lexicographical_compare(const Base_Term<modifier>& snd) const override
+		{
+			if (const auto compare_types = order::compare_uniqueness(this->get_type(), snd.get_type()); compare_types != std::partial_ordering::equivalent) {
+				return compare_types;
+			}
+			else {
+				const Logarithm* const snd_log = Logarithm::down_cast(&snd);
+				if (const auto compare_base = this->base->lexicographical_compare(*snd_log->base); compare_base != std::partial_ordering::equivalent) {
+					return compare_base;
+				}
+				else {
+					return this->argument->lexicographical_compare(*snd_log->argument);
+				}
+			}
+		}
 	};
 
-	using Regular_Log = Logarithm<Base_Type::regular>;
-	using Pattern_Log = Logarithm<Base_Type::pattern>;
-	static_assert(!std::is_same<Regular_Log, Pattern_Log>::value);
+	using Regular_Log = Logarithm<Modifier::regular>;
+	using Pattern_Log = Logarithm<Modifier::pattern>;
 
 
-	template<Base_Type base_type>
-	class Power final : public Base_Term<base_type>
+	template<Modifier modifier>
+	class Power final : public Base_Term<modifier>
 	{
 	public:
-		Base_Term<base_type>* base;
-		Base_Term<base_type>* exponent;
+		Base_Term<modifier>* base;
+		Base_Term<modifier>* exponent;
 
+		Power(Base_Term<modifier>* base_, Base_Term<modifier>* exponent_) : base(base_), exponent(exponent_) {}
 		~Power() { delete this->base; delete this->exponent; }
 
-		virtual void to_str(std::string& str, Derived_Type parent_type) const override
+		virtual void to_str(std::string& str, Type parent_type) const override
 		{
 			str.push_back('(');
 			this->base->to_str(str, this->get_type());
@@ -142,10 +182,33 @@ namespace bmath::intern {
 			str.push_back(')');
 		}
 
-		virtual /*constexpr*/ Derived_Type get_type() const override { return Derived_Type::power; }
+		virtual /*constexpr*/ Type get_type() const override { return Type::power; }
 
-		static /*constexpr*/ Power* down_cast(Base_Term<base_type>* base_ptr)
-			{ assert(base_ptr->get_type() == Derived_Type::power); return static_cast<Power*>(base_ptr); }
+		static /*constexpr*/ Power* down_cast(Base_Term<modifier>* base_ptr)
+			{ assert(base_ptr->get_type() == Type::power); return static_cast<Power*>(base_ptr); }
+
+		static /*constexpr*/ const Power* down_cast(const Base_Term<modifier>* base_ptr)
+			{ assert(base_ptr->get_type() == Type::power); return static_cast<const Power*>(base_ptr); }
+
+
+		virtual /*constexpr*/ std::partial_ordering lexicographical_compare(const Base_Term<modifier>& snd) const override
+		{
+			if (const auto compare_types = order::compare_uniqueness(this->get_type(), snd.get_type()); compare_types != std::partial_ordering::equivalent) {
+				return compare_types;
+			}
+			else {
+				const Power* const snd_power = Power::down_cast(&snd);
+				if (const auto compare_base = this->base->lexicographical_compare(*snd_power->base); compare_base != std::partial_ordering::equivalent) {
+					return compare_base;
+				}
+				else {
+					return this->exponent->lexicographical_compare(*snd_power->exponent);
+				}
+			}
+		}
 	};
+
+	using Regular_Power = Power<Modifier::regular>;
+	using Pattern_Power = Power<Modifier::pattern>;
 
 } //namespace bmath::intern
