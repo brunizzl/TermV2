@@ -50,6 +50,10 @@ namespace bmath::intern {
 
 	} //namespace order
 
+	namespace print {
+
+	} //namespace print
+
 	namespace construction {
 
 	} //namespace construction

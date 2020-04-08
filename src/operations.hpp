@@ -35,11 +35,11 @@ namespace bmath::intern {
 	};
 
 	//array with instance of every Par_Op_Type to iterate over them
-	static const Par_Op_Type all_par_op_types[] = { Par_Op_Type::log10, Par_Op_Type::asinh, Par_Op_Type::acosh, Par_Op_Type::atanh,
-													Par_Op_Type::asin, Par_Op_Type::acos, Par_Op_Type::atan, Par_Op_Type::sinh,
-													Par_Op_Type::cosh, Par_Op_Type::tanh, Par_Op_Type::sqrt, Par_Op_Type::exp,
-													Par_Op_Type::sin, Par_Op_Type::cos, Par_Op_Type::tan, Par_Op_Type::abs,
-													Par_Op_Type::arg, Par_Op_Type::ln, Par_Op_Type::re, Par_Op_Type::im };
+	static constexpr Par_Op_Type all_par_op_types[] = { Par_Op_Type::log10, Par_Op_Type::asinh, Par_Op_Type::acosh, Par_Op_Type::atanh,
+														Par_Op_Type::asin, Par_Op_Type::acos, Par_Op_Type::atan, Par_Op_Type::sinh,
+														Par_Op_Type::cosh, Par_Op_Type::tanh, Par_Op_Type::sqrt, Par_Op_Type::exp,
+														Par_Op_Type::sin, Par_Op_Type::cos, Par_Op_Type::tan, Par_Op_Type::abs,
+														Par_Op_Type::arg, Par_Op_Type::ln, Par_Op_Type::re, Par_Op_Type::im };
 
 	constexpr std::string_view name_of(Par_Op_Type op_type)
 	{
@@ -73,10 +73,12 @@ namespace bmath::intern {
 	class Parenthesis_Operator final : public Base_Term<modifier>
 	{
 	public:
-		Par_Op_Type op_type;
-		Base_Term<modifier>* argument;
+		typedef Base_Term<modifier> Base;
 
-		Parenthesis_Operator(Par_Op_Type op_type_, Base_Term<modifier>* argument_) :op_type(op_type_), argument(argument_) {}
+		Par_Op_Type op_type;
+		Base* argument;
+
+		Parenthesis_Operator(Par_Op_Type op_type_, Base* argument_) :op_type(op_type_), argument(argument_) {}
 		~Parenthesis_Operator() { delete this->argument; }
 
 		virtual void to_str(std::string& str, Type parent_type) const override
@@ -88,13 +90,13 @@ namespace bmath::intern {
 
 		virtual /*constexpr*/ Type get_type() const override { return Type::par_operator; }
 
-		static /*constexpr*/ Parenthesis_Operator* down_cast(Base_Term<modifier>* base_ptr)
+		static /*constexpr*/ Parenthesis_Operator* down_cast(Base* base_ptr)
 			{ assert(base_ptr->get_type() == Type::par_operator); return static_cast<Parenthesis_Operator*>(base_ptr); }
 
-		static /*constexpr*/ const Parenthesis_Operator* down_cast(const Base_Term<modifier>* base_ptr)
+		static /*constexpr*/ const Parenthesis_Operator* down_cast(const Base* base_ptr)
 			{ assert(base_ptr->get_type() == Type::par_operator); return static_cast<const Parenthesis_Operator*>(base_ptr); }
 
-		virtual /*constexpr*/ std::partial_ordering lexicographical_compare(const Base_Term<modifier>& snd) const override
+		virtual /*constexpr*/ std::partial_ordering lexicographical_compare(const Base& snd) const override
 		{
 			if (const auto compare_types = order::compare_uniqueness(this->get_type(), snd.get_type()); compare_types != std::partial_ordering::equivalent) {
 				return compare_types;
@@ -110,7 +112,7 @@ namespace bmath::intern {
 			}
 		}
 
-		virtual /*constexpr*/ bool equals(const Base_Term<modifier>& snd) const
+		virtual /*constexpr*/ bool equals(const Base& snd) const override
 		{
 			if (this->get_type() != snd.get_type()) {
 				return false;
@@ -119,6 +121,12 @@ namespace bmath::intern {
 				const Parenthesis_Operator* const snd_par_op = Parenthesis_Operator::down_cast(&snd);
 				return this->op_type == snd_par_op->op_type && this->argument->equals(*snd_par_op->argument);
 			}
+		}
+
+		virtual /*constexpr*/ void for_each(std::function<void(Base* this_ptr, Type this_type, Base** this_storage_key)> func, Base** this_storage_key) override
+		{
+			this->argument->for_each(func, &this->argument);
+			func(this, this->get_type(), this_storage_key);
 		}
 	};
 
@@ -130,10 +138,12 @@ namespace bmath::intern {
 	class Logarithm final : public Base_Term<modifier>
 	{
 	public:
-		Base_Term<modifier>* base;
-		Base_Term<modifier>* argument;
+		typedef Base_Term<modifier> Base;
 
-		Logarithm(Base_Term<modifier>* base_, Base_Term<modifier>* argument_) : base(base_), argument(argument_) {}
+		Base* base;
+		Base* argument;
+
+		Logarithm(Base* base_, Base* argument_) : base(base_), argument(argument_) {}
 		~Logarithm() { delete this->base; delete this->argument; }
 
 		virtual void to_str(std::string& str, Type parent_type) const override
@@ -147,13 +157,13 @@ namespace bmath::intern {
 		
 		virtual /*constexpr*/ Type get_type() const override { return Type::logarithm; }
 
-		static /*constexpr*/ Logarithm* down_cast(Base_Term<modifier>* base_ptr)
+		static /*constexpr*/ Logarithm* down_cast(Base* base_ptr)
 			{ assert(base_ptr->get_type() == Type::logarithm); return static_cast<Logarithm*>(base_ptr); }
 
-		static /*constexpr*/ const Logarithm* down_cast(const Base_Term<modifier>* base_ptr)
+		static /*constexpr*/ const Logarithm* down_cast(const Base* base_ptr)
 			{ assert(base_ptr->get_type() == Type::logarithm); return static_cast<const Logarithm*>(base_ptr); }
 
-		virtual /*constexpr*/ std::partial_ordering lexicographical_compare(const Base_Term<modifier>& snd) const override
+		virtual /*constexpr*/ std::partial_ordering lexicographical_compare(const Base& snd) const override
 		{
 			if (const auto compare_types = order::compare_uniqueness(this->get_type(), snd.get_type()); compare_types != std::partial_ordering::equivalent) {
 				return compare_types;
@@ -169,7 +179,7 @@ namespace bmath::intern {
 			}
 		}
 
-		virtual /*constexpr*/ bool equals(const Base_Term<modifier>& snd) const override
+		virtual /*constexpr*/ bool equals(const Base& snd) const override
 		{
 			if (this->get_type() != snd.get_type()) {
 				return false;
@@ -178,6 +188,13 @@ namespace bmath::intern {
 				const Logarithm* const snd_log = Logarithm::down_cast(&snd);
 				return this->base->equals(*snd_log->base) && this->argument->equals(*snd_log->argument);
 			}
+		}
+
+		virtual /*constexpr*/ void for_each(std::function<void(Base* this_ptr, Type this_type, Base** this_storage_key)> func, Base** this_storage_key) override
+		{
+			this->base->for_each(func, &this->base);
+			this->argument->for_each(func, &this->argument);
+			func(this, this->get_type(), this_storage_key);
 		}
 	};
 
@@ -189,10 +206,12 @@ namespace bmath::intern {
 	class Power final : public Base_Term<modifier>
 	{
 	public:
-		Base_Term<modifier>* base;
-		Base_Term<modifier>* exponent;
+		typedef Base_Term<modifier> Base;
 
-		Power(Base_Term<modifier>* base_, Base_Term<modifier>* exponent_) : base(base_), exponent(exponent_) {}
+		Base* base;
+		Base* exponent;
+
+		Power(Base* base_, Base* exponent_) : base(base_), exponent(exponent_) {}
 		~Power() { delete this->base; delete this->exponent; }
 
 		virtual void to_str(std::string& str, Type parent_type) const override
@@ -206,13 +225,13 @@ namespace bmath::intern {
 
 		virtual /*constexpr*/ Type get_type() const override { return Type::power; }
 
-		static /*constexpr*/ Power* down_cast(Base_Term<modifier>* base_ptr)
+		static /*constexpr*/ Power* down_cast(Base* base_ptr)
 			{ assert(base_ptr->get_type() == Type::power); return static_cast<Power*>(base_ptr); }
 
-		static /*constexpr*/ const Power* down_cast(const Base_Term<modifier>* base_ptr)
+		static /*constexpr*/ const Power* down_cast(const Base* base_ptr)
 			{ assert(base_ptr->get_type() == Type::power); return static_cast<const Power*>(base_ptr); }
 
-		virtual /*constexpr*/ std::partial_ordering lexicographical_compare(const Base_Term<modifier>& snd) const override
+		virtual /*constexpr*/ std::partial_ordering lexicographical_compare(const Base& snd) const override
 		{
 			if (const auto compare_types = order::compare_uniqueness(this->get_type(), snd.get_type()); compare_types != std::partial_ordering::equivalent) {
 				return compare_types;
@@ -228,7 +247,7 @@ namespace bmath::intern {
 			}
 		}
 
-		virtual /*constexpr*/ bool equals(const Base_Term<modifier>& snd) const override
+		virtual /*constexpr*/ bool equals(const Base& snd) const override
 		{
 			if (this->get_type() != snd.get_type()) {
 				return false;
@@ -237,6 +256,13 @@ namespace bmath::intern {
 				const Power* const snd_power = Power::down_cast(&snd);
 				return this->base->equals(*snd_power->base) && this->exponent->equals(*snd_power->exponent);
 			}
+		}
+
+		virtual /*constexpr*/ void for_each(std::function<void(Base* this_ptr, Type this_type, Base** this_storage_key)> func, Base** this_storage_key) override
+		{
+			this->base->for_each(func, &this->base);
+			this->exponent->for_each(func, &this->exponent);
+			func(this, this->get_type(), this_storage_key);
 		}
 	};
 
