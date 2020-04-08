@@ -5,11 +5,10 @@
 #include <string>
 #include <compare>
 #include <functional>
+#include <cassert>
+#include <vector>
 
 namespace bmath::intern {
-	//basic structure: 
-	//there are two Interface types: Pattern_Term and Regular_Term, both template instantiations of Base_Term.
-	//the classes implementing these interfaces also implement both for the most time and represent algebraic operations, values or variables.
 
 	//currently there is not planned to add any functionality beyond type differentiation of terms for this
 	enum class Modifier
@@ -21,8 +20,8 @@ namespace bmath::intern {
 	//specifies actual type of any Base_Term 
 	enum class Type
 	{
-		par_operator,          
-		logarithm,           
+		par_operator,
+		logarithm,
 		power,		           
 		product,	           
 		sum,		           
@@ -31,38 +30,202 @@ namespace bmath::intern {
 		variable,	           
 	};
 
+	//the classic object oriented way of creating the Base_Term type would mean most functions in "internalFunctions" would not be in that file, 
+	//but virtual members of Base_Term. i however, dislike to spread around logic in the derived classes like that. 
+	//the need to always create a new member function for any new functionality, where as the types are clear from the beginning and are never expanded 
+	//(or infrequent enough to tolerate the hussle of updating all functions implementing behavior for term) is another reason for going this way.
+
+	//because all i need to know from the base class is what type is actually held by it, this type is stored as the member variable of same name.
+	//the (probably less janky) other way would be to make Base_Term a virtual class. this would also benefit the destructor greatly, 
+	//as it enables the usual way to handle memory management of each derived class in this derived class only.
+	//the second virtual function would be the one returning the real term type (something like "virtual Type get_type() const").
+	//the size of the base is not different in both cases: eighter a vtable or the type member is held.
+	//side note: this is a fun projekt and as such only relaxed savety concerns may apply.
+
 	//this is a template to make the regular term and the pattern term two different types.
-	//it is hoped, that this measure removes any ambiguity surrounding terms beeing part of a pattern
+	//it is hoped, that this measure removes any ambiguity surrounding terms beeing part of a pattern and therefore better enables programming while beeing sleepy.
 	template <Modifier modifier>
-	class Base_Term
+	struct Base_Term
 	{
+	protected:
+		Base_Term(Type type_) : type(type_) {}
+
 	public:
-
-		virtual ~Base_Term() {}	//tree is cleaned up in derived classes -> nothing to do here
-
-		//appends this to str. caller_operator_precedence tells callee, whether to put parentheses around string or not
-		virtual void to_str(std::string& str, Type parent_type) const = 0;
-
-		//returns actual type if only pointer to Base_Term is held
-		virtual /*constexpr*/ Type get_type() const = 0;
-
-		//compares two terms for their uniqueness (see internalFunctions order::compare_uniqueness()) and returnes less if this is more unique
-		//order class std::partial_ordering is nessessary due to double beeing in that class.
-		virtual /*constexpr*/ std::partial_ordering lexicographical_compare(const Base_Term& snd) const = 0;
-
-		//equality compare on the type and subterms of term
-		virtual /*constexpr*/ bool equals(const Base_Term& snd) const = 0;
-
-		//alternative for virtual functions if only some terms need to implement behavior.
-		//for any operation for_each is first applied to all held subterms, then to itself. (e.g. product first calls for_each for all factors, then on itself)
-		//function func takes this, this->get_type(), and a pointer to the location in the parent where this is held. that last parameter allows to substitute specific subterms.
-		//as no term knows anything about its parent, this_storage_key needs to also be given by the caller of for_each()
-		virtual /*constexpr*/ void for_each(std::function<void(Base_Term* this_ptr, Type this_type, Base_Term** this_storage_key)> func, Base_Term** this_storage_key) = 0;
-
+		const Type type;
+		~Base_Term();
 	};
-
 	using Regular_Term = Base_Term<Modifier::regular>;
 	using Pattern_Term = Base_Term<Modifier::pattern>;
-	static_assert(!std::is_same<Regular_Term, Pattern_Term>::value);	//the whole reason to use templates with Modifier is to create different types.
+	static_assert(!std::is_same<Regular_Term, Pattern_Term>::value);
+
+
+	template<Modifier modifier>
+	struct Sum final : Base_Term<modifier>
+	{
+		std::vector<Base_Term<modifier>*> summands;
+
+		Sum(std::vector<Base_Term<modifier>*>&& summands_)
+			:Base_Term<modifier>(Type::sum), summands(summands_) {}
+
+		void clean_up() { for (auto summand : this->summands) delete summand; }
+	};
+	using Regular_Sum = Sum<Modifier::regular>;
+	using Pattern_Sum = Sum<Modifier::pattern>;
+
+
+	template<Modifier modifier>
+	struct Product final : Base_Term<modifier>
+	{
+		std::vector<Base_Term<modifier>*> factors;
+
+		Product(std::vector<Base_Term<modifier>*>&& factors_)
+			:Base_Term<modifier>(Type::product), factors(factors_) {}
+
+		void clean_up() { for (auto factor : this->factors) delete factor; }
+	};
+	using Regular_Product = Product<Modifier::regular>;
+	using Pattern_Product = Product<Modifier::pattern>;
+
+
+	template<Modifier modifier>
+	struct Power final : Base_Term<modifier>
+	{
+		Base_Term<modifier>* base;
+		Base_Term<modifier>* exponent;
+
+		Power(Base_Term<modifier>* base_, Base_Term<modifier>* exponent_) 
+			:Base_Term<modifier>(Type::power), base(base_), exponent(exponent_) {}
+
+		void clean_up() { delete this->base; delete this->exponent; }
+	};
+	using Regular_Power = Power<Modifier::regular>;
+	using Pattern_Power = Power<Modifier::pattern>;
+
+
+	template<Modifier modifier>
+	struct Logarithm final : Base_Term<modifier>
+	{
+		Base_Term<modifier>* base;
+		Base_Term<modifier>* argument;
+
+		Logarithm(Base_Term<modifier>* base_, Base_Term<modifier>* argument_) 
+			:Base_Term<modifier>(Type::logarithm), base(base_), argument(argument_) {}
+
+		void clean_up() { delete this->base; delete this->argument; }
+	};
+	using Regular_Log = Logarithm<Modifier::regular>;
+	using Pattern_Log = Logarithm<Modifier::pattern>;
+
+
+	//types names are sorted by length (used to be required, as the type_subterm() function searched for par_op at not only the beginning of the name string)
+	//(comments are corresponding std::complex functions)
+	enum class Par_Op_Type
+	{
+		log10,			//log10()
+		asinh,			//asinh()
+		acosh,			//acosh()
+		atanh,			//atanh()
+		asin,			//asin()
+		acos,			//acos()
+		atan,			//atan()
+		sinh,			//sinh()
+		cosh,			//cosh()
+		tanh,			//tanh()
+		sqrt,			//sqrt()
+		exp,			//exp()
+		sin,			//sin()
+		cos,			//cos()
+		tan,			//tan()
+		abs,			//abs()
+		arg,			//arg()
+		ln,				//log()
+		re,				//real()
+		im,				//imag()
+	};
+
+
+	template<Modifier modifier>
+	struct Parenthesis_Operator final : Base_Term<modifier>
+	{
+		Par_Op_Type op_type;
+		Base_Term<modifier>* argument;
+
+		Parenthesis_Operator(Par_Op_Type op_type_, Base_Term<modifier>* argument_) 
+			:Base_Term<modifier>(Type::par_operator), op_type(op_type_), argument(argument_) {}
+
+		void clean_up() { delete this->argument; }
+	};
+	using Regular_Par_Op = Parenthesis_Operator<Modifier::regular>;
+	using Pattern_Par_Op = Parenthesis_Operator<Modifier::pattern>;
+
+
+	template<Modifier modifier>
+	struct Value final : Base_Term<modifier>
+	{
+		std::complex<double> number;
+
+		Value(std::complex<double> number_)
+			:Base_Term<modifier>(Type::value), number(number_) {}
+
+		void clean_up() {}
+	};
+	using Regular_Value = Value<Modifier::regular>;
+	using Pattern_Value = Value<Modifier::pattern>;
+
+
+	struct Regular_Variable final : Regular_Term
+	{
+		std::string name;
+
+		Regular_Variable(std::string_view name_) 
+			:Regular_Term(Type::variable), name(name_) {}
+
+		void clean_up() {}
+	};
+
+	//Pattern_Term is meant to be compared against Regular_Term. A Pattern_Variable can stand for any arbitrary term and its subterms, but it -
+	//always represents this same thing for the (possibly) multiple times it occurs in a Pattern_Term. This behavior breakes the tree structure of a pattern,
+	//as one all parts of a pattern holding Pattern_Variable "x" need to point to the same instance.
+	struct Pattern_Variable final : Pattern_Term
+	{
+		std::string name;
+
+		Pattern_Variable(std::string_view name_) 
+			:Pattern_Term(Type::variable), name(name_) {}
+
+		void clean_up() {}
+	};
+
+	struct Variadic_Comprehension final : Pattern_Term
+	{
+		void clean_up() {}
+	};
+
+	template<Modifier modifier>
+	inline Base_Term<modifier>::~Base_Term()
+	{
+		switch (this->type) {
+		case Type::sum:          static_cast<Sum<modifier>*                 >(this)->clean_up(); break;
+		case Type::product:      static_cast<Product<modifier>*             >(this)->clean_up(); break;
+		case Type::power:        static_cast<Power<modifier>*               >(this)->clean_up(); break;
+		case Type::logarithm:    static_cast<Logarithm<modifier>*           >(this)->clean_up(); break;
+		case Type::par_operator: static_cast<Parenthesis_Operator<modifier>*>(this)->clean_up(); break;
+		case Type::value:        static_cast<Value<modifier>*               >(this)->clean_up(); break;
+		case Type::variable: 
+			if constexpr (modifier == Modifier::regular) {
+				static_cast<Regular_Value*>(this)->clean_up(); break;
+			}
+			if constexpr (modifier == Modifier::pattern) {
+				static_cast<Pattern_Value*>(this)->clean_up(); break;
+			}
+		case Type::variadic_comprehension: 
+			assert(modifier == Modifier::pattern);
+			if constexpr (modifier == Modifier::pattern) {
+				static_cast<Variadic_Comprehension*>(this)->clean_up(); break;
+			}
+
+		default: assert(false);	//not hitting the actual type means not deleting the actual type and creating a memory leak.
+		}
+	}
 
 } //namespace bmath::intern

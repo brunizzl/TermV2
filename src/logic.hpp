@@ -81,6 +81,6 @@ namespace bmath::intern {
 		Equals(Pattern_Term* fst_, Pattern_Term* snd_) :fst(fst_), snd(snd_) {}
 		virtual ~Equals() { delete fst; delete snd; }
 
-		virtual bool evaluate() const override { return fst->equals(*snd); }
+		virtual bool evaluate() const override { return /*fst->equals(*snd);*/ false; }
 	};
 }
