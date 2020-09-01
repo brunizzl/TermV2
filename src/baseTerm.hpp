@@ -20,14 +20,15 @@ namespace bmath::intern {
 	//specifies actual type of any Base_Term 
 	enum class Type
 	{
-		par_operator,
+		function_1,
 		logarithm,
 		power,		           
 		product,	           
 		sum,		           
 		variadic_comprehension,	//may only occur in pattern
 		value,		           
-		variable,	           
+		variable,	
+		COUNT
 	};
 
 	//the classic object oriented way of creating the Base_Term type would mean most functions in "internalFunctions" would not be in that file, 
@@ -67,7 +68,7 @@ namespace bmath::intern {
 		Sum(std::vector<Base_Term<modifier>*>&& summands_)
 			:Base_Term<modifier>(Type::sum), summands(summands_) {}
 
-		void clean_up() { for (auto summand : this->summands) delete summand; }
+		void destructor() { for (auto summand : this->summands) delete summand; }
 	};
 	using Regular_Sum = Sum<Modifier::regular>;
 	using Pattern_Sum = Sum<Modifier::pattern>;
@@ -81,7 +82,7 @@ namespace bmath::intern {
 		Product(std::vector<Base_Term<modifier>*>&& factors_)
 			:Base_Term<modifier>(Type::product), factors(factors_) {}
 
-		void clean_up() { for (auto factor : this->factors) delete factor; }
+		void destructor() { for (auto factor : this->factors) delete factor; }
 	};
 	using Regular_Product = Product<Modifier::regular>;
 	using Pattern_Product = Product<Modifier::pattern>;
@@ -96,7 +97,7 @@ namespace bmath::intern {
 		Power(Base_Term<modifier>* base_, Base_Term<modifier>* exponent_) 
 			:Base_Term<modifier>(Type::power), base(base_), exponent(exponent_) {}
 
-		void clean_up() { delete this->base; delete this->exponent; }
+		void destructor() { delete this->base; delete this->exponent; }
 	};
 	using Regular_Power = Power<Modifier::regular>;
 	using Pattern_Power = Power<Modifier::pattern>;
@@ -111,7 +112,7 @@ namespace bmath::intern {
 		Logarithm(Base_Term<modifier>* base_, Base_Term<modifier>* argument_) 
 			:Base_Term<modifier>(Type::logarithm), base(base_), argument(argument_) {}
 
-		void clean_up() { delete this->base; delete this->argument; }
+		void destructor() { delete this->base; delete this->argument; }
 	};
 	using Regular_Log = Logarithm<Modifier::regular>;
 	using Pattern_Log = Logarithm<Modifier::pattern>;
@@ -119,7 +120,7 @@ namespace bmath::intern {
 
 	//types names are sorted by length (used to be required, as the type_subterm() function searched for par_op at not only the beginning of the name string)
 	//(comments are corresponding std::complex functions)
-	enum class Par_Op_Type
+	enum class F1_Type
 	{
 		log10,			//log10()
 		asinh,			//asinh()
@@ -145,18 +146,18 @@ namespace bmath::intern {
 
 
 	template<Modifier modifier>
-	struct Parenthesis_Operator final : Base_Term<modifier>
+	struct Function_1 final : Base_Term<modifier>
 	{
-		Par_Op_Type op_type;
+		F1_Type op_type;
 		Base_Term<modifier>* argument;
 
-		Parenthesis_Operator(Par_Op_Type op_type_, Base_Term<modifier>* argument_) 
-			:Base_Term<modifier>(Type::par_operator), op_type(op_type_), argument(argument_) {}
+		Function_1(F1_Type op_type_, Base_Term<modifier>* argument_) 
+			:Base_Term<modifier>(Type::function_1), op_type(op_type_), argument(argument_) {}
 
-		void clean_up() { delete this->argument; }
+		void destructor() { delete this->argument; }
 	};
-	using Regular_Par_Op = Parenthesis_Operator<Modifier::regular>;
-	using Pattern_Par_Op = Parenthesis_Operator<Modifier::pattern>;
+	using Regular_F1 = Function_1<Modifier::regular>;
+	using Pattern_F1 = Function_1<Modifier::pattern>;
 
 
 	template<Modifier modifier>
@@ -167,7 +168,7 @@ namespace bmath::intern {
 		Value(std::complex<double> number_)
 			:Base_Term<modifier>(Type::value), number(number_) {}
 
-		void clean_up() {}
+		void destructor() {}
 	};
 	using Regular_Value = Value<Modifier::regular>;
 	using Pattern_Value = Value<Modifier::pattern>;
@@ -180,7 +181,7 @@ namespace bmath::intern {
 		Regular_Variable(std::string_view name_) 
 			:Regular_Term(Type::variable), name(name_) {}
 
-		void clean_up() {}
+		void destructor() {}
 	};
 
 	//Pattern_Term is meant to be compared against Regular_Term. A Pattern_Variable can stand for any arbitrary term and its subterms, but it -
@@ -189,40 +190,39 @@ namespace bmath::intern {
 	struct Pattern_Variable final : Pattern_Term
 	{
 		std::string name;
+		Regular_Term* matched_term;
 
 		Pattern_Variable(std::string_view name_) 
-			:Pattern_Term(Type::variable), name(name_) {}
+			:Pattern_Term(Type::variable), name(name_), matched_term(nullptr) {}
 
-		void clean_up() {}
+		void destructor() {} //matched term is not owned by this.
 	};
 
 	struct Variadic_Comprehension final : Pattern_Term
 	{
-		void clean_up() {}
+		void destructor() {}
 	};
 
 	template<Modifier modifier>
 	inline Base_Term<modifier>::~Base_Term()
 	{
 		switch (this->type) {
-		case Type::sum:          static_cast<Sum<modifier>*                 >(this)->clean_up(); break;
-		case Type::product:      static_cast<Product<modifier>*             >(this)->clean_up(); break;
-		case Type::power:        static_cast<Power<modifier>*               >(this)->clean_up(); break;
-		case Type::logarithm:    static_cast<Logarithm<modifier>*           >(this)->clean_up(); break;
-		case Type::par_operator: static_cast<Parenthesis_Operator<modifier>*>(this)->clean_up(); break;
-		case Type::value:        static_cast<Value<modifier>*               >(this)->clean_up(); break;
+		case Type::sum:        static_cast<Sum<modifier>*       >(this)->destructor(); break;
+		case Type::product:    static_cast<Product<modifier>*   >(this)->destructor(); break;
+		case Type::power:      static_cast<Power<modifier>*     >(this)->destructor(); break;
+		case Type::logarithm:  static_cast<Logarithm<modifier>* >(this)->destructor(); break;
+		case Type::function_1: static_cast<Function_1<modifier>*>(this)->destructor(); break;
+		case Type::value:      static_cast<Value<modifier>*     >(this)->destructor(); break;
 		case Type::variable: 
-			if constexpr (modifier == Modifier::regular) {
-				static_cast<Regular_Value*>(this)->clean_up(); break;
-			}
-			if constexpr (modifier == Modifier::pattern) {
-				static_cast<Pattern_Value*>(this)->clean_up(); break;
-			}
+			if constexpr (modifier == Modifier::regular)
+				static_cast<Regular_Value*>(this)->destructor(); break;
+			if constexpr (modifier == Modifier::pattern)
+				static_cast<Pattern_Value*>(this)->destructor(); break;
 		case Type::variadic_comprehension: 
-			assert(modifier == Modifier::pattern);
-			if constexpr (modifier == Modifier::pattern) {
-				static_cast<Variadic_Comprehension*>(this)->clean_up(); break;
-			}
+			if constexpr (modifier == Modifier::regular)
+				assert(false);
+			if constexpr (modifier == Modifier::pattern)
+				static_cast<Variadic_Comprehension*>(this)->destructor(); break;
 
 		default: assert(false);	//not hitting the actual type means not deleting the actual type and creating a memory leak.
 		}

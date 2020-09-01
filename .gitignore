@@ -37,6 +37,7 @@
 .vs/
 Debug/
 Release/
+lib/
 
 #dateien
 *.sln
