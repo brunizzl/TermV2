@@ -6,6 +6,7 @@
 
 using namespace bmath::intern;
 
+static_assert(std::is_trivially_destructible<std::bitset<8>>::value);
 
 int main()
 {
@@ -22,5 +23,5 @@ int main()
 	std::cout << evaluate(term) << std::endl;
     delete term;
 
-	std::cout << "max index: " << std::hex << TermIndexTypePair::max_index << '\n';
+	std::cin.get();
 }
