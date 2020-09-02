@@ -44,4 +44,3 @@ lib/
 *.vcxproj
 *.filters
 *.user
-main.cpp
