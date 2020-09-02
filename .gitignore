@@ -40,7 +40,6 @@ Release/
 lib/
 
 #dateien
-*.sln
 *.vcxproj
 *.filters
 *.user

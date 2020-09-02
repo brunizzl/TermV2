@@ -22,5 +22,5 @@ int main()
 	std::cout << evaluate(term) << std::endl;
     delete term;
 
-    std::cin.get();
+	std::cout << "max index: " << std::hex << TermIndexTypePair::max_index << '\n';
 }

@@ -12,11 +12,11 @@ namespace bmath::intern {
 	
 
 	template<typename TypesEnum, TypesEnum MaxEnumValue, typename UnderlyingType = std::uint32_t>
-	class IndexTypePair
+	class [[nodiscard]] IndexTypePair
 	{
 		UnderlyingType data;
 		
-		static constexpr UnderlyingType used_digits() 
+		static constexpr UnderlyingType enums_used_digits() 
 		{
 			UnderlyingType power = 0;
 			while ((1 << power) <= static_cast<UnderlyingType>(MaxEnumValue)) {
@@ -25,12 +25,12 @@ namespace bmath::intern {
 			return power;
 		}
 
-		static constexpr UnderlyingType index_offset = used_digits();
-		static constexpr UnderlyingType enum_mask = (1 << used_digits()) - 1;
+		static constexpr UnderlyingType index_offset = enums_used_digits();
+		static constexpr UnderlyingType enum_mask = (1 << index_offset) - 1;
 		static constexpr UnderlyingType index_mask = ~enum_mask;
 
 	public:
-		static constexpr std::size_t max_index =  1 << (31 - used_digits());
+		static constexpr std::size_t max_index =  index_mask >> index_offset;
 
 		constexpr IndexTypePair(std::size_t index, TypesEnum type)
 			:data(static_cast<UnderlyingType>(index << index_offset) | static_cast<UnderlyingType>(type))
@@ -47,7 +47,7 @@ namespace bmath::intern {
 
 		constexpr void set_index(std::size_t new_index) { 
 			if (new_index > max_index) [[unlikely]] {
-				throw std::exception("IndexTypePair has recieved index bigger than max_idx");
+				throw std::exception("IndexTypePair has recieved index bigger than max_index");
 			}
 			data = static_cast<UnderlyingType>(new_index << index_offset) | (data & enum_mask); 
 		}
@@ -65,8 +65,10 @@ namespace bmath::intern {
 	using TermIndexTypePair = IndexTypePair<Type, Type::COUNT>;
 
 	template <typename Index_T, typename Value_T>
-	class TermStore
+	class [[nodiscard]] TermStore
 	{
+
+
 		Index_T head;
 		union
 		{
