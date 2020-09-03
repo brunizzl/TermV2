@@ -87,6 +87,40 @@ namespace bmath::intern {
 				next_block.for_each<UnionToSLC>(store, apply);
 			}
 		}
+
+		template<typename UnionToSLC, typename Apply>
+		void for_each(TermStore<TermUnion_T>& store, Apply apply)
+		{
+			static_assert(std::is_invocable_r_v<TermSLC&, UnionToSLC, TermUnion_T&>, "UnionToSLC should extract the current TermSLC type from Union");
+			static_assert(std::is_invocable_r_v<void, Apply, Value_T&>, "apply should be applied to Value_T");
+
+			for (int i = 0; i < ArraySize; i++) {
+				if (this->values[i] != NullValue) {
+					apply(this->values[i]);
+				}
+			}
+			if (this->next_block_idx != NullIndex) {
+				TermSLC& next_block = UnionToSLC(store.at(this->next_block_idx));
+				next_block.for_each<UnionToSLC>(store, apply);
+			}
+		}
+
+		template<typename UnionToSLC, typename Apply>
+		void for_each(const TermStore<TermUnion_T>& store, Apply apply) const
+		{
+			static_assert(std::is_invocable_r_v<TermSLC&, UnionToSLC, TermUnion_T&>, "UnionToSLC should extract the current TermSLC type from Union");
+			static_assert(std::is_invocable_r_v<void, Apply, const Value_T&>, "apply should be applied to Value_T");
+
+			for (int i = 0; i < ArraySize; i++) {
+				if (this->values[i] != NullValue) {
+					apply(this->values[i]);
+				}
+			}
+			if (this->next_block_idx != NullIndex) {
+				TermSLC& next_block = UnionToSLC(store.at(this->next_block_idx));
+				next_block.for_each<UnionToSLC>(store, apply);
+			}
+		}
 	};
 
 }
