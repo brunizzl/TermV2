@@ -215,14 +215,16 @@ namespace bmath::intern {
 		case Type::value:      static_cast<Value<modifier>*     >(this)->destructor(); break;
 		case Type::variable: 
 			if constexpr (modifier == Modifier::regular)
-				static_cast<Regular_Value*>(this)->destructor(); break;
+				static_cast<Regular_Value*>(this)->destructor();
 			if constexpr (modifier == Modifier::pattern)
-				static_cast<Pattern_Value*>(this)->destructor(); break;
+				static_cast<Pattern_Value*>(this)->destructor();
+			break;
 		case Type::variadic_comprehension: 
 			if constexpr (modifier == Modifier::regular)
 				assert(false);
 			if constexpr (modifier == Modifier::pattern)
-				static_cast<Variadic_Comprehension*>(this)->destructor(); break;
+				static_cast<Variadic_Comprehension*>(this)->destructor(); 
+			break;
 
 		default: assert(false);	//not hitting the actual type means not deleting the actual type and creating a memory leak.
 		}
