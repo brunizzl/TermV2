@@ -1,17 +1,20 @@
+#pragma once
 
 #include <cstdint>
 #include <vector>
-#include <cassert>
 #include <bitset>
 #include <type_traits>
 
 namespace bmath::intern {
 
-	
-
+	//stores both an index and an enum value in the same variable 
+	//with the lower bits representing the enum, the upper bits representing the (shifted) index
 	template<typename TypesEnum, TypesEnum MaxEnumValue, typename UnderlyingType = std::uint32_t>
 	class [[nodiscard]] IndexTypePair
 	{
+		static_assert(std::is_enum_v<TypesEnum>);
+		static_assert(std::is_unsigned_v<UnderlyingType>);
+
 		UnderlyingType data;
 		
 		static constexpr UnderlyingType enums_used_digits() 
@@ -60,6 +63,9 @@ namespace bmath::intern {
 			}
 			data = (data & index_mask) | static_cast<UnderlyingType>(new_type); 
 		}
+
+		auto operator<=>(const IndexTypePair&) const = default;
+		bool operator==(const IndexTypePair&) const = default;
 	};	//class IndexTypePair
 
 
@@ -69,13 +75,13 @@ namespace bmath::intern {
 
 
 
-	template <typename Index_T, typename Value_T>
+	template <typename TermUnion_T>
 	class [[nodiscard]] TermStore
 	{
-		static_assert(std::is_default_constructible<Value_T>::value, "required for default constructor of TermStore");
-		static_assert(std::is_trivially_destructible<Value_T>::value, "required to allow Value_T to be used in VecElem union");
+		static_assert(std::is_default_constructible_v<TermUnion_T>, "required for default constructor of TermStore");
+		static_assert(std::is_trivially_destructible_v<TermUnion_T>, "required to allow TermUnion_T to be used in VecElem union");
 
-		static constexpr std::size_t table_dist = sizeof(Value_T) * 8;	//also number of elements each table keeps track of
+		static constexpr std::size_t table_dist = sizeof(TermUnion_T) * 8;	//also number of elements each table keeps track of
 		using OccupancyTable = std::bitset<table_dist>;
 
 		struct BuildValue {};	//used to differentiate the constructors of VecElem
@@ -86,9 +92,9 @@ namespace bmath::intern {
 		//thus this union can act as both.
 		union [[nodiscard]] VecElem
 		{
-			Value_T value;
+			TermUnion_T value;
 			OccupancyTable table;
-			static_assert(sizeof(Value_T) == sizeof(OccupancyTable), "union VecElem assumes equal member size");
+			static_assert(sizeof(TermUnion_T) == sizeof(OccupancyTable), "union VecElem assumes equal member size");
 
 			template<typename... Args>
 			VecElem(BuildValue, Args&&... args) :value(std::forward<Args>(args)...) {}
@@ -98,26 +104,24 @@ namespace bmath::intern {
 
 			VecElem(const VecElem& snd) :table(snd.table) {}	//bitwise copy of snd
 
-			~VecElem() {} //both std::bitset and Value_T are trivially destructible
+			~VecElem() {} //both std::bitset and TermUnion_T are trivially destructible
 		};
 
 		std::vector<VecElem> store;
 
 	public:
-		//head stores the index in store and term-type of the term trees root.
-		Index_T head;
 
 		TermStore()
-			:store(), head()
+			:store()
 		{}
 
 		template<typename... Args>
-		[[nodiscard]] std::size_t emplace_back(Args&&... args)
+		[[nodiscard]] std::size_t emplace_new(Args&&... args)
 		{
 			constexpr std::size_t none = -1;
 			const auto find_index_and_set_table = [](TermStore& self) {
 				for (std::size_t table_pos = 0; table_pos < self.store.size(); table_pos += table_dist) {
-					if (self.store[table_pos].table.all()) [[unlikely]] {
+					if (self.store[table_pos].table.all()) [[unlikely]] {	//currently optimizes for case with only one table present
 						continue;
 					}
 					else {
@@ -135,20 +139,19 @@ namespace bmath::intern {
 
 			const std::size_t new_pos = find_index_and_set_table(*this);
 			if (new_pos == none) [[unlikely]] {
-				if (this->store.size() % table_dist != 0) [[unlikely]]
-				{
-					throw std::exception("TermStore's emplace_back() found no free vector index, yet the next element to append to vector is not an occupancy_table");
+				if (this->store.size() % table_dist != 0) [[unlikely]] {
+					throw std::exception("TermStore's emplace_new() found no free vector index, yet the next element to append to store next is not an occupancy_table");
 				}
 				this->store.emplace_back(BuildTable(), 0x3);	//first bit is set, as table itself occupies that slot, second as new element is emplaced afterwards.
 				this->store.emplace_back(BuildValue(), std::forward<Args>(args)...);
 				return this->store.size() - 1;	//index of just inserted element
 			}
 			else {
-				if (new_pos >= this->store.size()) {
-					this->store.emplace_back(BuildValue(), std::forward<Args>(args)...);	//put new element in store
+				if (new_pos >= this->store.size()) {	//put new element in store
+					this->store.emplace_back(BuildValue(), std::forward<Args>(args)...);
 				}
-				else {
-					new (&this->store[new_pos]) VecElem(BuildValue(), std::forward<Args>(args)...);	//reuse old element in store
+				else {	//reuse old element in store
+					new (&this->store[new_pos]) VecElem(BuildValue(), std::forward<Args>(args)...);
 				}
 				return new_pos;
 			}
@@ -165,18 +168,18 @@ namespace bmath::intern {
 			}
 		}
 
-		[[nodiscard]] Value_T& at(std::size_t idx)
+		[[nodiscard]] TermUnion_T& at(std::size_t idx)
 		{
 			if (idx % table_dist == 0) [[unlikely]] {
-				throw std::exception("TermStore::at() supposed to access Value_T, but requests Table index");
+				throw std::exception("TermStore::at() supposed to access TermUnion_T, but an index reserved for Table is requested");
 			}			
 			return this->store.at(idx).value;
 		}
 
-		[[nodiscard]] const Value_T& at(std::size_t idx) const
+		[[nodiscard]] const TermUnion_T& at(std::size_t idx) const
 		{
 			if (idx % table_dist == 0) [[unlikely]] {
-				throw std::exception("TermStore::at() supposed to access Value_T, but requests Table index");
+				throw std::exception("TermStore::at() supposed to access TermUnion_T, but an index reserved for Table is requested");
 			}			
 			return this->store.at(idx).value;
 		}
