@@ -23,5 +23,6 @@ int main()
 	std::cout << evaluate(term) << std::endl;
     delete term;
 
+	TermStore<double, int, 10> test{ 5, 4.0 };
 	std::cin.get();
 }

@@ -34,7 +34,7 @@ namespace bmath::intern {
 
 		constexpr IndexTypePair() :data(static_cast<UnderlyingType>(MaxEnumValue)) {}
 
-		constexpr IndexTypePair(std::size_t index, TypesEnum type) noexcept
+		constexpr IndexTypePair(std::size_t index, TypesEnum type)
 			:data(static_cast<UnderlyingType>(index << index_offset) | static_cast<UnderlyingType>(type))
 		{
 			if (index > max_index) [[unlikely]] {
@@ -64,7 +64,6 @@ namespace bmath::intern {
 		}
 	};
 
-	using TermIndexTypePair = IndexTypePair<Type, Type::COUNT>;
 
 
 
@@ -74,10 +73,11 @@ namespace bmath::intern {
 
 
 
-
-	template <typename Index_T, typename Value_T>
+	template <typename Value_T, typename TypesEnum, TypesEnum MaxEnumValue, typename UnderlyingType = std::uint32_t>
 	class [[nodiscard]] TermStore
 	{
+		using Index_T = IndexTypePair<TypesEnum, MaxEnumValue, UnderlyingType>;
+
 		static_assert(std::is_default_constructible<Value_T>::value, "required for default constructor of TermStore");
 		static_assert(std::is_trivially_destructible<Value_T>::value, "required to allow Value_T to be used in VecElem union and Data union");
 
@@ -85,7 +85,7 @@ namespace bmath::intern {
 
 		//every vec_elem_size'th element in vec will not store actual term content, but a table of which of 
 		//the next (vec_elem_size -1) slots are still free. 
-		union VecElem
+		union [[nodiscard]] VecElem
 		{
 			Value_T value;
 			std::bitset<vec_elem_size> occupied_slots;
@@ -110,7 +110,7 @@ namespace bmath::intern {
 		Index_T head;
 
 		//if the term tree consists only of its root, this will be stored in val directly, not in the vector. (with head.get_index() == 0)
-		union Data
+		union [[nodiscard]] Data
 		{
 			std::vector<VecElem> vec;
 			Value_T val;
@@ -118,33 +118,90 @@ namespace bmath::intern {
 			template<typename... Args>
 			Data(Args&&... args) :val(std::forward<Args>(args)...) {}
 
-			Data() :val() {}
-
-			Data(Data& other) { std::memcpy(this, &other, sizeof(Data)); }	//will always just copy the other bit by bit
+			Data() {}
+			Data(const Data& other) {}
 			~Data() {}	//does not clean up vec, because it doesnt know if vec is in use
 		} data;
 
+		enum DataType { vec, val };	//not present in memory layout, as it is known from head.get_index()
+		DataType data_type() const noexcept { return (this->head.get_index() != 0) ? DataType::vec : DataType::val; }
+
 	public:
 
-		TermStore() noexcept
-			:head(), data()
-		{
-		}
-
-		TermStore(TermStore&& other)
-			:head(other.head), data(other.data)
-		{
-			if (other.head.get_index() != 0) {
-				new(&this->data.vec, std::move(other.data.vec));
-			}
-		}
+		template<typename... Args>
+		TermStore(TypesEnum type, Args&&... args)
+			:head(0, type), data(std::forward<Args>(args)...)
+		{}
 
 		~TermStore()
 		{
-			if (head.get_index() != 0) {
+			if (this->data_type() == DataType::vec) {
 				data.vec.~vector<VecElem>();
 			}
 		}
 
+		TermStore(const TermStore& other)
+			:head(other.head), data()
+		{
+			switch (other.data_type()) {
+			case DataType::val:
+				std::memcpy(&this->data.val, &other.data.val, sizeof(Value_T));
+				break;
+			case DataType::vec:
+				new(&this->data.vec) std::vector<VecElem>(other.data.vec);
+				break;
+			}
+		}
+
+		TermStore(TermStore&& other)
+			:head(other.head), data()
+		{
+			switch (other.data_type()) {
+			case DataType::val:
+				std::memcpy(&this->data.val, &other.data.val, sizeof(Value_T));
+				break;
+			case DataType::vec:
+				new(&this->data.vec) std::vector<VecElem>(std::move(other.data.vec));
+				break;
+			}
+		}
+
+		TermStore& operator=(const TermStore& other)
+		{
+			if (this->data_type() == DataType::vec) {
+				this->data.vec.~vector<VecElem>();
+			}
+
+			this->head = other.head;
+			switch (other.data_type()) {
+			case DataType::val:
+				std::memcpy(&this->data.val, &other.data.val, sizeof(Value_T));
+				break;
+			case DataType::vec:
+				new(&this->data.vec) std::vector<VecElem>(other.data.vec);
+				break;
+			}
+			return *this;
+		}
+
+		TermStore& operator=(TermStore&& other)
+		{
+			if (this->data_type() == DataType::vec) {
+				this->data.vec.~vector<VecElem>();
+			}
+
+			this->head = other.head;
+			switch (other.data_type()) {
+			case DataType::val:
+				std::memcpy(&this->data.val, &other.data.val, sizeof(Value_T));
+				break;
+			case DataType::vec:
+				new(&this->data.vec) std::vector<VecElem>(std::move(other.data.vec));
+				break;
+			}
+			return *this;
+		}
+
 	};
+
 }
