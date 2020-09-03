@@ -5,8 +5,6 @@
 #include <bitset>
 #include <type_traits>
 
-#include "baseTerm.hpp"
-
 namespace bmath::intern {
 
 	
@@ -62,7 +60,7 @@ namespace bmath::intern {
 			}
 			data = (data & index_mask) | static_cast<UnderlyingType>(new_type); 
 		}
-	};
+	};	//class IndexTypePair
 
 
 
@@ -71,137 +69,117 @@ namespace bmath::intern {
 
 
 
-
-
-	template <typename Value_T, typename TypesEnum, TypesEnum MaxEnumValue, typename UnderlyingType = std::uint32_t>
+	template <typename Index_T, typename Value_T>
 	class [[nodiscard]] TermStore
 	{
-		using Index_T = IndexTypePair<TypesEnum, MaxEnumValue, UnderlyingType>;
-
 		static_assert(std::is_default_constructible<Value_T>::value, "required for default constructor of TermStore");
-		static_assert(std::is_trivially_destructible<Value_T>::value, "required to allow Value_T to be used in VecElem union and Data union");
+		static_assert(std::is_trivially_destructible<Value_T>::value, "required to allow Value_T to be used in VecElem union");
 
-		static constexpr std::size_t vec_elem_size = sizeof(Value_T) * 8;
+		static constexpr std::size_t table_dist = sizeof(Value_T) * 8;	//also number of elements each table keeps track of
+		using OccupancyTable = std::bitset<table_dist>;
 
-		//every vec_elem_size'th element in vec will not store actual term content, but a table of which of 
-		//the next (vec_elem_size -1) slots are still free. 
+		struct BuildValue {};	//used to differentiate the constructors of VecElem
+		struct BuildTable {};	//used to differentiate the constructors of VecElem
+
+		//every table_dist'th element in vec will not store actual term content, but a table of which of 
+		//the next (table_dist -1) slots are still free. 
+		//thus this union can act as both.
 		union [[nodiscard]] VecElem
 		{
 			Value_T value;
-			std::bitset<vec_elem_size> occupied_slots;
-			static_assert(sizeof(Value_T) == sizeof(std::bitset<vec_elem_size>), "union VecElem assumes equal member size");
+			OccupancyTable table;
+			static_assert(sizeof(Value_T) == sizeof(OccupancyTable), "union VecElem assumes equal member size");
 
-			struct BuildValue {};	//used to differentiate the constructors
 			template<typename... Args>
 			VecElem(BuildValue, Args&&... args) :value(std::forward<Args>(args)...) {}
 
-			struct BuildBitset {};	//used to differentiate the constructors
 			template<typename... Args>
-			VecElem(BuildBitset, Args&&... args) :bitset(std::forward<Args>(args)...) {}
+			VecElem(BuildTable, Args&&... args) :table(std::forward<Args>(args)...) {}
 
-			VecElem(const VecElem& snd) :occupied_slots(snd.occupied_slots) {}	//just does a shallow copy of snd
+			VecElem(const VecElem& snd) :table(snd.table) {}	//bitwise copy of snd
 
 			~VecElem() {} //both std::bitset and Value_T are trivially destructible
 		};
 
-		//head stores the index and term-type of the term trees root.
-		//if head.get_index() is set to 0, head lies not in vec, but is val.
-		//this is always possible, as at vec[0] only occupancy data is stored (named occupied_slots)
-		Index_T head;
-
-		//if the term tree consists only of its root, this will be stored in val directly, not in the vector. (with head.get_index() == 0)
-		union [[nodiscard]] Data
-		{
-			std::vector<VecElem> vec;
-			Value_T val;
-
-			template<typename... Args>
-			Data(Args&&... args) :val(std::forward<Args>(args)...) {}
-
-			Data() {}
-			Data(const Data& other) {}
-			~Data() {}	//does not clean up vec, because it doesnt know if vec is in use
-		} data;
-
-		enum DataType { vec, val };	//not present in memory layout, as it is known from head.get_index()
-		DataType data_type() const noexcept { return (this->head.get_index() != 0) ? DataType::vec : DataType::val; }
+		std::vector<VecElem> store;
 
 	public:
+		//head stores the index in store and term-type of the term trees root.
+		Index_T head;
 
-		template<typename... Args>
-		TermStore(TypesEnum type, Args&&... args)
-			:head(0, type), data(std::forward<Args>(args)...)
+		TermStore()
+			:store(), head()
 		{}
 
-		~TermStore()
+		template<typename... Args>
+		[[nodiscard]] std::size_t emplace_back(Args&&... args)
 		{
-			if (this->data_type() == DataType::vec) {
-				data.vec.~vector<VecElem>();
+			constexpr std::size_t none = -1;
+			const auto find_index_and_set_table = [](TermStore& self) {
+				for (std::size_t table_pos = 0; table_pos < self.store.size(); table_pos += table_dist) {
+					if (self.store[table_pos].table.all()) [[unlikely]] {
+						continue;
+					}
+					else {
+						OccupancyTable& table = self.store[table_pos].table;
+						for (std::size_t relative_pos = 1; relative_pos < table_dist; relative_pos++) {	//first bit encodes position of table -> start one later
+							if (!table[relative_pos]) {
+								table.set(relative_pos);
+								return table_pos + relative_pos;
+							}
+						}
+					}
+				}
+				return none;
+			};
+
+			const std::size_t new_pos = find_index_and_set_table(*this);
+			if (new_pos == none) [[unlikely]] {
+				if (this->store.size() % table_dist != 0) [[unlikely]]
+				{
+					throw std::exception("TermStore's emplace_back() found no free vector index, yet the next element to append to vector is not an occupancy_table");
+				}
+				this->store.emplace_back(BuildTable(), 0x3);	//first bit is set, as table itself occupies that slot, second as new element is emplaced afterwards.
+				this->store.emplace_back(BuildValue(), std::forward<Args>(args)...);
+				return this->store.size() - 1;	//index of just inserted element
+			}
+			else {
+				if (new_pos >= this->store.size()) {
+					this->store.emplace_back(BuildValue(), std::forward<Args>(args)...);	//put new element in store
+				}
+				else {
+					new (&this->store[new_pos]) VecElem(BuildValue(), std::forward<Args>(args)...);	//reuse old element in store
+				}
+				return new_pos;
 			}
 		}
 
-		TermStore(const TermStore& other)
-			:head(other.head), data()
+		void free(std::size_t idx)
 		{
-			switch (other.data_type()) {
-			case DataType::val:
-				std::memcpy(&this->data.val, &other.data.val, sizeof(Value_T));
-				break;
-			case DataType::vec:
-				new(&this->data.vec) std::vector<VecElem>(other.data.vec);
-				break;
+			if (this->store.size() - 1 < idx) [[unlikely]] {
+				throw std::exception("TermStore supposed to free unowned slots");
+			}
+			else {
+				OccupancyTable& table = this->store[idx / table_dist].table;
+				table.reset(idx % table_dist);
 			}
 		}
 
-		TermStore(TermStore&& other)
-			:head(other.head), data()
+		[[nodiscard]] Value_T& at(std::size_t idx)
 		{
-			switch (other.data_type()) {
-			case DataType::val:
-				std::memcpy(&this->data.val, &other.data.val, sizeof(Value_T));
-				break;
-			case DataType::vec:
-				new(&this->data.vec) std::vector<VecElem>(std::move(other.data.vec));
-				break;
-			}
+			if (idx % table_dist == 0) [[unlikely]] {
+				throw std::exception("TermStore::at() supposed to access Value_T, but requests Table index");
+			}			
+			return this->store.at(idx).value;
 		}
 
-		TermStore& operator=(const TermStore& other)
+		[[nodiscard]] const Value_T& at(std::size_t idx) const
 		{
-			if (this->data_type() == DataType::vec) {
-				this->data.vec.~vector<VecElem>();
-			}
-
-			this->head = other.head;
-			switch (other.data_type()) {
-			case DataType::val:
-				std::memcpy(&this->data.val, &other.data.val, sizeof(Value_T));
-				break;
-			case DataType::vec:
-				new(&this->data.vec) std::vector<VecElem>(other.data.vec);
-				break;
-			}
-			return *this;
+			if (idx % table_dist == 0) [[unlikely]] {
+				throw std::exception("TermStore::at() supposed to access Value_T, but requests Table index");
+			}			
+			return this->store.at(idx).value;
 		}
-
-		TermStore& operator=(TermStore&& other)
-		{
-			if (this->data_type() == DataType::vec) {
-				this->data.vec.~vector<VecElem>();
-			}
-
-			this->head = other.head;
-			switch (other.data_type()) {
-			case DataType::val:
-				std::memcpy(&this->data.val, &other.data.val, sizeof(Value_T));
-				break;
-			case DataType::vec:
-				new(&this->data.vec) std::vector<VecElem>(std::move(other.data.vec));
-				break;
-			}
-			return *this;
-		}
-
-	};
+	};	//class TermStore
 
 }
