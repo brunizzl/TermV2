@@ -35,6 +35,8 @@ namespace bmath::intern {
 
 		constexpr IndexTypePair() :data(static_cast<UnderlyingType>(MaxEnumValue)) {}
 
+		constexpr IndexTypePair(UnderlyingType data_) : data(data_) {}
+
 		constexpr IndexTypePair(std::size_t index, TypesEnum type)
 			:data(static_cast<UnderlyingType>(index << index_offset) | static_cast<UnderlyingType>(type))
 		{
@@ -105,16 +107,14 @@ namespace bmath::intern {
 			~VecElem() {} //both std::bitset and TermUnion_T are trivially destructible
 		};
 
-		std::vector<VecElem> store;
+		std::vector<VecElem> vector;
 
 	public:
 
 		TermStore(std::size_t reserve = 0)
-			:store()
+			:vector()
 		{
-			if (reserve > 0) {
-				store.reserve(reserve);
-			}
+			vector.reserve(reserve);
 		}
 
 		template<typename TermUnionMember_T>
@@ -122,12 +122,12 @@ namespace bmath::intern {
 		{
 			constexpr std::size_t none = -1;
 			const auto find_index_and_set_table = [](TermStore& self) {
-				for (std::size_t table_pos = 0; table_pos < self.store.size(); table_pos += table_dist) {
-					if (self.store[table_pos].table.all()) [[unlikely]] {	//currently optimizes for case with only one table present
+				for (std::size_t table_pos = 0; table_pos < self.vector.size(); table_pos += table_dist) {
+					if (self.vector[table_pos].table.all()) [[unlikely]] {	//currently optimizes for case with only one table present
 						continue;
 					}
 					else {
-						OccupancyTable& table = self.store[table_pos].table;
+						OccupancyTable& table = self.vector[table_pos].table;
 						for (std::size_t relative_pos = 1; relative_pos < table_dist; relative_pos++) {	//first bit encodes position of table -> start one later
 							if (!table[relative_pos]) {
 								table.set(relative_pos);
@@ -141,19 +141,19 @@ namespace bmath::intern {
 
 			const std::size_t new_pos = find_index_and_set_table(*this);
 			if (new_pos == none) [[unlikely]] {
-				if (this->store.size() % table_dist != 0) [[unlikely]] {
-					throw std::exception("TermStore's insert_new() found no free vector index, yet the next element to append to store next is not an occupancy_table");
+				if (this->vector.size() % table_dist != 0) [[unlikely]] {
+					throw std::exception("TermStore's insert_new() found no free vector index, yet the next element to append to vector next is not an occupancy_table");
 				}
-				this->store.emplace_back(BuildTable(), 0x3);	//first bit is set, as table itself occupies that slot, second as new element is emplaced afterwards.
-				this->store.push_back(VecElem(BuildValue(), new_value));
-				return this->store.size() - 1;	//index of just inserted element
+				this->vector.emplace_back(BuildTable(), 0x3);	//first bit is set, as table itself occupies that slot, second as new element is emplaced afterwards.
+				this->vector.push_back(VecElem(BuildValue(), new_value));
+				return this->vector.size() - 1;	//index of just inserted element
 			}
 			else {
-				if (new_pos >= this->store.size()) {	//put new element in store
-					this->store.push_back(VecElem(BuildValue(), new_value));
+				if (new_pos >= this->vector.size()) {	//put new element in vector
+					this->vector.push_back(VecElem(BuildValue(), new_value));
 				}
-				else {	//reuse old element in store
-					new (&this->store[new_pos]) VecElem(BuildValue(), new_value);
+				else {	//reuse old element in vector
+					new (&this->vector[new_pos]) VecElem(BuildValue(), new_value);
 				}
 				return new_pos;
 			}
@@ -161,11 +161,11 @@ namespace bmath::intern {
 
 		void free(std::size_t idx)
 		{
-			if (this->store.size() - 1 < idx) [[unlikely]] {
+			if (this->vector.size() - 1 < idx) [[unlikely]] {
 				throw std::exception("TermStore supposed to free unowned slots");
 			}
 			else {
-				OccupancyTable& table = this->store[idx / table_dist].table;
+				OccupancyTable& table = this->vector[idx / table_dist].table;
 				table.reset(idx % table_dist);
 			}
 		}
@@ -175,7 +175,7 @@ namespace bmath::intern {
 			if (idx % table_dist == 0) [[unlikely]] {
 				throw std::exception("TermStore::at() supposed to access TermUnion_T, but an index reserved for Table is requested");
 			}			
-			return this->store.at(idx).value;
+			return this->vector.at(idx).value;
 		}
 
 		[[nodiscard]] const TermUnion_T& at(std::size_t idx) const
@@ -183,7 +183,7 @@ namespace bmath::intern {
 			if (idx % table_dist == 0) [[unlikely]] {
 				throw std::exception("TermStore::at() supposed to access TermUnion_T, but an index reserved for Table is requested");
 			}			
-			return this->store.at(idx).value;
+			return this->vector.at(idx).value;
 		}
 	};	//class TermStore
 
