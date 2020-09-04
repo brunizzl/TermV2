@@ -73,8 +73,6 @@ namespace bmath::intern {
 
 
 
-
-
 	template <typename TermUnion_T>
 	class [[nodiscard]] TermStore
 	{
@@ -102,7 +100,7 @@ namespace bmath::intern {
 			template<typename... Args>
 			VecElem(BuildTable, Args&&... args) :table(std::forward<Args>(args)...) {}
 
-			VecElem(const VecElem& snd) :table(snd.table) {}	//bitwise copy of snd
+			VecElem(const VecElem& snd) :table(snd.table) {} //bitwise copy of snd
 
 			~VecElem() {} //both std::bitset and TermUnion_T are trivially destructible
 		};
@@ -111,12 +109,16 @@ namespace bmath::intern {
 
 	public:
 
-		TermStore()
+		TermStore(std::size_t reserve = 0)
 			:store()
-		{}
+		{
+			if (reserve > 0) {
+				store.reserve(reserve);
+			}
+		}
 
-		template<typename... Args>
-		[[nodiscard]] std::size_t emplace_new(Args&&... args)
+		template<typename TermUnionMember_T>
+		[[nodiscard]] std::size_t insert_new(const TermUnionMember_T& new_value)
 		{
 			constexpr std::size_t none = -1;
 			const auto find_index_and_set_table = [](TermStore& self) {
@@ -140,18 +142,18 @@ namespace bmath::intern {
 			const std::size_t new_pos = find_index_and_set_table(*this);
 			if (new_pos == none) [[unlikely]] {
 				if (this->store.size() % table_dist != 0) [[unlikely]] {
-					throw std::exception("TermStore's emplace_new() found no free vector index, yet the next element to append to store next is not an occupancy_table");
+					throw std::exception("TermStore's insert_new() found no free vector index, yet the next element to append to store next is not an occupancy_table");
 				}
 				this->store.emplace_back(BuildTable(), 0x3);	//first bit is set, as table itself occupies that slot, second as new element is emplaced afterwards.
-				this->store.emplace_back(BuildValue(), std::forward<Args>(args)...);
+				this->store.push_back(VecElem(BuildValue(), new_value));
 				return this->store.size() - 1;	//index of just inserted element
 			}
 			else {
 				if (new_pos >= this->store.size()) {	//put new element in store
-					this->store.emplace_back(BuildValue(), std::forward<Args>(args)...);
+					this->store.push_back(VecElem(BuildValue(), new_value));
 				}
 				else {	//reuse old element in store
-					new (&this->store[new_pos]) VecElem(BuildValue(), std::forward<Args>(args)...);
+					new (&this->store[new_pos]) VecElem(BuildValue(), new_value);
 				}
 				return new_pos;
 			}
