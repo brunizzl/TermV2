@@ -35,7 +35,7 @@ namespace bmath::intern {
 
 		constexpr IndexTypePair() :data(static_cast<UnderlyingType>(MaxEnumValue)) {}
 
-		constexpr IndexTypePair(UnderlyingType data_) : data(data_) {}
+		explicit constexpr IndexTypePair(UnderlyingType data_) : data(data_) {}
 
 		constexpr IndexTypePair(std::size_t index, TypesEnum type)
 			:data(static_cast<UnderlyingType>(index << index_offset) | static_cast<UnderlyingType>(type))

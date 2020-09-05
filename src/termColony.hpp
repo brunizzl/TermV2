@@ -5,6 +5,7 @@
 #include <array>
 #include <functional>
 #include <limits>
+#include <cassert>
 
 #include "termStore.hpp"
 
@@ -14,27 +15,36 @@ namespace bmath::intern {
 	//not only a single Value_T (as an ordinary list would). TermSLC directly represents the node, there is no extra head or management.
 	//TermSLC is build to reside inside a TermStore, thus it works with Index_T to access later nodes, not with pointers.
 	//NullIndex is analogous to nullptr, NullValue is a placeholder to indicate that a position in values is not yet used.
-	template <typename Index_T, Index_T NullIndex, typename Value_T, /*Value_T*/ unsigned int NullValue, std::size_t ArraySize>
+	template <typename Index_T, typename Value_T, std::size_t ArraySize>
 	struct TermSLC
 	{
 		static_assert(std::is_unsigned_v<Index_T>);
 		static_assert(std::is_trivially_destructible_v<Value_T>);
 
+		static constexpr Index_T null_index = Index_T(0);
+		static constexpr Value_T null_value = Value_T(0);
+		static constexpr std::size_t array_size = ArraySize;
+
 		Index_T next_block_idx;
 		Value_T values[ArraySize];
 
-		TermSLC() :next_block_idx(NullIndex)
+		TermSLC() :next_block_idx(null_index)
 		{
 			for (std::size_t i = 0; i < ArraySize; i++) {
-				values[i] = NullValue;
+				values[i] = null_value;
 			}
 		}
 
-		TermSLC(Value_T elem) :next_block_idx(NullIndex)
+		TermSLC(std::initializer_list<Value_T> list) :next_block_idx(null_index)
 		{
-			values[0] = elem;
-			for (std::size_t i = 1; i < ArraySize; i++) {
-				values[i] = NullValue;
+			assert(list.size() <= ArraySize);
+			std::size_t i = 0;
+			for (auto& val : list) {
+				this->values[i] = val;
+				i++;
+			}
+			for (; i < ArraySize; i++) {
+				this->values[i] = null_value;
 			}
 		}
 
@@ -43,13 +53,13 @@ namespace bmath::intern {
 		void insert_new(TermStore<TermUnion_T>& store, Value_T elem)
 		{
 			for (std::size_t i = 0; i < ArraySize; i++) {
-				if (this->values[i] != NullValue) {
+				if (this->values[i] != null_value) {
 					this->values[i] = elem;
 					return;
 				}
 			}
 
-			if (this->next_block_idx != NullIndex) {
+			if (this->next_block_idx != null_index) {
 				TermSLC& next_block = store.at(this->next_block_idx);
 				next_block.insert_new(store, elem);
 			}
@@ -57,44 +67,79 @@ namespace bmath::intern {
 				this->next_block_idx = store.insert_new(TermSLC(elem));
 			}
 		}
-
-		template<typename TermUnion_T, typename UnionToSLC, typename Apply>
-		void for_each(TermStore<TermUnion_T>& store, const UnionToSLC& union_to_slc, const Apply& apply) 
-		{
-			static_assert(std::is_invocable_r_v<TermSLC&, UnionToSLC, TermUnion_T&>, "conversion from TermUnion_T to TermSLC must return reference");
-
-			for (std::size_t i = 0; i < ArraySize; i++) {
-				if (this->values[i] != NullValue) [[likely]] {
-					apply(this->values[i]);
-				}
-			}
-			if (this->next_block_idx != NullIndex) {
-				TermSLC& next_block = union_to_slc(store.at(this->next_block_idx));
-				next_block.for_each<TermUnion_T, UnionToSLC, Apply>(store, union_to_slc, apply);
-			}
-		}
-
-		template<typename TermUnion_T, typename UnionToSLC, typename Apply>
-		void for_each(const TermStore<TermUnion_T>& store, const UnionToSLC& union_to_slc, const Apply& apply) const 
-		{
-			static_assert(std::is_invocable_r_v<const TermSLC&, UnionToSLC, const TermUnion_T&>, "conversion from TermUnion_T to TermSLC must return reference");
-
-			for (std::size_t i = 0; i < ArraySize; i++) {
-				if (this->values[i] != NullValue) [[likely]] {
-					apply(this->values[i]);
-				}
-			}
-			if (this->next_block_idx != NullIndex) {
-				const TermSLC& next_block = union_to_slc(store.at(this->next_block_idx));
-				next_block.for_each<TermUnion_T, UnionToSLC, Apply>(store, union_to_slc, apply);
-			}
-		}
-
 	};	//struct TermSLC 
 
+	template<typename UnionToSLC, typename TermUnion_T, typename SLC_Index_T, typename SLC_Value_T, std::size_t SLC_ArraySize>
+	struct SLC_Ref
+	{
+		using SLC = TermSLC<SLC_Index_T, SLC_Value_T, SLC_ArraySize>;
+
+		TermStore<TermUnion_T>& store;
+		SLC& slc;
+		const UnionToSLC& union_to_slc;
+
+		struct Iterator
+		{
+			TermStore<TermUnion_T>& store;
+			SLC* current_block;			// == nullptr, if whole object represents end()
+			std::size_t array_idx;		// == SLC::array_size, if whole object represents end()
+			const UnionToSLC& union_to_slc;
+
+			void operator++()
+			{
+				this->array_idx++;
+				while (true) {
+					while (this->array_idx < SLC::array_size && this->current_block->values[array_idx] == SLC::null_value) 
+						[[unlikely]] {
+						this->array_idx++;
+					}
+
+					if (this->array_idx < SLC::array_size) [[likely]] {
+						return;
+					}
+					else if (current_block->next_block_idx != SLC::null_index) {
+						this->current_block = &union_to_slc(store.at(current_block->next_block_idx));
+						this->array_idx = 0;
+					}
+					else {
+						current_block = nullptr;
+						return;
+					}
+				}
+			}
+
+			auto& operator*() noexcept
+			{
+				assert(this->current_block->values[this->array_idx] != SLC::null_value && this->array_idx < SLC::array_size);
+				return current_block->values[array_idx];
+			}
+
+			bool operator==(const Iterator& other) const noexcept
+			{
+				return this->array_idx == other.array_idx && this->current_block == other.current_block;
+			}
+		};	//struct Iterator
+
+		Iterator begin()
+		{
+			return Iterator{ this->store, &this->slc, 0, union_to_slc };
+		}
+
+		Iterator end()
+		{
+			return Iterator{ this->store, nullptr, SLC::array_size, union_to_slc };
+		}
+	}; //struct SLC_Ref
+
+	template<typename UnionToSLC, typename TermUnion_T, typename SLC_Index_T, typename SLC_Value_T, std::size_t SLC_ArraySize>
+	auto make_iterable(TermStore<TermUnion_T>& store, TermSLC<SLC_Index_T, SLC_Value_T, SLC_ArraySize>& slc, 
+		const UnionToSLC& union_to_slc)
+	{
+		return SLC_Ref<UnionToSLC, TermUnion_T, SLC_Index_T, SLC_Value_T, SLC_ArraySize>{store, slc, union_to_slc};
+	}
 
 
-	struct TermString128 : TermSLC<std::uint32_t, 0, char, '\0', 12>
+	struct TermString128 : TermSLC<std::uint32_t, char, 12>
 	{
 		static constexpr std::size_t array_size = 12;
 		static constexpr std::uint16_t null_index = 0;
@@ -119,23 +164,21 @@ namespace bmath::intern {
 		}
 
 		template<typename UnionToSLC, typename TermUnion_T>
-		void read(TermStore<TermUnion_T>& store, const UnionToSLC& union_to_slc, std::string& dest) const noexcept
+		void read(TermStore<TermUnion_T>& store, const UnionToSLC& union_to_slc, std::string& dest) const
 		{
 			static_assert(std::is_invocable_r_v<TermString128&, UnionToSLC, TermUnion_T&>, "conversion from TermUnion_T to TermString128 must return reference");
 
-			if (this->next_block_idx != null_index) {
-				dest.append(this->values, array_size);
-				const TermString128& next_block = union_to_slc(store.at(this->next_block_idx));
-				next_block.read<UnionToSLC, TermUnion_T>(store, union_to_slc, dest);
+			const TermString128* current = this;
+			while (current->next_block_idx != null_index) {
+				dest.append(current->values, array_size);
+				current = &union_to_slc(store.at(current->next_block_idx));
 			}
-			else {
-				for (std::size_t i = 0; i < array_size; i++) {
-					if (this->values[i] == '\0') [[unlikely]] {
-						return;
-					}
-					dest.push_back(this->values[i]);
+			for (std::size_t i = 0; i < array_size; i++) {
+				if (current->values[i] == '\0') [[unlikely]] {
+					return;
 				}
-			}
+				dest.push_back(current->values[i]);
+			}			
 		}
 
 	};	//struct TermString128
