@@ -133,10 +133,10 @@ namespace bmath::intern::arithmetic {
 
 	template<typename SumLambda, typename ProductLambda, typename KnownFunctionLambda, typename UnknownFunctionLambda, 
 		typename PowerLambda, typename VariableLambda, typename ComplexLambda>
-		auto visit(TermStore<TypesUnion>& store, TypedRef ref, 
-			const SumLambda& sum_lambda, const ProductLambda& product_lambda, const KnownFunctionLambda& known_function_lambda, 
-			const UnknownFunctionLambda& unknown_function_lambda, const PowerLambda& power_lambda, 
-			const VariableLambda& variable_lambda, const ComplexLambda& complex_lambda)
+	auto visit(TermStore<TypesUnion>& store, TypedRef ref, 
+		const SumLambda& sum_lambda, const ProductLambda& product_lambda, const KnownFunctionLambda& known_function_lambda, 
+		const UnknownFunctionLambda& unknown_function_lambda, const PowerLambda& power_lambda, 
+		const VariableLambda& variable_lambda, const ComplexLambda& complex_lambda)
 	{
 		const std::size_t index = ref.get_index();
 		switch (ref.get_type()) {
