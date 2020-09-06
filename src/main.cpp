@@ -7,24 +7,8 @@
 using namespace bmath::intern::arithmetic;
 using namespace bmath::intern;
 
-struct Chars
-{
-	char chars1[2];
-	char chars2[2];
-};
-
 int main()
 {
-	{
-		Chars chars;
-		for (int i = 0; i < 4; i++) {
-			chars.chars1[i] = 'c';
-		}
-		for (int i = 0; i < 4; i++) {
-			std::cout << chars.chars1[i];
-		}
-		std::cout << '\n';
-	}
 	{
 		bmath::ArithmeticTerm term;
 		auto val1_idx = term.values.emplace_new(Complex{ {3.0, 0.0} });
