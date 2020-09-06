@@ -1,7 +1,6 @@
 #pragma once
 
 #include <complex>
-#include <variant>
 
 #include "termStore.hpp"
 #include "termColony.hpp"
@@ -19,18 +18,16 @@ namespace bmath::intern::arithmetic {
 		COUNT	//has to be last element
 	};
 
-	using TypedRef = IndexTypePair<Type, Type::COUNT, std::uint32_t>;
+	using TypedRef = BasicTypedRef<Type, Type::COUNT, std::uint32_t>;
 	using TypedRefColony = TermSLC<std::uint32_t, TypedRef, 3>;
 
 
 
 	struct Sum : TypedRefColony
-	{
-	};
+	{};
 
 	struct Product : TypedRefColony
-	{
-	};
+	{};
 
 	enum class FunctionType : std::uint32_t
 	{
@@ -70,25 +67,14 @@ namespace bmath::intern::arithmetic {
 		enum class ParamCount :char { one, two, more };
 		enum class NameSize :char { small, longer };
 
+		ParamCount param_count : 4;
+		NameSize name_size : 4;
+		char short_name[3];	//can be used as short_name[7], if short_name_extension is active member
 		union
 		{
-			struct
-			{
-				//if == ParamCount::one or == ParamCount::two, short_parameters are used, long_param_colony_index otherwise
-				//if == NameSize::small, short_name is used, long_name_index otherwise
-				ParamCount param_count : 4;
-				NameSize name_size : 4;
-				std::uint32_t long_name_index;	//points to TermString128 containing name (if active)
-			};
-
-			struct
-			{
-				ParamCount param_count_ : 4; //also here to guarantee existence independent of active member
-				NameSize name_size_ : 4;	 //also here to guarantee existence independent of active member
-				char short_name[7];
-			};
+			char short_name_extension[4];
+			std::uint32_t long_name_index;	//points to TermString128 containing name (if active)
 		};
-
 		union
 		{
 			std::uint32_t long_param_colony_index; //points to TypedRefColony containing all parameters (if active)
@@ -107,10 +93,8 @@ namespace bmath::intern::arithmetic {
 		TermString128 name;
 	};
 
-	struct Complex
-	{
-		std::complex<double> val;
-	};
+	struct Complex :std::complex<double>
+	{};
 
 	union TypesUnion
 	{
@@ -137,29 +121,34 @@ namespace bmath::intern::arithmetic {
 
 	static_assert(sizeof(TypesUnion) * 8 == 128);
 
-	struct ToSum { static Sum& apply(TypesUnion& val) { return val.sum; } };
-	struct ToProduct { static Product& apply(TypesUnion& val) { return val.product; } };
+	//everything using the TermSLC needs to have a way to get the right union member from the union
+	struct ToSum     { static Sum&           apply(TypesUnion& val) { return val.sum;     } };
+	struct ToProduct { static Product&       apply(TypesUnion& val) { return val.product; } };
+	struct ToString  { static TermString128& apply(TypesUnion& val) { return val.string;  } };
+	struct ToConstSum     { static const Sum&           apply(const TypesUnion& val) { return val.sum;     } };
+	struct ToConstProduct { static const Product&       apply(const TypesUnion& val) { return val.product; } };
+	struct ToConstString  { static const TermString128& apply(const TypesUnion& val) { return val.string;  } };
 
 
-	//using VarTerm = std::variant<Sum, Product, KnownFunction, UnknownFunction, Power, Variable, Complex, Integer>;
 
 	template<typename SumLambda, typename ProductLambda, typename KnownFunctionLambda, typename UnknownFunctionLambda, 
 		typename PowerLambda, typename VariableLambda, typename ComplexLambda>
-		auto visit(TermStore<TypesUnion>& store, TypedRef ref, SumLambda& sum_lambda, ProductLambda& product_lambda,
-			KnownFunctionLambda& known_function_lambda, UnknownFunctionLambda& unknown_function_lambda, PowerLambda& power_lambda,
-			VariableLambda& variable_lambda, ComplexLambda& complex_lambda)
+		auto visit(TermStore<TypesUnion>& store, TypedRef ref, 
+			const SumLambda& sum_lambda, const ProductLambda& product_lambda, const KnownFunctionLambda& known_function_lambda, 
+			const UnknownFunctionLambda& unknown_function_lambda, const PowerLambda& power_lambda, 
+			const VariableLambda& variable_lambda, const ComplexLambda& complex_lambda)
 	{
 		const std::size_t index = ref.get_index();
 		switch (ref.get_type()) {
-		case Type::sum: return sum_lambda(store, store.at(index).sum);
-		case Type::product: return product_lambda(store, store.at(index).product);
-		case Type::known_function: return known_function_lambda(store, store.at(index).known_function);
+		case Type::sum:              return sum_lambda             (store, store.at(index).sum             );
+		case Type::product:          return product_lambda         (store, store.at(index).product         );
+		case Type::known_function:   return known_function_lambda  (store, store.at(index).known_function  );
 		case Type::unknown_function: return unknown_function_lambda(store, store.at(index).unknown_function);
-		case Type::power: return power_lambda(store, store.at(index).power);
-		case Type::variable: return variable_lambda(store, store.at(index).variable);
-		case Type::complex: return complex_lambda(store, store.at(index).complex);
+		case Type::power:            return power_lambda           (store, store.at(index).power           );
+		case Type::variable:         return variable_lambda        (store, store.at(index).variable        );
+		case Type::complex:          return complex_lambda         (store, store.at(index).complex         );
 		}
-		assert(false);	//if this assert hits, the switch needs more cases.
+		assert(false);	//if this assert hits, the switch above needs more cases.
 		return complex_lambda(store, store.at(index).complex);
 	}
 
@@ -190,9 +179,9 @@ namespace bmath::intern::arithmetic {
 			},
 			unimplemented,
 			[](auto& store, Complex& complex) {
-				return complex.val.real();
+				return complex.real();
 			}
-			);
+		);
 	}
 
 }	//namespace bmath::intern::arithmetic

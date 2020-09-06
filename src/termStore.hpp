@@ -10,7 +10,7 @@ namespace bmath::intern {
 	//stores both an index and an enum value in the same variable 
 	//with the lower bits representing the enum, the upper bits representing the (shifted) index
 	template<typename TypesEnum, TypesEnum MaxEnumValue, typename UnderlyingType = std::uint32_t>
-	class [[nodiscard]] IndexTypePair
+	class [[nodiscard]] BasicTypedRef
 	{
 		static_assert(std::is_enum_v<TypesEnum>);
 		static_assert(std::is_unsigned_v<UnderlyingType>);
@@ -33,18 +33,18 @@ namespace bmath::intern {
 	public:
 		static constexpr std::size_t max_index =  index_mask >> index_offset;
 
-		constexpr IndexTypePair() :data(static_cast<UnderlyingType>(MaxEnumValue)) {}
+		constexpr BasicTypedRef() :data(static_cast<UnderlyingType>(MaxEnumValue)) {}
 
-		explicit constexpr IndexTypePair(UnderlyingType data_) : data(data_) {}
+		explicit constexpr BasicTypedRef(UnderlyingType data_) : data(data_) {}
 
-		constexpr IndexTypePair(std::size_t index, TypesEnum type)
+		constexpr BasicTypedRef(std::size_t index, TypesEnum type)
 			:data(static_cast<UnderlyingType>(index << index_offset) | static_cast<UnderlyingType>(type))
 		{
 			if (index > max_index) [[unlikely]] {
-				throw std::exception("IndexTypePair has recieved index bigger than max_index");
+				throw std::exception("BasicTypedRef has recieved index bigger than max_index");
 			}
 			if (type > MaxEnumValue) [[unlikely]] {
-				throw std::exception("IndexTypePair has recieved enum value bigger than MaxEnumValue");
+				throw std::exception("BasicTypedRef has recieved enum value bigger than MaxEnumValue");
 			}
 		}
 
@@ -52,7 +52,7 @@ namespace bmath::intern {
 
 		constexpr void set_index(std::size_t new_index) { 
 			if (new_index > max_index) [[unlikely]] {
-				throw std::exception("IndexTypePair has recieved index bigger than max_index");
+				throw std::exception("BasicTypedRef has recieved index bigger than max_index");
 			}
 			data = static_cast<UnderlyingType>(new_index << index_offset) | (data & enum_mask); 
 		}
@@ -61,14 +61,14 @@ namespace bmath::intern {
 
 		constexpr void set_type(TypesEnum new_type) { 
 			if (new_type > MaxEnumValue) [[unlikely]] {
-				throw std::exception("IndexTypePair has recieved enum value bigger than MaxEnumValue");
+				throw std::exception("BasicTypedRef has recieved enum value bigger than MaxEnumValue");
 			}
 			data = (data & index_mask) | static_cast<UnderlyingType>(new_type); 
 		}
 
-		auto operator<=>(const IndexTypePair&) const = default;
-		bool operator==(const IndexTypePair&) const = default;
-	};	//class IndexTypePair
+		auto operator<=>(const BasicTypedRef&) const = default;
+		bool operator==(const BasicTypedRef&) const = default;
+	};	//class BasicTypedRef
 
 
 

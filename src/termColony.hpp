@@ -139,23 +139,23 @@ namespace bmath::intern {
 			const std::size_t last_substr_length = str.length() % TermString128::array_size;
 			if (last_substr_length > 0) {
 				const std::string_view last_view = str.substr(str.length() - last_substr_length);
-				prev_inserted_at = store.emplace_new(last_view, prev_inserted_at);
+				prev_inserted_at = store.emplace_new(TermString128(last_view, prev_inserted_at));
 				str.remove_suffix(last_substr_length);
 			}
 		}
 		assert((str.length() % TermString128::array_size == 0) && "last shorter bit should have been cut off already");
 		while (str.length()) {
 			const std::string_view last_view = str.substr(str.length() - TermString128::array_size);
-			prev_inserted_at = store.emplace_new(last_view, prev_inserted_at);
+			prev_inserted_at = store.emplace_new(TermString128(last_view, prev_inserted_at));
 			str.remove_suffix(TermString128::array_size);
 		}
 		return prev_inserted_at;
 	}
 
 	template<typename UnionToSLC, typename TermUnion_T>
-	void read(const TermStore<TermUnion_T>& store, const TermString128& source, std::string& dest)
+	void read(const TermStore<TermUnion_T>& store, std::size_t source_idx, std::string& dest)
 	{
-		const TermString128* current = &source;
+		const TermString128* current = &UnionToSLC::apply(store.at(source_idx));
 		while (current->next_block_idx != TermString128::null_index) {
 			dest.append(current->values, TermString128::array_size);
 			current = &UnionToSLC::apply(store.at(current->next_block_idx));

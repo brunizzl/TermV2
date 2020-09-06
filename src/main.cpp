@@ -7,8 +7,24 @@
 using namespace bmath::intern::arithmetic;
 using namespace bmath::intern;
 
+struct Chars
+{
+	char chars1[2];
+	char chars2[2];
+};
+
 int main()
 {
+	{
+		Chars chars;
+		for (int i = 0; i < 4; i++) {
+			chars.chars1[i] = 'c';
+		}
+		for (int i = 0; i < 4; i++) {
+			std::cout << chars.chars1[i];
+		}
+		std::cout << '\n';
+	}
 	{
 		bmath::ArithmeticTerm term;
 		auto val1_idx = term.values.emplace_new(Complex{ {3.0, 0.0} });
@@ -21,25 +37,23 @@ int main()
 		auto sum_ref = TypedRef(sum_idx, Type::sum);
 		std::cout << eval(term.values, sum_ref) << std::endl;
 	}
+	{
+		TermStore<TypesUnion> store;
+		std::string_view info = "ich bin bruno und ich bin der kameramann";
+		auto head = insert_string(store, info);
+		ToString::apply(store.at(head)).insert_new<ToString>(store, '.');
 
-	struct ToString { static TermString128& apply(TermString128& val) { return val; } };
-	struct ToConstString { static const TermString128& apply(const TermString128& val) { return val; } };
-
-	TermStore<TermString128> store;
-	std::string_view info = "ich bin bruno und ich bin der kameramann";
-	auto head = insert_string(store, info);
-	store.at(head).insert_new<ToString>(store, '.');
-
-	std::string output;
-	read<ToConstString>(store, store.at(head), output);
-	std::cout << output << '\n';
-	for (auto& c : range<ToString>(store, store.at(head))) {
-		if (c == 'a' || c == 'o' || c == 'i' || c == 'e') {
-			c = 'u';
+		std::string output;
+		read<ToConstString>(store, head, output);
+		std::cout << output << '\n';
+		for (auto& c : range<ToString>(store, ToString::apply(store.at(head)))) {
+			if (c == 'a' || c == 'o' || c == 'i' || c == 'e' || c == 'u') {
+				c = 'o';
+			}
 		}
+
+		output.clear();
+		read<ToConstString>(store, head, output);
+		std::cout << output << '\n';
 	}
-	
-	output.clear();
-	read<ToConstString>(store, store.at(head), output);
-	std::cout << output << '\n';
 }
