@@ -76,32 +76,30 @@ namespace bmath::intern {
 
 		TermStore<TermUnion_T>& store;
 		SLC& slc;
-		const UnionToSLC& union_to_slc;
 
-		struct Iterator
+		struct RangeIterator
 		{
 			TermStore<TermUnion_T>& store;
 			SLC* current_block;			// == nullptr, if whole object represents end()
 			std::size_t array_idx;		// == SLC::array_size, if whole object represents end()
-			const UnionToSLC& union_to_slc;
 
 			void operator++()
 			{
 				this->array_idx++;
 				while (true) {
 					while (this->array_idx < SLC::array_size && this->current_block->values[array_idx] == SLC::null_value) 
-						[[unlikely]] {
+					[[unlikely]] {
 						this->array_idx++;
 					}
 
-					if (this->array_idx < SLC::array_size) [[likely]] {
+					if (this->array_idx < SLC::array_size) [[likely]] { //valid position and valid element -> done
 						return;
 					}
-					else if (current_block->next_block_idx != SLC::null_index) {
-						this->current_block = &union_to_slc(store.at(current_block->next_block_idx));
+					else if (current_block->next_block_idx != SLC::null_index) { //no valid position -> go to next block
+						this->current_block = &UnionToSLC::apply(store.at(current_block->next_block_idx));
 						this->array_idx = 0;
 					}
-					else {
+					else { //neither valid position, nor valid block -> this becomes end()
 						current_block = nullptr;
 						return;
 					}
@@ -114,28 +112,22 @@ namespace bmath::intern {
 				return current_block->values[array_idx];
 			}
 
-			bool operator==(const Iterator& other) const noexcept
+			bool operator==(const RangeIterator& other) const noexcept
 			{
 				return this->array_idx == other.array_idx && this->current_block == other.current_block;
 			}
-		};	//struct Iterator
+		};	//struct RangeIterator
 
-		Iterator begin()
-		{
-			return Iterator{ this->store, &this->slc, 0, union_to_slc };
-		}
-
-		Iterator end()
-		{
-			return Iterator{ this->store, nullptr, SLC::array_size, union_to_slc };
-		}
+		RangeIterator begin() { return RangeIterator{ this->store, &this->slc, 0 }; }
+		RangeIterator end() { return RangeIterator{ this->store, nullptr, SLC::array_size }; }
 	}; //struct SLC_Ref
 
+	//first template parameter needs to be explicit, and of form:
+	// struct UnionToSLC { static SLC_TYPE& apply(TermUnion_T& val) { return val.slc_member; }};
 	template<typename UnionToSLC, typename TermUnion_T, typename SLC_Index_T, typename SLC_Value_T, std::size_t SLC_ArraySize>
-	auto make_iterable(TermStore<TermUnion_T>& store, TermSLC<SLC_Index_T, SLC_Value_T, SLC_ArraySize>& slc, 
-		const UnionToSLC& union_to_slc)
+	auto range(TermStore<TermUnion_T>& store, TermSLC<SLC_Index_T, SLC_Value_T, SLC_ArraySize>& slc)
 	{
-		return SLC_Ref<UnionToSLC, TermUnion_T, SLC_Index_T, SLC_Value_T, SLC_ArraySize>{store, slc, union_to_slc};
+		return SLC_Ref<UnionToSLC, TermUnion_T, SLC_Index_T, SLC_Value_T, SLC_ArraySize>{store, slc};
 	}
 
 

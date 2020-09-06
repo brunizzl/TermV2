@@ -16,7 +16,6 @@ namespace bmath::intern::arithmetic {
 		power,
 		variable,
 		complex,
-		integer,
 		COUNT	//has to be last element
 	};
 
@@ -25,15 +24,11 @@ namespace bmath::intern::arithmetic {
 
 
 
-	struct Sum
-	{
-		TypedRefColony summands;
-	};
+	struct Sum : TypedRefColony
+	{};
 
-	struct Product
-	{
-		TypedRefColony factors;
-	};
+	struct Product : TypedRefColony
+	{};
 
 	enum class FunctionType : std::uint32_t
 	{
@@ -115,12 +110,6 @@ namespace bmath::intern::arithmetic {
 		std::complex<double> val;
 	};
 
-	struct Integer
-	{
-		//if value fits into std::int32_t, only parts.values[0] is used, else also parts.values[1] ...
-		TermSLC<std::uint32_t, std::int32_t, 3> parts;
-	};
-
 	union TypesUnion
 	{
 		Sum sum;
@@ -130,10 +119,9 @@ namespace bmath::intern::arithmetic {
 		Power power;
 		Variable variable;
 		Complex complex;
-		Integer integer;
 		TermString128 string;	//Variable and UnknownFunction may allocate additional string nodes
 
-		TypesUnion() :integer() {}
+		TypesUnion() :complex() {}
 
 		TypesUnion(const Sum &            val) :sum(val)              {}
 		TypesUnion(const Product&         val) :product(val)          {}
@@ -142,52 +130,35 @@ namespace bmath::intern::arithmetic {
 		TypesUnion(const Power&           val) :power(val)            {}
 		TypesUnion(const Variable&        val) :variable(val)         {}
 		TypesUnion(const Complex&         val) :complex(val)          {}
-		TypesUnion(const Integer&         val) :integer(val)          {} 
 		TypesUnion(const TermString128&   val) :string(val)           {} 
 	};
 
 	static_assert(sizeof(TypesUnion) * 8 == 128);
 
-	Sum&             get_sum             (TypesUnion& val) { return val.sum; }
-	Product&         get_product         (TypesUnion& val) { return val.product; }
-	KnownFunction&   get_known_function  (TypesUnion& val) { return val.known_function; }
-	UnknownFunction& get_unknown_function(TypesUnion& val) { return val.unknown_function; }
-	Power&           get_power           (TypesUnion& val) { return val.power; }
-	Variable&        get_variable        (TypesUnion& val) { return val.variable; }
-	Complex&         get_complex         (TypesUnion& val) { return val.complex; }
-	Integer&         get_integer         (TypesUnion& val) { return val.integer; }
-
-	const Sum&             get_sum             (const TypesUnion& val) { return val.sum; }
-	const Product&         get_product         (const TypesUnion& val) { return val.product; }
-	const KnownFunction&   get_known_function  (const TypesUnion& val) { return val.known_function; }
-	const UnknownFunction& get_unknown_function(const TypesUnion& val) { return val.unknown_function; }
-	const Power&           get_power           (const TypesUnion& val) { return val.power; }
-	const Variable&        get_variable        (const TypesUnion& val) { return val.variable; }
-	const Complex&         get_complex         (const TypesUnion& val) { return val.complex; }
-	const Integer&         get_integer         (const TypesUnion& val) { return val.integer; }
+	struct ToSum { static Sum& apply(TypesUnion& val) { return val.sum; } };
+	struct ToProduct { static Product& apply(TypesUnion& val) { return val.product; } };
 
 
 	//using VarTerm = std::variant<Sum, Product, KnownFunction, UnknownFunction, Power, Variable, Complex, Integer>;
 
 	template<typename SumLambda, typename ProductLambda, typename KnownFunctionLambda, typename UnknownFunctionLambda, 
-		typename PowerLambda, typename VariableLambda, typename ComplexLambda, typename IntegerLambda>
+		typename PowerLambda, typename VariableLambda, typename ComplexLambda>
 		auto visit(TermStore<TypesUnion>& store, TypedRef ref, SumLambda& sum_lambda, ProductLambda& product_lambda,
 			KnownFunctionLambda& known_function_lambda, UnknownFunctionLambda& unknown_function_lambda, PowerLambda& power_lambda,
-			VariableLambda& variable_lambda, ComplexLambda& complex_lambda, IntegerLambda& integer_lambda)
+			VariableLambda& variable_lambda, ComplexLambda& complex_lambda)
 	{
 		const std::size_t index = ref.get_index();
 		switch (ref.get_type()) {
-		case Type::sum: return sum_lambda(store, get_sum(store.at(index)));
-		case Type::product: return product_lambda(store, get_product(store.at(index)));
-		case Type::known_function: return known_function_lambda(store, get_known_function(store.at(index)));
-		case Type::unknown_function: return unknown_function_lambda(store, get_unknown_function(store.at(index)));
-		case Type::power: return power_lambda(store, get_power(store.at(index)));
-		case Type::variable: return variable_lambda(store, get_variable(store.at(index)));
-		case Type::complex: return complex_lambda(store, get_complex(store.at(index)));
-		case Type::integer: return integer_lambda(store, get_integer(store.at(index)));
+		case Type::sum: return sum_lambda(store, store.at(index).sum);
+		case Type::product: return product_lambda(store, store.at(index).product);
+		case Type::known_function: return known_function_lambda(store, store.at(index).known_function);
+		case Type::unknown_function: return unknown_function_lambda(store, store.at(index).unknown_function);
+		case Type::power: return power_lambda(store, store.at(index).power);
+		case Type::variable: return variable_lambda(store, store.at(index).variable);
+		case Type::complex: return complex_lambda(store, store.at(index).complex);
 		}
 		assert(false);	//if this assert hits, the switch needs more cases.
-		return integer_lambda(store, get_integer(store.at(index)));
+		return complex_lambda(store, store.at(index).complex);
 	}
 
 	double eval(TermStore<TypesUnion>& store, TypedRef ref)
@@ -196,19 +167,15 @@ namespace bmath::intern::arithmetic {
 		return visit(store, ref,
 			[](auto& store, Sum& sum) {
 				double value = 0;
-				for (auto i = 0; i < 3; i++) {
-					if (sum.summands.values[i] != TypedRefColony::null_value) {
-						value += eval(store, sum.summands.values[i]);
-					}
+				for (auto& elem : range<ToSum>(store, sum)) {
+					value += eval(store, elem);
 				}
 				return value;
 			},
 			[](auto& store, Product& product) {
 				double value = 1;
-				for (auto i = 0; i < 3; i++) {
-					if (product.factors.values[i] != TypedRefColony::null_value) {
-						value *= eval(store, product.factors.values[i]);
-					}
+				for (auto& elem : range<ToProduct>(store, product)) {
+					value *= eval(store, elem);
 				}
 				return value;
 			},
@@ -222,9 +189,6 @@ namespace bmath::intern::arithmetic {
 			unimplemented,
 			[](auto& store, Complex& complex) {
 				return complex.val.real();
-			},
-			[](auto& store, Integer& integer) {
-				return static_cast<double>(integer.parts.values[0]);
 			}
 			);
 	}
