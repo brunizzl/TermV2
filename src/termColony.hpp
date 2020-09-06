@@ -2,9 +2,6 @@
 
 #include <type_traits>
 #include <vector>
-#include <array>
-#include <functional>
-#include <limits>
 #include <cassert>
 
 #include "termStore.hpp"
@@ -15,56 +12,56 @@ namespace bmath::intern {
 	//not only a single Value_T (as an ordinary list would). TermSLC directly represents the node, there is no extra head or management.
 	//TermSLC is build to reside inside a TermStore, thus it works with Index_T to access later nodes, not with pointers.
 	//NullIndex is analogous to nullptr, NullValue is a placeholder to indicate that a position in values is not yet used.
-	template <typename Index_T, typename Value_T, std::size_t ArraySize>
+	template <typename Index_T, typename Value_T, std::size_t ArraySize, Index_T NullIndex = 0, long NullValue = 0>
 	struct TermSLC
 	{
 		static_assert(std::is_unsigned_v<Index_T>);
 		static_assert(std::is_trivially_destructible_v<Value_T>);
 
-		static constexpr Index_T null_index = Index_T(0);
-		static constexpr Value_T null_value = Value_T(0);
+		static constexpr Index_T null_index = Index_T(NullIndex);
+		static constexpr Value_T null_value = Value_T(NullValue);
 		static constexpr std::size_t array_size = ArraySize;
 
 		Index_T next_block_idx;
 		Value_T values[ArraySize];
 
-		TermSLC() :next_block_idx(null_index)
+		TermSLC(Value_T fst_elem = null_value) :next_block_idx(null_index)
 		{
-			for (std::size_t i = 0; i < ArraySize; i++) {
-				values[i] = null_value;
-			}
-		}
-
-		TermSLC(std::initializer_list<Value_T> list) :next_block_idx(null_index)
-		{
-			assert(list.size() <= ArraySize);
-			std::size_t i = 0;
-			for (auto& val : list) {
-				this->values[i] = val;
-				i++;
-			}
-			for (; i < ArraySize; i++) {
+			this->values[0] = fst_elem;
+			for (std::size_t i = 1; i < ArraySize; i++) {
 				this->values[i] = null_value;
 			}
 		}
 
+		template<typename Container>
+		TermSLC(const Container& new_values, Index_T next_block = null_index) :next_block_idx(next_block)
+		{
+			assert(new_values.size() <= ArraySize);
+			std::memcpy(this->values, new_values.data(), new_values.size() * sizeof(Value_T));
+			for (std::size_t i = new_values.size(); i < ArraySize; i++) {
+				values[i] = null_value;
+			}
+		}
+
 		//no order is guaranteed
-		template<typename TermUnion_T>
+		template<typename UnionToSLC, typename TermUnion_T>
 		void insert_new(TermStore<TermUnion_T>& store, Value_T elem)
 		{
-			for (std::size_t i = 0; i < ArraySize; i++) {
-				if (this->values[i] != null_value) {
-					this->values[i] = elem;
+			TermSLC* current = this;
+			while (true) {
+				for (std::size_t i = 0; i < ArraySize; i++) {
+					if (current->values[i] == null_value) {
+						current->values[i] = elem;
+						return;
+					}
+				}
+				if (current->next_block_idx != null_index) {
+					current = &UnionToSLC::apply(store.at(current->next_block_idx));
+				}
+				else {
+					current->next_block_idx = store.emplace_new(elem);
 					return;
 				}
-			}
-
-			if (this->next_block_idx != null_index) {
-				TermSLC& next_block = store.at(this->next_block_idx);
-				next_block.insert_new(store, elem);
-			}
-			else {
-				this->next_block_idx = store.insert_new(TermSLC(elem));
 			}
 		}
 	};	//struct TermSLC 
@@ -131,48 +128,43 @@ namespace bmath::intern {
 	}
 
 
-	struct TermString128 : TermSLC<std::uint32_t, char, 12>
-	{
-		static constexpr std::size_t array_size = 12;
-		static constexpr std::uint16_t null_index = 0;
-
-		TermString128() {}	//all chars are initialized to '\0' already by TermSLC
-
-		template<typename TermUnion_T>
-		TermString128(TermStore<TermUnion_T>& store, std::string_view str)
-		{
-			if (str.ends_with('\0')) {	//we dont need to open a new node if all that remains is '\0' -> just cut it off
-				str.remove_suffix(1);
-			}
-
-			if (str.size() > array_size) {
-				std::memcpy(&this->values, str.data(), sizeof(char) * array_size);
-				this->next_block_idx = store.insert_new(TermString128(store, str.substr(array_size)));
-			}
-			else {
-				std::memcpy(&this->values, str.data(), sizeof(char) * str.size());
-				this->next_block_idx = null_index;
-			}
-		}
-
-		template<typename UnionToSLC, typename TermUnion_T>
-		void read(TermStore<TermUnion_T>& store, const UnionToSLC& union_to_slc, std::string& dest) const
-		{
-			static_assert(std::is_invocable_r_v<TermString128&, UnionToSLC, TermUnion_T&>, "conversion from TermUnion_T to TermString128 must return reference");
-
-			const TermString128* current = this;
-			while (current->next_block_idx != null_index) {
-				dest.append(current->values, array_size);
-				current = &union_to_slc(store.at(current->next_block_idx));
-			}
-			for (std::size_t i = 0; i < array_size; i++) {
-				if (current->values[i] == '\0') [[unlikely]] {
-					return;
-				}
-				dest.push_back(current->values[i]);
-			}			
-		}
-
-	};	//struct TermString128
+	using TermString128 = TermSLC<std::uint32_t, char, 12>;
 	static_assert(sizeof(TermString128) * 8 == 128);
+
+	template<typename TermUnion_T>
+	[[nodiscard]] std::size_t insert_string(TermStore<TermUnion_T>& store, std::string_view str)
+	{
+		std::uint32_t prev_inserted_at = TermString128::null_index;
+		{
+			const std::size_t last_substr_length = str.length() % TermString128::array_size;
+			if (last_substr_length > 0) {
+				const std::string_view last_view = str.substr(str.length() - last_substr_length);
+				prev_inserted_at = store.emplace_new(last_view, prev_inserted_at);
+				str.remove_suffix(last_substr_length);
+			}
+		}
+		assert((str.length() % TermString128::array_size == 0) && "last shorter bit should have been cut off already");
+		while (str.length()) {
+			const std::string_view last_view = str.substr(str.length() - TermString128::array_size);
+			prev_inserted_at = store.emplace_new(last_view, prev_inserted_at);
+			str.remove_suffix(TermString128::array_size);
+		}
+		return prev_inserted_at;
+	}
+
+	template<typename UnionToSLC, typename TermUnion_T>
+	void read(const TermStore<TermUnion_T>& store, const TermString128& source, std::string& dest)
+	{
+		const TermString128* current = &source;
+		while (current->next_block_idx != TermString128::null_index) {
+			dest.append(current->values, TermString128::array_size);
+			current = &UnionToSLC::apply(store.at(current->next_block_idx));
+		}
+		for (std::size_t i = 0; i < TermString128::array_size; i++) {
+			if (current->values[i] == '\0') [[unlikely]] {
+				return;
+			}
+			dest.push_back(current->values[i]);
+		}			
+	}
 }

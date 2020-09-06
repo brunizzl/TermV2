@@ -25,10 +25,12 @@ namespace bmath::intern::arithmetic {
 
 
 	struct Sum : TypedRefColony
-	{};
+	{
+	};
 
 	struct Product : TypedRefColony
-	{};
+	{
+	};
 
 	enum class FunctionType : std::uint32_t
 	{
@@ -163,7 +165,7 @@ namespace bmath::intern::arithmetic {
 
 	double eval(TermStore<TypesUnion>& store, TypedRef ref)
 	{
-		const auto unimplemented = [](auto& x, auto& y) { return 0.0; };
+		const auto unimplemented = [](auto& x, auto& y) { assert(false); return 0.0; };
 		return visit(store, ref,
 			[](auto& store, Sum& sum) {
 				double value = 0;

@@ -109,51 +109,51 @@ namespace bmath::intern {
 
 		std::vector<VecElem> vector;
 
+		static constexpr std::size_t no_index_found = -1;
+		[[nodiscard]] std::size_t find_index_and_set_table() noexcept {
+			for (std::size_t table_pos = 0; table_pos < this->vector.size(); table_pos += table_dist) {
+				if (this->vector[table_pos].table.all()) [[unlikely]] {	//currently optimizes for case with only one table present
+					continue;
+				}
+				else {
+					OccupancyTable& table = this->vector[table_pos].table;
+					for (std::size_t relative_pos = 1; relative_pos < table_dist; relative_pos++) {	//first bit encodes position of table -> start one later
+						if (!table[relative_pos]) {
+							table.set(relative_pos);
+							return table_pos + relative_pos;
+						}
+					}
+				}
+			}
+			return no_index_found;
+		}
+
 	public:
 
-		TermStore(std::size_t reserve = 0)
-			:vector()
+		TermStore(std::size_t reserve = 0) :vector()
 		{
 			vector.reserve(reserve);
 		}
 
-		template<typename TermUnionMember_T>
-		[[nodiscard]] std::size_t insert_new(const TermUnionMember_T& new_value)
+		//never construct recursively using emplace_new, as this will break if vector has to reallocate
+		template<typename... Args>
+		[[nodiscard]] std::size_t emplace_new(Args&&... args)
 		{
-			constexpr std::size_t none = -1;
-			const auto find_index_and_set_table = [](TermStore& self) {
-				for (std::size_t table_pos = 0; table_pos < self.vector.size(); table_pos += table_dist) {
-					if (self.vector[table_pos].table.all()) [[unlikely]] {	//currently optimizes for case with only one table present
-						continue;
-					}
-					else {
-						OccupancyTable& table = self.vector[table_pos].table;
-						for (std::size_t relative_pos = 1; relative_pos < table_dist; relative_pos++) {	//first bit encodes position of table -> start one later
-							if (!table[relative_pos]) {
-								table.set(relative_pos);
-								return table_pos + relative_pos;
-							}
-						}
-					}
-				}
-				return none;
-			};
-
-			const std::size_t new_pos = find_index_and_set_table(*this);
-			if (new_pos == none) [[unlikely]] {
+			const std::size_t new_pos = this->find_index_and_set_table();
+			if (new_pos == no_index_found) [[unlikely]] {
 				if (this->vector.size() % table_dist != 0) [[unlikely]] {
-					throw std::exception("TermStore's insert_new() found no free vector index, yet the next element to append to vector next is not an occupancy_table");
+					throw std::exception("TermStore's emplace_new() found no free vector index, yet the next element to append to vector next is not an occupancy_table");
 				}
 				this->vector.emplace_back(BuildTable(), 0x3);	//first bit is set, as table itself occupies that slot, second as new element is emplaced afterwards.
-				this->vector.push_back(VecElem(BuildValue(), new_value));
+				this->vector.emplace_back(BuildValue(), std::forward<Args>(args)...);
 				return this->vector.size() - 1;	//index of just inserted element
 			}
 			else {
 				if (new_pos >= this->vector.size()) {	//put new element in vector
-					this->vector.push_back(VecElem(BuildValue(), new_value));
+					this->vector.emplace_back(BuildValue(), std::forward<Args>(args)...);
 				}
 				else {	//reuse old element in vector
-					new (&this->vector[new_pos]) VecElem(BuildValue(), new_value);
+					new (&this->vector[new_pos]) VecElem(BuildValue(), std::forward<Args>(args)...);
 				}
 				return new_pos;
 			}
