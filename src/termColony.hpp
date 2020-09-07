@@ -2,6 +2,7 @@
 
 #include <type_traits>
 #include <vector>
+#include <algorithm>
 #include <cassert>
 
 #include "termStore.hpp"
@@ -12,14 +13,14 @@ namespace bmath::intern {
 	//not only a single Value_T (as an ordinary list would). TermSLC directly represents the node, there is no extra head or management.
 	//TermSLC is build to reside inside a TermStore, thus it works with Index_T to access later nodes, not with pointers.
 	//NullIndex is analogous to nullptr, NullValue is a placeholder to indicate that a position in values is not yet used.
-	template <typename Index_T, typename Value_T, std::size_t ArraySize, Index_T NullIndex = 0, long NullValue = 0>
+	template <typename Index_T, typename Value_T, std::size_t ArraySize>
 	struct TermSLC
 	{
 		static_assert(std::is_unsigned_v<Index_T>);
 		static_assert(std::is_trivially_destructible_v<Value_T>);
 
-		static constexpr Index_T null_index = Index_T(NullIndex);
-		static constexpr Value_T null_value = Value_T(NullValue);
+		static constexpr Index_T null_index = Index_T(0);
+		static constexpr Value_T null_value = Value_T(0);
 		static constexpr std::size_t array_size = ArraySize;
 
 		Index_T next_block_idx;
@@ -66,11 +67,11 @@ namespace bmath::intern {
 		}
 	};	//struct TermSLC 
 
+	//jumps over all instances of SLC::null_value
 	template<typename UnionToSLC, typename TermUnion_T, typename SLC_Index_T, typename SLC_Value_T, std::size_t SLC_ArraySize>
-	struct SLC_Ref
+	struct CheckedSLCRef
 	{
 		using SLC = TermSLC<SLC_Index_T, SLC_Value_T, SLC_ArraySize>;
-
 		TermStore<TermUnion_T>& store;
 		SLC& slc;
 
@@ -101,11 +102,7 @@ namespace bmath::intern {
 				}
 			}
 
-			auto& operator*() noexcept
-			{
-				assert(this->current_block->values[this->array_idx] != SLC::null_value && this->array_idx < SLC::array_size);
-				return current_block->values[array_idx];
-			}
+			auto& operator*() noexcept { return current_block->values[array_idx]; }
 
 			bool operator==(const RangeIterator& other) const noexcept
 			{
@@ -113,8 +110,8 @@ namespace bmath::intern {
 			}
 		};	//struct RangeIterator
 
-		RangeIterator begin() { return RangeIterator{ this->store, &this->slc, 0 }; }
-		RangeIterator end() { return RangeIterator{ this->store, nullptr, SLC::array_size }; }
+		RangeIterator begin() noexcept { return RangeIterator{ this->store, &this->slc, 0 }; }
+		RangeIterator end() noexcept { return RangeIterator{ this->store, nullptr, SLC::array_size }; }
 	}; //struct SLC_Ref
 
 	//first template parameter needs to be explicit, and of form:
@@ -122,8 +119,59 @@ namespace bmath::intern {
 	template<typename UnionToSLC, typename TermUnion_T, typename SLC_Index_T, typename SLC_Value_T, std::size_t SLC_ArraySize>
 	auto range(TermStore<TermUnion_T>& store, TermSLC<SLC_Index_T, SLC_Value_T, SLC_ArraySize>& slc)
 	{
-		return SLC_Ref<UnionToSLC, TermUnion_T, SLC_Index_T, SLC_Value_T, SLC_ArraySize>{store, slc};
+		return CheckedSLCRef<UnionToSLC, TermUnion_T, SLC_Index_T, SLC_Value_T, SLC_ArraySize>{store, slc};
 	}
+
+	//also allows SLC::null_index to be passed in
+	template<typename UnionToSLC, typename TermUnion_T, typename Index_T>
+	void free_slc(TermStore<TermUnion_T>& store, Index_T slc_idx)
+	{
+		Index_T last_idx(0);
+		while (slc_idx != Index_T(0)) { // Index_T(0) should be equivalent to SLC::null_index
+			last_idx = slc_idx;
+			slc_idx = UnionToSLC::apply(store.at(slc_idx)).next_block_idx;
+			store.free(last_idx);
+		};
+	}
+
+	template<typename UnionToSLC, typename TermUnion_T, typename SLC_Index_T, typename SLC_Value_T, std::size_t SLC_ArraySize, typename Compare>
+	void sort(TermStore<TermUnion_T>& store, TermSLC<SLC_Index_T, SLC_Value_T, SLC_ArraySize>& slc, Compare compare)
+	{
+		using SLC = TermSLC<SLC_Index_T, SLC_Value_T, SLC_ArraySize>;
+
+		std::vector<SLC_Value_T> all_values;			
+		for (SLC_Value_T& elem : range<UnionToSLC>(store, slc)) {
+			all_values.push_back(elem);
+		}
+		std::sort(all_values.begin(), all_values.end(), compare);
+		
+		std::size_t vec_i = 0;
+		SLC* current = &slc;
+		bool all_copied_back = false;
+		while (!all_copied_back) {
+			std::size_t slc_i = 0;
+			for (; slc_i < SLC::array_size; slc_i++) {
+				current->values[slc_i] = all_values[vec_i++];
+				if (vec_i == all_values.size()) {
+					all_copied_back = true;
+					break;
+				}
+			}
+			if (all_copied_back) {
+				for (slc_i++; slc_i < SLC::array_size; slc_i++) {
+					current->values[slc_i] = SLC::null_value;
+				}
+				free_slc<UnionToSLC>(store, current->next_block_idx);
+				current->next_block_idx = SLC::null_index;
+			}
+			else {
+				current = &UnionToSLC::apply(store.at(current->next_block_idx));	//guaranteed to work, as all_values holds <= elements compared to slc
+			}
+		}		
+	}
+
+
+
 
 
 	using TermString128 = TermSLC<std::uint32_t, char, 12>;

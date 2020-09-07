@@ -31,10 +31,11 @@ int main()
 		read<ToConstString>(store, head, output);
 		std::cout << output << '\n';
 		for (auto& c : range<ToString>(store, ToString::apply(store.at(head)))) {
-			if (c == 'a' || c == 'o' || c == 'i' || c == 'e' || c == 'u') {
-				c = 'o';
+			if (c % 2 == 0) {
+				c = '\0';
 			}
 		}
+		sort<ToString>(store, ToString::apply(store.at(head)), [](auto& c1, auto& c2) { return c1 < c2; });
 
 		output.clear();
 		read<ToConstString>(store, head, output);
