@@ -82,19 +82,17 @@ namespace bmath::intern {
 
 			void operator++()
 			{
-				this->array_idx++;
+				auto& i = this->array_idx;
+				i++;
 				while (true) {
-					while (this->array_idx < SLC::array_size && this->current_block->values[array_idx] == SLC::null_value) 
-					[[unlikely]] {
-						this->array_idx++;
+					for (; i < SLC::array_size; i++) {
+						if (this->current_block->values[i] != SLC::null_value) [[likely]] {
+							return;
+						}
 					}
-
-					if (this->array_idx < SLC::array_size) [[likely]] { //valid position and valid element -> done
-						return;
-					}
-					else if (current_block->next_block_idx != SLC::null_index) { //no valid position -> go to next block
+					if (current_block->next_block_idx != SLC::null_index) { //no valid position -> go to next block
 						this->current_block = &UnionToSLC::apply(store.at(current_block->next_block_idx));
-						this->array_idx = 0;
+						i = 0;
 					}
 					else { //neither valid position, nor valid block -> this becomes end()
 						current_block = nullptr;

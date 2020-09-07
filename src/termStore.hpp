@@ -74,9 +74,9 @@ namespace bmath::intern {
 
 
 
-
+	//possibly preferred version for debugging
 	template <typename TermUnion_T>
-	class [[nodiscard]] TermStore
+	class [[nodiscard]] TermStoreTable
 	{
 		static_assert(std::is_default_constructible_v<TermUnion_T>, "required for default constructor of TermStore");
 		static_assert(std::is_trivially_destructible_v<TermUnion_T>, "required to allow TermUnion_T to be used in VecElem union");
@@ -128,9 +128,21 @@ namespace bmath::intern {
 			return no_index_found;
 		}
 
+		//debugging function to ensure only valid accesses
+		void check_index_validity(std::size_t idx) const
+		{
+			if (this->vector.size() < idx + 1) [[unlikely]] {
+				throw std::exception("TermStore supposed to access/free unowned slot");
+			}
+			const OccupancyTable& table = this->vector[idx / table_dist].table;
+			if (!table[idx % table_dist]) [[unlikely]] {
+				throw std::exception("TermStore supposed to access/free already freed slot");
+			}
+		}
+
 	public:
 
-		TermStore(std::size_t reserve = 0) :vector()
+		TermStoreTable(std::size_t reserve = 0) :vector()
 		{
 			vector.reserve(reserve);
 		}
@@ -144,9 +156,9 @@ namespace bmath::intern {
 				if (this->vector.size() % table_dist != 0) [[unlikely]] {
 					throw std::exception("TermStore's emplace_new() found no free vector index, yet the next element to append to vector next is not an occupancy_table");
 				}
-				this->vector.emplace_back(BuildTable(), 0x3);	//first bit is set, as table itself occupies that slot, second as new element is emplaced afterwards.
-				this->vector.emplace_back(BuildValue(), std::forward<Args>(args)...);
-				return this->vector.size() - 1;	//index of just inserted element
+			this->vector.emplace_back(BuildTable(), 0x3);	//first bit is set, as table itself occupies that slot, second as new element is emplaced afterwards.
+			this->vector.emplace_back(BuildValue(), std::forward<Args>(args)...);
+			return this->vector.size() - 1;	//index of just inserted element
 			}
 			else {
 				if (new_pos >= this->vector.size()) {	//put new element in vector
@@ -161,30 +173,130 @@ namespace bmath::intern {
 
 		void free(std::size_t idx)
 		{
-			if (this->vector.size() - 1 < idx) [[unlikely]] {
-				throw std::exception("TermStore supposed to free unowned slots");
-			}
-			else {
-				OccupancyTable& table = this->vector[idx / table_dist].table;
-				table.reset(idx % table_dist);
-			}
+			check_index_validity(idx);
+			OccupancyTable& table = this->vector[idx / table_dist].table;
+			table.reset(idx % table_dist);
 		}
 
 		[[nodiscard]] TermUnion_T& at(std::size_t idx)
 		{
-			if (idx % table_dist == 0) [[unlikely]] {
-				throw std::exception("TermStore::at() supposed to access TermUnion_T, but an index reserved for Table is requested");
-			}			
+			check_index_validity(idx);	
 			return this->vector.at(idx).value;
 		}
 
 		[[nodiscard]] const TermUnion_T& at(std::size_t idx) const
 		{
-			if (idx % table_dist == 0) [[unlikely]] {
-				throw std::exception("TermStore::at() supposed to access TermUnion_T, but an index reserved for Table is requested");
-			}			
+			check_index_validity(idx);		
 			return this->vector.at(idx).value;
 		}
-	};	//class TermStore
+	};	//class TermStoreTable
 
+	//possibly faster version, but also with less access checks, thus with no (internal) memory savety
+	template <typename TermUnion_T, typename Index_T = std::size_t>
+	class [[nodiscard]] TermStoreFreeList
+	{
+		static_assert(std::is_default_constructible_v<TermUnion_T>, "required for default constructor of TermStore");
+		static_assert(std::is_trivially_destructible_v<TermUnion_T>, "required to allow TermUnion_T to be used in VecElem union");
+
+		struct FreeList
+		{
+			static constexpr Index_T first_idx = Index_T(0);
+			Index_T next;
+			Index_T prev;
+		};
+
+		//at this->vector[0] always resides a node of the FreeList. all currently unused elements are listed from there.
+		union [[nodiscard]] VecElem
+		{
+			TermUnion_T value;
+			FreeList free_list;
+			static_assert(sizeof(FreeList) <= sizeof(TermUnion_T), "size of union VecElem may not be defined by FreeList");
+
+			template<typename... Args>
+			VecElem(Args&&... args) :value(std::forward<Args>(args)...) {}
+
+			VecElem(FreeList node) :free_list(node) {}
+			VecElem(const VecElem& snd) :value(snd.value) {} //bitwise copy of snd
+
+			~VecElem() {} //both std::bitset and TermUnion_T are trivially destructible
+		};
+
+		//first elem is guaranteed to be free_list, the rest may vary.
+		std::vector<VecElem> vector;
+
+		//assumes vector to already hold first element
+		[[nodiscard]] Index_T get_free_position()
+		{
+			FreeList& first = this->vector[FreeList::first_idx].free_list;
+			if (first.next == FreeList::first_idx) {	//no free elements available (besides first)
+				return FreeList::first_idx;
+			}
+			else {	//at least one free element available (besides first)
+				const Index_T second_idx = first.next;
+				const Index_T third_idx = this->vector[second_idx].free_list.next;
+				FreeList& third = this->vector[third_idx].free_list;
+
+				third.prev = FreeList::first_idx;
+				first.next = third_idx;
+
+				return second_idx;
+			}
+		}
+
+	public:
+
+		TermStoreFreeList(std::size_t reserve = 0) :vector()
+		{
+			vector.reserve(reserve);
+		}
+
+		//never construct recursively using emplace_new, as this will break if vector has to reallocate
+		template<typename... Args>
+		[[nodiscard]] std::size_t emplace_new(Args&&... args)
+		{
+			if (this->vector.size() == 0) [[unlikely]] {
+				vector.emplace_back(FreeList{ FreeList::first_idx, FreeList::first_idx });	//free_list is only (free) element in vector -> points to itself
+			}
+			
+			if (const Index_T free_pos = this->get_free_position(); free_pos != FreeList::first_idx) {
+				new (&this->vector[free_pos]) VecElem(std::forward<Args>(args)...);
+				return free_pos;
+			}
+			else {
+				const std::size_t new_pos = this->vector.size();
+				this->vector.emplace_back(std::forward<Args>(args)...);
+				return new_pos;
+			}
+		}
+
+		void free(Index_T idx)
+		{
+			//there is currently no test if the idx was freed previously (because expensive). if so, freeing again would break the list.
+			FreeList& first = this->vector[FreeList::first_idx].free_list;
+			const Index_T second_idx = first.next;
+			FreeList& second = this->vector[second_idx].free_list;
+
+			FreeList& new_node = this->vector[new_idx].free_list;
+			new_node.prev = FreeList::first_idx;	  //TermUnion_T guaranteed to be trivially destructable -> just override with FreeList
+			new_node.next = second_idx;				  //TermUnion_T guaranteed to be trivially destructable -> just override with FreeList
+
+			first.next = new_idx;
+			second.prev = new_idx;
+		}
+
+		[[nodiscard]] TermUnion_T& at(std::size_t idx) noexcept
+		{
+			//no tests if a free_list is accessed, as only position of the first node is known anyway.
+			return this->vector[idx].value;
+		}
+
+		[[nodiscard]] const TermUnion_T& at(std::size_t idx) const noexcept
+		{
+			//no tests if a free_list is accessed, as only position of the first node is known anyway.
+			return this->vector[idx].value;
+		}
+	};	//class TermStoreFreeList
+
+	template<typename TermUnion_T>
+	using TermStore = TermStoreTable<TermUnion_T>;
 }
