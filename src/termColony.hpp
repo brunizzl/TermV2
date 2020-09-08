@@ -3,6 +3,7 @@
 #include <type_traits>
 #include <vector>
 #include <algorithm>
+#include <span>
 #include <cassert>
 
 #include "termStore.hpp"
@@ -23,10 +24,10 @@ namespace bmath::intern {
 		static constexpr Value_T null_value = Value_T(0);
 		static constexpr std::size_t array_size = ArraySize;
 
-		Index_T next_block_idx;
+		Index_T next_idx;	//index of next SLC block in TermStore
 		Value_T values[ArraySize];
 
-		TermSLC(Value_T fst_elem = null_value) :next_block_idx(null_index)
+		TermSLC(Value_T fst_elem = null_value) :next_idx(null_index)
 		{
 			this->values[0] = fst_elem;
 			for (std::size_t i = 1; i < ArraySize; i++) {
@@ -35,7 +36,7 @@ namespace bmath::intern {
 		}
 
 		template<typename Container>
-		TermSLC(const Container& new_values, Index_T next_block = null_index) :next_block_idx(next_block)
+		TermSLC(const Container& new_values, Index_T next_block = null_index) :next_idx(next_block)
 		{
 			assert(new_values.size() <= ArraySize);
 			std::memcpy(this->values, new_values.data(), new_values.size() * sizeof(Value_T));
@@ -56,11 +57,11 @@ namespace bmath::intern {
 						return;
 					}
 				}
-				if (current->next_block_idx != null_index) {
-					current = &UnionToSLC::apply(store.at(current->next_block_idx));
+				if (current->next_idx != null_index) {
+					current = &UnionToSLC::apply(store.at(current->next_idx));
 				}
 				else {
-					current->next_block_idx = store.emplace_new(elem);
+					current->next_idx = store.emplace_new(elem);
 					return;
 				}
 			}
@@ -78,7 +79,7 @@ namespace bmath::intern {
 		struct RangeIterator
 		{
 			TermStore<TermUnion_T>& store;
-			SLC* current_block;			// == nullptr, if whole object represents end()
+			SLC* current;			// == nullptr, if whole object represents end()
 			std::size_t array_idx;		// == SLC::array_size, if whole object represents end()
 
 			void operator++()
@@ -87,32 +88,32 @@ namespace bmath::intern {
 				i++;
 				while (true) {
 					for (; i < SLC::array_size; i++) {
-						if (this->current_block->values[i] != SLC::null_value) [[likely]] {
+						if (this->current->values[i] != SLC::null_value) [[likely]] {
 							return;
 						}
 					}
-					if (current_block->next_block_idx != SLC::null_index) { //no valid position -> go to next block
-						this->current_block = &UnionToSLC::apply(store.at(current_block->next_block_idx));
+					if (current->next_idx != SLC::null_index) { //no valid position -> go to next block
+						this->current = &UnionToSLC::apply(store.at(current->next_idx));
 						i = 0;
 					}
 					else { //neither valid position, nor valid block -> this becomes end()
-						current_block = nullptr;
+						current = nullptr;
 						return;
 					}
 				}
 			}
 
-			auto& operator*() noexcept { return current_block->values[array_idx]; }
+			auto& operator*() noexcept { return current->values[array_idx]; }
 
 			bool operator==(const RangeIterator& other) const noexcept
 			{
-				return this->array_idx == other.array_idx && this->current_block == other.current_block;
+				return this->array_idx == other.array_idx && this->current == other.current;
 			}
 		};	//struct RangeIterator
 
 		RangeIterator begin() noexcept { return RangeIterator{ this->store, &this->slc, 0 }; }
 		RangeIterator end() noexcept { return RangeIterator{ this->store, nullptr, SLC::array_size }; }
-	}; //struct SLC_Ref
+	}; //struct CheckedSLCRef
 
 	//first template parameter needs to be explicit, and of form:
 	// struct UnionToSLC { static SLC_TYPE& apply(TermUnion_T& val) { return val.slc_member; }};
@@ -122,6 +123,61 @@ namespace bmath::intern {
 		return CheckedSLCRef<UnionToSLC, TermUnion_T, SLC_Index_T, SLC_Value_T, SLC_ArraySize>{store, slc};
 	}
 
+	//jumps over all instances of SLC::null_value
+	template<typename UnionToSLC, typename TermUnion_T, typename SLC_Index_T, typename SLC_Value_T, std::size_t SLC_ArraySize>
+	struct CheckedConstSLCRef
+	{
+		using SLC = TermSLC<SLC_Index_T, SLC_Value_T, SLC_ArraySize>;
+		const TermStore<TermUnion_T>& store;
+		const SLC& slc;
+
+		struct RangeIterator
+		{
+			const TermStore<TermUnion_T>& store;
+			const SLC* current;			// == nullptr, if whole object represents end()
+			std::size_t array_idx;		// == SLC::array_size, if whole object represents end()
+
+			void operator++()
+			{
+				auto& i = this->array_idx;
+				i++;
+				while (true) {
+					for (; i < SLC::array_size; i++) {
+						if (this->current->values[i] != SLC::null_value) [[likely]] {
+							return;
+						}
+					}
+					if (current->next_idx != SLC::null_index) { //no valid position -> go to next block
+						this->current = &UnionToSLC::apply(store.at(current->next_idx));
+						i = 0;
+					}
+					else { //neither valid position, nor valid block -> this becomes end()
+						current = nullptr;
+						return;
+					}
+				}
+			} //operator++
+
+			auto& operator*() noexcept { return current->values[array_idx]; }
+
+			bool operator==(const RangeIterator& other) const noexcept
+			{
+				return this->array_idx == other.array_idx && this->current == other.current;
+			}
+		};	//struct RangeIterator
+
+		RangeIterator begin() noexcept { return RangeIterator{ this->store, &this->slc, 0 }; }
+		RangeIterator end() noexcept { return RangeIterator{ this->store, nullptr, SLC::array_size }; }
+	}; //struct CheckedConstSLCRef
+
+	//first template parameter needs to be explicit, and of form:
+	// struct UnionToSLC { static SLC_TYPE& apply(TermUnion_T& val) { return val.slc_member; }};
+	template<typename UnionToSLC, typename TermUnion_T, typename SLC_Index_T, typename SLC_Value_T, std::size_t SLC_ArraySize>
+	auto range(const TermStore<TermUnion_T>& store, const TermSLC<SLC_Index_T, SLC_Value_T, SLC_ArraySize>& slc)
+	{
+		return CheckedConstSLCRef<UnionToSLC, TermUnion_T, SLC_Index_T, SLC_Value_T, SLC_ArraySize>{store, slc};
+	}
+
 	//also allows SLC::null_index to be passed in
 	template<typename UnionToSLC, typename TermUnion_T, typename Index_T>
 	void free_slc(TermStore<TermUnion_T>& store, Index_T slc_idx)
@@ -129,7 +185,7 @@ namespace bmath::intern {
 		Index_T last_idx(0);
 		while (slc_idx != Index_T(0)) { // Index_T(0) should be equivalent to SLC::null_index
 			last_idx = slc_idx;
-			slc_idx = UnionToSLC::apply(store.at(slc_idx)).next_block_idx;
+			slc_idx = UnionToSLC::apply(store.at(slc_idx)).next_idx;
 			store.free(last_idx);
 		};
 	}
@@ -138,37 +194,48 @@ namespace bmath::intern {
 	void sort(TermStore<TermUnion_T>& store, TermSLC<SLC_Index_T, SLC_Value_T, SLC_ArraySize>& slc, Compare compare)
 	{
 		using SLC = TermSLC<SLC_Index_T, SLC_Value_T, SLC_ArraySize>;
-
-		std::vector<SLC_Value_T> all_values;			
-		for (SLC_Value_T& elem : range<UnionToSLC>(store, slc)) {
-			all_values.push_back(elem);
+		if (slc.next_idx == SLC::null_index) {	//only a single array to sort -> dont need dynamic allocation
+			std::span<SLC_Value_T> whole_array(slc.values, SLC::array_size);
+			//sord indices directly by index and in reverse order to bring SLC::null_index to the end
+			std::sort(whole_array.rbegin(), whole_array.rend());
+			const auto values_end = std::find(whole_array.begin(), whole_array.end(), SLC::null_value);
+			assert(whole_array[SLC::array_size - 1] == SLC::null_value || values_end == whole_array.end()
+				&& "SLC::null_value should be smallest (acutally occuring) in order of values");
+			std::sort(whole_array.begin(), values_end, compare);	//here occurs the actual sorting
 		}
-		std::sort(all_values.begin(), all_values.end(), compare);
-		
-		std::size_t vec_i = 0;
-		SLC* current = &slc;
-		bool all_copied_back = false;
-		while (!all_copied_back) {
-			std::size_t slc_i = 0;
-			for (; slc_i < SLC::array_size; slc_i++) {
-				current->values[slc_i] = all_values[vec_i++];
-				if (vec_i == all_values.size()) {
-					all_copied_back = true;
-					break;
+		else {
+			std::vector<SLC_Value_T> all_values;		
+			all_values.reserve(2 * SLC::array_size);
+			for (SLC_Value_T& elem : range<UnionToSLC>(store, slc)) {
+				all_values.push_back(elem);
+			}
+			std::sort(all_values.begin(), all_values.end(), compare);
+
+			std::size_t vec_i = 0;
+			SLC* current = &slc;
+			bool all_copied_back = false;
+			while (!all_copied_back) {
+				std::size_t slc_i = 0;
+				for (; slc_i < SLC::array_size; slc_i++) {
+					current->values[slc_i] = all_values[vec_i++];
+					if (vec_i == all_values.size()) {
+						all_copied_back = true;
+						break;
+					}
 				}
-			}
-			if (all_copied_back) {
-				for (slc_i++; slc_i < SLC::array_size; slc_i++) {
-					current->values[slc_i] = SLC::null_value;
+				if (all_copied_back) {
+					for (slc_i++; slc_i < SLC::array_size; slc_i++) {
+						current->values[slc_i] = SLC::null_value;
+					}
+					free_slc<UnionToSLC>(store, current->next_idx);
+					current->next_idx = SLC::null_index;
 				}
-				free_slc<UnionToSLC>(store, current->next_block_idx);
-				current->next_block_idx = SLC::null_index;
-			}
-			else {
-				current = &UnionToSLC::apply(store.at(current->next_block_idx));	//guaranteed to work, as all_values holds <= elements compared to slc
-			}
-		}		
-	}
+				else {
+					current = &UnionToSLC::apply(store.at(current->next_idx));	//guaranteed to work, as all_values holds <= elements compared to slc
+				}
+			}		
+		}
+	} //sort
 
 
 
@@ -196,15 +263,15 @@ namespace bmath::intern {
 			str.remove_suffix(TermString128::array_size);
 		}
 		return prev_inserted_at;
-	}
+	} //insert_string
 
 	template<typename UnionToSLC, typename TermUnion_T>
 	void read(const TermStore<TermUnion_T>& store, std::size_t source_idx, std::string& dest)
 	{
 		const TermString128* current = &UnionToSLC::apply(store.at(source_idx));
-		while (current->next_block_idx != TermString128::null_index) {
+		while (current->next_idx != TermString128::null_index) {
 			dest.append(current->values, TermString128::array_size);
-			current = &UnionToSLC::apply(store.at(current->next_block_idx));
+			current = &UnionToSLC::apply(store.at(current->next_idx));
 		}
 		for (std::size_t i = 0; i < TermString128::array_size; i++) {
 			if (current->values[i] == '\0') [[unlikely]] {
@@ -212,5 +279,6 @@ namespace bmath::intern {
 			}
 			dest.push_back(current->values[i]);
 		}			
-	}
-}
+	} //read
+
+} //namespace bmath::intern

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <complex>
+#include <sstream>
 
 #include "termStore.hpp"
 #include "termColony.hpp"
@@ -88,9 +89,8 @@ namespace bmath::intern::arithmetic {
 		TypedRef expo;
 	};
 
-	struct Variable
+	struct Variable :TermString128
 	{
-		TermString128 name;
 	};
 
 	struct Complex :std::complex<double>
@@ -131,57 +131,81 @@ namespace bmath::intern::arithmetic {
 
 
 
-	template<typename SumLambda, typename ProductLambda, typename KnownFunctionLambda, typename UnknownFunctionLambda, 
-		typename PowerLambda, typename VariableLambda, typename ComplexLambda>
-	auto visit(TermStore<TypesUnion>& store, TypedRef ref, 
-		SumLambda sum_lambda, ProductLambda product_lambda, KnownFunctionLambda known_function_lambda, 
-		UnknownFunctionLambda unknown_function_lambda, PowerLambda power_lambda, 
-		VariableLambda variable_lambda, ComplexLambda complex_lambda)
+	std::complex<double> eval(const TermStore<TypesUnion> & store, TypedRef ref)
 	{
 		const std::size_t index = ref.get_index();
 		switch (ref.get_type()) {
-		case Type::sum:              return sum_lambda             (store, store.at(index).sum             );
-		case Type::product:          return product_lambda         (store, store.at(index).product         );
-		case Type::known_function:   return known_function_lambda  (store, store.at(index).known_function  );
-		case Type::unknown_function: return unknown_function_lambda(store, store.at(index).unknown_function);
-		case Type::power:            return power_lambda           (store, store.at(index).power           );
-		case Type::variable:         return variable_lambda        (store, store.at(index).variable        );
-		case Type::complex:          return complex_lambda         (store, store.at(index).complex         );
+		case Type::sum: {
+			const Sum& sum = store.at(index).sum;
+			std::complex<double> value = 0.0;
+			for (auto elem : range<ToConstSum>(store, sum)) {
+				value += eval(store, elem);
+			}
+			return value;
+		} break;
+		case Type::product:  {
+			const Product& product = store.at(index).product;
+			std::complex<double> value = 1.0;
+			for (auto elem : range<ToConstProduct>(store, product)) {
+				value *= eval(store, elem);
+			}
+			return value;
+		} break;        
+		case Type::known_function:   
+		case Type::unknown_function: 
+		case Type::power:            
+		case Type::variable:         
+		case Type::complex: {
+			const Complex& complex = store.at(index).complex;
+			return complex;
+		} break;
 		}
 		assert(false);	//if this assert hits, the switch above needs more cases.
-		return complex_lambda(store, store.at(index).complex);
+		return std::complex<double>(0.0, 0.0);
 	}
 
-	double eval(TermStore<TypesUnion>& store, TypedRef ref)
+	void to_string(const TermStore<TypesUnion>& store, TypedRef ref, std::string& str)
 	{
-		const auto unimplemented = [](auto& x, auto& y) { assert(false); return 0.0; };
-		return visit(store, ref,
-			[](auto& store, Sum& sum) {
-				double value = 0;
-				for (auto& elem : range<ToSum>(store, sum)) {
-					value += eval(store, elem);
+		const std::size_t index = ref.get_index();
+		switch (ref.get_type()) {
+		case Type::sum: {
+			const Sum& sum = store.at(index).sum;
+			str.push_back('(');
+			bool first = true;
+			for (auto elem : range<ToConstSum>(store, sum)) {
+				if (!std::exchange(first, false)) {
+					str.push_back('+');
 				}
-				return value;
-			},
-			[](auto& store, Product& product) {
-				double value = 1;
-				for (auto& elem : range<ToProduct>(store, product)) {
-					value *= eval(store, elem);
-				}
-				return value;
-			},
-			unimplemented,
-			unimplemented,
-			[](auto& store, Power& power) {
-				double base = eval(store, power.base);
-				double expo = eval(store, power.expo);
-				return std::pow(base, expo);
-			},
-			unimplemented,
-			[](auto& store, Complex& complex) {
-				return complex.real();
+				to_string(store, elem, str);
 			}
-		);
+			str.push_back(')');
+		} break;
+		case Type::product:  {
+			const Product& product = store.at(index).product;
+			str.push_back('(');
+			bool first = true;
+			for (auto elem : range<ToConstProduct>(store, product)) {
+				if (!std::exchange(first, false)) {
+					str.push_back('*');
+				}
+				to_string(store, elem, str);
+			}
+			str.push_back(')');
+		} break;        
+		case Type::known_function:   
+		case Type::unknown_function: 
+		case Type::power:            
+		case Type::variable: {
+			const Variable& variable = store.at(index).variable;
+			read<ToConstString>(store, index, str);
+		} break;
+		case Type::complex: {
+			const Complex& complex = store.at(index).complex;
+			std::stringstream stream;
+			stream << complex.real();
+			str.append(stream.str());
+		} break;
+		}
 	}
 
 }	//namespace bmath::intern::arithmetic
