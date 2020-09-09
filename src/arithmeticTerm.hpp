@@ -1,7 +1,6 @@
 #pragma once
 
 #include <complex>
-#include <sstream>
 
 #include "termStore.hpp"
 #include "termColony.hpp"
@@ -129,84 +128,11 @@ namespace bmath::intern::arithmetic {
 	struct ToConstProduct { static const Product&       apply(const TypesUnion& val) { return val.product; } };
 	struct ToConstString  { static const TermString128& apply(const TypesUnion& val) { return val.string;  } };
 
+	//evaluates tree if possible else throws (if variables of unknown value /unknown_functions are present)
+	std::complex<double> eval(const TermStore<TypesUnion>& store, TypedRef ref);
 
-
-	std::complex<double> eval(const TermStore<TypesUnion> & store, TypedRef ref)
-	{
-		const std::size_t index = ref.get_index();
-		switch (ref.get_type()) {
-		case Type::sum: {
-			const Sum& sum = store.at(index).sum;
-			std::complex<double> value = 0.0;
-			for (auto elem : range<ToConstSum>(store, sum)) {
-				value += eval(store, elem);
-			}
-			return value;
-		} break;
-		case Type::product:  {
-			const Product& product = store.at(index).product;
-			std::complex<double> value = 1.0;
-			for (auto elem : range<ToConstProduct>(store, product)) {
-				value *= eval(store, elem);
-			}
-			return value;
-		} break;        
-		case Type::known_function:   
-		case Type::unknown_function: 
-		case Type::power:            
-		case Type::variable:         
-		case Type::complex: {
-			const Complex& complex = store.at(index).complex;
-			return complex;
-		} break;
-		}
-		assert(false);	//if this assert hits, the switch above needs more cases.
-		return std::complex<double>(0.0, 0.0);
-	}
-
-	void to_string(const TermStore<TypesUnion>& store, TypedRef ref, std::string& str)
-	{
-		const std::size_t index = ref.get_index();
-		switch (ref.get_type()) {
-		case Type::sum: {
-			const Sum& sum = store.at(index).sum;
-			str.push_back('(');
-			bool first = true;
-			for (auto elem : range<ToConstSum>(store, sum)) {
-				if (!std::exchange(first, false)) {
-					str.push_back('+');
-				}
-				to_string(store, elem, str);
-			}
-			str.push_back(')');
-		} break;
-		case Type::product:  {
-			const Product& product = store.at(index).product;
-			str.push_back('(');
-			bool first = true;
-			for (auto elem : range<ToConstProduct>(store, product)) {
-				if (!std::exchange(first, false)) {
-					str.push_back('*');
-				}
-				to_string(store, elem, str);
-			}
-			str.push_back(')');
-		} break;        
-		case Type::known_function:   
-		case Type::unknown_function: 
-		case Type::power:            
-		case Type::variable: {
-			const Variable& variable = store.at(index).variable;
-			read<ToConstString>(store, index, str);
-		} break;
-		case Type::complex: {
-			const Complex& complex = store.at(index).complex;
-			std::stringstream stream;
-			stream << complex.real();
-			str.append(stream.str());
-		} break;
-		}
-	}
+	//iff caller is outside tree, parent_precedence may be -1 
+	void to_string(const TermStore<TypesUnion>& store, TypedRef ref, std::string& str, const int parent_precedence = -1);
 
 }	//namespace bmath::intern::arithmetic
 
