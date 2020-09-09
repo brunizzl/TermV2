@@ -158,7 +158,7 @@ namespace bmath::intern {
 				}
 			} //operator++
 
-			auto& operator*() noexcept { return current->values[array_idx]; }
+			auto operator*() noexcept { return current->values[array_idx]; } //const anyway -> faster to return by value
 
 			bool operator==(const RangeIterator& other) const noexcept
 			{
