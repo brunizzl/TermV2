@@ -6,6 +6,8 @@
 #include <span>
 #include <cassert>
 
+#include <forward_list>
+
 #include "termStore.hpp"
 
 namespace bmath::intern {
@@ -35,8 +37,9 @@ namespace bmath::intern {
 			}
 		}
 
+		//can only fill up to single block
 		template<typename Container>
-		TermSLC(const Container& new_values, Index_T next_block = null_index) :next_idx(next_block)
+		TermSLC(Container new_values, Index_T next_block) :next_idx(next_block)
 		{
 			assert(new_values.size() <= ArraySize);
 			std::memcpy(this->values, new_values.data(), new_values.size() * sizeof(Value_T));
@@ -44,6 +47,16 @@ namespace bmath::intern {
 				values[i] = null_value;
 			}
 		}
+
+		//can only fill up to single block
+		TermSLC(std::initializer_list<Value_T> new_values) :next_idx(null_index)
+        {
+			assert(new_values.size() <= ArraySize);
+			std::memcpy(this->values, new_values.begin(), new_values.size() * sizeof(Value_T));
+			for (std::size_t i = new_values.size(); i < ArraySize; i++) {
+				values[i] = null_value;
+			}
+        }
 
 		//no order is guaranteed
 		template<typename UnionToSLC, typename TermUnion_T>
@@ -78,18 +91,24 @@ namespace bmath::intern {
 
 		struct RangeIterator
 		{
+			using value_type      = SLC_Value_T;
+			using difference_type = void;	//no random access
+			using pointer         = SLC_Value_T*;
+			using reference       = value_type&;
+			using iterator_category = std::forward_iterator_tag;
+
 			TermStore<TermUnion_T>& store;
 			SLC* current;			// == nullptr, if whole object represents end()
 			std::size_t array_idx;		// == SLC::array_size, if whole object represents end()
 
-			void operator++()
+			RangeIterator& operator++()
 			{
 				auto& i = this->array_idx;
 				i++;
 				while (true) {
 					for (; i < SLC::array_size; i++) {
 						if (this->current->values[i] != SLC::null_value) [[likely]] {
-							return;
+							return *this;
 						}
 					}
 					if (current->next_idx != SLC::null_index) { //no valid position -> go to next block
@@ -98,17 +117,26 @@ namespace bmath::intern {
 					}
 					else { //neither valid position, nor valid block -> this becomes end()
 						current = nullptr;
-						return;
+						return *this;
 					}
 				}
 			}
 
-			auto& operator*() noexcept { return current->values[array_idx]; }
+			RangeIterator operator++(int)
+			{
+				RangeIterator result = *this;
+				++(*this);
+				return result;
+			}
+
+			[[nodiscard]] auto& operator*() noexcept { return current->values[array_idx]; }
 
 			bool operator==(const RangeIterator& other) const noexcept
 			{
 				return this->array_idx == other.array_idx && this->current == other.current;
 			}
+
+			bool operator!=(const RangeIterator& other) const noexcept { return !(*this == other); }
 		};	//struct RangeIterator
 
 		RangeIterator begin() noexcept { return RangeIterator{ this->store, &this->slc, 0 }; }
@@ -133,18 +161,24 @@ namespace bmath::intern {
 
 		struct RangeIterator
 		{
+			using value_type      = SLC_Value_T;
+			using difference_type = void;	//no random access
+			using pointer         = const SLC_Value_T*;
+			using reference       = const value_type&;
+			using iterator_category = std::forward_iterator_tag;
+
 			const TermStore<TermUnion_T>& store;
 			const SLC* current;			// == nullptr, if whole object represents end()
 			std::size_t array_idx;		// == SLC::array_size, if whole object represents end()
 
-			void operator++()
+			RangeIterator& operator++()
 			{
 				auto& i = this->array_idx;
 				i++;
 				while (true) {
 					for (; i < SLC::array_size; i++) {
 						if (this->current->values[i] != SLC::null_value) [[likely]] {
-							return;
+							return *this;
 						}
 					}
 					if (current->next_idx != SLC::null_index) { //no valid position -> go to next block
@@ -153,10 +187,17 @@ namespace bmath::intern {
 					}
 					else { //neither valid position, nor valid block -> this becomes end()
 						current = nullptr;
-						return;
+						return *this;
 					}
 				}
 			} //operator++
+
+			RangeIterator operator++(int)
+			{
+				RangeIterator result = *this;
+				++(*this);
+				return result;
+			}
 
 			auto operator*() noexcept { return current->values[array_idx]; } //const anyway -> faster to return by value
 
@@ -164,6 +205,8 @@ namespace bmath::intern {
 			{
 				return this->array_idx == other.array_idx && this->current == other.current;
 			}
+
+			bool operator!=(const RangeIterator& other) const noexcept { return !(*this == other); }
 		};	//struct RangeIterator
 
 		RangeIterator begin() noexcept { return RangeIterator{ this->store, &this->slc, 0 }; }

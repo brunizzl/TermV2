@@ -24,10 +24,14 @@ namespace bmath::intern::arithmetic {
 
 
 	struct Sum : TypedRefColony
-	{};
+	{
+		Sum(std::initializer_list<TypedRef> list) :TypedRefColony(list) {}
+	};
 
 	struct Product : TypedRefColony
-	{};
+	{
+		Product(std::initializer_list<TypedRef> list) :TypedRefColony(list) {}
+	};
 
 	enum class FunctionType : std::uint32_t
 	{
