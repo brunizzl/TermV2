@@ -6,7 +6,7 @@
 #include "arithmeticTerm.hpp"
 
 /*
-	void pattern(const TermStore<TypesUnion> & store, TypedRef ref)
+	void pattern(const TermStore<TypesUnion> & store, TypedIdx ref)
 	{
 		const std::size_t index = ref.get_index();
 		switch (ref.get_type()) {
@@ -336,12 +336,12 @@ namespace bmath::intern::arithmetic {
 
 
 
-		TypedRef new_number(TermStore<TypesUnion>& store, double re, double im = 0.0)
+		TypedIdx new_number(TermStore<TypesUnion>& store, double re, double im = 0.0)
 		{
-			return TypedRef(store.emplace_new(Complex{ std::complex<double>(re, im) }), Type::complex);
+			return TypedIdx(store.emplace_new(Complex{ std::complex<double>(re, im) }), Type::complex);
 		}
 
-		TypedRef new_arithmetic(TermStore<TypesUnion>& store, std::string_view name)
+		TypedIdx new_arithmetic(TermStore<TypesUnion>& store, std::string_view name)
 		{
 			std::size_t op = std::string::npos;	//op standing for operator
 			HeadType head = head_type(name, op);
@@ -356,7 +356,7 @@ namespace bmath::intern::arithmetic {
 					assert(name[op] == '-' && "no plus may lead");
 					name.remove_prefix(1);
 					const Product name_times_minus_one(Product{ { new_number(store, -1.0), new_arithmetic(store, name) } });
-					return TypedRef(store.emplace_new(name_times_minus_one), Type::product);
+					return TypedIdx(store.emplace_new(name_times_minus_one), Type::product);
 				}
 				else {
 					while (op != std::string::npos) {
@@ -383,7 +383,7 @@ namespace bmath::intern::arithmetic {
 
 			}
 
-			return TypedRef(0);
+			return TypedIdx(0);
 		}
 
 
@@ -394,14 +394,14 @@ namespace bmath::intern::arithmetic {
 //////////////////////////////////////////////////exported in header///////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	std::complex<double> eval(const TermStore<TypesUnion> & store, TypedRef ref)
+	std::complex<double> eval(const TermStore<TypesUnion> & store, TypedIdx ref)
 	{
 		const std::size_t index = ref.get_index();
 		switch (ref.get_type()) {
 		case Type::sum: {
 			const Sum& sum = store.at(index).sum;
 			std::complex<double> value = 0.0;
-			for (const auto elem : range<ConstSummands>(store, sum.summands)) {
+			for (const auto elem : range<ToConstSum>(store, sum)) {
 				value += eval(store, elem);
 			}
 			return value;
@@ -409,7 +409,7 @@ namespace bmath::intern::arithmetic {
 		case Type::product:  {
 			const Product& product = store.at(index).product;
 			std::complex<double> value = 1.0;
-			for (const auto elem : range<ConstFactors>(store, product.factors)) {
+			for (const auto elem : range<ToConstProduct>(store, product)) {
 				value *= eval(store, elem);
 			}
 			return value;
@@ -440,7 +440,7 @@ namespace bmath::intern::arithmetic {
 		return std::complex<double>(0.0, 0.0);
 	} //eval
 
-	void to_string(const TermStore<TypesUnion>& store, TypedRef ref, std::string& str, const int parent_precedence)
+	void to_string(const TermStore<TypesUnion>& store, TypedIdx ref, std::string& str, const int parent_precedence)
 	{
 		const int own_precedence = print::operator_precedence(ref.get_type());
 		if (own_precedence < parent_precedence) {
@@ -452,7 +452,7 @@ namespace bmath::intern::arithmetic {
 		case Type::sum: {
 			const Sum& sum = store.at(index).sum;
 			bool first = true;
-			for (const auto elem : range<ConstSummands>(store, sum.summands)) {
+			for (const auto elem : range<ToConstSum>(store, sum)) {
 				if (!std::exchange(first, false)) {
 					str.push_back('+');
 				}
@@ -462,7 +462,7 @@ namespace bmath::intern::arithmetic {
 		case Type::product:  {
 			const Product& product = store.at(index).product;
 			bool first = true;
-			for (const auto elem : range<ConstFactors>(store, product.factors)) {
+			for (const auto elem : range<ToConstProduct>(store, product)) {
 				if (!std::exchange(first, false)) {
 					str.push_back('*');
 				}

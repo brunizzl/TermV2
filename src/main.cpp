@@ -13,30 +13,36 @@ int main()
 		bmath::ArithmeticTerm term;
 		auto val1_idx = term.values.emplace_new(Complex{ {3.0, 0.0} });
 		auto val2_idx = term.values.emplace_new(Complex{ {12.0, 0.0} });
-		auto val1_ref = TypedRef(val1_idx, Type::complex);
-		auto val2_ref = TypedRef(val2_idx, Type::complex);
+		auto val1_ref = TypedIdx(val1_idx, Type::complex);
+		auto val2_ref = TypedIdx(val2_idx, Type::complex);
 		auto sum_idx = term.values.emplace_new(Sum{ {val1_ref, val2_ref} });
-		auto sum_ref = TypedRef(sum_idx, Type::sum);
+		auto sum_ref = TypedIdx(sum_idx, Type::sum);
 		auto var_idx = insert_string(term.values, "DerWeinachtsmannVomNordpol");
-		auto var_ref = TypedRef(var_idx, Type::variable);
+		auto var_ref = TypedIdx(var_idx, Type::variable);
 		auto product_idx = term.values.emplace_new(Product{ {sum_ref, var_ref} });
-		auto product_ref = TypedRef(product_idx, Type::product);
+		auto product_ref = TypedIdx(product_idx, Type::product);
+		for (int i = 0; i < 10; i++) {
+			std::string term_str;
+			to_string(term.values, product_ref, term_str);
+			std::cout << term_str << std::endl;
+			insert_new<ToProduct, Product>(term.values, product_idx, val1_ref);
+		}
 
-		std::cout << eval(term.values, sum_ref) << std::endl;
 		std::string term_str;
 		to_string(term.values, product_ref, term_str);
 		std::cout << term_str << std::endl;
+		std::cout << eval(term.values, sum_ref) << std::endl;
 	}
 	{
 		TermStore<TypesUnion> store;
 		std::string_view info = "ich bin bruno und ich bin der kameramann";
 		auto head = insert_string(store, info);
-		ToString::apply(store.at(head)).insert_new<ToString>(store, '.');
+		insert_new<ToString, TermString128>(store, head, '.');
 
 		std::string output;
 		read<ToConstString>(store, head, output);
 		std::cout << output << '\n';
-		for (auto& c : range<ToString>(store, ToString::apply(store.at(head)))) {
+		for (auto& c : range<ToString>(store, head)) {
 			if (c % 2 == 0) {
 				c = '\0';
 			}
