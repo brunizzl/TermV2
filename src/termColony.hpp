@@ -101,6 +101,22 @@ namespace bmath::intern {
 			SLC* current;			// == nullptr, if whole object represents end()
 			std::size_t array_idx;		// == SLC::array_size, if whole object represents end()
 
+			RangeIterator(TermStore<TermUnion_T>& new_store, SLC* new_current, std::size_t new_idx)
+				:store(new_store), current(new_current), array_idx(new_idx)
+			{}
+
+			RangeIterator(const RangeIterator& other)
+				:store(other.store), current(other.current), array_idx(other.array_idx)
+			{}
+
+			RangeIterator& operator=(const RangeIterator& other)
+			{
+				this->store = other.store;
+				this->current = other.current;
+				this->array_idx = other.array_idx;
+				return *this;
+			}
+
 			RangeIterator& operator++()
 			{
 				auto& i = this->array_idx;
@@ -139,8 +155,8 @@ namespace bmath::intern {
 			bool operator!=(const RangeIterator& other) const noexcept { return !(*this == other); }
 		};	//struct RangeIterator
 
-		RangeIterator begin() noexcept { return RangeIterator{ this->store, &this->slc, 0 }; }
-		RangeIterator end() noexcept { return RangeIterator{ this->store, nullptr, SLC::array_size }; }
+		RangeIterator begin() noexcept { return RangeIterator(this->store, &this->slc, 0); }
+		RangeIterator end() noexcept { return RangeIterator(this->store, nullptr, SLC::array_size); }
 	}; //struct CheckedSLCRef
 
 	//first template parameter needs to be explicit, and of form:
@@ -171,6 +187,22 @@ namespace bmath::intern {
 			const SLC* current;			// == nullptr, if whole object represents end()
 			std::size_t array_idx;		// == SLC::array_size, if whole object represents end()
 
+			RangeIterator(const TermStore<TermUnion_T>& new_store, const SLC* new_current, std::size_t new_idx)
+				:store(new_store), current(new_current), array_idx(new_idx)
+			{}
+
+			RangeIterator(const RangeIterator& other)
+				:store(other.store), current(other.current), array_idx(other.array_idx)
+			{}
+
+			RangeIterator& operator=(const RangeIterator& other)
+			{
+				this->store = other.store;
+				this->current = other.current;
+				this->array_idx = other.array_idx;
+				return *this;
+			}
+
 			RangeIterator& operator++()
 			{
 				auto& i = this->array_idx;
@@ -199,7 +231,7 @@ namespace bmath::intern {
 				return result;
 			}
 
-			auto operator*() noexcept { return current->values[array_idx]; } //const anyway -> faster to return by value
+			[[nodiscard]] auto operator*() noexcept { return current->values[array_idx]; } //const anyway -> faster to return by value
 
 			bool operator==(const RangeIterator& other) const noexcept
 			{
@@ -209,8 +241,8 @@ namespace bmath::intern {
 			bool operator!=(const RangeIterator& other) const noexcept { return !(*this == other); }
 		};	//struct RangeIterator
 
-		RangeIterator begin() noexcept { return RangeIterator{ this->store, &this->slc, 0 }; }
-		RangeIterator end() noexcept { return RangeIterator{ this->store, nullptr, SLC::array_size }; }
+		RangeIterator begin() noexcept { return RangeIterator(this->store, &this->slc, 0); }
+		RangeIterator end() noexcept { return RangeIterator(this->store, nullptr, SLC::array_size); }
 	}; //struct CheckedConstSLCRef
 
 	//first template parameter needs to be explicit, and of form:
@@ -237,6 +269,10 @@ namespace bmath::intern {
 	void sort(TermStore<TermUnion_T>& store, TermSLC<SLC_Index_T, SLC_Value_T, SLC_ArraySize>& slc, Compare compare)
 	{
 		using SLC = TermSLC<SLC_Index_T, SLC_Value_T, SLC_ArraySize>;
+		auto view = range<UnionToSLC>(store, slc);
+		if (std::is_sorted(view.begin(), view.end(), compare)) {
+			return;
+		}
 		if (slc.next_idx == SLC::null_index) {	//only a single array to sort -> dont need dynamic allocation
 			std::span<SLC_Value_T> whole_array(slc.values, SLC::array_size);
 			//sord indices directly by index and in reverse order to bring SLC::null_index to the end

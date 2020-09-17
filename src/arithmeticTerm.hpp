@@ -23,14 +23,14 @@ namespace bmath::intern::arithmetic {
 
 
 
-	struct Sum : TypedRefColony
+	struct Sum
 	{
-		Sum(std::initializer_list<TypedRef> list) :TypedRefColony(list) {}
+		TypedRefColony summands;
 	};
 
-	struct Product : TypedRefColony
+	struct Product
 	{
-		Product(std::initializer_list<TypedRef> list) :TypedRefColony(list) {}
+		TypedRefColony factors;
 	};
 
 	enum class FunctionType : std::uint32_t
@@ -125,12 +125,12 @@ namespace bmath::intern::arithmetic {
 	static_assert(sizeof(TypesUnion) * 8 == 128);
 
 	//everything using the TermSLC needs to have a way to get the right union member from the union
-	struct ToSum     { static Sum&           apply(TypesUnion& val) { return val.sum;     } };
-	struct ToProduct { static Product&       apply(TypesUnion& val) { return val.product; } };
-	struct ToString  { static TermString128& apply(TypesUnion& val) { return val.string;  } };
-	struct ToConstSum     { static const Sum&           apply(const TypesUnion& val) { return val.sum;     } };
-	struct ToConstProduct { static const Product&       apply(const TypesUnion& val) { return val.product; } };
-	struct ToConstString  { static const TermString128& apply(const TypesUnion& val) { return val.string;  } };
+	struct Summands { static TypedRefColony& apply(TypesUnion& val) { return val.sum.summands;    } };
+	struct Factors  { static TypedRefColony& apply(TypesUnion& val) { return val.product.factors; } };
+	struct ToString { static TermString128&  apply(TypesUnion& val) { return val.string;          } };
+	struct ConstSummands { static const TypedRefColony& apply(const TypesUnion& val) { return val.sum.summands;    } };
+	struct ConstFactors  { static const TypedRefColony& apply(const TypesUnion& val) { return val.product.factors; } };
+	struct ToConstString { static const TermString128&  apply(const TypesUnion& val) { return val.string;          } };
 
 	//evaluates tree if possible else throws (if variables of unknown value /unknown_functions are present)
 	std::complex<double> eval(const TermStore<TypesUnion>& store, TypedRef ref);

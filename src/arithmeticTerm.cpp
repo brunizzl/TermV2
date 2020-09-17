@@ -355,7 +355,7 @@ namespace bmath::intern::arithmetic {
 				if (op == 0) {	//FALLUNTERSCHEIDUNG FUER MEHRERE ZEICHEN NUR BEGINNENDES MINUS MUSS HIER NOCH HIN
 					assert(name[op] == '-' && "no plus may lead");
 					name.remove_prefix(1);
-					const Product name_times_minus_one({ new_number(store, -1.0), new_arithmetic(store, name) });
+					const Product name_times_minus_one(Product{ { new_number(store, -1.0), new_arithmetic(store, name) } });
 					return TypedRef(store.emplace_new(name_times_minus_one), Type::product);
 				}
 				else {
@@ -401,7 +401,7 @@ namespace bmath::intern::arithmetic {
 		case Type::sum: {
 			const Sum& sum = store.at(index).sum;
 			std::complex<double> value = 0.0;
-			for (const auto elem : range<ToConstSum>(store, sum)) {
+			for (const auto elem : range<ConstSummands>(store, sum.summands)) {
 				value += eval(store, elem);
 			}
 			return value;
@@ -409,7 +409,7 @@ namespace bmath::intern::arithmetic {
 		case Type::product:  {
 			const Product& product = store.at(index).product;
 			std::complex<double> value = 1.0;
-			for (const auto elem : range<ToConstProduct>(store, product)) {
+			for (const auto elem : range<ConstFactors>(store, product.factors)) {
 				value *= eval(store, elem);
 			}
 			return value;
@@ -452,7 +452,7 @@ namespace bmath::intern::arithmetic {
 		case Type::sum: {
 			const Sum& sum = store.at(index).sum;
 			bool first = true;
-			for (const auto elem : range<ToConstSum>(store, sum)) {
+			for (const auto elem : range<ConstSummands>(store, sum.summands)) {
 				if (!std::exchange(first, false)) {
 					str.push_back('+');
 				}
@@ -462,7 +462,7 @@ namespace bmath::intern::arithmetic {
 		case Type::product:  {
 			const Product& product = store.at(index).product;
 			bool first = true;
-			for (const auto elem : range<ToConstProduct>(store, product)) {
+			for (const auto elem : range<ConstFactors>(store, product.factors)) {
 				if (!std::exchange(first, false)) {
 					str.push_back('*');
 				}
