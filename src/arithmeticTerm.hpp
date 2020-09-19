@@ -24,14 +24,12 @@ namespace bmath::intern::arithmetic {
 
 	struct Sum : TypedIdxColony
 	{
-		Sum(std::initializer_list<TypedIdx> list) :TypedIdxColony(list) {}
-		Sum(TypedIdx idx) :TypedIdxColony(idx) {}
+		using TypedIdxColony::TypedIdxColony;
 	};
 
 	struct Product : TypedIdxColony
 	{
-		Product(std::initializer_list<TypedIdx> list) :TypedIdxColony(list) {}
-		Product(TypedIdx idx) :TypedIdxColony(idx) {}
+		using TypedIdxColony::TypedIdxColony;
 	};
 
 	enum class FunctionType : std::uint32_t

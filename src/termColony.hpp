@@ -15,14 +15,14 @@ namespace bmath::intern {
 	//single linked colony is similar to a single linked list, but each node holds a whole array containing ArraySize Value_T,
 	//not only a single Value_T (as an ordinary list would). TermSLC directly represents the node, there is no extra head or management.
 	//TermSLC is build to reside inside a TermStore, thus it works with Index_T to access later nodes, not with pointers.
-	//NullIndex is analogous to nullptr, NullValue is a placeholder to indicate that a position in values is not yet used.
 	template <typename Index_T, typename Value_T, std::size_t ArraySize>
 	struct TermSLC
 	{
 		static_assert(std::is_unsigned_v<Index_T>);
 		static_assert(std::is_trivially_destructible_v<Value_T>);
+		static_assert(std::is_trivially_copyable_v<Value_T>);
 
-		static constexpr Index_T null_index = Index_T(0);
+		static constexpr Index_T null_index = Index_T(0);	//assumed to hold a value invalid as an actual index in a TermStore
 		static constexpr Value_T null_value = Value_T(0);
 		static constexpr std::size_t array_size = ArraySize;
 
@@ -70,6 +70,7 @@ namespace bmath::intern {
 		struct RangeIterator
 		{
 			static constexpr bool is_const = std::is_const_v<TermStore_T> || std::is_const_v<SLC_T>;
+			static_assert(std::is_const_v<TermStore_T> == std::is_const_v<SLC_T>, "there is no reason to have more than an all-constant and all-mutable version");
 
 			using value_type      = std::remove_const_t<decltype(SLC_T::null_value)>;
 			using difference_type = void;	//no random access
@@ -145,7 +146,10 @@ namespace bmath::intern {
 	template<typename UnionToSLC, typename TermStore_T, typename SLC_T>
 	auto range(TermStore_T& store, SLC_T& slc)
 	{
-		return SLCRef<UnionToSLC, TermStore_T, SLC_T>{ store, slc };
+		static constexpr bool is_const = std::is_const_v<TermStore_T> || std::is_const_v<SLC_T>;	   //ensure that eigther both or none are const
+		using Maybe_Const_TermStore_T = std::conditional_t<is_const, const TermStore_T, TermStore_T>;  //ensure that eigther both or none are const
+		using Maybe_Const_SLC_T = std::conditional_t<is_const, const SLC_T, SLC_T>;					   //ensure that eigther both or none are const
+		return SLCRef<UnionToSLC, Maybe_Const_TermStore_T, Maybe_Const_SLC_T>{ store, slc };
 	}
 
 	template<typename UnionToSLC, typename TermStore_T>

@@ -80,6 +80,7 @@ namespace bmath::intern {
 	{
 		static_assert(std::is_default_constructible_v<TermUnion_T>, "required for default constructor of TermStore");
 		static_assert(std::is_trivially_destructible_v<TermUnion_T>, "required to allow TermUnion_T to be used in VecElem union");
+		static_assert(std::is_trivially_copyable_v<TermUnion_T>, "dunno, feels like a sane thing.");
 
 		static constexpr std::size_t table_dist = sizeof(TermUnion_T) * 8;	//also number of elements each table keeps track of
 		using OccupancyTable = std::bitset<table_dist>;
@@ -197,8 +198,9 @@ namespace bmath::intern {
 	{
 		static_assert(std::is_default_constructible_v<TermUnion_T>, "required for default constructor of TermStore");
 		static_assert(std::is_trivially_destructible_v<TermUnion_T>, "required to allow TermUnion_T to be used in VecElem union");
+		static_assert(std::is_trivially_copyable_v<TermUnion_T>, "dunno, feels like a sane thing.");
 
-		struct FreeList
+		struct [[nodiscard]] FreeList
 		{
 			static constexpr Index_T first_idx = Index_T(0);
 			Index_T next;
@@ -225,7 +227,7 @@ namespace bmath::intern {
 		std::vector<VecElem> vector;
 
 		//assumes vector to already hold first element
-		[[nodiscard]] Index_T get_free_position()
+		[[nodiscard]] Index_T get_free_position() noexcept
 		{
 			FreeList& first = this->vector[FreeList::first_idx].free_list;
 			if (first.next == FreeList::first_idx) {	//no free elements available (besides first)
@@ -269,7 +271,7 @@ namespace bmath::intern {
 			}
 		}
 
-		void free(Index_T idx)
+		void free(std::size_t idx) noexcept
 		{
 			//there is currently no test if the idx was freed previously (because expensive). if so, freeing again would break the list.
 			FreeList& first = this->vector[FreeList::first_idx].free_list;
