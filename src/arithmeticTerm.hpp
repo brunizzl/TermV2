@@ -134,7 +134,6 @@ namespace bmath::intern::arithmetic {
 	//evaluates tree if possible else throws (if variables of unknown value /unknown_functions are present)
 	std::complex<double> eval(const TermStore<TypesUnion>& store, TypedIdx ref);
 
-	//iff caller is outside tree, parent_precedence may be -1 
 	void to_string(const TermStore<TypesUnion>& store, TypedIdx ref, std::string& str, const int parent_precedence = -1);
 
 }	//namespace bmath::intern::arithmetic
