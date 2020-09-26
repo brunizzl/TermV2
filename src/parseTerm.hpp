@@ -17,8 +17,36 @@ namespace bmath::intern {
 	struct TokenView :std::string_view
 	{
 		using std::string_view::basic_string_view;
-		explicit TokenView(const std::string_view& other) :std::string_view(other) {}
-		explicit TokenView(std::string_view&& other) :std::string_view(other) {}
+		constexpr explicit TokenView(const std::string_view& other) :std::string_view(other) {}
+		constexpr explicit TokenView(std::string_view&& other) :std::string_view(other) {}
+	};
+
+	//as parsing always needs both a string_view to the actual input and a TokenView to the tokenized input, this struct packs both together
+	struct ParseView
+	{
+		TokenView tokens;
+		const char* chars;
+
+		ParseView(const TokenString& new_tokens, const std::string& new_chars) :tokens(new_tokens), chars(new_chars.data()) 
+		{
+			throw_if(new_tokens.size() != new_chars.size(), "expected both views to represent same data -> have same length");
+		}
+
+		constexpr ParseView(const TokenView& new_tokens, const char* new_chars) :tokens(new_tokens), chars(new_chars) {}
+
+		constexpr void remove_prefix(const std::size_t count) noexcept
+		{
+			this->chars += count;
+			this->tokens.remove_prefix(count);
+		}
+
+		constexpr void remove_suffix(const std::size_t count) noexcept { this->tokens.remove_suffix(count); }
+		constexpr std::size_t size() const noexcept { return this->tokens.size(); }
+
+		constexpr ParseView substr(std::size_t offset, std::size_t count) const noexcept 
+		{ 
+			return ParseView(TokenView(this->tokens.substr(offset, count)), this->chars + offset); 
+		}
 	};
 
 	//TokenString is intended to be used along the string to be parsed to associate every char with what it represents 
@@ -110,7 +138,7 @@ namespace bmath::intern {
 		TypedIdx build_number(ArithmeticStore& store, double re, double im = 0);
 
 		//returns head, offset is used to determine error position relative begin of whole term
-		TypedIdx build(ArithmeticStore& store, TokenView token_view, std::string_view name_view, const std::size_t offset);
+		TypedIdx build(ArithmeticStore& store, ParseView view, const std::size_t offset);
 
 	} //namespace arithmetic
 

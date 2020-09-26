@@ -19,17 +19,17 @@ int main()
 		std::size_t closed = find_closed_par(open, TokenView(tokens));
 		std::cout << parentheses << '\n';
 		std::cout << std::string(open, ' ') << "^open\n";
-		std::cout << std::string(closed, ' ') << "^closed\n";
+		std::cout << std::string(closed, ' ') << "^closed\n\n";
 	}
 	{
-		std::string term_name = "-(b+c)*2i-";
+		std::string term_name = "-(b+c)*2i";
 		try {
 			remove_whitspace(term_name);
 			auto tokens = tokenize(term_name);
 			allow_implicit_product(tokens, term_name);
 			assert(is_arithmetic(TokenView(tokens)));
 			ArithmeticStore term(term_name.size());
-			auto head = build(term, TokenView(tokens), term_name, 0);
+			auto head = build(term, {tokens, term_name}, 0);
 
 			std::string term_str;
 			to_string(term, head, term_str);

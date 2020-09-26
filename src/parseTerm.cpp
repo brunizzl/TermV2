@@ -262,40 +262,32 @@ namespace bmath::intern {
 			return TypedIdx(store.emplace_new(Complex{ std::complex<double>(re, im) }), Type::complex);
 		}
 
-		TypedIdx build(ArithmeticStore& store, TokenView tokn_view, std::string_view name_view, std::size_t offset)
+		TypedIdx build(ArithmeticStore& store, ParseView view, std::size_t offset)
 		{
-			assert(tokn_view.length() == name_view.length());
-			throw_if<ParseFailure>(tokn_view.length() == 0, offset, ParseFailure::What::illegal_ops);
-			Head head = find_head_type(tokn_view, offset);
+			throw_if<ParseFailure>(view.size() == 0, offset, ParseFailure::What::illegal_ops);
+			Head head = find_head_type(view.tokens, offset);
 			while (head.type == Head::Type::group) {
-				tokn_view.remove_prefix(1);
-				tokn_view.remove_suffix(1);
-				name_view.remove_prefix(1);
-				name_view.remove_suffix(1);
-				head = find_head_type(tokn_view, offset);
+				view.remove_prefix(1);
+				view.remove_suffix(1);
+				head = find_head_type(view.tokens, offset);
 			}
 			switch (head.type) {
 			case Head::Type::sum: {
 				std::size_t sum_idx;
 				{	//first summand is not guaranteed to start with '+' or '-'
-					const auto summand_toks = TokenView(tokn_view.substr(0, head.where));
-					const auto summand_name = std::string_view(name_view.substr(0, head.where));
-					tokn_view.remove_prefix(head.where);  //leave next operator as first symbol
-					name_view.remove_prefix(head.where);  //leave next operator as first symbol
-					const TypedIdx summand = build(store, summand_toks, summand_name, offset);
+					const auto summand_view = view.substr(0, head.where);
+					view.remove_prefix(head.where);  //leave next operator as first symbol
+					const TypedIdx summand = build(store, summand_view, offset);
 					offset += head.where;
 					sum_idx = store.emplace_new(Sum(summand));
 				}
-				while (tokn_view.length()) {
-					const char current_sign = name_view.front();
-					tokn_view.remove_prefix(1);  //remove sign of current summand
-					name_view.remove_prefix(1);  //remove sign of current summand
-					const std::size_t next_op_idx = find_first_of_skip_pars(tokn_view, token::sum);
-					const auto summand_toks = TokenView(tokn_view.substr(0, next_op_idx));
-					const auto summand_name = std::string_view(name_view.substr(0, next_op_idx));
-					tokn_view.remove_prefix(next_op_idx == TokenView::npos ? tokn_view.length() : next_op_idx);
-					name_view.remove_prefix(next_op_idx == TokenView::npos ? tokn_view.length() : next_op_idx);
-					const TypedIdx summand = build(store, summand_toks, summand_name, offset);
+				while (view.size()) {
+					const char current_sign = view.chars[0];
+					view.remove_prefix(1);  //remove sign of current summand
+					const std::size_t next_op_idx = find_first_of_skip_pars(view.tokens, token::sum);
+					const auto summand_view = view.substr(0, next_op_idx);
+					view.remove_prefix(next_op_idx == TokenView::npos ? view.size() : next_op_idx);
+					const TypedIdx summand = build(store, summand_view, offset);
 					offset += next_op_idx + 1;
 					switch (current_sign) {
 					case '+':
@@ -313,33 +305,27 @@ namespace bmath::intern {
 				return TypedIdx(sum_idx, Type::sum);
 			} break;
 			case Head::Type::negate: {
-				tokn_view.remove_prefix(1);  //remove minus sign
-				name_view.remove_prefix(1);  //remove minus sign
-				const TypedIdx to_negate = build(store, tokn_view, name_view, offset + 1);
+				view.remove_prefix(1);  //remove minus sign
+				const TypedIdx to_negate = build(store, view, offset + 1);
 				const TypedIdx minus_1 = build_number(store, -1.0);
 				return TypedIdx(store.emplace_new(Product({ to_negate, minus_1 })), Type::product);
 			} break;
 			case Head::Type::product: {
 				std::size_t product_idx;
 				{
-					const auto factor_toks = TokenView(tokn_view.substr(0, head.where));
-					const auto factor_name = std::string_view(name_view.substr(0, head.where));
-					tokn_view.remove_prefix(head.where);  //leave next operator as first symbol
-					name_view.remove_prefix(head.where);  //leave next operator as first symbol
-					const TypedIdx factor = build(store, factor_toks, factor_name, offset);
+					const auto factor_view = view.substr(0, head.where);
+					view.remove_prefix(head.where);  //leave next operator as first symbol
+					const TypedIdx factor = build(store, factor_view, offset);
 					offset += head.where;
 					product_idx = store.emplace_new(Product(factor));
 				}
-				while (tokn_view.length()) {
-					const char current_operation = name_view.front();
-					tokn_view.remove_prefix(1);  //remove '*' or '/' of current factor
-					name_view.remove_prefix(1);  //remove '*' or '/' of current factor
-					const std::size_t next_op_idx = find_first_of_skip_pars(tokn_view, token::product);
-					const auto factor_toks = TokenView(tokn_view.substr(0, next_op_idx));
-					const auto factor_name = std::string_view(name_view.substr(0, next_op_idx));
-					tokn_view.remove_prefix(next_op_idx == TokenView::npos ? tokn_view.length() : next_op_idx);
-					name_view.remove_prefix(next_op_idx == TokenView::npos ? tokn_view.length() : next_op_idx);
-					const TypedIdx factor = build(store, factor_toks, factor_name, offset);
+				while (view.size()) {
+					const char current_operation = view.chars[0];
+					view.remove_prefix(1);  //remove '*' or '/' of current factor
+					const std::size_t next_op_idx = find_first_of_skip_pars(view.tokens, token::product);
+					const auto factor_view = view.substr(0, next_op_idx);
+					view.remove_prefix(next_op_idx == TokenView::npos ? view.size() : next_op_idx);
+					const TypedIdx factor = build(store, factor_view, offset);
 					offset += next_op_idx + 1;
 					switch (current_operation) {
 					case '*':
@@ -357,27 +343,25 @@ namespace bmath::intern {
 				return TypedIdx(product_idx, Type::product);
 			} break;
 			case Head::Type::power: {
-				const auto base_toks = TokenView(tokn_view.substr(0, head.where));
-				const auto base_name = std::string_view(name_view.substr(0, head.where));
-				tokn_view.remove_prefix(head.where + 1);
-				name_view.remove_prefix(head.where + 1);
-				const TypedIdx base = build(store, base_toks, base_name, offset);
-				const TypedIdx expo = build(store, tokn_view, name_view, offset + head.where + 1);
+				const auto base_view = view.substr(0, head.where);
+				view.remove_prefix(head.where + 1);
+				const TypedIdx base = build(store, base_view, offset);
+				const TypedIdx expo = build(store, view, offset + head.where + 1);
 				return TypedIdx(store.emplace_new(KnownFunction{FunctionType::pow, base, expo, TypedIdx()}), Type::known_function);
 			} break;
 			case Head::Type::value: {
 				double val;
-				const auto [ptr, error] = std::from_chars(name_view.data(), name_view.data() + name_view.length(), val);
+				const auto [ptr, error] = std::from_chars(view.chars, view.chars + view.size(), val);
 				throw_if<ParseFailure>(error == std::errc::invalid_argument, offset, ParseFailure::What::illformed_val);
-				throw_if<ParseFailure>(ptr != name_view.data() + name_view.length(), std::size_t(offset + ptr - name_view.data() + 1), ParseFailure::What::illformed_val);
+				throw_if<ParseFailure>(ptr != view.chars + view.size(), std::size_t(offset + ptr - view.chars + 1), ParseFailure::What::illformed_val);
 				return build_number(store, val);
 			} break;
 			case Head::Type::variable:
-				if (name_view == "i") {
+				if (view.chars[0] == 'i' && view.size() == 1) {
 					return build_number(store, 0.0, 1.0);
 				}
 				else {
-					return TypedIdx(insert_string(store, name_view), Type::variable);
+					return TypedIdx(insert_string(store, std::string_view(view.chars, view.size())), Type::variable);
 				}
 			}
 		}
