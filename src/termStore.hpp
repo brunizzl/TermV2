@@ -1,82 +1,16 @@
 #pragma once
 
-#include <cstdint>
 #include <vector>
 #include <bitset>
 #include <type_traits>
 
+#include "termUtility.hpp"
+
 namespace bmath::intern {
-
-	//stores both an index and an enum value in the same variable 
-	//with the lower bits representing the enum, the upper bits representing the (shifted) index
-	template<typename TypesEnum, TypesEnum MaxEnumValue, typename UnderlyingType = std::uint32_t>
-	class [[nodiscard]] BasicTypedRef
-	{
-		static_assert(std::is_enum_v<TypesEnum>);
-		static_assert(std::is_unsigned_v<UnderlyingType>);
-
-		UnderlyingType data;
-		
-		static constexpr UnderlyingType enums_used_digits() 
-		{
-			UnderlyingType power = 0;
-			while ((1 << power) <= static_cast<UnderlyingType>(MaxEnumValue)) {
-				power++;
-			}
-			return power;
-		}
-
-		static constexpr UnderlyingType index_offset = enums_used_digits();
-		static constexpr UnderlyingType enum_mask = (1 << index_offset) - 1;
-		static constexpr UnderlyingType index_mask = ~enum_mask;
-
-	public:
-		static constexpr std::size_t max_index =  index_mask >> index_offset;
-
-		constexpr BasicTypedRef() :data(static_cast<UnderlyingType>(MaxEnumValue)) {}
-
-		explicit constexpr BasicTypedRef(UnderlyingType data_) : data(data_) {}
-
-		constexpr BasicTypedRef(std::size_t index, TypesEnum type)
-			:data(static_cast<UnderlyingType>(index << index_offset) | static_cast<UnderlyingType>(type))
-		{
-			if (index > max_index) [[unlikely]] {
-				throw std::exception("BasicTypedRef has recieved index bigger than max_index");
-			}
-			if (type > MaxEnumValue) [[unlikely]] {
-				throw std::exception("BasicTypedRef has recieved enum value bigger than MaxEnumValue");
-			}
-		}
-
-		[[nodiscard]] constexpr std::size_t get_index() const noexcept { return data >> index_offset; }
-
-		constexpr void set_index(std::size_t new_index) { 
-			if (new_index > max_index) [[unlikely]] {
-				throw std::exception("BasicTypedRef has recieved index bigger than max_index");
-			}
-			data = static_cast<UnderlyingType>(new_index << index_offset) | (data & enum_mask); 
-		}
-
-		[[nodiscard]] constexpr TypesEnum get_type() const noexcept { return static_cast<TypesEnum>(data & enum_mask); }
-
-		constexpr void set_type(TypesEnum new_type) { 
-			if (new_type > MaxEnumValue) [[unlikely]] {
-				throw std::exception("BasicTypedRef has recieved enum value bigger than MaxEnumValue");
-			}
-			data = (data & index_mask) | static_cast<UnderlyingType>(new_type); 
-		}
-
-		auto operator<=>(const BasicTypedRef&) const = default;
-		bool operator==(const BasicTypedRef&) const = default;
-	};	//class BasicTypedRef
-
-
-
-
 
 	//possibly preferred version for debugging
 	template <typename TermUnion_T>
-	class [[nodiscard]] TermStoreTable
+	class [[nodiscard]] TermStore_Table
 	{
 		static_assert(std::is_default_constructible_v<TermUnion_T>, "required for default constructor of TermStore");
 		static_assert(std::is_trivially_destructible_v<TermUnion_T>, "required to allow TermUnion_T to be used in VecElem union");
@@ -132,18 +66,14 @@ namespace bmath::intern {
 		//debugging function to ensure only valid accesses
 		void check_index_validity(std::size_t idx) const
 		{
-			if (this->vector.size() < idx + 1) [[unlikely]] {
-				throw std::exception("TermStore supposed to access/free unowned slot");
-			}
+			throw_if(this->vector.size() < idx + 1, "TermStore supposed to access/free unowned slot");
 			const OccupancyTable& table = this->vector[idx / table_dist].table;
-			if (!table[idx % table_dist]) [[unlikely]] {
-				throw std::exception("TermStore supposed to access/free already freed slot");
-			}
+			throw_if(!table[idx % table_dist], "TermStore supposed to access/free already freed slot");
 		}
 
 	public:
 
-		TermStoreTable(std::size_t reserve = 0) :vector()
+		TermStore_Table(std::size_t reserve = 0) :vector()
 		{
 			vector.reserve(reserve);
 		}
@@ -190,11 +120,16 @@ namespace bmath::intern {
 			check_index_validity(idx);		
 			return this->vector.at(idx).value;
 		}
-	};	//class TermStoreTable
+
+		[[nodiscard]] std::size_t size() const noexcept { return vector.size(); }
+	};	//class TermStore_Table
+
+
+
 
 	//possibly faster version, but also with less access checks, thus with no (internal) memory savety
 	template <typename TermUnion_T, typename Index_T = std::size_t>
-	class [[nodiscard]] TermStoreFreeList
+	class [[nodiscard]] TermStore_FreeList
 	{
 		static_assert(std::is_default_constructible_v<TermUnion_T>, "required for default constructor of TermStore");
 		static_assert(std::is_trivially_destructible_v<TermUnion_T>, "required to allow TermUnion_T to be used in VecElem union");
@@ -247,7 +182,7 @@ namespace bmath::intern {
 
 	public:
 
-		TermStoreFreeList(std::size_t reserve = 0) :vector()
+		TermStore_FreeList(std::size_t reserve = 0) :vector()
 		{
 			vector.reserve(reserve);
 		}
@@ -297,8 +232,10 @@ namespace bmath::intern {
 			//no tests if a free_list is accessed, as only position of the first node is known anyway.
 			return this->vector[idx].value;
 		}
-	};	//class TermStoreFreeList
+
+		[[nodiscard]] std::size_t size() const noexcept { return vector.size(); }
+	};	//class TermStore_FreeList
 
 	template<typename TermUnion_T>
-	using TermStore = TermStoreTable<TermUnion_T>;
+	using TermStore = TermStore_Table<TermUnion_T>;
 }

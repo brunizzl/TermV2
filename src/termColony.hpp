@@ -61,16 +61,17 @@ namespace bmath::intern {
 
 	//a reference to just a TermSLC has the problem, that the adress of the next block depends not only on next_idx,
 	//but also on the Store holding the TermSLC. Thus this store-aware type is used to iterate over any TermSLC.
-	template<typename UnionToSLC, typename TermStore_T, typename SLC_T>
+	template<typename UnionToSLC, typename TermStore_T, typename SLC_T, typename Index_T>
 	struct SLCRef
 	{
+		static_assert(std::is_unsigned_v<Index_T>);
+
 		TermStore_T& store;
-		SLC_T& slc;
+		Index_T slc_idx;
 
 		struct RangeIterator
 		{
-			static constexpr bool is_const = std::is_const_v<TermStore_T> || std::is_const_v<SLC_T>;
-			static_assert(std::is_const_v<TermStore_T> == std::is_const_v<SLC_T>, "there is no reason to have more than an all-constant and all-mutable version");
+			static constexpr bool is_const = std::is_const_v<TermStore_T>;
 
 			using value_type      = std::remove_const_t<decltype(SLC_T::null_value)>;
 			using difference_type = void;	//no random access
@@ -79,21 +80,21 @@ namespace bmath::intern {
 			using iterator_category = std::forward_iterator_tag;
 
 			TermStore_T& store;
-			SLC_T* current;			// == nullptr, if whole object represents end()
-			std::size_t array_idx;		// == SLC::array_size, if whole object represents end()
+			Index_T current_idx;			// == 0, if whole object represents end()
+			std::uint32_t array_idx;		// == SLC::array_size, if whole object represents end()
 
-			RangeIterator(TermStore_T& new_store, SLC_T* new_current, std::size_t new_idx)
-				:store(new_store), current(new_current), array_idx(new_idx)
+			RangeIterator(TermStore_T& new_store, std::uint32_t new_current_idx, std::uint32_t new_array_idx)
+				:store(new_store), current_idx(new_current_idx), array_idx(new_array_idx)
 			{}
 
 			RangeIterator(const RangeIterator& other)
-				:store(other.store), current(other.current), array_idx(other.array_idx)
+				:store(other.store), current_idx(other.current_idx), array_idx(other.array_idx)
 			{}
 
 			RangeIterator& operator=(const RangeIterator& other)
 			{
 				this->store = other.store;
-				this->current = other.current;
+				this->current_idx = other.current_idx;
 				this->array_idx = other.array_idx;
 				return *this;
 			}
@@ -102,18 +103,20 @@ namespace bmath::intern {
 			{
 				auto& i = this->array_idx;
 				i++;
+				auto* current = &UnionToSLC::apply(this->store.at(this->current_idx));
 				while (true) {
 					for (; i < SLC_T::array_size; i++) {
-						if (this->current->values[i] != SLC_T::null_value) [[likely]] {
+						if (current->values[i] != SLC_T::null_value) [[likely]] {
 							return *this;
 						}
 					}
-					if (this->current->next_idx != SLC_T::null_index) { //no valid position -> go to next block
-						this->current = &UnionToSLC::apply(this->store.at(current->next_idx));
+					if (current->next_idx != SLC_T::null_index) { //no valid position -> go to next block
+						this->current_idx = current->next_idx;
+						current = &UnionToSLC::apply(this->store.at(this->current_idx));
 						i = 0;
 					}
 					else { //neither valid position, nor valid block -> this becomes end()
-						this->current = nullptr;
+						this->current_idx = 0;
 						return *this;
 					}
 				}
@@ -126,39 +129,33 @@ namespace bmath::intern {
 				return result;
 			}
 
-			[[nodiscard]] auto& operator*() noexcept { return current->values[array_idx]; }
+			[[nodiscard]] auto& operator*() noexcept 
+			{ 
+				auto* const current = &UnionToSLC::apply(this->store.at(this->current_idx));
+				return current->values[array_idx]; 
+			}
 
 			bool operator==(const RangeIterator& other) const noexcept
 			{
 				assert(&this->store == &other.store && "only comparison between iterators in same term makes sense");
-				return this->array_idx == other.array_idx && this->current == other.current;
+				return this->array_idx == other.array_idx && this->current_idx == other.current_idx;
 			}
 
 			bool operator!=(const RangeIterator& other) const noexcept { return !(*this == other); }
 		};	//struct RangeIterator
 
-		RangeIterator begin() noexcept { return RangeIterator(this->store, &this->slc, 0); }
-		RangeIterator end() noexcept { return RangeIterator(this->store, nullptr, SLC_T::array_size); }
+		RangeIterator begin() noexcept { return RangeIterator(this->store, this->slc_idx, 0); }
+		RangeIterator end() noexcept { return RangeIterator(this->store, 0, SLC_T::array_size); }
 	}; //struct SLCRef
 
-	//first template parameter needs to be explicit, and of form:
-	// struct UnionToSLC { static SLC_TYPE& apply(TermUnion_T& val) { return val.slc_member; }};
-	template<typename UnionToSLC, typename TermStore_T, typename SLC_T>
-	auto range(TermStore_T& store, SLC_T& slc)
+	template<typename UnionToSLC, typename TermStore_T, typename Index_T>
+	auto range(TermStore_T& store, Index_T slc_idx)
 	{
-		static constexpr bool is_const = std::is_const_v<TermStore_T> || std::is_const_v<SLC_T>;	   //ensure that eigther both or none are const
-		using Maybe_Const_TermStore_T = std::conditional_t<is_const, const TermStore_T, TermStore_T>;  //ensure that eigther both or none are const
-		using Maybe_Const_SLC_T = std::conditional_t<is_const, const SLC_T, SLC_T>;					   //ensure that eigther both or none are const
-		return SLCRef<UnionToSLC, Maybe_Const_TermStore_T, Maybe_Const_SLC_T>{ store, slc };
+		using SLC_T = UnionToSLC::Result;
+		return SLCRef<UnionToSLC, TermStore_T, SLC_T, Index_T>{ store, slc_idx };
 	}
 
-	template<typename UnionToSLC, typename TermStore_T>
-	auto range(TermStore_T& store, std::size_t idx)
-	{
-		auto& slc = UnionToSLC::apply(store.at(idx));
-		using SLC_T = std::remove_reference_t<decltype(slc)>;
-		return SLCRef<UnionToSLC, TermStore_T, SLC_T>{ store, slc };
-	}
+
 
 	//also allows SLC::null_index to be passed in
 	template<typename UnionToSLC, typename TermUnion_T, typename Index_T>
@@ -172,9 +169,10 @@ namespace bmath::intern {
 		};
 	}
 
-	template<typename UnionToSLC, typename SLC_T, typename TermStore_T>
-	void insert_new(TermStore_T& store, std::size_t slc_idx, decltype(SLC_T::null_value) elem)
+	template<typename UnionToSLC, typename TermStore_T>
+	void insert_new(TermStore_T& store, std::size_t slc_idx, decltype(UnionToSLC::Result::null_value) elem)
 	{
+		using SLC_T = UnionToSLC::Result;
 		while (true) {
 			auto* const slc_ptr = &UnionToSLC::apply(store.at(slc_idx));
 			for (std::size_t i = 0; i < SLC_T::array_size; i++) {
@@ -194,16 +192,20 @@ namespace bmath::intern {
 		}
 	} //insert_new
 
-	template<typename UnionToSLC, typename TermStore_T, typename SLC_T, typename Compare>
-	void sort(TermStore_T& store, SLC_T& slc, Compare compare)
+	template<typename UnionToSLC, typename TermStore_T, typename Index_T, typename Compare>
+	void sort(TermStore_T& store, Index_T slc_idx, Compare compare)
 	{
+		static_assert(std::is_unsigned_v<Index_T>);
+		using SLC_T = UnionToSLC::Result;
 		using SLC_Value_T = std::remove_const_t<decltype(SLC_T::null_value)>;
 
-		if (auto view = range<UnionToSLC>(store, slc); std::is_sorted(view.begin(), view.end(), compare)) {
+		auto* current = &UnionToSLC::apply(store.at(slc_idx));
+
+		if (auto view = range<UnionToSLC>(store, slc_idx); std::is_sorted(view.begin(), view.end(), compare)) {
 			return;
 		}
-		else if (slc.next_idx == SLC_T::null_index) {	//only a single array to sort -> dont need dynamic allocation
-			std::span<SLC_Value_T> whole_array(slc.values, SLC_T::array_size);
+		else if (current->next_idx == SLC_T::null_index) {	//only a single array to sort -> dont need dynamic allocation
+			std::span<SLC_Value_T> whole_array(current->values, SLC_T::array_size);
 			//sord indices directly by index and in reverse order to bring SLC::null_index to the end
 			std::sort(whole_array.rbegin(), whole_array.rend());
 			const auto values_end = std::find(whole_array.begin(), whole_array.end(), SLC_T::null_value);
@@ -214,13 +216,12 @@ namespace bmath::intern {
 		else {	//general case: unsorted and spanning multiple blocks
 			std::vector<SLC_Value_T> all_values;		
 			all_values.reserve(2 * SLC_T::array_size);
-			for (SLC_Value_T& elem : range<UnionToSLC>(store, slc)) {
+			for (SLC_Value_T& elem : range<UnionToSLC>(store, slc_idx)) {
 				all_values.push_back(elem);
 			}
 			std::sort(all_values.begin(), all_values.end(), compare);
 
 			std::size_t vec_i = 0;
-			SLC_T* current = &slc;
 			bool all_copied_back = false;
 			while (!all_copied_back) {
 				std::size_t slc_i = 0;
@@ -244,8 +245,6 @@ namespace bmath::intern {
 			}		
 		}
 	} //sort
-
-
 
 
 
