@@ -6,6 +6,7 @@
 #include "termColony.hpp"
 #include "arithmeticTerm.hpp"
 #include "parseTerm.hpp"
+#include "parseArithmetic.hpp"
 
 using namespace bmath::intern::arithmetic;
 using namespace bmath::intern;
@@ -13,28 +14,30 @@ using namespace bmath::intern;
 int main()
 {
 	{
-		std::string parentheses = "([[]])()[(){()()}]({}{}{()})";
+		std::string parentheses = "1([[.]])2(.)[(.){()(.)}]({}{}{()})3";
 		TokenString tokens = tokenize(parentheses);
-		std::size_t open = parentheses.find_first_of('{', 0);
-		std::size_t closed = find_closed_par(open, TokenView(tokens));
+		std::size_t closed = parentheses.find_last_of(')');
+		std::size_t open = find_open_par(closed, TokenView(tokens));
 		std::cout << parentheses << '\n';
 		std::cout << std::string(open, ' ') << "^open\n";
-		std::cout << std::string(closed, ' ') << "^closed\n\n";
+		std::cout << std::string(closed, ' ') << "^closed\n";
+		std::cout << "counted " << count_skip_pars(TokenView(tokens), token::number) << " unenclosed instances of token::number\n\n";
 	}
 	{
-		std::string term_name = "-(b+c)*2i";
+		//std::string term_name = "-(b+c)*2i-5*(a+3e*2weinachtsmannVomNordpolUnterWasserWeilKlimawandel)";
+		std::string term_name = "herbert(20, 2+2, anneliese(fred, marko * 4))";
 		try {
 			remove_whitspace(term_name);
 			auto tokens = tokenize(term_name);
 			allow_implicit_product(tokens, term_name);
-			assert(is_arithmetic(TokenView(tokens)));
-			ArithmeticStore term(term_name.size());
-			auto head = build(term, {tokens, term_name}, 0);
+			assert(find_first_not_arithmetic(TokenView(tokens)) == TokenView::npos);
+			Store term(term_name.size());
+			auto head = build(term, {tokens, term_name});
 
 			std::string term_str;
 			to_string(term, head, term_str);
 			std::cout << "to_string: " << term_str << std::endl;
-			std::cout << bmath::ArithmeticTerm{ head, term }.to_debug_view() << '\n';
+			std::cout << bmath::ArithmeticTerm{ head, term }.show_memory_layout() << '\n';
 		}
 		catch (ParseFailure failure) {
 			switch (failure.what) {
@@ -50,6 +53,9 @@ int main()
 			case ParseFailure::What::illformed_val:
 				std::cout << "error while building: encountered illformed value:\n";
 				break;
+			case ParseFailure::What::wrong_param_count:
+				std::cout << "error while building: encountered wrong parameter count:\n";
+				break;
 			}
 			std::cout << term_name << '\n';
 			std::cout << std::string(failure.where, ' ') << "^\n\n";
@@ -58,30 +64,6 @@ int main()
 		double result;
 		std::from_chars(term_name.data(), term_name.data() + term_name.size(), result);
 		std::cout << result << '\n';
-	}
-	{
-		bmath::ArithmeticTerm term;
-		auto val1_idx = term.values.emplace_new(Complex{ {3.0, 0.0} });
-		auto val2_idx = term.values.emplace_new(Complex{ {12.0, 0.0} });
-		auto val1_ref = TypedIdx(val1_idx, Type::complex);
-		auto val2_ref = TypedIdx(val2_idx, Type::complex);
-		auto sum_idx = term.values.emplace_new(Sum{ {val1_ref, val2_ref} });
-		auto sum_ref = TypedIdx(sum_idx, Type::sum);
-		auto var_idx = insert_string(term.values, "DerWeinachtsmannVomNordpol");
-		auto var_ref = TypedIdx(var_idx, Type::variable);
-		std::uint32_t product_idx = term.values.emplace_new(Product{ {sum_ref, var_ref} });
-		auto product_ref = TypedIdx(product_idx, Type::product);
-		for (int i = 0; i < 10; i++) {
-			std::string term_str;
-			to_string(term.values, product_ref, term_str);
-			std::cout << term_str << std::endl;
-			insert_new<ToProduct>(term.values, product_idx, val1_ref);
-		}
-
-		std::string term_str;
-		to_string(term.values, product_ref, term_str);
-		std::cout << term_str << std::endl;
-		std::cout << eval(term.values, sum_ref) << std::endl;
 	}
 	{
 		TermStore<TypesUnion> store;

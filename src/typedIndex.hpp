@@ -32,7 +32,7 @@ namespace bmath::intern {
 	public:
 		static constexpr std::size_t max_index = index_mask >> index_offset;
 
-		constexpr BasicTypedIdx() :data(static_cast<UnderlyingType>(MaxEnumValue)) {}
+		explicit constexpr BasicTypedIdx() :data(static_cast<UnderlyingType>(0)) {}
 
 		explicit constexpr BasicTypedIdx(UnderlyingType data_) :data(data_) {}
 

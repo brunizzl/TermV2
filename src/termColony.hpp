@@ -14,10 +14,12 @@ namespace bmath::intern {
 
 	//single linked colony is similar to a single linked list, but each node holds a whole array containing ArraySize Value_T,
 	//not only a single Value_T (as an ordinary list would). TermSLC directly represents the node, there is no extra head or management.
-	//TermSLC is build to reside inside a TermStore, thus it works with Index_T to access later nodes, not with pointers.
+	//TermSLC is build to reside inside a TermStore, thus it works with TypedIdx_T to access later nodes, not with pointers.
 	template <typename Index_T, typename Value_T, std::size_t ArraySize>
 	struct TermSLC
 	{
+		typedef Value_T Value_T; //make visible to outside
+		typedef Index_T Index_T; //make visible to outside
 		static_assert(std::is_unsigned_v<Index_T>);
 		static_assert(std::is_trivially_destructible_v<Value_T>);
 		static_assert(std::is_trivially_copyable_v<Value_T>);
@@ -162,7 +164,7 @@ namespace bmath::intern {
 	void free_slc(TermStore<TermUnion_T>& store, Index_T slc_idx)
 	{
 		Index_T last_idx(0);
-		while (slc_idx != Index_T(0)) { // Index_T(0) should be equivalent to SLC::null_index
+		while (slc_idx != Index_T(0)) { // TypedIdx_T(0) should be equivalent to SLC::null_index
 			last_idx = slc_idx;
 			slc_idx = UnionToSLC::apply(store.at(slc_idx)).next_idx;
 			store.free(last_idx);
@@ -185,7 +187,7 @@ namespace bmath::intern {
 				slc_idx = slc_ptr->next_idx;
 			}
 			else {
-				const std::size_t new_idx = store.emplace_new(SLC_T(elem));
+				const std::size_t new_idx = store.insert(SLC_T(elem));
 				UnionToSLC::apply(store.at(slc_idx)).next_idx = new_idx;
 				return;
 			}
@@ -259,14 +261,14 @@ namespace bmath::intern {
 			const std::size_t last_substr_length = str.length() % TermString128::array_size;
 			if (last_substr_length > 0) {
 				const std::string_view last_view = str.substr(str.length() - last_substr_length);
-				prev_inserted_at = store.emplace_new(TermString128(last_view, prev_inserted_at));
+				prev_inserted_at = store.insert(TermString128(last_view, prev_inserted_at));
 				str.remove_suffix(last_substr_length);
 			}
 		}
 		assert((str.length() % TermString128::array_size == 0) && "last shorter bit should have been cut off already");
 		while (str.length()) {
 			const std::string_view last_view = str.substr(str.length() - TermString128::array_size);
-			prev_inserted_at = store.emplace_new(TermString128(last_view, prev_inserted_at));
+			prev_inserted_at = store.insert(TermString128(last_view, prev_inserted_at));
 			str.remove_suffix(TermString128::array_size);
 		}
 		return prev_inserted_at;
