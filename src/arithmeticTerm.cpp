@@ -138,7 +138,7 @@ namespace bmath::intern::arithmetic {
 //////////////////////////////////////////////////exported in header///////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	namespace function {
+	namespace fn {
 
 		std::string_view name_of(FunctionType type) noexcept
 		{
@@ -173,16 +173,10 @@ namespace bmath::intern::arithmetic {
 		void append_name(const Store& store, const UnknownFunction& func, std::string& str)
 		{
 			if (func.name_size == UnknownFunction::NameSize::small) {
-				std::size_t end = 0;
-				for (; end < UnknownFunction::short_name_max; end++) {
-					if (func.short_name[end] == '\0') {
-						break;
-					}
-				}
-				str.append(func.short_name, end);
+				str.append(func.short_name);
 			}
 			else {
-				read<ToConstString>(store, func.name_idx, str);
+				read<ToConstString>(store, func.long_name_idx, str);
 			}
 		}
 
@@ -237,22 +231,7 @@ namespace bmath::intern::arithmetic {
 			}
 		} //param_count
 
-		std::span<TypedIdx> range(KnownFunction& func) noexcept { return { func.params, param_count(func.type) }; }
-		std::span<const TypedIdx> range(const KnownFunction& func) noexcept { return { func.params, param_count(func.type) }; }
-
-		std::span<TypedIdx> short_range(UnknownFunction& func) noexcept
-		{
-			assert(func.param_count != UnknownFunction::ParamCount::more);
-			return { func.short_params, static_cast<std::size_t>(func.param_count) };
-		}
-
-		std::span<const TypedIdx> short_range(const UnknownFunction& func) noexcept
-		{
-			assert(func.param_count != UnknownFunction::ParamCount::more);
-			return { func.short_params, static_cast<std::size_t>(func.param_count) };
-		}
-
-	} //namespace function
+	} //namespace fn
 
 	std::complex<double> eval(const Store& store, TypedIdx ref)
 	{
@@ -260,14 +239,14 @@ namespace bmath::intern::arithmetic {
 		switch (ref.get_type()) {
 		case Type::sum: {
 			std::complex<double> value = 0.0;
-			for (const auto elem : range<ToConstSum>(store, index)) {
+			for (const auto elem : vd::range(store, index)) {
 				value += eval(store, elem);
 			}
 			return value;
 		} break;
 		case Type::product:  {
 			std::complex<double> value = 1.0;
-			for (const auto elem : range<ToConstProduct>(store, index)) {
+			for (const auto elem : vd::range(store, index)) {
 				value *= eval(store, elem);
 			}
 			return value;
@@ -303,7 +282,7 @@ namespace bmath::intern::arithmetic {
 		switch (ref.get_type()) {
 		case Type::sum: {
 			bool first = true;
-			for (const auto elem : range<ToConstSum>(store, index)) {
+			for (const auto elem : vd::range(store, index)) {
 				if (!std::exchange(first, false)) {
 					str.push_back('+');
 				}
@@ -312,7 +291,7 @@ namespace bmath::intern::arithmetic {
 		} break;
 		case Type::product:  {
 			bool first = true;
-			for (const auto elem : range<ToConstProduct>(store, index)) {
+			for (const auto elem : vd::range(store, index)) {
 				if (!std::exchange(first, false)) {
 					str.push_back('*');
 				}
@@ -321,10 +300,10 @@ namespace bmath::intern::arithmetic {
 		} break;        
 		case Type::known_function: {
 			const KnownFunction& known_function = store.at(index).known_function;
-			str.append(function::name_of(known_function.type));
+			str.append(fn::name_of(known_function.type));
 			str.push_back('(');
 			bool first = true;
-			for (const auto param : function::range(known_function)) {
+			for (const auto param : fn::range(known_function)) {
 				if (!std::exchange(first, false)) {
 					str.push_back(',');
 				}
@@ -334,15 +313,15 @@ namespace bmath::intern::arithmetic {
 		} break;
 		case Type::unknown_function: {
 			const UnknownFunction& unknown_function = store.at(index).unknown_function;
-			function::append_name(store, unknown_function, str);
+			fn::append_name(store, unknown_function, str);
 			str.push_back('(');
-			function::for_each(store, unknown_function,
-				[&str, first = true](const Store& store, TypedIdx param) mutable {
-					if (!std::exchange(first, false)) {
-						str.push_back(',');
-					}
-					to_string(store, param, str, print::operator_precedence(Type::unknown_function));
-				});
+			bool first = true;
+			for (const auto param : fn::range(store, unknown_function)) {
+				if (!std::exchange(first, false)) {
+					str.push_back(',');
+				}
+				to_string(store, param, str, own_precedence);
+			}
 			str.push_back(')');
 		} break;         
 		case Type::variable: {
@@ -369,7 +348,7 @@ namespace bmath::intern::arithmetic {
 		case Type::sum: {
 			current_str.append("sum      : {");
 			bool first = true;
-			for (const auto elem : range<ToConstSum>(store, index)) {
+			for (const auto elem : vd::range(store, index)) {
 				if (!std::exchange(first, false)) {
 					current_str.append(", ");
 				}
@@ -386,7 +365,7 @@ namespace bmath::intern::arithmetic {
 		case Type::product:  {
 			current_str.append("product  : {");
 			bool first = true;
-			for (const auto elem : range<ToConstProduct>(store, index)) {
+			for (const auto elem : vd::range(store, index)) {
 				if (!std::exchange(first, false)) {
 					current_str.append(", ");
 				}
@@ -402,11 +381,11 @@ namespace bmath::intern::arithmetic {
 		} break;             
 		case Type::known_function: {
 			const KnownFunction& known_function = store.at(index).known_function;
-			current_str.append(function::name_of(known_function.type));
-			current_str.append(9 - function::name_of(known_function.type).size(), ' ');
+			current_str.append(fn::name_of(known_function.type));
+			current_str.append(9 - fn::name_of(known_function.type).size(), ' ');
 			current_str.append(": {");
 			bool first = true;
-			for (const auto param : function::range(known_function)) {
+			for (const auto param : fn::range(known_function)) {
 				if (!std::exchange(first, false)) {
 					current_str.append(", ");
 				}
@@ -417,16 +396,16 @@ namespace bmath::intern::arithmetic {
 		} break;
 		case Type::unknown_function: {
 			const UnknownFunction& unknown_function = store.at(index).unknown_function;
-			function::append_name(store, unknown_function, current_str);
+			fn::append_name(store, unknown_function, current_str);
 			current_str.append(": {");
-			function::for_each(store, unknown_function, 
-				[&current_str, &content, first = true](const Store& store, TypedIdx param) mutable {
-					if (!std::exchange(first, false)) {
-						current_str.append(", ");
-					}
-					current_str.append(std::to_string(param.get_index()));
-					to_memory_layout(store, param, content);
-				});
+			bool first = true;
+			for (const auto param : fn::range(store, unknown_function)) {
+				if (!std::exchange(first, false)) {
+					current_str.append(", ");
+				}
+				current_str.append(std::to_string(param.get_index()));
+				to_memory_layout(store, param, content);
+			}
 			current_str.push_back('}');
 		} break;         
 		case Type::variable: {
@@ -446,7 +425,7 @@ namespace bmath::intern::arithmetic {
 		} break;
 		default: assert(false); //if this assert hits, the switch above needs more cases.
 		}
-	}
+	} //to_memory_layout
 
 } //namespace bmath::intern::arithmetic
 

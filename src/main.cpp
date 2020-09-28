@@ -24,8 +24,8 @@ int main()
 		std::cout << "counted " << count_skip_pars(TokenView(tokens), token::number) << " unenclosed instances of token::number\n\n";
 	}
 	{
-		//std::string term_name = "-(b+c)*2i-5*(a+3e*2weinachtsmannVomNordpolUnterWasserWeilKlimawandel)";
-		std::string term_name = "herbert(20, 2+2, anneliese(fred, marko * 4))";
+		std::string term_name = "-(b+c)*2i-5*(a+3e*2weinachtsmannVomNordpolUnterWasserWeilKlimawandel)";
+		//std::string term_name = "herbert(20, 2+2, anneliese(fred, marko * 4))";
 		try {
 			remove_whitspace(term_name);
 			auto tokens = tokenize(term_name);
@@ -64,25 +64,5 @@ int main()
 		double result;
 		std::from_chars(term_name.data(), term_name.data() + term_name.size(), result);
 		std::cout << result << '\n';
-	}
-	{
-		TermStore<TypesUnion> store;
-		std::string_view info = "ich bin bruno und ich bin der kameramann";
-		std::uint32_t head = insert_string(store, info);
-		insert_new<ToString>(store, head, '.');
-
-		std::string output;
-		read<ToConstString>(store, head, output);
-		std::cout << output << '\n';
-		for (auto& c : range<ToString>(store, head)) {
-			if (c % 2 == 0) {
-				c = '\0';
-			}
-		}
-		sort<ToString>(store, head, [](auto& c1, auto& c2) { return c1 < c2; });
-
-		output.clear();
-		read<ToConstString>(store, head, output);
-		std::cout << output << '\n';
 	}
 }

@@ -76,7 +76,7 @@ namespace bmath::intern::arithmetic {
 		}
 		switch (head.type) {
 		case Head::Type::sum: {
-			return build_variadic<SumTraits, ToSum, TypedIdx>(store, input, head.where, 
+			return build_variadic<vd::SumTraits, ToSum, TypedIdx>(store, input, head.where, 
 				[](Store& store, TypedIdx to_invert) {
 					const TypedIdx minus_1 = build_value(store, -1.0);
 					return TypedIdx(store.insert(Product({ minus_1, to_invert })), Type::product);
@@ -90,7 +90,7 @@ namespace bmath::intern::arithmetic {
 			return TypedIdx(store.insert(Product({ to_negate, minus_1 })), Type::product);
 		} break;
 		case Head::Type::product: {
-			return build_variadic<ProductTraits, ToProduct, TypedIdx>(store, input, head.where, 
+			return build_variadic<vd::ProductTraits, ToProduct, TypedIdx>(store, input, head.where, 
 				[](Store& store, TypedIdx to_invert) {
 					const TypedIdx minus_1 = build_value(store, -1.0);
 					return TypedIdx(store.insert(
@@ -131,14 +131,14 @@ namespace bmath::intern::arithmetic {
 
 	TypedIdx build_function(Store& store, ParseView input, const std::size_t open_par)
 	{
-		const FunctionType type = function::type_of(input.substr(0, open_par));
+		const FunctionType type = fn::type_of(input.substr(0, open_par));
 		if (type == FunctionType::UNKNOWN) { //build unknown function
 			UnknownFunction result;
 			{//writing name in result
 				const auto name = std::string_view(input.chars, open_par);
 				if (name.size() > UnknownFunction::short_name_max) [[unlikely]] {
 					result.name_size = UnknownFunction::NameSize::longer;
-					result.name_idx = insert_string(store, name);
+					result.long_name_idx = insert_string(store, name);
 				}
 				else {
 					result.name_size = UnknownFunction::NameSize::small;
@@ -151,38 +151,24 @@ namespace bmath::intern::arithmetic {
 			//writing parameters in result
 			input.remove_suffix(1);            //"pow(2,4)" -> "pow(2,4"
 			input.remove_prefix(open_par + 1); //"pow(2,4" ->      "2,4"
-			if (input.size()) [[likely]] {
-				const std::size_t nr_params = count_skip_pars(input.tokens, ',') + 1; //commas only seperate params -> one more param than commas
-				switch (nr_params) {
-				case 1: {
-					result.param_count = UnknownFunction::ParamCount::one;
-					result.short_params[0] = build(store, input);
-				} break;
-				case 2: {
-					result.param_count = UnknownFunction::ParamCount::two;
-					const std::size_t comma = find_first_of_skip_pars(input.tokens, ',');
-					result.short_params[0] = build(store, input.substr(0, comma));
-					result.short_params[1] = build(store, input.substr(comma + 1));
-				} break;
-				default: {
-					result.param_count = UnknownFunction::ParamCount::more;
-					{
-						const std::size_t comma = find_first_of_skip_pars(input.tokens, ',');
-						const auto first_param_view = input.substr(0, comma);
-						const TypedIdx first_param = build(store, first_param_view);
-						input.remove_prefix(comma + 1);
-						result.params_idx = store.insert(TypedIdxColony(first_param));
-					}
-					while (input.size()) {
-						const std::size_t comma = find_first_of_skip_pars(input.tokens, ',');
-						const auto next_param_view = input.substr(0, comma);
-						const TypedIdx nex_param = build(store, next_param_view);
-						input.remove_prefix(comma == TokenView::npos ? input.size() : comma + 1);
-						insert_new<ToIndexSLC>(store, result.params_idx, nex_param);
-					}
-				} break;
-				}
-			} //else no parameters to parse -> already done
+
+			{
+				const std::size_t comma = find_first_of_skip_pars(input.tokens, ',');
+				const auto param_view = input.substr(0u, comma);
+				const TypedIdx param = build(store, param_view);
+				input.remove_prefix(comma);	//from now on every parameter starts with a comma
+				result.params_idx = store.insert(TypedIdxColony(param));
+			}
+			std::size_t last_node_idx = result.params_idx;
+			while (input.size()) {
+				input.remove_prefix(1); //erase comma
+				const std::size_t comma = find_first_of_skip_pars(input.tokens, ',');
+				const auto param_view = input.substr(0u, comma);
+				const TypedIdx param = build(store, param_view);
+				input.remove_prefix(comma);
+				last_node_idx = insert_new<ToIndexSLC>(store, last_node_idx, param);
+			}
+
 			return TypedIdx(store.insert(result), Type::unknown_function);
 		}
 		//known function, but with extra syntax (as "logn(...)" is allowed, where n is any natural number)
@@ -204,7 +190,7 @@ namespace bmath::intern::arithmetic {
 			std::size_t comma = find_first_of_skip_pars(input.tokens, ',');
 			auto param_view = input.substr(0u, comma);
 			input.remove_prefix(comma == TokenView::npos ? input.size() : comma + 1u);
-			for (auto& param : function::range(result)) {
+			for (auto& param : fn::range(result)) {
 				throw_if<ParseFailure>(param_view.size() == 0u, input.offset, ParseFailure::What::wrong_param_count);
 				param = build(store, param_view);
 				comma = find_first_of_skip_pars(input.tokens, ',');

@@ -38,24 +38,6 @@ namespace bmath::intern::arithmetic {
 	//returns head, offset is used to determine error position relative begin of whole term
 	TypedIdx build(Store& store, ParseView view);
 
-	struct SumTraits
-	{
-		static constexpr Type type_name = Type::sum;
-		static constexpr double neutral_element = 0.0;
-		static constexpr char operator_char = '+';
-		static constexpr char inverse_operator_char = '-';
-		static constexpr Token operator_token = token::sum;
-	};
-
-	struct ProductTraits
-	{
-		static constexpr Type type_name = Type::product;
-		static constexpr double neutral_element = 1.0;
-		static constexpr char operator_char = '*';
-		static constexpr char inverse_operator_char = '/';
-		static constexpr Token operator_token = token::product;
-	};
-
 	//VariadicTraits must include:
 	//<Enum type> type_name: name of operation in enum representing all types in store
 	//double neutral_element: the value not changing any other value if both are combined using operation e.g. 0.0
@@ -71,26 +53,24 @@ namespace bmath::intern::arithmetic {
 	TypedIdx_T build_variadic(TermStore_T& store, ParseView input, std::size_t op_idx,
 			BuildInverse build_inverse, BuildAny build_any)
 	{
-		std::size_t variadic_idx;
-		{
-			const auto subterm_view = input.substr(0, op_idx);
-			const TypedIdx_T subterm = build_any(store, subterm_view);
-			input.remove_prefix(op_idx);
-			variadic_idx = store.insert(UnionToSLC::Result(subterm));
-		}
+		const auto subterm_view = input.substr(0, op_idx);
+		const TypedIdx_T subterm = build_any(store, subterm_view);
+		input.remove_prefix(op_idx);
+		const std::size_t variadic_idx = store.insert(UnionToSLC::Result(subterm));
+		std::size_t last_node_idx = variadic_idx;
 		while (input.size()) {
 			const char current_operator = input.chars[0];
 			input.remove_prefix(1); //remove current_operator;
 			op_idx = find_first_of_skip_pars(input.tokens, VariadicTraits::operator_token);
 			const auto subterm_view = input.substr(0, op_idx);
 			const TypedIdx_T subterm = build_any(store, subterm_view);
-			input.remove_prefix(op_idx == TokenView::npos ? input.size() : op_idx);
+			input.remove_prefix(op_idx);
 			switch (current_operator) {
 			case VariadicTraits::operator_char:
-				insert_new<UnionToSLC>(store, variadic_idx, subterm);
+				last_node_idx = insert_new<UnionToSLC>(store, last_node_idx, subterm);
 				break;
 			case VariadicTraits::inverse_operator_char:
-				insert_new<UnionToSLC>(store, variadic_idx, build_inverse(store, subterm));
+				last_node_idx = insert_new<UnionToSLC>(store, last_node_idx, build_inverse(store, subterm));
 				break;
 			default: assert(false);
 			}

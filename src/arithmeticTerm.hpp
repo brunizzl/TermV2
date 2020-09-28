@@ -62,27 +62,18 @@ namespace bmath::intern::arithmetic {
 
 	struct UnknownFunction
 	{
-		static constexpr std::size_t short_name_max = 7;
+		static constexpr std::size_t short_name_max = 10; //plus '\0' at end
+		enum class NameSize :unsigned char { small, longer } name_size = NameSize::small;
 
-		//param count can be used directly as number, if more is not active member
-		enum class ParamCount :unsigned char { zero = 0u, one = 1u, two = 2u, more } param_count : 4;
-		enum class NameSize :unsigned char { small, longer } name_size : 4;
-
-		char short_name[3];	//can be used as short_name[7], if short_name_extension is active member
+		//if name_size == NameSize::small short_name is used, but as if would be of length 11
+		//this is perhaps undefined behavior, but im feeling unsave today >:)
+		char short_name[7] = "";	
 		union
 		{
-			char short_name_extension[4];
-			std::uint32_t name_idx;	//points to TermString128 containing name (if active)
+			char short_name_extension[4] = "";
+			std::uint32_t long_name_idx;	//points to TermString128 containing name (if active)
 		};
-		union
-		{
-			std::uint32_t params_idx; //points to TypedIdxColony containing the parameters (if active)
-			TypedIdx short_params[2];
-		};
-
-		UnknownFunction() :param_count(ParamCount::zero), name_size(NameSize::small), 
-			short_name{ '\0', '\0', '\0' }, short_name_extension{ '\0', '\0', '\0', '\0' }, 
-			short_params{ TypedIdx(), TypedIdx() } {}
+		std::uint32_t params_idx = 0; //points to TypedIdxColony containing the parameters
 	};
 
 	using  Variable = TermString128;
@@ -122,7 +113,7 @@ namespace bmath::intern::arithmetic {
 	using ToConstProduct = ToConstIndexSLC;
 
 	//utility for both KnownFunction and UnknownFunction
-	namespace function {
+	namespace fn {
 
 		std::string_view name_of(FunctionType type) noexcept;
 
@@ -135,47 +126,48 @@ namespace bmath::intern::arithmetic {
 
 		std::size_t param_count(FunctionType type) noexcept;
 
-		std::span<TypedIdx> range(KnownFunction& func) noexcept;
-		std::span<const TypedIdx> range(const KnownFunction& func) noexcept;
+		inline std::span<TypedIdx> range(KnownFunction& func) noexcept
+		{ return { func.params, param_count(func.type) }; }
 
-		template<typename Modifier>
-		void for_each(Store& store, UnknownFunction& func, Modifier modifier)
-		{
-			switch (func.param_count) {
-			case UnknownFunction::ParamCount::one:
-				modifier(store, func.short_params[0]);
-				break;
-			case UnknownFunction::ParamCount::two:
-				modifier(store, func.short_params[0]);
-				modifier(store, func.short_params[1]);
-				break;
-			case UnknownFunction::ParamCount::more:
-				for (auto param : range<ToIndexSLC>(store, func.params_idx)) {
-					modifier(store, param);
-				}
-				break;
-			}
-		}
+		inline std::span<const TypedIdx> range(const KnownFunction& func) noexcept
+		{ return { func.params, param_count(func.type) }; }
 
-		template<typename Modifier>
-		void for_each(const Store& store, const UnknownFunction& func, Modifier modifier)
+		inline auto range(Store& store, UnknownFunction& func) noexcept 
+		{ return range<ToIndexSLC>(store, func.params_idx); }
+
+		inline auto range(const Store& store, const UnknownFunction& func) noexcept 
+		{ return range<ToConstIndexSLC>(store, func.params_idx); }
+
+	} //namespace fn
+
+	//utility for variadic types (Sum and Product)
+	namespace vd {
+
+		inline auto range(const Store& store, std::uint32_t vd_idx) noexcept 
+		{ return range<ToConstIndexSLC>(store, vd_idx); }
+
+		inline auto range(Store& store, std::uint32_t vd_idx) noexcept
+		{ return range<ToIndexSLC>(store, vd_idx); }
+
+		struct SumTraits
 		{
-			switch (func.param_count) {
-			case UnknownFunction::ParamCount::one:
-				modifier(store, func.short_params[0]);
-				break;
-			case UnknownFunction::ParamCount::two:
-				modifier(store, func.short_params[0]);
-				modifier(store, func.short_params[1]);
-				break;
-			case UnknownFunction::ParamCount::more:
-				for (auto param : range<ToConstIndexSLC>(store, func.params_idx)) {
-					modifier(store, param);
-				}
-				break;
-			}
-		}
-	}
+			static constexpr Type type_name = Type::sum;
+			static constexpr double neutral_element = 0.0;
+			static constexpr char operator_char = '+';
+			static constexpr char inverse_operator_char = '-';
+			static constexpr Token operator_token = token::sum;
+		};
+
+		struct ProductTraits
+		{
+			static constexpr Type type_name = Type::product;
+			static constexpr double neutral_element = 1.0;
+			static constexpr char operator_char = '*';
+			static constexpr char inverse_operator_char = '/';
+			static constexpr Token operator_token = token::product;
+		};
+
+	} //namespace vd
 
 	//evaluates tree if possible, throws if variables of unknown value /unknown_functions are present
 	std::complex<double> eval(const Store& store, TypedIdx ref);

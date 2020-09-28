@@ -6,8 +6,6 @@
 #include <span>
 #include <cassert>
 
-#include <forward_list>
-
 #include "termStore.hpp"
 
 namespace bmath::intern {
@@ -18,8 +16,6 @@ namespace bmath::intern {
 	template <typename Index_T, typename Value_T, std::size_t ArraySize>
 	struct TermSLC
 	{
-		typedef Value_T Value_T; //make visible to outside
-		typedef Index_T Index_T; //make visible to outside
 		static_assert(std::is_unsigned_v<Index_T>);
 		static_assert(std::is_trivially_destructible_v<Value_T>);
 		static_assert(std::is_trivially_copyable_v<Value_T>);
@@ -151,7 +147,7 @@ namespace bmath::intern {
 	}; //struct SLCRef
 
 	template<typename UnionToSLC, typename TermStore_T, typename Index_T>
-	auto range(TermStore_T& store, Index_T slc_idx)
+	auto range(TermStore_T& store, Index_T slc_idx) noexcept
 	{
 		using SLC_T = UnionToSLC::Result;
 		return SLCRef<UnionToSLC, TermStore_T, SLC_T, Index_T>{ store, slc_idx };
@@ -171,8 +167,10 @@ namespace bmath::intern {
 		};
 	}
 
+	//returns position of node where insert happened.
+	//this allows easy insertion of n elements in O(n), instead of O(n^2)
 	template<typename UnionToSLC, typename TermStore_T>
-	void insert_new(TermStore_T& store, std::size_t slc_idx, decltype(UnionToSLC::Result::null_value) elem)
+	[[nodiscard]] std::size_t insert_new(TermStore_T& store, std::size_t slc_idx, decltype(UnionToSLC::Result::null_value) elem)
 	{
 		using SLC_T = UnionToSLC::Result;
 		while (true) {
@@ -180,7 +178,7 @@ namespace bmath::intern {
 			for (std::size_t i = 0; i < SLC_T::array_size; i++) {
 				if (slc_ptr->values[i] == SLC_T::null_value) {
 					slc_ptr->values[i] = elem;
-					return;
+					return slc_idx;
 				}
 			}
 			if (slc_ptr->next_idx != SLC_T::null_index) {
@@ -189,7 +187,7 @@ namespace bmath::intern {
 			else {
 				const std::size_t new_idx = store.insert(SLC_T(elem));
 				UnionToSLC::apply(store.at(slc_idx)).next_idx = new_idx;
-				return;
+				return new_idx;
 			}
 		}
 	} //insert_new

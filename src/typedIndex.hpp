@@ -6,6 +6,14 @@
 #include "termUtility.hpp"
 
 namespace bmath::intern {
+
+	template<typename TypesEnum, typename UnderlyingType>
+	struct SplitResult
+	{
+		UnderlyingType index;
+		TypesEnum type;
+	};
+
 	//stores both an index and an enum value in the same variable 
 	//with the lower bits representing the enum, the upper bits representing the (shifted) index
 	template<typename TypesEnum, TypesEnum MaxEnumValue, typename UnderlyingType = std::uint32_t>
@@ -46,8 +54,13 @@ namespace bmath::intern {
 		[[nodiscard]] constexpr std::size_t get_index() const noexcept { return data >> index_offset; }
 		[[nodiscard]] constexpr TypesEnum get_type() const noexcept { return static_cast<TypesEnum>(data & enum_mask); }
 
-		auto operator<=>(const BasicTypedIdx&) const = default;
-		bool operator==(const BasicTypedIdx&) const = default;
+		[[nodiscard]] constexpr SplitResult<TypesEnum, UnderlyingType> split() const noexcept
+		{
+			return { this->get_index(), this->get_type() };
+		}
+
+		constexpr auto operator<=>(const BasicTypedIdx&) const = default;
+		constexpr bool operator==(const BasicTypedIdx&) const = default;
 	};	//class BasicTypedIdx
 
 } //namespace bmath::intern

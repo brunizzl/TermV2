@@ -39,14 +39,20 @@ namespace bmath::intern {
 		constexpr ParseView(const TokenView& new_tokens, const char* new_chars, std::size_t offset_) 
 			:tokens(new_tokens), chars(new_chars), offset(offset_) {}
 
+		//never produces undefinded behavior, unlike unlike std::string_view's version >:(
 		constexpr void remove_prefix(const std::size_t count) noexcept
 		{
-			this->tokens.remove_prefix(count);
-			this->chars += count;
-			this->offset += count;
+			const std::size_t remove = std::min(count, this->tokens.size());
+			this->tokens.remove_prefix(remove);
+			this->chars += remove;
+			this->offset += remove;
 		}
 
-		constexpr void remove_suffix(const std::size_t count) noexcept { this->tokens.remove_suffix(count); }
+		constexpr void remove_suffix(const std::size_t count) noexcept 
+		{
+			this->tokens.remove_suffix(count);
+		}
+
 		constexpr std::size_t size() const noexcept { return this->tokens.size(); }
 
 		constexpr ParseView substr(std::size_t offset_, std::size_t count = TokenView::npos) const noexcept 
@@ -114,7 +120,7 @@ namespace bmath::intern {
 	//searches from open_par to back
 	std::size_t find_closed_par(const std::size_t open_par, const TokenView name);
 
-	//search all of name not enclosed by parentheses for character
+	//search all of name not enclosed by parentheses for token
 	std::size_t find_first_of_skip_pars(const TokenView name, const Token token);
 
 	//counts occurences of token in all of name not enclosed by parentheses
