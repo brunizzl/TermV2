@@ -7,7 +7,7 @@
 
 namespace bmath::intern {
 
-	template<typename TypesEnum, typename UnderlyingType>
+	template<typename UnderlyingType, typename TypesEnum>
 	struct SplitResult
 	{
 		UnderlyingType index;
@@ -40,9 +40,7 @@ namespace bmath::intern {
 	public:
 		static constexpr std::size_t max_index = index_mask >> index_offset;
 
-		explicit constexpr BasicTypedIdx() :data(static_cast<UnderlyingType>(0)) {}
-
-		explicit constexpr BasicTypedIdx(UnderlyingType data_) :data(data_) {}
+		explicit constexpr BasicTypedIdx() :data(static_cast<UnderlyingType>(MaxEnumValue)) {}
 
 		constexpr BasicTypedIdx(std::size_t index, TypesEnum type)
 			: data(static_cast<UnderlyingType>(index << index_offset) | static_cast<UnderlyingType>(type))
@@ -51,10 +49,10 @@ namespace bmath::intern {
 			throw_if(type > MaxEnumValue, "TypedIdx has recieved enum value bigger than MaxEnumValue");
 		}
 
-		[[nodiscard]] constexpr std::size_t get_index() const noexcept { return data >> index_offset; }
-		[[nodiscard]] constexpr TypesEnum get_type() const noexcept { return static_cast<TypesEnum>(data & enum_mask); }
+		[[nodiscard]] constexpr auto get_index() const noexcept { return data >> index_offset; }
+		[[nodiscard]] constexpr auto get_type() const noexcept { return static_cast<TypesEnum>(data & enum_mask); }
 
-		[[nodiscard]] constexpr SplitResult<TypesEnum, UnderlyingType> split() const noexcept
+		[[nodiscard]] constexpr SplitResult<UnderlyingType, TypesEnum> split() const noexcept
 		{
 			return { this->get_index(), this->get_type() };
 		}

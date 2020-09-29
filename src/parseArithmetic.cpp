@@ -16,16 +16,29 @@ namespace bmath::intern::arithmetic {
 		return view.find_first_not_of(allowed_tokens);
 	}
 
-	void allow_implicit_product(TokenString& tokens, std::string& name)
+	void allow_implicit_product(ParseString& str)
 	{
-		assert(tokens.length() == name.length());
-		auto tokens_iter = tokens.begin();
-		auto name_iter = name.begin();
-		for (; std::next(tokens_iter) != tokens.end(); tokens_iter++, name_iter++) {
-			if (*tokens_iter == token::number && *std::next(tokens_iter) == token::character) {
-				tokens_iter = tokens.insert(std::next(tokens_iter), token::product);
-				name_iter = name.insert(std::next(name_iter), '*');
+		assert(str.tokens.length() == str.name.length());
+		for (std::size_t prev_idx = 0; prev_idx + 2 < str.tokens.length(); prev_idx++) {
+			const std::size_t curr_idx = prev_idx + 1;
+			const Token prev = str.tokens[prev_idx];
+			const Token curr = str.tokens[prev_idx + 1];
+			const Token next = str.tokens[prev_idx + 2];
+			if (prev == token::number && curr == token::character) {
+				str.tokens.insert(curr_idx, 1, token::product);
+				str.name.insert(curr_idx, 1, '*');
 			}
+			else if (is_literal(prev) && curr == ' ' && is_literal(next)) {
+				str.tokens[curr_idx] = token::product;
+				str.name[curr_idx] = '*';
+			}
+		}
+		const std::size_t last_idx = str.tokens.size() - 1u;
+		const char last = str.tokens[last_idx];
+		const char snd_last = str.tokens[last_idx - 1u];
+		if (snd_last == token::number && last == token::character) {
+			str.tokens.insert(last_idx, 1, token::product);
+			str.name.insert(last_idx, 1, '*');
 		}
 	}
 
@@ -76,7 +89,7 @@ namespace bmath::intern::arithmetic {
 		}
 		switch (head.type) {
 		case Head::Type::sum: {
-			return build_variadic<vd::SumTraits, ToSum, TypedIdx>(store, input, head.where, 
+			return build_variadic<vdc::SumTraits, ToSum, TypedIdx>(store, input, head.where, 
 				[](Store& store, TypedIdx to_invert) {
 					const TypedIdx minus_1 = build_value(store, -1.0);
 					return TypedIdx(store.insert(Product({ minus_1, to_invert })), Type::product);
@@ -90,20 +103,20 @@ namespace bmath::intern::arithmetic {
 			return TypedIdx(store.insert(Product({ to_negate, minus_1 })), Type::product);
 		} break;
 		case Head::Type::product: {
-			return build_variadic<vd::ProductTraits, ToProduct, TypedIdx>(store, input, head.where, 
+			return build_variadic<vdc::ProductTraits, ToProduct, TypedIdx>(store, input, head.where, 
 				[](Store& store, TypedIdx to_invert) {
 					const TypedIdx minus_1 = build_value(store, -1.0);
 					return TypedIdx(store.insert(
-						KnownFunction{ FunctionType::pow, to_invert, minus_1, TypedIdx() }), Type::known_function);
+						KnownFunction{ FnType::pow, to_invert, minus_1, TypedIdx() }), Type::known_function);
 				},
 				build);
 		} break;
 		case Head::Type::power: {
-			const auto base_view = input.substr(0, head.where);
-			input.remove_prefix(head.where + 1);
+			const auto base_view = input.steal_prefix(head.where);
+			input.remove_prefix(1);
 			const TypedIdx base = build(store, base_view);
 			const TypedIdx expo = build(store, input);
-			return TypedIdx(store.insert(KnownFunction{ FunctionType::pow, base, expo, TypedIdx() }), Type::known_function);
+			return TypedIdx(store.insert(KnownFunction{ FnType::pow, base, expo, TypedIdx() }), Type::known_function);
 		} break;
 		case Head::Type::value: {
 			double val;
@@ -131,17 +144,17 @@ namespace bmath::intern::arithmetic {
 
 	TypedIdx build_function(Store& store, ParseView input, const std::size_t open_par)
 	{
-		const FunctionType type = fn::type_of(input.substr(0, open_par));
-		if (type == FunctionType::UNKNOWN) { //build unknown function
-			UnknownFunction result;
+		const FnType type = fn::type_of(input.substr(0, open_par));
+		if (type == FnType::UNKNOWN) { //build generic function
+			GenericFunction result;
 			{//writing name in result
 				const auto name = std::string_view(input.chars, open_par);
-				if (name.size() > UnknownFunction::short_name_max) [[unlikely]] {
-					result.name_size = UnknownFunction::NameSize::longer;
+				if (name.size() > GenericFunction::short_name_max) [[unlikely]] {
+					result.name_size = GenericFunction::NameSize::longer;
 					result.long_name_idx = insert_string(store, name);
 				}
 				else {
-					result.name_size = UnknownFunction::NameSize::small;
+					result.name_size = GenericFunction::NameSize::small;
 					for (std::size_t i = 0; i < name.size(); i++) {
 						result.short_name[i] = name[i]; //maybe go over bound of short_name and into short_name_extension (undefined behavior oh wee!)
 					}
@@ -154,25 +167,23 @@ namespace bmath::intern::arithmetic {
 
 			{
 				const std::size_t comma = find_first_of_skip_pars(input.tokens, ',');
-				const auto param_view = input.substr(0u, comma);
+				const auto param_view = input.steal_prefix(comma); //now input starts with comma
 				const TypedIdx param = build(store, param_view);
-				input.remove_prefix(comma);	//from now on every parameter starts with a comma
 				result.params_idx = store.insert(TypedIdxColony(param));
 			}
 			std::size_t last_node_idx = result.params_idx;
 			while (input.size()) {
 				input.remove_prefix(1); //erase comma
 				const std::size_t comma = find_first_of_skip_pars(input.tokens, ',');
-				const auto param_view = input.substr(0u, comma);
+				const auto param_view = input.steal_prefix(comma);
 				const TypedIdx param = build(store, param_view);
-				input.remove_prefix(comma);
 				last_node_idx = insert_new<ToIndexSLC>(store, last_node_idx, param);
 			}
 
-			return TypedIdx(store.insert(result), Type::unknown_function);
+			return TypedIdx(store.insert(result), Type::generic_function);
 		}
 		//known function, but with extra syntax (as "logn(...)" is allowed, where n is any natural number)
-		else if (type == FunctionType::log && open_par > std::strlen("log")) { 
+		else if (type == FnType::log && open_par > std::strlen("log")) { 
 			double base_val;
 			const auto [ptr, error] = std::from_chars(input.chars + std::strlen("log"), input.chars + open_par, base_val);
 			throw_if<ParseFailure>(error == std::errc::invalid_argument, input.offset + std::strlen("log"), ParseFailure::What::illformed_val);
@@ -181,21 +192,19 @@ namespace bmath::intern::arithmetic {
 			input.remove_suffix(1u);
 			input.remove_prefix(open_par + 1u);
 			const TypedIdx expo = build(store, input);
-			return TypedIdx(store.insert(KnownFunction{ FunctionType::log, base, expo, TypedIdx() }), Type::known_function);
+			return TypedIdx(store.insert(KnownFunction{ FnType::log, base, expo, TypedIdx() }), Type::known_function);
 		}
 		else { //generic known function
 			KnownFunction result{ type, TypedIdx(), TypedIdx(), TypedIdx() };
 			input.remove_suffix(1u);
 			input.remove_prefix(open_par + 1u);	//only arguments are left
 			std::size_t comma = find_first_of_skip_pars(input.tokens, ',');
-			auto param_view = input.substr(0u, comma);
-			input.remove_prefix(comma == TokenView::npos ? input.size() : comma + 1u);
+			auto param_view = input.steal_prefix(comma);
 			for (auto& param : fn::range(result)) {
 				throw_if<ParseFailure>(param_view.size() == 0u, input.offset, ParseFailure::What::wrong_param_count);
 				param = build(store, param_view);
 				comma = find_first_of_skip_pars(input.tokens, ',');
-				param_view = input.substr(0u, comma);
-				input.remove_prefix(comma == TokenView::npos ? input.size() : comma + 1u);
+				param_view = input.steal_prefix(comma);
 			}
 			throw_if<ParseFailure>(param_view.size() > 0u, input.offset, ParseFailure::What::wrong_param_count);
 			return TypedIdx(store.insert(result), Type::known_function);

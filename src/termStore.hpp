@@ -44,7 +44,7 @@ namespace bmath::intern {
 				else {
 					OccupancyTable& table = this->vector[table_pos].table;
 					for (std::size_t relative_pos = 1; relative_pos < table_dist; relative_pos++) {	//first bit encodes position of table -> start one later
-						if (!table[relative_pos]) {
+						if (!table.test(relative_pos)) {
 							table.set(relative_pos);
 							return table_pos + relative_pos;
 						}
@@ -114,7 +114,27 @@ namespace bmath::intern {
 
 		[[nodiscard]] std::size_t size() const noexcept { return vector.size(); }
 
-		[[nodiscard]] OccupancyTable first_table() const { return vector.front().table; }
+		[[nodiscard]] std::vector<std::size_t> free_slots() const noexcept
+		{
+			std::vector<std::size_t> result;
+			for (std::size_t table_pos = 0; table_pos < this->vector.size(); table_pos += table_dist) {
+				if (this->vector[table_pos].table.all()) [[unlikely]] {	//currently optimizes for case with only one table present
+					continue;
+				}
+				else {
+					const OccupancyTable table = this->vector[table_pos].table;
+					for (std::size_t relative_pos = 1; relative_pos < table_dist; relative_pos++) {	//first bit encodes position of table -> start one later
+						if (table_pos + relative_pos == this->vector.size()) [[unlikely]] {
+							break;
+						}
+						if (!table.test(relative_pos)) {
+							result.push_back(table_pos + relative_pos);
+						}
+					}
+				}
+			}
+			return result;
+		}
 	};	//class TermStore_Table
 
 
@@ -130,7 +150,7 @@ namespace bmath::intern {
 
 		struct [[nodiscard]] FreeList
 		{
-			static constexpr TypedIdx_T first_idx = TypedIdx_T(0);
+			static constexpr TypedIdx_T start_idx = TypedIdx_T(0);
 			TypedIdx_T next;
 			TypedIdx_T prev;
 		};
@@ -153,16 +173,16 @@ namespace bmath::intern {
 		//assumes vector to already hold first element
 		[[nodiscard]] TypedIdx_T get_free_position() noexcept
 		{
-			FreeList& first = this->vector[FreeList::first_idx].free_list;
-			if (first.next == FreeList::first_idx) {	//no free elements available (besides first)
-				return FreeList::first_idx;
+			FreeList& first = this->vector[FreeList::start_idx].free_list;
+			if (first.next == FreeList::start_idx) {	//no free elements available (besides first)
+				return FreeList::start_idx;
 			}
 			else {	//at least one free element available (besides first)
 				const TypedIdx_T second_idx = first.next;
 				const TypedIdx_T third_idx = this->vector[second_idx].free_list.next;
 				FreeList& third = this->vector[third_idx].free_list;
 
-				third.prev = FreeList::first_idx;
+				third.prev = FreeList::start_idx;
 				first.next = third_idx;
 
 				return second_idx;
@@ -180,10 +200,10 @@ namespace bmath::intern {
 		[[nodiscard]] std::size_t insert(TermUnion_T new_elem)
 		{
 			if (this->vector.size() == 0) [[unlikely]] {
-				vector.emplace_back(FreeList{ FreeList::first_idx, FreeList::first_idx });	//free_list is only (free) element in vector -> points to itself
+				vector.emplace_back(FreeList{ FreeList::start_idx, FreeList::start_idx });	//free_list is only (free) element in vector -> points to itself
 			}
 			
-			if (const TypedIdx_T free_pos = this->get_free_position(); free_pos != FreeList::first_idx) {
+			if (const TypedIdx_T free_pos = this->get_free_position(); free_pos != FreeList::start_idx) {
 				new (&this->vector[free_pos]) VecElem(new_elem);
 				return free_pos;
 			}
@@ -197,12 +217,12 @@ namespace bmath::intern {
 		void free(std::size_t idx) noexcept
 		{
 			//there is currently no test if the idx was freed previously (because expensive). if so, freeing again would break the list.
-			FreeList& first = this->vector[FreeList::first_idx].free_list;
+			FreeList& first = this->vector[FreeList::start_idx].free_list;
 			const TypedIdx_T second_idx = first.next;
 			FreeList& second = this->vector[second_idx].free_list;
 
 			FreeList& new_node = this->vector[new_idx].free_list;
-			new_node.prev = FreeList::first_idx;	  //TermUnion_T guaranteed to be trivially destructable -> just override with FreeList
+			new_node.prev = FreeList::start_idx;	  //TermUnion_T guaranteed to be trivially destructable -> just override with FreeList
 			new_node.next = second_idx;				  //TermUnion_T guaranteed to be trivially destructable -> just override with FreeList
 
 			first.next = new_idx;
@@ -214,8 +234,22 @@ namespace bmath::intern {
 		[[nodiscard]] const TermUnion_T& at(std::size_t idx) const noexcept { return this->vector[idx].value; }
 
 		[[nodiscard]] std::size_t size() const noexcept { return vector.size(); }
+
+		[[nodiscard]] std::vector<std::size_t> free_slots() const noexcept
+		{
+			std::vector<std::size_t> result;
+			if (this->vector.size()) {
+				FreeList node = this->vector[FreeList::start_idx].free_list;
+				while (node.next != FreeList::start_idx) {
+					result.push_back(node.next);
+					node = this->vector[node.next].free_list;
+				}
+			}
+			return result;
+		}
 	};	//class TermStore_FreeList
 
 	template<typename TermUnion_T>
-	using TermStore = TermStore_Table<TermUnion_T>;
+	//using TermStore = TermStore_Table<TermUnion_T>;
+	using TermStore = TermStore_FreeList<TermUnion_T>;
 }

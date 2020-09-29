@@ -1,6 +1,9 @@
 #pragma once
 
 #include <exception>
+#include <algorithm>
+#include <cassert>
+#include <array>
 
 namespace bmath::intern {
 
@@ -16,6 +19,34 @@ namespace bmath::intern {
 	{
 		if (cond) [[unlikely]] {
 			throw Exception_T{ std::forward<Args>(args)... };
+		}
+	}
+
+	//stolen from Jason Turner: https://www.youtube.com/watch?v=INn3xa4pMfg
+	//(but also modified slightly)
+	template <typename Key, typename Value, std::size_t Size>
+	[[nodiscard]] constexpr Value find(
+		const std::array<std::pair<Key, Value>, Size>& data, const Key key) noexcept
+	{
+		const auto itr = std::find_if(begin(data), end(data),
+			[&key](const auto &v) { return v.first == key; });
+		if (itr == end(data)) {
+			assert(false);
+		}
+		return itr->second;
+	}
+
+	template <typename Key, typename Value, std::size_t Size>
+	[[nodiscard]] constexpr Value search(
+		const std::array<std::pair<Key, Value>, Size>& data, 
+		const Key key, const Value null_value) noexcept 
+	{
+		const auto itr = std::find_if(begin(data), end(data),
+			[&key](const auto &v) { return v.first == key; });
+		if (itr != end(data)) {
+			return itr->second;
+		} else {
+			return null_value;
 		}
 	}
 

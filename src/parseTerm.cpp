@@ -7,14 +7,40 @@
 
 namespace bmath::intern {
 
-	void remove_whitspace(std::string& str)
+	ParseString::ParseString(std::string new_name)
 	{
-		for (std::size_t i = 0; i < str.length(); i++) {
-			if (std::isspace(str[i])) {
-				str.erase(i--, 1);	//erase this char -> set i one back, as string got shorter
+		standardize_whitespace(new_name);
+		this->name = std::move(new_name);
+		this->tokens = tokenize(name);
+	}
+
+
+	void standardize_whitespace(std::string& str)
+	{
+		for (std::size_t prev_idx = 0; prev_idx + 1 < str.length(); prev_idx++) {
+			const std::size_t curr_idx = prev_idx + 1;
+			const char prev = str[prev_idx];
+			const char curr = str[curr_idx];
+			if (std::isspace(curr)) {
+				str[curr_idx] = ' ';
+				if (prev == ' ') {
+					str.erase(prev_idx--, 1);//erase this char -> set prev_idx one back, as string got shorter
+				}
 			}
 		}
-	} //remove_whitspace
+	} //standardize_whitespace
+
+	void remove_space(ParseString& str)
+	{
+		for (std::size_t i = 0; i < str.size(); i++) {
+			if (str.tokens[i] == ' ') {
+				assert(str.name[i] == ' ' && "name and tokens represent different data");
+				str.name.erase(i, 1);
+				str.tokens.erase(i, 1);
+				i--;
+			}
+		}
+	} //remove_space
 
 	TokenString tokenize(const std::string_view name)
 	{
@@ -24,9 +50,9 @@ namespace bmath::intern {
 
 		TokenString tokenized(name.length(), '\0');
 		{
-			int nr_paren = 0;	//counts number of '(' minus number of ')', may never be negative 
-			int nr_brack = 0;	//counts number of '[' minus number of ']', may never be negative
-			int nr_brace = 0;	//counts number of '{' minus number of '}', may never be negative
+			int nr_paren = 0;	//counts number of '(' minus number of ')', (may never be negative in valid string) 
+			int nr_brack = 0;	//counts number of '[' minus number of ']', (may never be negative in valid string)
+			int nr_brace = 0;	//counts number of '{' minus number of '}', (may never be negative in valid string)
 			for (std::size_t i = 0u; i < name.length(); i++) {
 				const char current = name[i];
 				if (in_interval(current, 'a', 'z') || in_interval(current, 'A', 'Z') || current == '_') {
@@ -47,7 +73,8 @@ namespace bmath::intern {
 				case '|': [[fallthrough]];
 				case '&': [[fallthrough]];
 				case '<': [[fallthrough]];
-				case '>':
+				case '>': [[fallthrough]];
+				case ' ':
 					tokenized[i] = current;
 					continue;
 
@@ -100,45 +127,45 @@ namespace bmath::intern {
 		} 
 		//change tokens to better matches, decided by also looking at the previous token
 		//caution: only test up to second last element, as all matches so far implemented dont exist at the end anyways
-		for (std::size_t last_idx = 0u; last_idx + 2u < name.length(); last_idx++) {
-			const std::size_t curr_idx = last_idx + 1u;
-			const char last = tokenized[last_idx];
+		for (std::size_t prev_idx = 0u; prev_idx + 2u < name.length(); prev_idx++) {
+			const std::size_t curr_idx = prev_idx + 1u;
+			const char prev = tokenized[prev_idx];
 			const char curr = tokenized[curr_idx];
-			throw_if<ParseFailure>((last == token::sum || last == token::product) && (curr == token::sum || curr == token::product),
+			throw_if<ParseFailure>((prev == token::sum || prev == token::product) && (curr == token::sum || curr == token::product),
 				curr_idx, ParseFailure::What::illegal_ops);
 
 			//change token representing digits occuring in names to token::character
-			if (last == token::character && curr == token::number) { 
+			if (prev == token::character && curr == token::number) { 
 				tokenized[curr_idx] = token::character;
 			}
 			//change token representing any of "e+-" occuring in numbers to token::number
-			else if (last == token::number && (name[curr_idx] == 'e' || name[curr_idx] == 'E') &&
+			else if (prev == token::number && (name[curr_idx] == 'e' || name[curr_idx] == 'E') &&
 				(tokenized[curr_idx + 1] == token::sum || tokenized[curr_idx + 1] == token::number)) 
 			{
 				tokenized[curr_idx] = token::number;
 			}
-			else if (last == token::number && curr == token::sum && (name[last_idx] == 'e' || name[last_idx] == 'E')) {
+			else if (prev == token::number && curr == token::sum && (name[prev_idx] == 'e' || name[prev_idx] == 'E')) {
 				tokenized[curr_idx] = token::number;
 			}
 			//change unary minus to token::unary_minus
-			else if (last == token::open_grouping && name[curr_idx] == '-') {
+			else if (prev == token::open_grouping && name[curr_idx] == '-') {
 				tokenized[curr_idx] = token::unary_minus;
 			}
 			//change token::unary_minus to part of number, if it is
-			else if (last == token::unary_minus && curr == token::number) {
-				tokenized[last_idx] = token::number;
+			else if (prev == token::unary_minus && curr == token::number) {
+				tokenized[prev_idx] = token::number;
 			}
 			//change comparison character pairs to their representing tokens
-			else if (last == '<' && curr == '=') {
-				tokenized[last_idx] = token::smaller_equal;
+			else if (prev == '<' && curr == '=') {
+				tokenized[prev_idx] = token::smaller_equal;
 				tokenized[curr_idx] = token::smaller_equal;
 			}
-			else if (last == '>' && curr == '=') {
-				tokenized[last_idx] = token::larger_equal;
+			else if (prev == '>' && curr == '=') {
+				tokenized[prev_idx] = token::larger_equal;
 				tokenized[curr_idx] = token::larger_equal;
 			}
-			else if (last == '=' && curr == '=') {
-				tokenized[last_idx] = token::equal;
+			else if (prev == '=' && curr == '=') {
+				tokenized[prev_idx] = token::equal;
 				tokenized[curr_idx] = token::equal;
 			}
 		}

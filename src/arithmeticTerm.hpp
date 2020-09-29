@@ -14,7 +14,7 @@ namespace bmath::intern::arithmetic {
 		sum,
 		product,
 		known_function,
-		unknown_function,
+		generic_function,
 		variable,
 		complex,
 		COUNT	//has to be last element
@@ -26,7 +26,7 @@ namespace bmath::intern::arithmetic {
 	using Sum            = TypedIdxColony;
 	using Product        = TypedIdxColony;
 
-	enum class FunctionType : std::uint32_t
+	enum class FnType : std::uint32_t
 	{
 		asinh,	//params[0] := argument
 		acosh,	//params[0] := argument
@@ -54,25 +54,29 @@ namespace bmath::intern::arithmetic {
 
 	struct KnownFunction
 	{
-		FunctionType type;
+		FnType type;
 
 		//if any buildin funtion exeeds a parameter count of 3, a more involved structure needs to replace this.
 		TypedIdx params[3];
 	};
 
-	struct UnknownFunction
+	struct GenericFunction
 	{
-		static constexpr std::size_t short_name_max = 10; //plus '\0' at end
-		enum class NameSize :unsigned char { small, longer } name_size = NameSize::small;
+		static constexpr std::size_t short_name_max = 4 + 7; //plus '\0' at end, supplied by name_size
 
 		//if name_size == NameSize::small short_name is used, but as if would be of length 11
-		//this is perhaps undefined behavior, but im feeling unsave today >:)
-		char short_name[7] = "";	
+		//this is perhaps undefined behavior, but im feeling unsave today >:)	
 		union
 		{
-			char short_name_extension[4] = "";
+			char short_name[4] = "";
 			std::uint32_t long_name_idx;	//points to TermString128 containing name (if active)
 		};
+	private:
+		char short_name_extension[7] = ""; //just implementation detail, no one needs to see this
+	public:
+		//if small is active, it doubles in purpose as '\0' character to end the name
+		enum class NameSize :char { small = '\0', longer } name_size = NameSize::small;
+
 		std::uint32_t params_idx = 0; //points to TypedIdxColony containing the parameters
 	};
 
@@ -82,10 +86,10 @@ namespace bmath::intern::arithmetic {
 	union TypesUnion
 	{
 		KnownFunction known_function;
-		UnknownFunction unknown_function;
+		GenericFunction generic_function;
 		Complex complex;
-		TermString128 string;	//Variable and UnknownFunction may allocate additional string nodes
-		TypedIdxColony index_slc; //representing Sum, Product or UnknownFunction's extra parameters 
+		TermString128 string;	//Variable and GenericFunction may allocate additional string nodes
+		TypedIdxColony index_slc; //representing Sum, Product or GenericFunction's extra parameters 
 		Variable variable; //alias for string
 		Sum sum;         //alias for index_slc
 		Product product; //alias for index_slc
@@ -93,7 +97,7 @@ namespace bmath::intern::arithmetic {
 		TypesUnion() :complex() {}
 
 		TypesUnion(const KnownFunction&   val) :known_function(val)   {}
-		TypesUnion(const UnknownFunction& val) :unknown_function(val) {}
+		TypesUnion(const GenericFunction& val) :generic_function(val) {}
 		TypesUnion(const Complex&         val) :complex(val)          {}
 		TypesUnion(const TermString128&   val) :string(val)           {} 
 		TypesUnion(const TypedIdxColony&  val) :index_slc(val)        {}
@@ -103,6 +107,7 @@ namespace bmath::intern::arithmetic {
 	using Store = TermStore<TypesUnion>;
 
 	//everything using the TermSLC needs to have a way to get the right union member from the union
+	//these are refered in templates as UnionToSLC
 	struct ToString   { using Result = TermString128;  static Result& apply(TypesUnion& val) { return val.string;    } };
 	struct ToIndexSLC { using Result = TypedIdxColony; static Result& apply(TypesUnion& val) { return val.index_slc; } };
 	struct ToConstString   { using Result = const TermString128;  static Result& apply(const TypesUnion& val) { return val.string;    } };
@@ -112,19 +117,91 @@ namespace bmath::intern::arithmetic {
 	using ToConstSum     = ToConstIndexSLC;
 	using ToConstProduct = ToConstIndexSLC;
 
-	//utility for both KnownFunction and UnknownFunction
+	//utility for both KnownFunction and GenericFunction
 	namespace fn {
 
-		std::string_view name_of(FunctionType type) noexcept;
+		constexpr auto name_table = std::to_array<std::pair<FnType, std::string_view>>({
+			{ FnType::asinh, { "asinh" } },	
+			{ FnType::acosh, { "acosh" } },
+			{ FnType::atanh, { "atanh" } },	
+			{ FnType::asin , { "asin"  } },	
+			{ FnType::acos , { "acos"  } },	
+			{ FnType::atan , { "atan"  } },	
+			{ FnType::sinh , { "sinh"  } },	
+			{ FnType::cosh , { "cosh"  } },	
+			{ FnType::tanh , { "tanh"  } },	
+			{ FnType::sqrt , { "sqrt"  } },	
+			{ FnType::pow  , { "pow"   } },   
+			{ FnType::log  , { "log"   } },	
+			{ FnType::exp  , { "exp"   } },	
+			{ FnType::sin  , { "sin"   } },	
+			{ FnType::cos  , { "cos"   } },	
+			{ FnType::tan  , { "tan"   } },	
+			{ FnType::abs  , { "abs"   } },	
+			{ FnType::arg  , { "arg"   } },	
+			{ FnType::ln   , { "ln"    } },	
+			{ FnType::re   , { "re"    } },	
+			{ FnType::im   , { "im"    } },	
+		});
+		constexpr std::string_view name_of(FnType type) noexcept 
+		{ return find(name_table, type); }
+
+		constexpr auto type_table = std::to_array<std::pair<std::string_view, FnType>>({
+			{ { "asinh" }, FnType::asinh },	
+			{ { "acosh" }, FnType::acosh },
+			{ { "atanh" }, FnType::atanh },	
+			{ { "asin"  }, FnType::asin  },	
+			{ { "acos"  }, FnType::acos  },	
+			{ { "atan"  }, FnType::atan  },	
+			{ { "sinh"  }, FnType::sinh  },	
+			{ { "cosh"  }, FnType::cosh  },	
+			{ { "tanh"  }, FnType::tanh  },	
+			{ { "sqrt"  }, FnType::sqrt  },	
+			{ { "pow"   }, FnType::pow   },   
+			{ { "log"   }, FnType::log   },	
+			{ { "exp"   }, FnType::exp   },	
+			{ { "sin"   }, FnType::sin   },	
+			{ { "cos"   }, FnType::cos   },	
+			{ { "tan"   }, FnType::tan   },	
+			{ { "abs"   }, FnType::abs   },	
+			{ { "arg"   }, FnType::arg   },	
+			{ { "ln"    }, FnType::ln    },	
+			{ { "re"    }, FnType::re    },	
+			{ { "im"    }, FnType::im    },	
+		});
+
+		constexpr auto param_count_table = std::to_array<std::pair<FnType, std::size_t>>({
+			{ FnType::asinh, 1 },	
+			{ FnType::acosh, 1 },
+			{ FnType::atanh, 1 },	
+			{ FnType::asin , 1 },	
+			{ FnType::acos , 1 },	
+			{ FnType::atan , 1 },	
+			{ FnType::sinh , 1 },	
+			{ FnType::cosh , 1 },	
+			{ FnType::tanh , 1 },	
+			{ FnType::sqrt , 1 },	
+			{ FnType::pow  , 2 }, //<- only for these fuckers >:(  
+			{ FnType::log  , 2 },	//<- only for these fuckers >:(
+			{ FnType::exp  , 1 },	
+			{ FnType::sin  , 1 },	
+			{ FnType::cos  , 1 },	
+			{ FnType::tan  , 1 },	
+			{ FnType::abs  , 1 },	
+			{ FnType::arg  , 1 },	
+			{ FnType::ln   , 1 },	
+			{ FnType::re   , 1 },	
+			{ FnType::im   , 1 },	
+		});
+		constexpr std::size_t param_count(FnType type) noexcept 
+		{ return find(param_count_table, type); }
 
 		//appends only name, no parentheses or anything fancy
-		void append_name(const Store& store, const UnknownFunction& func, std::string& str);
+		void append_name(const Store& store, const GenericFunction& func, std::string& str);
 
 		//only expects actual name part of function, e.g. "asin", NOT "asin(...)"
-		//if name is one of FunctionType, that is returned, else FunctionType::UNKNOWN
-		FunctionType type_of(const ParseView input) noexcept;
-
-		std::size_t param_count(FunctionType type) noexcept;
+		//if name is one of FnType, that is returned, else FnType::UNKNOWN
+		FnType type_of(const ParseView input) noexcept;
 
 		inline std::span<TypedIdx> range(KnownFunction& func) noexcept
 		{ return { func.params, param_count(func.type) }; }
@@ -132,22 +209,22 @@ namespace bmath::intern::arithmetic {
 		inline std::span<const TypedIdx> range(const KnownFunction& func) noexcept
 		{ return { func.params, param_count(func.type) }; }
 
-		inline auto range(Store& store, UnknownFunction& func) noexcept 
-		{ return range<ToIndexSLC>(store, func.params_idx); }
+		inline auto range(Store& store, GenericFunction& func) noexcept 
+		{ return SLCRange<ToIndexSLC, Store, TypedIdxColony, std::uint32_t>(store, func.params_idx); }
 
-		inline auto range(const Store& store, const UnknownFunction& func) noexcept 
-		{ return range<ToConstIndexSLC>(store, func.params_idx); }
+		inline auto range(const Store& store, const GenericFunction& func) noexcept 
+		{ return SLCRange<ToConstIndexSLC, const Store, TypedIdxColony, std::uint32_t>(store, func.params_idx); }
 
 	} //namespace fn
 
 	//utility for variadic types (Sum and Product)
-	namespace vd {
-
-		inline auto range(const Store& store, std::uint32_t vd_idx) noexcept 
-		{ return range<ToConstIndexSLC>(store, vd_idx); }
+	namespace vdc {
 
 		inline auto range(Store& store, std::uint32_t vd_idx) noexcept
-		{ return range<ToIndexSLC>(store, vd_idx); }
+		{ return SLCRange<ToIndexSLC, Store, TypedIdxColony, std::uint32_t>(store, vd_idx); }
+
+		inline auto range(const Store& store, std::uint32_t vd_idx) noexcept 
+		{ return SLCRange<ToConstIndexSLC, const Store, TypedIdxColony, std::uint32_t>(store, vd_idx); }
 
 		struct SumTraits
 		{
@@ -167,14 +244,17 @@ namespace bmath::intern::arithmetic {
 			static constexpr Token operator_token = token::product;
 		};
 
-	} //namespace vd
+	} //namespace vdc
 
-	//evaluates tree if possible, throws if variables of unknown value /unknown_functions are present
+	//evaluates tree if possible, throws if variables of unknown value /generic_functions are present
 	std::complex<double> eval(const Store& store, TypedIdx ref);
 
 	void to_string(const Store& store, TypedIdx ref, std::string& str, const int parent_precedence = -1);
 
 	void to_memory_layout(const Store& store, TypedIdx ref, std::vector<std::string>& content);
+
+	//flatten sums holding als summands and products holding products as factors
+	void combine_variadic(Store& store, TypedIdx ref);
 
 }	//namespace bmath::intern::arithmetic
 
@@ -184,7 +264,7 @@ namespace bmath {
 	{
 		intern::arithmetic::TypedIdx head;
 		intern::arithmetic::Store values;
-		std::string show_memory_layout(const bool show_first_table = true) const;
+		std::string show_memory_layout() const;
 	};	//class ArithmeticTerm
 
 }	//namespace bmath

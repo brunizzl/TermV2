@@ -2,6 +2,7 @@
 
 #include <string>
 #include <string_view>
+#include <cassert>
 
 #include "termUtility.hpp"
 
@@ -21,6 +22,16 @@ namespace bmath::intern {
 		constexpr explicit TokenView(std::string_view&& other) :std::string_view(other) {}
 	};
 
+	struct ParseString
+	{
+		TokenString tokens;
+		std::string name;
+
+		ParseString(std::string new_name);
+
+		std::size_t size() const noexcept { assert(tokens.size() == name.size()); return tokens.size(); }
+	};
+
 	//as parsing always needs both a string_view to the actual input and a TokenView to the tokenized input, 
 	//  this struct packs both together (and also the offset from the beginning)
 	struct ParseView
@@ -29,10 +40,10 @@ namespace bmath::intern {
 		const char* chars;
 		std::size_t offset; //distance to actual beginning of string(s)
 
-		ParseView(const TokenString& new_tokens, const std::string& new_chars) 
-			:tokens(new_tokens), chars(new_chars.data()), offset(0)
+		ParseView(const ParseString& str) 
+			:tokens(str.tokens), chars(str.name.data()), offset(0)
 		{
-			throw_if(new_tokens.size() != new_chars.size(), 
+			throw_if(str.name.size() != str.tokens.size(), 
 				"expected both views to represent same data -> have same length");
 		}
 
@@ -59,6 +70,16 @@ namespace bmath::intern {
 		{ 
 			return ParseView(TokenView(this->tokens.substr(offset_, count)), 
 				this->chars + offset_, this->offset + offset_); 
+		}
+
+		constexpr ParseView steal_prefix(const std::size_t count) noexcept
+		{
+			const std::size_t remove = std::min(count, this->tokens.size());
+			ParseView to_steal(TokenView(this->tokens.substr(0, remove)), this->chars, this->offset);
+			this->tokens.remove_prefix(remove);
+			this->chars += remove;
+			this->offset += remove;
+			return to_steal;
 		}
 
 		constexpr std::string_view to_string_view() const noexcept { return { this->chars, this->size() }; }
@@ -95,6 +116,9 @@ namespace bmath::intern {
 	//'>' representing only "larger than, not part of ">="
 	//'|' representing '|'
 	//'&' representing '&'
+	//' ' representing ' '
+
+	constexpr bool is_literal(Token token) { return token == token::character || token == token::number; }
 
 
 	struct ParseFailure
@@ -110,7 +134,13 @@ namespace bmath::intern {
 		} what;
 	};
 
-	void remove_whitspace(std::string& str);
+	//all groups of whitespaces are shortened /changed to only a single ' '
+	//caution: runs in O(n^2), but input size is assumed to be small enough.
+	void standardize_whitespace(std::string& str);
+
+	//will not remove '\n' and the like, only ' ' -> assumes standardize_whitespace already run
+	//caution: runs in O(n^2), but input size is assumed to be small enough.
+	void remove_space(ParseString& str);
 
 	TokenString tokenize(const std::string_view name);
 

@@ -10,7 +10,7 @@ namespace bmath::intern::arithmetic {
 
 	//allows a number to be directly followed by a variable or function name
 	//e.g. inserts multiplication operator in between
-	void allow_implicit_product(TokenString& tokens, std::string& name);
+	void allow_implicit_product(ParseString& str);
 
 	struct Head
 	{
@@ -53,18 +53,16 @@ namespace bmath::intern::arithmetic {
 	TypedIdx_T build_variadic(TermStore_T& store, ParseView input, std::size_t op_idx,
 			BuildInverse build_inverse, BuildAny build_any)
 	{
-		const auto subterm_view = input.substr(0, op_idx);
+		const auto subterm_view = input.steal_prefix(op_idx);
 		const TypedIdx_T subterm = build_any(store, subterm_view);
-		input.remove_prefix(op_idx);
 		const std::size_t variadic_idx = store.insert(UnionToSLC::Result(subterm));
 		std::size_t last_node_idx = variadic_idx;
 		while (input.size()) {
 			const char current_operator = input.chars[0];
 			input.remove_prefix(1); //remove current_operator;
 			op_idx = find_first_of_skip_pars(input.tokens, VariadicTraits::operator_token);
-			const auto subterm_view = input.substr(0, op_idx);
+			const auto subterm_view = input.steal_prefix(op_idx);
 			const TypedIdx_T subterm = build_any(store, subterm_view);
-			input.remove_prefix(op_idx);
 			switch (current_operator) {
 			case VariadicTraits::operator_char:
 				last_node_idx = insert_new<UnionToSLC>(store, last_node_idx, subterm);
