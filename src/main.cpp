@@ -25,26 +25,32 @@ int main()
 	}
 	{
 		//std::string term_name = "-(b+c)*2i-5*(a+3e*2weinachtsmannVomNordpolUnterWasserWeilKlimawandel)";
-		//std::string term_name = "herbert(20e-10, a 2, 6anneliese(fred, marko * 4))*log2(2)";
-		std::string term_name = "-a*3";
+		std::string term_name = "loge(2)*herbert(20e-10, a 2, 6anneliese(fred, marko * 4))/5";
+		//std::string term_name = "log2(8)";
+		try {
 			auto str = ParseString(std::move(term_name));
 			allow_implicit_product(str);
 			remove_space(str);
 			assert(find_first_not_arithmetic(TokenView(str.tokens)) == TokenView::npos);
 			bmath::ArithmeticTerm term;
 			term.head = build(term.values, str);
-		try {
 
 			std::string term_str;
 			to_string(term.values, term.head, term_str);
 			std::cout << "to_string: \n" << term_str << std::endl;
 			std::cout << "speicher nach bau:\n" << term.show_memory_layout() << '\n';
 
-			combine_variadic(term.values, term.head);
+			//flatten_variadic(term.values, term.head);
+			//if (auto val = combine_values_unexact(term.values, term.head)) {
+			//	term.head = TypedIdx(term.values.insert(*val), Type::complex);
+			//}	
+			free_tree(term.values, term.head);
+			term.head = TypedIdx(term.values.insert(Complex(1337.0, 0.0)), Type::complex);
+
 			term_str.clear();
 			to_string(term.values, term.head, term_str);
-			std::cout << "to_string nach combine: \n" << term_str << std::endl;
-			std::cout << "speicher nach combine_variadic\n:" << term.show_memory_layout() << '\n';
+			std::cout << "to_string nach vereinfachen: \n" << term_str << std::endl;
+			std::cout << "speicher nach vereinfachen:\n" << term.show_memory_layout() << '\n';
 			std::cout << "\n\n";
 		}
 		catch (ParseFailure failure) {
@@ -74,10 +80,5 @@ int main()
 		auto head_idx = insert_string(term.values, "ich bin bruno und ich bin der kameramann.");
 		term.head = TypedIdx(head_idx, Type::variable);
 		std::cout << "speicher nach bau:\n" << term.show_memory_layout() << '\n';
-
-		auto new_str = insert_string(term.values, "wir kommen aus der schweiz und freuen uns sehr, dass ihr unseren kanal gefunden habt.");
-		auto last = append<ToString>(term.values, head_idx, new_str);
-		std::cout << "speicher nach anhaengen:\n" << term.show_memory_layout() << '\n';
-
 	}
 }

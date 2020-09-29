@@ -163,17 +163,17 @@ namespace bmath::intern {
 	void free_slc(TermStore<TermUnion_T>& store, Index_T slc_idx)
 	{
 		Index_T last_idx(0);
-		while (slc_idx != Index_T(0)) { // TypedIdx_T(0) should be equivalent to SLC::null_index
+		while (slc_idx != Index_T()) { // TypedIdx_T() should be equivalent to SLC::null_index
 			last_idx = slc_idx;
 			slc_idx = UnionToSLC::apply(store.at(slc_idx)).next_idx;
 			store.free(last_idx);
 		};
-	}
+	} //free_slc
 
 	//returns position of node where insert happened.
 	//this allows easy insertion of n elements in O(n), instead of O(n^2)
 	template<typename UnionToSLC, typename TermStore_T>
-	[[nodiscard]] std::size_t insert_new(TermStore_T& store, std::size_t slc_idx, decltype(UnionToSLC::Result::null_value) elem)
+	std::size_t insert_new(TermStore_T& store, std::size_t slc_idx, decltype(UnionToSLC::Result::null_value) elem)
 	{
 		using SLC_T = UnionToSLC::Result;
 		while (true) {
@@ -201,7 +201,7 @@ namespace bmath::intern {
 	template<typename UnionToSLC, typename TermStore_T>
 	[[nodiscard]] std::size_t append(TermStore_T& store, std::size_t this_idx, const std::size_t append_idx)
 	{
-		//static_assert(!std::is_same_v<UnionToSLC::Result, TermString128>, "append is not meant for strings");
+		static_assert(!std::is_same_v<UnionToSLC::Result, TermString128>, "append is not meant for strings");
 		using SLC_T = UnionToSLC::Result;
 		auto* this_ptr = &UnionToSLC::apply(store.at(this_idx));
 		while (this_ptr->next_idx != SLC_T::null_index) {
@@ -210,7 +210,7 @@ namespace bmath::intern {
 		}
 		this_ptr->next_idx = append_idx;
 		return this_idx;
-	}
+	} //append
 
 	template<typename UnionToSLC, typename TermStore_T, typename Index_T, typename Compare>
 	void sort(TermStore_T& store, Index_T slc_idx, Compare compare)

@@ -2,6 +2,7 @@
 
 #include <complex>
 #include <span>
+#include <optional>
 
 #include "typedIndex.hpp"
 #include "termStore.hpp"
@@ -40,6 +41,7 @@ namespace bmath::intern::arithmetic {
 		sqrt,	//params[0] := argument
 		pow,    //params[0] := base      params[1] := expo    
 		log,	//params[0] := base      params[1] := argument
+		_logn, //same as log, this enum may only occur during parsing
 		exp,	//params[0] := argument
 		sin,	//params[0] := argument
 		cos,	//params[0] := argument
@@ -164,7 +166,8 @@ namespace bmath::intern::arithmetic {
 			{ { "cos"   }, FnType::cos   },	
 			{ { "tan"   }, FnType::tan   },	
 			{ { "abs"   }, FnType::abs   },	
-			{ { "arg"   }, FnType::arg   },	
+			{ { "arg"   }, FnType::arg   },		
+			{ { "loge"  }, FnType::ln    },	
 			{ { "ln"    }, FnType::ln    },	
 			{ { "re"    }, FnType::re    },	
 			{ { "im"    }, FnType::im    },	
@@ -195,6 +198,8 @@ namespace bmath::intern::arithmetic {
 		});
 		constexpr std::size_t param_count(FnType type) noexcept 
 		{ return find(param_count_table, type); }
+
+		Complex eval(FnType type, const std::array<Complex, 3>& params);
 
 		//appends only name, no parentheses or anything fancy
 		void append_name(const Store& store, const GenericFunction& func, std::string& str);
@@ -246,15 +251,24 @@ namespace bmath::intern::arithmetic {
 
 	} //namespace vdc
 
+	//removes subtree starting at ref from store
+	void free_tree(Store& store, const TypedIdx ref);
+
 	//evaluates tree if possible, throws if variables of unknown value /generic_functions are present
-	std::complex<double> eval(const Store& store, TypedIdx ref);
+	[[nodiscard]] Complex eval_tree(const Store& store, const TypedIdx ref);
 
-	void to_string(const Store& store, TypedIdx ref, std::string& str, const int parent_precedence = -1);
+	void to_string(const Store& store, const TypedIdx ref, std::string& str, const int parent_precedence = -1);
 
-	void to_memory_layout(const Store& store, TypedIdx ref, std::vector<std::string>& content);
+	void to_memory_layout(const Store& store, const TypedIdx ref, std::vector<std::string>& content);
 
 	//flatten sums holding als summands and products holding products as factors
-	void combine_variadic(Store& store, TypedIdx ref);
+	void flatten_variadic(Store& store, const TypedIdx ref);
+
+	//if a subtree can be fully evaluated, it will be, even if the result can not be stored exactly in 
+	//floating point/ the computation is unexact
+	//the evaluated subtree also deletes itself, meaning the caller needs to reinsert the value,
+	//  if a value was returned
+	[[nodiscard]] std::optional<Complex> combine_values_unexact(Store& store, const TypedIdx ref);
 
 }	//namespace bmath::intern::arithmetic
 

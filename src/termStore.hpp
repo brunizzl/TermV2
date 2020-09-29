@@ -221,12 +221,12 @@ namespace bmath::intern {
 			const TypedIdx_T second_idx = first.next;
 			FreeList& second = this->vector[second_idx].free_list;
 
-			FreeList& new_node = this->vector[new_idx].free_list;
+			FreeList& new_node = this->vector[idx].free_list;
 			new_node.prev = FreeList::start_idx;	  //TermUnion_T guaranteed to be trivially destructable -> just override with FreeList
 			new_node.next = second_idx;				  //TermUnion_T guaranteed to be trivially destructable -> just override with FreeList
 
-			first.next = new_idx;
-			second.prev = new_idx;
+			first.next = idx;
+			second.prev = idx;
 		}
 
 		//no tests if a free_list is accessed, as only position of the first node is known anyway.
@@ -250,6 +250,6 @@ namespace bmath::intern {
 	};	//class TermStore_FreeList
 
 	template<typename TermUnion_T>
-	//using TermStore = TermStore_Table<TermUnion_T>;
-	using TermStore = TermStore_FreeList<TermUnion_T>;
+	using TermStore = TermStore_Table<TermUnion_T>;
+	//using TermStore = TermStore_FreeList<TermUnion_T>;
 }

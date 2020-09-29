@@ -9,26 +9,32 @@
 #include "termColony.hpp"
 
 /*
-	void prototype(const TermStore<TypesUnion> & store, TypedIdx ref)
+	void prototype(const Store & store, const TypedIdx ref)
 	{
 		const auto [index, type] = ref.split();
 		switch (type) {
 		case Type::sum: {
-			const Sum& sum = store.at(index).sum;
+			for (const auto elem : vdc::range(store, index)) {
+			}
 			assert(false);
 		} break;
 		case Type::product:  {
-			const Product& product = store.at(index).product;
+			for (const auto elem : vdc::range(store, index)) {
+			}
 			assert(false);
-		} break;             
+		} break;            
 		case Type::known_function: {
 			const KnownFunction& known_function = store.at(index).known_function;
+			for (const auto param : fn::range(known_function)) {
+			}
 			assert(false);
 		} break;
 		case Type::generic_function: {
 			const GenericFunction& generic_function = store.at(index).generic_function;
+			for (const auto param : fn::range(store, generic_function)) {
+			}
 			assert(false);
-		} break;          
+		} break;           
 		case Type::variable: {
 			const Variable& variable = store.at(index).variable;
 			assert(false);
@@ -140,6 +146,35 @@ namespace bmath::intern::arithmetic {
 
 	namespace fn {
 
+		Complex eval(FnType type, const std::array<Complex, 3>& params)
+		{
+			switch (type) {
+			case FnType::asinh: return std::asinh(params[0]);
+			case FnType::acosh: return std::acosh(params[0]);
+			case FnType::atanh: return std::atanh(params[0]);
+			case FnType::asin : return std::asin (params[0]);
+			case FnType::acos : return std::acos (params[0]);
+			case FnType::atan : return std::atan (params[0]);
+			case FnType::sinh : return std::sinh (params[0]);
+			case FnType::cosh : return std::cosh (params[0]);
+			case FnType::tanh : return std::tanh (params[0]);
+			case FnType::sqrt : return std::sqrt (params[0]);
+			case FnType::pow  : return std::pow  (params[0], params[1]);
+			case FnType::log  : return std::log  (params[1]) / std::log(params[0]); //https://en.wikipedia.org/wiki/Complex_logarithm#Generalizations
+			case FnType::exp  : return std::exp  (params[0]);
+			case FnType::sin  : return std::sin  (params[0]);
+			case FnType::cos  : return std::cos  (params[0]);
+			case FnType::tan  : return std::tan  (params[0]);
+			case FnType::abs  : return std::abs  (params[0]);
+			case FnType::arg  : return std::arg  (params[0]);
+			case FnType::ln   : return std::log  (params[0]);
+			case FnType::re   : return std::real (params[0]);
+			case FnType::im   : return std::imag (params[0]);
+			default: assert(false);
+				return Complex(0.0, 0.0);
+			}
+		} //eval
+
 		void append_name(const Store& store, const GenericFunction& func, std::string& str)
 		{
 			if (func.name_size == GenericFunction::NameSize::small) {
@@ -156,31 +191,75 @@ namespace bmath::intern::arithmetic {
 		{
 			const auto name = input.to_string_view();
 			//special syntax allowed for log, to also accept "logn()" for any natural n
-			if (input.tokens.find_first_not_of(std::strlen("log"), token::number) == TokenView::npos && 
+			if (name.find_first_not_of("0123456789", std::strlen("log")) == TokenView::npos && 
 				name.starts_with("log")) [[unlikely]] 
 			{
-				return FnType::log;
+				return FnType::_logn;
 			}
 			return search(type_table, name, FnType::UNKNOWN);
 		} //type_of
 
 	} //namespace fn
 
-	std::complex<double> eval(const Store& store, TypedIdx ref)
+	void free_tree(Store& store, const TypedIdx ref)
 	{
 		const auto [index, type] = ref.split();
 		switch (type) {
 		case Type::sum: {
-			std::complex<double> value = 0.0;
 			for (const auto elem : vdc::range(store, index)) {
-				value += eval(store, elem);
+				free_tree(store, elem);
+			}
+			free_slc<ToSum>(store, index);
+		} break;
+		case Type::product:  {
+			for (const auto elem : vdc::range(store, index)) {
+				free_tree(store, elem);
+			}
+			free_slc<ToProduct>(store, index);
+		} break;            
+		case Type::known_function: {
+			const KnownFunction& known_function = store.at(index).known_function;
+			for (const auto param : fn::range(known_function)) {
+				free_tree(store, param);
+			}
+			store.free(index);
+		} break;
+		case Type::generic_function: {
+			const GenericFunction& generic_function = store.at(index).generic_function;
+			for (const auto param : fn::range(store, generic_function)) {
+				free_tree(store, param);
+			}
+			free_slc<ToIndexSLC>(store, generic_function.params_idx);
+			if (generic_function.name_size == GenericFunction::NameSize::longer) {
+				free_slc<ToString>(store, generic_function.long_name_idx);
+			}
+			store.free(index);
+		} break;             
+		case Type::variable: {
+			free_slc<ToString>(store, index);
+		} break;   
+		case Type::complex: {
+			store.free(index);
+		} break;
+		default: assert(false); //if this assert hits, the switch above needs more cases.
+		}
+	}
+
+	Complex eval_tree(const Store& store, const TypedIdx ref)
+	{
+		const auto [index, type] = ref.split();
+		switch (type) {
+		case Type::sum: {
+			Complex value = 0.0;
+			for (const auto elem : vdc::range(store, index)) {
+				value += eval_tree(store, elem);
 			}
 			return value;
 		} break;
 		case Type::product:  {
-			std::complex<double> value = 1.0;
+			Complex value = 1.0;
 			for (const auto elem : vdc::range(store, index)) {
-				value *= eval(store, elem);
+				value *= eval_tree(store, elem);
 			}
 			return value;
 		} break;             
@@ -193,18 +272,17 @@ namespace bmath::intern::arithmetic {
 			assert(false);
 		} break;      
 		case Type::variable: {
-			throw std::exception("eval found variable in term");
+			throw std::exception("eval_tree found variable in term");
 		} break;   
 		case Type::complex: {
-			const Complex& complex = store.at(index).complex;
-			return complex;
+			return store.at(index).complex;
 		} break;
 		default: assert(false); //if this assert hits, the switch above needs more cases.
 		}
-		return std::complex<double>(0.0, 0.0);
-	} //eval
+		return Complex(0.0, 0.0);
+	} //eval_tree
 
-	void to_string(const Store& store, TypedIdx ref, std::string& str, const int parent_precedence)
+	void to_string(const Store& store, const TypedIdx ref, std::string& str, const int parent_precedence)
 	{
 		const auto [index, type] = ref.split();
 		const int own_precedence = print::operator_precedence(type);
@@ -274,9 +352,30 @@ namespace bmath::intern::arithmetic {
 		}
 	} //to_string
 
-	void to_memory_layout(const Store& store, TypedIdx ref, std::vector<std::string>& content)
+	void to_memory_layout(const Store& store, const TypedIdx ref, std::vector<std::string>& content)
 	{
 		const auto [index, type] = ref.split();
+
+		auto show_further_typedidx_col_nodes = [&](std::uint32_t idx) {
+			const TypedIdxColony* col = &store.at(idx).index_slc;
+			while (col->next_idx != TypedIdxColony::null_index) {
+				content[col->next_idx].append("(SLC node part of index " + std::to_string(index) + ')');
+				col = &store.at(col->next_idx).index_slc;
+			}
+		};
+		auto show_all_string_nodes = [&](std::uint32_t idx) {
+			const TermString128* str = &store.at(idx).string;
+			content[idx].append("(str node part of index " + std::to_string(index) + ": \"" 
+				+ std::string(str->values, TermString128::array_size) + "\")");
+
+			while (str->next_idx != TermString128::null_index) {
+				const std::size_t str_idx = str->next_idx;
+				str = &store.at(str->next_idx).string;
+				content[str_idx].append("(str node part of index " + std::to_string(index) + ": \"" 
+					+ std::string(str->values, TermString128::array_size) + "\")");
+			}
+		};
+
 		std::string& current_str = content[index];
 		switch (type) {
 		case Type::sum: {
@@ -290,11 +389,7 @@ namespace bmath::intern::arithmetic {
 				to_memory_layout(store, elem, content);
 			}
 			current_str.push_back('}');
-			const Sum* sum = &store.at(index).sum;
-			while (sum->next_idx != Sum::null_index) {
-				content[sum->next_idx].append("(sum node part of index " + std::to_string(index) + ')');
-				sum = &store.at(sum->next_idx).sum;
-			}
+			show_further_typedidx_col_nodes(index);
 		} break;
 		case Type::product:  {
 			current_str.append("product  : {");
@@ -307,11 +402,7 @@ namespace bmath::intern::arithmetic {
 				to_memory_layout(store, elem, content);
 			}
 			current_str.push_back('}');
-			const Product* product = &store.at(index).product;
-			while (product->next_idx != Product::null_index) {
-				content[product->next_idx].append("(product node part of index " + std::to_string(index) + ')');
-				product = &store.at(product->next_idx).sum;
-			}
+			show_further_typedidx_col_nodes(index);
 		} break;             
 		case Type::known_function: {
 			const KnownFunction& known_function = store.at(index).known_function;
@@ -341,15 +432,17 @@ namespace bmath::intern::arithmetic {
 				to_memory_layout(store, param, content);
 			}
 			current_str.push_back('}');
+			show_further_typedidx_col_nodes(generic_function.params_idx);
+			if (generic_function.name_size == GenericFunction::NameSize::longer) {
+				show_all_string_nodes(generic_function.long_name_idx);
+			}
 		} break;         
 		case Type::variable: {
 			current_str.append("variable : ");
 			read<ToConstString>(store, index, current_str);
 			const Variable* variable = &store.at(index).variable;
-			while (variable->next_idx != TermString128::null_index) {
-				std::size_t var_idx = variable->next_idx;
-				variable = &store.at(variable->next_idx).variable;
-				content[var_idx].append("(string node part of index " + std::to_string(index) + ": \"" + std::string(variable->values, Variable::array_size) + "\")");
+			if (variable->next_idx != Variable::null_index) {
+				show_all_string_nodes(variable->next_idx);
 			}
 		} break;   
 		case Type::complex: {
@@ -361,7 +454,7 @@ namespace bmath::intern::arithmetic {
 		}
 	} //to_memory_layout
 
-	void combine_variadic(Store& store, TypedIdx ref)
+	void flatten_variadic(Store& store, const TypedIdx ref)
 	{
 		const auto [index, type] = ref.split();
 		switch (type) {
@@ -376,20 +469,20 @@ namespace bmath::intern::arithmetic {
 					current_append_node = append<ToIndexSLC>(store, current_append_node, elem_idx);
 				}
 				else {
-					combine_variadic(store, elem);
+					flatten_variadic(store, elem);
 				}
 			}
 		} break;
 		case Type::known_function: {
 			const KnownFunction& known_function = store.at(index).known_function;
 			for (const auto param : fn::range(known_function)) {
-				combine_variadic(store, param);
+				flatten_variadic(store, param);
 			}
 		} break;
 		case Type::generic_function: {
 			const GenericFunction& generic_function = store.at(index).generic_function;
 			for (const auto param : fn::range(store, generic_function)) {
-				combine_variadic(store, param);
+				flatten_variadic(store, param);
 			}
 		} break;          
 		case Type::variable: 
@@ -398,7 +491,95 @@ namespace bmath::intern::arithmetic {
 			break;
 		default: assert(false); //if this assert hits, the switch above needs more cases.
 		}
-	} //combine_variadic
+	} //flatten_variadic
+
+	std::optional<Complex> combine_values_unexact(Store& store, const TypedIdx ref)
+	{
+		const auto [index, type] = ref.split();
+		switch (type) {
+		case Type::sum: {
+			Complex result_val = 0.0;
+			bool only_values = true;
+			for (auto& elem : vdc::range(store, index)) {
+				if (const auto elem_res = combine_values_unexact(store, elem)) {
+					result_val += *elem_res;
+					elem = Sum::null_value;
+				}
+				else {
+					only_values = false;
+				}
+			}
+			if (only_values) {
+				free_slc<ToSum>(store, index); //all summands have already been freed in the loop above
+				return { result_val };
+			}
+			else if (result_val != 0.0) {
+				const auto new_summand = TypedIdx(store.insert(result_val), Type::complex);
+				insert_new<ToSum>(store, index, new_summand);
+			}
+			return {};
+		} break;
+		case Type::product:  {
+			Complex result_val = 1.0;
+			bool only_values = true;
+			for (auto& elem : vdc::range(store, index)) {
+				if (const auto elem_res = combine_values_unexact(store, elem)) {
+					result_val *= *elem_res;
+					elem = Product::null_value;
+				}
+				else {
+					only_values = false;
+				}
+			}
+			if (only_values) {
+				free_slc<ToProduct>(store, index); //all factors have already been freed in the loop above
+				return { result_val };
+			}
+			else if (result_val != 1.0) {
+				const auto new_factor = TypedIdx(store.insert(result_val), Type::complex);
+				insert_new<ToProduct>(store, index, new_factor);
+			}
+			return {};
+		} break;             
+		case Type::known_function: {
+			KnownFunction& known_function = store.at(index).known_function;
+			std::array<Complex, 3> results_values;
+			std::bitset<3> results_computable = 0;
+			for (std::size_t i = 0; i < fn::param_count(known_function.type); i++) {
+				if (const auto param_res = combine_values_unexact(store, known_function.params[i])) {
+					results_values[i] = *param_res;
+					results_computable.set(i);
+				}
+			}
+			if (results_computable.count() == fn::param_count(known_function.type)) {
+				const FnType type = known_function.type;
+				store.free(index);
+				return { fn::eval(type, results_values) };
+			}
+			else {
+				for (std::size_t i = 0; i < fn::param_count(known_function.type); i++) {
+					if (results_computable.test(i)) {
+						known_function.params[i] = TypedIdx(store.insert(results_values[i]), Type::complex);
+					}
+				}
+				return {};
+			}
+		} break;
+		case Type::generic_function: {
+			return {};
+		} break;          
+		case Type::variable: {
+			return {};
+		} break;   
+		case Type::complex: {
+			const Complex value = store.at(index).complex;
+			store.free(index);
+			return { value };
+		} break;
+		default: assert(false); //if this assert hits, the switch above needs more cases.
+			return {};
+		}
+	}
 
 } //namespace bmath::intern::arithmetic
 

@@ -183,7 +183,7 @@ namespace bmath::intern::arithmetic {
 			return TypedIdx(store.insert(result), Type::generic_function);
 		}
 		//known function, but with extra syntax (as "logn(...)" is allowed, where n is any natural number)
-		else if (type == FnType::log && open_par > std::strlen("log")) { 
+		else if (type == FnType::_logn) { 
 			double base_val;
 			const auto [ptr, error] = std::from_chars(input.chars + std::strlen("log"), input.chars + open_par, base_val);
 			throw_if<ParseFailure>(error == std::errc::invalid_argument, input.offset + std::strlen("log"), ParseFailure::What::illformed_val);
