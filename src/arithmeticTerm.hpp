@@ -9,7 +9,7 @@
 #include "termColony.hpp"
 #include "parseTerm.hpp"
 
-namespace bmath::in::arm {
+namespace bmath::intern::arithmetic {
 
 	enum class Type {
 		sum,
@@ -270,23 +270,24 @@ namespace bmath::in::arm {
 	//  if a value was returned
 	[[nodiscard]] std::optional<Complex> combine_values_unexact(Store& store, const TypedIdx ref);
 
-}	//namespace bmath::in::arm
+}	//namespace bmath::intern::arithmetic
 
 namespace bmath {
 
 	class ArithmeticTerm
 	{
-	public:
-		in::arm::TypedIdx head;
-		in::arm::Store store;
+		intern::arithmetic::TypedIdx head;
+		intern::arithmetic::Store store;
 
-		void flatten_variadic() noexcept;
-		void combine_values_unexact() noexcept;
 	public:
 		ArithmeticTerm(std::string name);
 		ArithmeticTerm() = default;
 
-		std::string show_memory_layout() const;
+		void flatten_variadic() noexcept;
+		void combine_values_unexact() noexcept;
+
+		std::string show_memory_layout() const noexcept;
+		std::string to_string() const noexcept;
 	};	//class ArithmeticTerm
 
 }	//namespace bmath

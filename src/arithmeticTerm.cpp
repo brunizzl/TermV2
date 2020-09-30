@@ -49,7 +49,7 @@
 	} //prototype
 */
 
-namespace bmath::in::arm {
+namespace bmath::intern::arithmetic {
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////internal to file/////////////////////////////////////////////////////////////////////////
@@ -192,8 +192,8 @@ namespace bmath::in::arm {
 		{
 			const auto name = input.to_string_view();
 			//special syntax allowed for log, to also accept "logn()" for any natural n
-			if (name.find_first_not_of("0123456789", std::strlen("log")) == TokenView::npos && 
-				name.starts_with("log")) [[unlikely]] 
+			if (name.starts_with("log") && 
+				name.find_first_not_of("0123456789", std::strlen("log")) == TokenView::npos) [[unlikely]] 
 			{
 				return FnType::_logn;
 			}
@@ -569,6 +569,12 @@ namespace bmath::in::arm {
 			}
 		} break;
 		case Type::generic_function: {
+			GenericFunction& function = store.at(index).generic_function;
+			for (auto& elem : fn::range(store, function)) {
+				if (const auto param_res = combine_values_unexact(store, elem)) {
+					elem = TypedIdx(store.insert(*param_res), Type::complex);
+				}
+			}
 			return {};
 		} break;          
 		case Type::variable: {
@@ -584,34 +590,35 @@ namespace bmath::in::arm {
 		}
 	}
 
-} //namespace bmath::in::arm
+} //namespace bmath::intern::arithmetic
 
 namespace bmath {
+	using namespace intern;
 
 	void ArithmeticTerm::flatten_variadic() noexcept
 	{
-		in::arm::flatten_variadic(this->store, this->head);
+		arithmetic::flatten_variadic(this->store, this->head);
 	}
 
 	void ArithmeticTerm::combine_values_unexact() noexcept
 	{
-		if (const auto val = in::arm::combine_values_unexact(this->store, this->head)) {
-			this->head = in::arm::TypedIdx(this->store.insert(*val), in::arm::Type::complex);
+		if (const auto val = arithmetic::combine_values_unexact(this->store, this->head)) {
+			this->head = arithmetic::TypedIdx(this->store.insert(*val), arithmetic::Type::complex);
 		}	
 	}
 
 	ArithmeticTerm::ArithmeticTerm(std::string name)
 		:store(name.size() / 2)
 	{
-		auto parse_string = in::ParseString(std::move(name));
+		auto parse_string = ParseString(std::move(name));
 		parse_string.allow_implicit_product();
 		parse_string.remove_space();
-		const std::size_t error_pos = in::arm::find_first_not_arithmetic(in::TokenView(parse_string.tokens));
-		in::throw_if<ParseFailure>(error_pos != in::TokenView::npos, error_pos, ParseFailure::What::illegal_char);
-		this->head = in::arm::build(this->store, parse_string);
+		const std::size_t error_pos = arithmetic::find_first_not_arithmetic(TokenView(parse_string.tokens));
+		intern::throw_if<ParseFailure>(error_pos != TokenView::npos, error_pos, ParseFailure::What::illegal_char);
+		this->head = arithmetic::build(this->store, parse_string);
 	} //ArithmeticTerm
 
-	std::string bmath::ArithmeticTerm::show_memory_layout() const
+	std::string bmath::ArithmeticTerm::show_memory_layout() const noexcept
 	{
 		std::vector<std::string> elements;
 		elements.reserve(this->store.size() + 1);
@@ -639,5 +646,13 @@ namespace bmath {
 		}
 		return result;
 	} //show_memory_layout
+
+	std::string ArithmeticTerm::to_string() const noexcept
+	{
+		std::string result;
+		result.reserve(this->store.size() * 2);
+		arithmetic::append_to_string(this->store, this->head, result);
+		return result;
+	}
 
 } //namespace bmath

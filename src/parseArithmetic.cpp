@@ -5,7 +5,7 @@
 #include "parseArithmetic.hpp"
 #include "termUtility.hpp"
 
-namespace bmath::in::arm {
+namespace bmath::intern::arithmetic {
 
 
 	std::size_t find_first_not_arithmetic(const TokenView view)
@@ -186,4 +186,4 @@ namespace bmath::in::arm {
 			
 	} //build_function
 
-} //namespace bmath::in::arm
+} //namespace bmath::intern::arithmetic

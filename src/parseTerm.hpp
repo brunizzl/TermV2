@@ -23,7 +23,7 @@ namespace bmath {
 
 } //namespace bmath
 
-namespace bmath::in {
+namespace bmath::intern {
 
 	struct TokenString :std::string
 	{
@@ -160,4 +160,4 @@ namespace bmath::in {
 	//counts occurences of token in all of name not enclosed by parentheses
 	std::size_t count_skip_pars(const TokenView name, const Token token);
 
-} //namespace bmath::in
+} //namespace bmath::intern

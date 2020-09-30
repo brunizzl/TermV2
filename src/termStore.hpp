@@ -6,7 +6,7 @@
 
 #include "termUtility.hpp"
 
-namespace bmath::in {
+namespace bmath::intern {
 
 	//possibly preferred version for debugging
 	template <typename TermUnion_T>

@@ -5,7 +5,7 @@
 #include "parseTerm.hpp"
 #include "termUtility.hpp"
 
-namespace bmath::in {
+namespace bmath::intern {
 
 	ParseString::ParseString(std::string new_name)
 	{
@@ -256,4 +256,4 @@ namespace bmath::in {
 		return count;
 	} //count_skip_pars
 
-} //namespace bmath::in
+} //namespace bmath::intern

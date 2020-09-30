@@ -6,7 +6,7 @@
 #include <array>
 #include <vector>
 
-namespace bmath::in {
+namespace bmath::intern {
 
 	constexpr void throw_if(bool cond, const char* const msg)
 	{
@@ -65,4 +65,4 @@ namespace bmath::in {
 		str << '}';
 	}
 
-} //namespace bmath::in
+} //namespace bmath::intern

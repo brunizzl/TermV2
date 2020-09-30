@@ -5,7 +5,7 @@
 
 #include "termUtility.hpp"
 
-namespace bmath::in {
+namespace bmath::intern {
 
 	template<typename UnderlyingType, typename TypesEnum>
 	struct SplitResult
@@ -61,4 +61,4 @@ namespace bmath::in {
 		constexpr bool operator==(const BasicTypedIdx&) const = default;
 	};	//class BasicTypedIdx
 
-} //namespace bmath::in
+} //namespace bmath::intern

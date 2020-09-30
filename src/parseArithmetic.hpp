@@ -3,7 +3,7 @@
 #include "parseTerm.hpp"
 #include "arithmeticTerm.hpp"
 
-namespace bmath::in::arm {
+namespace bmath::intern::arithmetic {
 
 	//returns position of first non_arithmetic token in view
 	std::size_t find_first_not_arithmetic(const TokenView view);
@@ -76,4 +76,4 @@ namespace bmath::in::arm {
 	TypedIdx build_function(Store& store, ParseView input, const std::size_t open_par);
 
 
-} //namespace bmath::in::arm
+} //namespace bmath::intern::arithmetic

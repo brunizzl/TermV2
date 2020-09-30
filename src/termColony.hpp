@@ -8,7 +8,7 @@
 
 #include "termStore.hpp"
 
-namespace bmath::in {
+namespace bmath::intern {
 
 	//single linked colony is similar to a single linked list, but each node holds a whole array containing ArraySize Value_T,
 	//not only a single Value_T (as an ordinary list would). TermSLC directly represents the node, there is no extra head or management.
@@ -331,4 +331,4 @@ namespace bmath::in {
 		}			
 	} //read
 
-} //namespace bmath::in
+} //namespace bmath::intern
