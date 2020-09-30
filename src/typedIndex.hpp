@@ -5,7 +5,7 @@
 
 #include "termUtility.hpp"
 
-namespace bmath::intern {
+namespace bmath::in {
 
 	template<typename UnderlyingType, typename TypesEnum>
 	struct SplitResult
@@ -52,13 +52,13 @@ namespace bmath::intern {
 		[[nodiscard]] constexpr auto get_index() const noexcept { return data >> index_offset; }
 		[[nodiscard]] constexpr auto get_type() const noexcept { return static_cast<TypesEnum>(data & enum_mask); }
 
-		[[nodiscard]] constexpr SplitResult<UnderlyingType, TypesEnum> split() const noexcept
+		[[nodiscard]] constexpr auto split() const noexcept
 		{
-			return { this->get_index(), this->get_type() };
+			return SplitResult<UnderlyingType, TypesEnum>{ this->get_index(), this->get_type() };
 		}
 
 		constexpr auto operator<=>(const BasicTypedIdx&) const = default;
 		constexpr bool operator==(const BasicTypedIdx&) const = default;
 	};	//class BasicTypedIdx
 
-} //namespace bmath::intern
+} //namespace bmath::in

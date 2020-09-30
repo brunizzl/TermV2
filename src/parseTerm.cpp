@@ -5,42 +5,69 @@
 #include "parseTerm.hpp"
 #include "termUtility.hpp"
 
-namespace bmath::intern {
+namespace bmath::in {
 
 	ParseString::ParseString(std::string new_name)
 	{
+		//all groups of whitespaces are shortened /changed to only a single ' '
+		//caution: runs in O(n^2), but input size is assumed to be small enough.
+		const auto standardize_whitespace = [](std::string& str) {
+			for (std::size_t prev_idx = 0; prev_idx + 1 < str.length(); prev_idx++) {
+				const std::size_t curr_idx = prev_idx + 1;
+				const char prev = str[prev_idx];
+				const char curr = str[curr_idx];
+				if (std::isspace(curr)) {
+					str[curr_idx] = ' ';
+					if (prev == ' ') {
+						str.erase(prev_idx--, 1);//erase this char -> set prev_idx one back, as string got shorter
+					}
+				}
+			}
+		}; //standardize_whitespace
+
 		standardize_whitespace(new_name);
 		this->name = std::move(new_name);
 		this->tokens = tokenize(name);
 	}
 
-
-	void standardize_whitespace(std::string& str)
+	void ParseString::allow_implicit_product() noexcept
 	{
-		for (std::size_t prev_idx = 0; prev_idx + 1 < str.length(); prev_idx++) {
+		assert(this->tokens.length() == this->name.length());
+		for (std::size_t prev_idx = 0; prev_idx + 2 < this->tokens.length(); prev_idx++) {
 			const std::size_t curr_idx = prev_idx + 1;
-			const char prev = str[prev_idx];
-			const char curr = str[curr_idx];
-			if (std::isspace(curr)) {
-				str[curr_idx] = ' ';
-				if (prev == ' ') {
-					str.erase(prev_idx--, 1);//erase this char -> set prev_idx one back, as string got shorter
-				}
+			const Token prev = this->tokens[prev_idx];
+			const Token curr = this->tokens[prev_idx + 1];
+			const Token next = this->tokens[prev_idx + 2];
+			if (prev == token::number && curr == token::character) {
+				this->tokens.insert(curr_idx, 1, token::product);
+				this->name.insert(curr_idx, 1, '*');
+			}
+			else if (is_literal(prev) && curr == ' ' && is_literal(next)) {
+				this->tokens[curr_idx] = token::product;
+				this->name[curr_idx] = '*';
 			}
 		}
-	} //standardize_whitespace
+		const std::size_t last_idx = this->tokens.size() - 1u;
+		const char last = this->tokens[last_idx];
+		const char snd_last = this->tokens[last_idx - 1u];
+		if (snd_last == token::number && last == token::character) {
+			this->tokens.insert(last_idx, 1, token::product);
+			this->name.insert(last_idx, 1, '*');
+		}
+	} //allow_implicit_product
 
-	void remove_space(ParseString& str)
+	void ParseString::remove_space() noexcept
 	{
-		for (std::size_t i = 0; i < str.size(); i++) {
-			if (str.tokens[i] == ' ') {
-				assert(str.name[i] == ' ' && "name and tokens represent different data");
-				str.name.erase(i, 1);
-				str.tokens.erase(i, 1);
+		for (std::size_t i = 0; i < this->size(); i++) {
+			if (this->tokens[i] == ' ') {
+				assert(this->name[i] == ' ' && "name and tokens represent different data");
+				this->name.erase(i, 1);
+				this->tokens.erase(i, 1);
 				i--;
 			}
 		}
 	} //remove_space
+
 
 	TokenString tokenize(const std::string_view name)
 	{
@@ -229,4 +256,4 @@ namespace bmath::intern {
 		return count;
 	} //count_skip_pars
 
-} //namespace bmath::intern
+} //namespace bmath::in

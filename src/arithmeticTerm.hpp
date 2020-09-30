@@ -9,7 +9,7 @@
 #include "termColony.hpp"
 #include "parseTerm.hpp"
 
-namespace bmath::intern::arithmetic {
+namespace bmath::in::arm {
 
 	enum class Type {
 		sum,
@@ -257,7 +257,7 @@ namespace bmath::intern::arithmetic {
 	//evaluates tree if possible, throws if variables of unknown value /generic_functions are present
 	[[nodiscard]] Complex eval_tree(const Store& store, const TypedIdx ref);
 
-	void to_string(const Store& store, const TypedIdx ref, std::string& str, const int parent_precedence = -1);
+	void append_to_string(const Store& store, const TypedIdx ref, std::string& str, const int parent_precedence = -1);
 
 	void to_memory_layout(const Store& store, const TypedIdx ref, std::vector<std::string>& content);
 
@@ -270,14 +270,22 @@ namespace bmath::intern::arithmetic {
 	//  if a value was returned
 	[[nodiscard]] std::optional<Complex> combine_values_unexact(Store& store, const TypedIdx ref);
 
-}	//namespace bmath::intern::arithmetic
+}	//namespace bmath::in::arm
 
 namespace bmath {
 
-	struct ArithmeticTerm
+	class ArithmeticTerm
 	{
-		intern::arithmetic::TypedIdx head;
-		intern::arithmetic::Store values;
+	public:
+		in::arm::TypedIdx head;
+		in::arm::Store store;
+
+		void flatten_variadic() noexcept;
+		void combine_values_unexact() noexcept;
+	public:
+		ArithmeticTerm(std::string name);
+		ArithmeticTerm() = default;
+
 		std::string show_memory_layout() const;
 	};	//class ArithmeticTerm
 

@@ -4,8 +4,9 @@
 #include <algorithm>
 #include <cassert>
 #include <array>
+#include <vector>
 
-namespace bmath::intern {
+namespace bmath::in {
 
 	constexpr void throw_if(bool cond, const char* const msg)
 	{
@@ -50,4 +51,18 @@ namespace bmath::intern {
 		}
 	}
 
-} //namespace bmath::intern
+	template<typename Val>
+	std::ostream& operator<<(std::ostream& str, const std::vector<Val>& vec)
+	{
+		str << "{ ";
+		bool first = true;
+		for (const auto& elem : vec) {
+			if (!std::exchange(first, false)) {
+				str << ", ";
+			}
+			str << elem;
+		}
+		str << '}';
+	}
+
+} //namespace bmath::in

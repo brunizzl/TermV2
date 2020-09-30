@@ -8,7 +8,7 @@
 
 #include "termStore.hpp"
 
-namespace bmath::intern {
+namespace bmath::in {
 
 	//single linked colony is similar to a single linked list, but each node holds a whole array containing ArraySize Value_T,
 	//not only a single Value_T (as an ordinary list would). TermSLC directly represents the node, there is no extra head or management.
@@ -162,7 +162,7 @@ namespace bmath::intern {
 	template<typename UnionToSLC, typename TermUnion_T, typename Index_T>
 	void free_slc(TermStore<TermUnion_T>& store, Index_T slc_idx)
 	{
-		Index_T last_idx(0);
+		Index_T last_idx;
 		while (slc_idx != Index_T()) { // TypedIdx_T() should be equivalent to SLC::null_index
 			last_idx = slc_idx;
 			slc_idx = UnionToSLC::apply(store.at(slc_idx)).next_idx;
@@ -201,7 +201,7 @@ namespace bmath::intern {
 	template<typename UnionToSLC, typename TermStore_T>
 	[[nodiscard]] std::size_t append(TermStore_T& store, std::size_t this_idx, const std::size_t append_idx)
 	{
-		static_assert(!std::is_same_v<UnionToSLC::Result, TermString128>, "append is not meant for strings");
+		//static_assert(!std::is_same_v<UnionToSLC::Result, TermString128>, "append is not meant for strings");
 		using SLC_T = UnionToSLC::Result;
 		auto* this_ptr = &UnionToSLC::apply(store.at(this_idx));
 		while (this_ptr->next_idx != SLC_T::null_index) {
@@ -211,6 +211,28 @@ namespace bmath::intern {
 		this_ptr->next_idx = append_idx;
 		return this_idx;
 	} //append
+
+	//moves all values to the front, deallocates empty nodes
+	template<typename UnionToSLC, typename TermStore_T, typename Index_T>
+	void compact(TermStore_T& store, const Index_T slc_idx)
+	{
+		using SLC_T = UnionToSLC::Result;
+		using Range = SLCRange<UnionToSLC, TermStore_T, SLC_T, Index_T>;
+		auto* current = &UnionToSLC::apply(store.at(slc_idx));
+		std::size_t array_idx = 0;
+		for (const auto elem : Range(store, slc_idx)) { //move all elems to front
+			if (array_idx == SLC_T::array_size) {
+				array_idx = 0;
+				current = &UnionToSLC::apply(store.at(current->next_idx));
+			}
+			current->values[array_idx++] = elem;
+		}
+		while (array_idx < SLC_T::array_size) { //delete last elems of current node
+			current->values[array_idx++] = SLC_T::null_value;
+		}
+		free_slc<UnionToSLC>(store, current->next_idx);
+		current->next_idx = SLC_T::null_index;
+	} //compact
 
 	template<typename UnionToSLC, typename TermStore_T, typename Index_T, typename Compare>
 	void sort(TermStore_T& store, Index_T slc_idx, Compare compare)
@@ -309,4 +331,4 @@ namespace bmath::intern {
 		}			
 	} //read
 
-} //namespace bmath::intern
+} //namespace bmath::in

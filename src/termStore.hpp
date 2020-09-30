@@ -6,7 +6,7 @@
 
 #include "termUtility.hpp"
 
-namespace bmath::intern {
+namespace bmath::in {
 
 	//possibly preferred version for debugging
 	template <typename TermUnion_T>
@@ -52,7 +52,7 @@ namespace bmath::intern {
 				}
 			}
 			return no_index_found;
-		}
+		} //find_index_and_set_table
 
 		//debugging function to ensure only valid accesses
 		void check_index_validity(std::size_t idx) const
@@ -91,7 +91,7 @@ namespace bmath::intern {
 				}
 				return new_pos;
 			}
-		}
+		} //insert
 
 		void free(std::size_t idx)
 		{
@@ -134,7 +134,8 @@ namespace bmath::intern {
 				}
 			}
 			return result;
-		}
+		} //free_slots
+
 	};	//class TermStore_Table
 
 

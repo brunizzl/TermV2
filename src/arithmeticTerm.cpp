@@ -7,6 +7,7 @@
 #include "termUtility.hpp"
 #include "arithmeticTerm.hpp"
 #include "termColony.hpp"
+#include "parseArithmetic.hpp"
 
 /*
 	void prototype(const Store & store, const TypedIdx ref)
@@ -48,7 +49,7 @@
 	} //prototype
 */
 
-namespace bmath::intern::arithmetic {
+namespace bmath::in::arm {
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////internal to file/////////////////////////////////////////////////////////////////////////
@@ -282,7 +283,7 @@ namespace bmath::intern::arithmetic {
 		return Complex(0.0, 0.0);
 	} //eval_tree
 
-	void to_string(const Store& store, const TypedIdx ref, std::string& str, const int parent_precedence)
+	void append_to_string(const Store& store, const TypedIdx ref, std::string& str, const int parent_precedence)
 	{
 		const auto [index, type] = ref.split();
 		const int own_precedence = print::operator_precedence(type);
@@ -298,7 +299,7 @@ namespace bmath::intern::arithmetic {
 				if (!std::exchange(first, false)) {
 					str.push_back('+');
 				}
-				to_string(store, elem, str, own_precedence);
+				append_to_string(store, elem, str, own_precedence);
 			}
 		} break;
 		case Type::product:  {
@@ -307,7 +308,7 @@ namespace bmath::intern::arithmetic {
 				if (!std::exchange(first, false)) {
 					str.push_back('*');
 				}
-				to_string(store, elem, str, own_precedence);
+				append_to_string(store, elem, str, own_precedence);
 			}
 		} break;        
 		case Type::known_function: {
@@ -319,7 +320,7 @@ namespace bmath::intern::arithmetic {
 				if (!std::exchange(first, false)) {
 					str.push_back(',');
 				}
-				to_string(store, param, str, own_precedence);
+				append_to_string(store, param, str, own_precedence);
 			}
 			str.push_back(')');
 		} break;
@@ -332,7 +333,7 @@ namespace bmath::intern::arithmetic {
 				if (!std::exchange(first, false)) {
 					str.push_back(',');
 				}
-				to_string(store, param, str, own_precedence);
+				append_to_string(store, param, str, own_precedence);
 			}
 			str.push_back(')');
 		} break;         
@@ -350,24 +351,28 @@ namespace bmath::intern::arithmetic {
 		if (own_precedence <= parent_precedence && print::needs_parentheses(type)) {
 			str.push_back(')');
 		}
-	} //to_string
+	} //append_to_string
 
 	void to_memory_layout(const Store& store, const TypedIdx ref, std::vector<std::string>& content)
 	{
 		const auto [index, type] = ref.split();
 
-		auto show_further_typedidx_col_nodes = [&](std::uint32_t idx) {
+		auto show_typedidx_col_nodes = [&store, &content, index](std::uint32_t idx, bool show_first) {
 			const TypedIdxColony* col = &store.at(idx).index_slc;
+			if (show_first) {
+				content[idx].append("(SLC node part of index " + std::to_string(index) + ')');
+			}
 			while (col->next_idx != TypedIdxColony::null_index) {
 				content[col->next_idx].append("(SLC node part of index " + std::to_string(index) + ')');
 				col = &store.at(col->next_idx).index_slc;
 			}
 		};
-		auto show_all_string_nodes = [&](std::uint32_t idx) {
+		auto show_string_nodes = [&store, &content, index](std::uint32_t idx, bool show_first) {
 			const TermString128* str = &store.at(idx).string;
-			content[idx].append("(str node part of index " + std::to_string(index) + ": \"" 
-				+ std::string(str->values, TermString128::array_size) + "\")");
-
+			if (show_first) {
+				content[idx].append("(str node part of index " + std::to_string(index) + ": \"" 
+					+ std::string(str->values, TermString128::array_size) + "\")");
+			}
 			while (str->next_idx != TermString128::null_index) {
 				const std::size_t str_idx = str->next_idx;
 				str = &store.at(str->next_idx).string;
@@ -389,7 +394,7 @@ namespace bmath::intern::arithmetic {
 				to_memory_layout(store, elem, content);
 			}
 			current_str.push_back('}');
-			show_further_typedidx_col_nodes(index);
+			show_typedidx_col_nodes(index, false);
 		} break;
 		case Type::product:  {
 			current_str.append("product  : {");
@@ -402,7 +407,7 @@ namespace bmath::intern::arithmetic {
 				to_memory_layout(store, elem, content);
 			}
 			current_str.push_back('}');
-			show_further_typedidx_col_nodes(index);
+			show_typedidx_col_nodes(index, false);
 		} break;             
 		case Type::known_function: {
 			const KnownFunction& known_function = store.at(index).known_function;
@@ -432,23 +437,21 @@ namespace bmath::intern::arithmetic {
 				to_memory_layout(store, param, content);
 			}
 			current_str.push_back('}');
-			show_further_typedidx_col_nodes(generic_function.params_idx);
+			show_typedidx_col_nodes(generic_function.params_idx, true);
 			if (generic_function.name_size == GenericFunction::NameSize::longer) {
-				show_all_string_nodes(generic_function.long_name_idx);
+				show_string_nodes(generic_function.long_name_idx, true);
 			}
 		} break;         
 		case Type::variable: {
 			current_str.append("variable : ");
 			read<ToConstString>(store, index, current_str);
-			const Variable* variable = &store.at(index).variable;
-			if (variable->next_idx != Variable::null_index) {
-				show_all_string_nodes(variable->next_idx);
-			}
+			show_string_nodes(index, false);
 		} break;   
 		case Type::complex: {
 			const Complex& complex = store.at(index).complex;
-			current_str.append("value    : ");
+			current_str.append("value    : <");
 			print::append_complex(complex, current_str, -1, false);
+			current_str.push_back('>');
 		} break;
 		default: assert(false); //if this assert hits, the switch above needs more cases.
 		}
@@ -581,14 +584,38 @@ namespace bmath::intern::arithmetic {
 		}
 	}
 
-} //namespace bmath::intern::arithmetic
+} //namespace bmath::in::arm
 
 namespace bmath {
+
+	void ArithmeticTerm::flatten_variadic() noexcept
+	{
+		in::arm::flatten_variadic(this->store, this->head);
+	}
+
+	void ArithmeticTerm::combine_values_unexact() noexcept
+	{
+		if (const auto val = in::arm::combine_values_unexact(this->store, this->head)) {
+			this->head = in::arm::TypedIdx(this->store.insert(*val), in::arm::Type::complex);
+		}	
+	}
+
+	ArithmeticTerm::ArithmeticTerm(std::string name)
+		:store(name.size() / 2)
+	{
+		auto parse_string = in::ParseString(std::move(name));
+		parse_string.allow_implicit_product();
+		parse_string.remove_space();
+		const std::size_t error_pos = in::arm::find_first_not_arithmetic(in::TokenView(parse_string.tokens));
+		in::throw_if<ParseFailure>(error_pos != in::TokenView::npos, error_pos, ParseFailure::What::illegal_char);
+		this->head = in::arm::build(this->store, parse_string);
+	} //ArithmeticTerm
+
 	std::string bmath::ArithmeticTerm::show_memory_layout() const
 	{
 		std::vector<std::string> elements;
-		elements.reserve(this->values.size() + 1);
-		for (std::size_t i = 0; i < this->values.size(); i++) {
+		elements.reserve(this->store.size() + 1);
+		for (std::size_t i = 0; i < this->store.size(); i++) {
 			elements.push_back("");
 			if (i < 10) { //please std::format, i need you :(
 				elements[i] = " ";
@@ -596,21 +623,21 @@ namespace bmath {
 			elements[i].append(std::to_string(i));
 			elements[i].append(" | ");
 		}
-		to_memory_layout(this->values, this->head, elements);
-		elements.push_back("head at index: " + std::to_string(this->head.get_index()));
+		to_memory_layout(this->store, this->head, elements);
 
-		for (const auto i : this->values.free_slots()) {
+		for (const auto i : this->store.free_slots()) {
 			elements[i].append("-----free slot-----");
 		}		
 
 		for (auto& elem : elements) {
 			elem.push_back('\n');
 		}
-		std::string result;
-		result.reserve(this->values.size() * 15);
+		std::string result("   | head at index: " + std::to_string(this->head.get_index()) + '\n');
+		result.reserve(this->store.size() * 15);
 		for (auto& elem : elements) {
 			result.append(elem);
 		}
 		return result;
-	}
+	} //show_memory_layout
+
 } //namespace bmath

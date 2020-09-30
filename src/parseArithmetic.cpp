@@ -5,7 +5,7 @@
 #include "parseArithmetic.hpp"
 #include "termUtility.hpp"
 
-namespace bmath::intern::arithmetic {
+namespace bmath::in::arm {
 
 
 	std::size_t find_first_not_arithmetic(const TokenView view)
@@ -14,32 +14,6 @@ namespace bmath::intern::arithmetic {
 		const char allowed_tokens[] = { character, number, open_grouping, clse_grouping, 
 			unary_minus, sum, product, ',', '^', '\0' }; //'\0' only as end symbol for allowed_tokens
 		return view.find_first_not_of(allowed_tokens);
-	}
-
-	void allow_implicit_product(ParseString& str)
-	{
-		assert(str.tokens.length() == str.name.length());
-		for (std::size_t prev_idx = 0; prev_idx + 2 < str.tokens.length(); prev_idx++) {
-			const std::size_t curr_idx = prev_idx + 1;
-			const Token prev = str.tokens[prev_idx];
-			const Token curr = str.tokens[prev_idx + 1];
-			const Token next = str.tokens[prev_idx + 2];
-			if (prev == token::number && curr == token::character) {
-				str.tokens.insert(curr_idx, 1, token::product);
-				str.name.insert(curr_idx, 1, '*');
-			}
-			else if (is_literal(prev) && curr == ' ' && is_literal(next)) {
-				str.tokens[curr_idx] = token::product;
-				str.name[curr_idx] = '*';
-			}
-		}
-		const std::size_t last_idx = str.tokens.size() - 1u;
-		const char last = str.tokens[last_idx];
-		const char snd_last = str.tokens[last_idx - 1u];
-		if (snd_last == token::number && last == token::character) {
-			str.tokens.insert(last_idx, 1, token::product);
-			str.name.insert(last_idx, 1, '*');
-		}
 	}
 
 	Head find_head_type(const TokenView token_view, std::size_t offset)
@@ -212,4 +186,4 @@ namespace bmath::intern::arithmetic {
 			
 	} //build_function
 
-} //namespace bmath::intern::arithmetic
+} //namespace bmath::in::arm

@@ -3,14 +3,10 @@
 #include "parseTerm.hpp"
 #include "arithmeticTerm.hpp"
 
-namespace bmath::intern::arithmetic {
+namespace bmath::in::arm {
 
 	//returns position of first non_arithmetic token in view
 	std::size_t find_first_not_arithmetic(const TokenView view);
-
-	//allows a number to be directly followed by a variable or function name
-	//e.g. inserts multiplication operator in between
-	void allow_implicit_product(ParseString& str);
 
 	struct Head
 	{
@@ -80,4 +76,4 @@ namespace bmath::intern::arithmetic {
 	TypedIdx build_function(Store& store, ParseView input, const std::size_t open_par);
 
 
-} //namespace bmath::intern::arithmetic
+} //namespace bmath::in::arm

@@ -6,7 +6,24 @@
 
 #include "termUtility.hpp"
 
-namespace bmath::intern {
+namespace bmath {
+
+	struct ParseFailure
+	{
+		std::size_t where;	//index of invalid token
+		enum class What
+		{
+			illegal_char,
+			poor_grouping,
+			illegal_ops,	//short for illegal operators
+			illformed_val,
+			wrong_param_count,
+		} what;
+	}; //struct ParseFailure
+
+} //namespace bmath
+
+namespace bmath::in {
 
 	struct TokenString :std::string
 	{
@@ -28,6 +45,15 @@ namespace bmath::intern {
 		std::string name;
 
 		ParseString(std::string new_name);
+
+		//allows a number to be directly followed by a variable or function name
+		//e.g. inserts multiplication operator in between
+		//also changes spaces out to multiplication operator if appropriate
+		void allow_implicit_product() noexcept;
+
+		//will not remove '\n' and the like, only ' ' -> assumes standardize_whitespace already run
+		//caution: runs in O(n^2), but input size is assumed to be small enough.
+		void remove_space() noexcept;
 
 		std::size_t size() const noexcept { assert(tokens.size() == name.size()); return tokens.size(); }
 	};
@@ -120,28 +146,6 @@ namespace bmath::intern {
 
 	constexpr bool is_literal(Token token) { return token == token::character || token == token::number; }
 
-
-	struct ParseFailure
-	{
-		std::size_t where;	//index of invalid token
-		enum class What
-		{
-			illegal_char,
-			poor_grouping,
-			illegal_ops,	//short for illegal operators
-			illformed_val,
-			wrong_param_count,
-		} what;
-	};
-
-	//all groups of whitespaces are shortened /changed to only a single ' '
-	//caution: runs in O(n^2), but input size is assumed to be small enough.
-	void standardize_whitespace(std::string& str);
-
-	//will not remove '\n' and the like, only ' ' -> assumes standardize_whitespace already run
-	//caution: runs in O(n^2), but input size is assumed to be small enough.
-	void remove_space(ParseString& str);
-
 	TokenString tokenize(const std::string_view name);
 
 	//searches from clsd_par to front, as term is constructed from the right.
@@ -156,4 +160,4 @@ namespace bmath::intern {
 	//counts occurences of token in all of name not enclosed by parentheses
 	std::size_t count_skip_pars(const TokenView name, const Token token);
 
-} //namespace bmath::intern
+} //namespace bmath::in
