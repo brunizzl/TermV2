@@ -27,7 +27,7 @@ int main()
 	{
 		//std::string term_name = "-(b+c)*2i-5*(a+3e*2weinachtsmannVomNordpolUnterWasserWeilKlimawandel)";
 		//std::string term_name = "loge(2)*herbert(20e-10, a 2, 6anneliese(fred, marko * 4))/5";
-		std::string term_name = "affhg(3+8)";
+		std::string term_name = "sin(1) + 3 + sin(3) + fred + 1 + sin(7) - hans + jens + herbert + 7 + anneliese + fred + sin(3) + marco + 3 + bernd";
 		try {
 			bmath::ArithmeticTerm term(std::move(term_name));
 			
@@ -35,7 +35,8 @@ int main()
 			std::cout << "speicher nach bau:\n" << term.show_memory_layout() << "\n\n";
 
 			term.flatten_variadic();
-			term.combine_values_unexact();
+			term.sort();
+			//term.combine_values_unexact();
 
 			std::cout << "to_string nach vereinfachen: \n" << term.to_string() << "\n\n";
 			std::cout << "speicher nach vereinfachen:\n" << term.show_memory_layout() << "\n\n\n";

@@ -10,7 +10,7 @@ namespace bmath::intern {
 	ParseString::ParseString(std::string new_name)
 	{
 		//all groups of whitespaces are shortened /changed to only a single ' '
-		//caution: runs in O(n^2), but input size is assumed to be small enough.
+		//caution: runs in O(n^2), but input size_ is assumed to be small enough.
 		const auto standardize_whitespace = [](std::string& str) {
 			for (std::size_t prev_idx = 0; prev_idx + 1 < str.length(); prev_idx++) {
 				const std::size_t curr_idx = prev_idx + 1;

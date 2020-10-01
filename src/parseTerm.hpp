@@ -52,7 +52,7 @@ namespace bmath::intern {
 		void allow_implicit_product() noexcept;
 
 		//will not remove '\n' and the like, only ' ' -> assumes standardize_whitespace already run
-		//caution: runs in O(n^2), but input size is assumed to be small enough.
+		//caution: runs in O(n^2), but input size_ is assumed to be small enough.
 		void remove_space() noexcept;
 
 		std::size_t size() const noexcept { assert(tokens.size() == name.size()); return tokens.size(); }

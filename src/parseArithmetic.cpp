@@ -63,7 +63,7 @@ namespace bmath::intern::arithmetic {
 		}
 		switch (head.type) {
 		case Head::Type::sum: {
-			return build_variadic<vdc::SumTraits, ToSum, TypedIdx>(store, input, head.where, 
+			return build_variadic<vdc::SumTraits, TypedIdx>(store, input, head.where, 
 				[](Store& store, TypedIdx to_invert) {
 					const TypedIdx minus_1 = build_value(store, -1.0);
 					return TypedIdx(store.insert(Product({ minus_1, to_invert })), Type::product);
@@ -77,7 +77,7 @@ namespace bmath::intern::arithmetic {
 			return TypedIdx(store.insert(Product({ to_negate, minus_1 })), Type::product);
 		} break;
 		case Head::Type::product: {
-			return build_variadic<vdc::ProductTraits, ToProduct, TypedIdx>(store, input, head.where, 
+			return build_variadic<vdc::ProductTraits, TypedIdx>(store, input, head.where, 
 				[](Store& store, TypedIdx to_invert) {
 					const TypedIdx minus_1 = build_value(store, -1.0);
 					return TypedIdx(store.insert(
@@ -151,7 +151,7 @@ namespace bmath::intern::arithmetic {
 				const std::size_t comma = find_first_of_skip_pars(input.tokens, ',');
 				const auto param_view = input.steal_prefix(comma);
 				const TypedIdx param = build(store, param_view);
-				last_node_idx = insert_new<ToIndexSLC>(store, last_node_idx, param);
+				last_node_idx = TypedIdxColony::insert_new(store, last_node_idx, param);
 			}
 
 			return TypedIdx(store.insert(result), Type::generic_function);

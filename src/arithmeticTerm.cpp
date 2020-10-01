@@ -3,6 +3,8 @@
 #include <sstream>
 #include <array>
 #include <algorithm>
+#include <cstring>
+#include <bit>
 
 #include "termUtility.hpp"
 #include "arithmeticTerm.hpp"
@@ -182,9 +184,34 @@ namespace bmath::intern::arithmetic {
 				str.append(func.short_name);
 			}
 			else {
-				read<ToConstString>(store, func.long_name_idx, str);
+				read(store, func.long_name_idx, str);
 			}
 		} //append_name
+
+		std::strong_ordering compare_name(const Store& store, const GenericFunction& func_1, const GenericFunction& func_2)
+		{
+			if (func_1.name_size == GenericFunction::NameSize::small &&
+				func_2.name_size == GenericFunction::NameSize::small) 
+			{ //std::string_view does not currently support <=>
+				const int cmp = std::strcmp(func_1.short_name, func_2.short_name);
+				if (cmp < 0) {
+					return std::strong_ordering::less;
+				}
+				if (cmp > 0) {
+					return std::strong_ordering::greater;
+				}
+			}
+			if (func_1.name_size == GenericFunction::NameSize::longer &&
+				func_2.name_size == GenericFunction::NameSize::longer) 					
+			{
+				return string_compare(store, func_1.long_name_idx, store, func_2.long_name_idx);
+			}
+			else {
+				return func_1.name_size == GenericFunction::NameSize::small ?
+					std::strong_ordering::less : 
+					std::strong_ordering::greater;
+			}
+		}
 
 		  //only expects actual name part of function, e.g. "asin", NOT "asin(...)"
 		  //if name is one of FnType, that is returned, else FnType::UNKNOWN
@@ -210,13 +237,13 @@ namespace bmath::intern::arithmetic {
 			for (const auto elem : vdc::range(store, index)) {
 				free_tree(store, elem);
 			}
-			free_slc<ToSum>(store, index);
+			Sum::free_slc(store, index);
 		} break;
 		case Type::product:  {
 			for (const auto elem : vdc::range(store, index)) {
 				free_tree(store, elem);
 			}
-			free_slc<ToProduct>(store, index);
+			Product::free_slc(store, index);
 		} break;            
 		case Type::known_function: {
 			const KnownFunction& known_function = store.at(index).known_function;
@@ -230,14 +257,14 @@ namespace bmath::intern::arithmetic {
 			for (const auto param : fn::range(store, generic_function)) {
 				free_tree(store, param);
 			}
-			free_slc<ToIndexSLC>(store, generic_function.params_idx);
+			TypedIdxColony::free_slc(store, generic_function.params_idx);
 			if (generic_function.name_size == GenericFunction::NameSize::longer) {
-				free_slc<ToString>(store, generic_function.long_name_idx);
+				TermString128::free_slc(store, generic_function.long_name_idx);
 			}
 			store.free(index);
 		} break;             
 		case Type::variable: {
-			free_slc<ToString>(store, index);
+			TermString128::free_slc(store, index);
 		} break;   
 		case Type::complex: {
 			store.free(index);
@@ -339,7 +366,7 @@ namespace bmath::intern::arithmetic {
 		} break;         
 		case Type::variable: {
 			const Variable& variable = store.at(index).variable;
-			read<ToConstString>(store, index, str);
+			read(store, index, str);
 		} break;
 		case Type::complex: {
 			const Complex& complex = store.at(index).complex;
@@ -444,7 +471,7 @@ namespace bmath::intern::arithmetic {
 		} break;         
 		case Type::variable: {
 			current_str.append("variable : ");
-			read<ToConstString>(store, index, current_str);
+			read(store, index, current_str);
 			show_string_nodes(index, false);
 		} break;   
 		case Type::complex: {
@@ -469,7 +496,7 @@ namespace bmath::intern::arithmetic {
 				const auto [elem_idx, elem_type] = elem.split();
 				if (elem_type == type) {
 					elem = TypedIdxColony::null_value;
-					current_append_node = append<ToIndexSLC>(store, current_append_node, elem_idx);
+					current_append_node = TypedIdxColony::append(store, current_append_node, elem_idx);
 				}
 				else {
 					flatten_variadic(store, elem);
@@ -513,12 +540,12 @@ namespace bmath::intern::arithmetic {
 				}
 			}
 			if (only_values) {
-				free_slc<ToSum>(store, index); //all summands have already been freed in the loop above
+				Sum::free_slc(store, index); //all summands have already been freed in the loop above
 				return { result_val };
 			}
 			else if (result_val != 0.0) {
 				const auto new_summand = TypedIdx(store.insert(result_val), Type::complex);
-				insert_new<ToSum>(store, index, new_summand);
+				Sum::insert_new(store, index, new_summand);
 			}
 			return {};
 		} break;
@@ -535,12 +562,12 @@ namespace bmath::intern::arithmetic {
 				}
 			}
 			if (only_values) {
-				free_slc<ToProduct>(store, index); //all factors have already been freed in the loop above
+				Product::free_slc(store, index); //all factors have already been freed in the loop above
 				return { result_val };
 			}
 			else if (result_val != 1.0) {
 				const auto new_factor = TypedIdx(store.insert(result_val), Type::complex);
-				insert_new<ToProduct>(store, index, new_factor);
+				Product::insert_new(store, index, new_factor);
 			}
 			return {};
 		} break;             
@@ -590,7 +617,142 @@ namespace bmath::intern::arithmetic {
 		}
 	}
 
+	std::strong_ordering compare(const Store& store, const TypedIdx ref_1, const TypedIdx ref_2)
+	{
+		const auto [index_1, type_1] = ref_1.split();
+		const auto [index_2, type_2] = ref_2.split();
+		if (type_1 != type_2) [[likely]] {
+			static_assert((1 <=> 1) == std::strong_ordering::equal); //dont wanna mix with std::strong_ordering::equivalent
+			return uniqueness(type_1) <=> uniqueness(type_2);
+		}
+		
+		switch (type_1) {
+		case Type::sum: 
+			[[fallthrough]];
+		case Type::product: {
+			auto range_1 = vdc::range(store, index_1);
+			auto range_2 = vdc::range(store, index_2);
+			auto iter_1 = range_1.begin();
+			auto iter_2 = range_2.begin();
+			for (; iter_1 != range_1.end() && iter_2 != range_2.end(); ++iter_1, ++iter_2) {
+				const auto iter_compare = compare(store, *iter_1, *iter_2);
+				if (iter_compare != std::strong_ordering::equal) [[likely]] {
+					return iter_compare;
+				}
+			}
+			if (iter_1 == range_1.end() && iter_2 == range_2.end()) {
+				return std::strong_ordering::equal;
+			}
+			else {
+				return iter_1 == range_1.end() ? 
+					std::strong_ordering::less : 
+					std::strong_ordering::greater;
+			}
+		} break;       
+		case Type::known_function: {
+			const KnownFunction& fn_1 = store.at(index_1).known_function;
+			const KnownFunction& fn_2 = store.at(index_2).known_function;
+			if (fn_1.type != fn_2.type) {
+				return fn_1.type <=> fn_2.type;
+			}
+			auto range_1 = fn::range(fn_1);
+			auto range_2 = fn::range(fn_2);
+			auto iter_1 = range_1.begin();
+			auto iter_2 = range_2.begin();
+			for (; iter_1 != range_1.end(); ++iter_1, ++iter_2) { //iter_1 and iter_2 both go over same number of params
+				const auto iter_compare = compare(store, *iter_1, *iter_2);
+				if (iter_compare != std::strong_ordering::equal) [[likely]] {
+					return iter_compare;
+				}
+			}
+			return std::strong_ordering::equal;
+		} break;
+		case Type::generic_function: {
+			const GenericFunction& fn_1 = store.at(index_1).generic_function;
+			const GenericFunction& fn_2 = store.at(index_2).generic_function;
+			const auto name_cmp = fn::compare_name(store, fn_1, fn_2);
+			if (name_cmp != std::strong_ordering::equal) {
+				return name_cmp;
+			}
+			auto range_1 = fn::range(store, fn_1);
+			auto range_2 = fn::range(store, fn_2);
+			auto iter_1 = range_1.begin();
+			auto iter_2 = range_2.begin();
+			for (; iter_1 != range_1.end() && iter_2 != range_2.end(); ++iter_1, ++iter_2) {
+				const auto iter_compare = compare(store, *iter_1, *iter_2);
+				if (iter_compare != std::strong_ordering::equal) [[likely]] {
+					return iter_compare;
+				}
+			}
+			if (iter_1 == range_1.end() && iter_2 == range_2.end()) {
+				return std::strong_ordering::equal;
+			}
+			else {
+				return iter_1 == range_1.end() ? 
+					std::strong_ordering::less : 
+					std::strong_ordering::greater;
+			}
+		} break;           
+		case Type::variable: {
+			return string_compare(store, index_1, store, index_2);
+		} break;   
+		case Type::complex: {
+			const Complex& complex_1 = store.at(index_1).complex;
+			const Complex& complex_2 = store.at(index_2).complex;
+			static_assert(sizeof(double) * 8 == 64, "bit_cast may cast to something of doubles size.");
+			const auto real_1 = std::bit_cast<std::uint64_t>(complex_1.real());
+			const auto real_2 = std::bit_cast<std::uint64_t>(complex_2.real());
+			const auto imag_1 = std::bit_cast<std::uint64_t>(complex_1.imag());
+			const auto imag_2 = std::bit_cast<std::uint64_t>(complex_2.imag());
+			if (real_1 == real_2 && imag_1 == imag_2) {
+				return std::strong_ordering::equal;
+			}
+			if (real_1 == real_2) {
+				return imag_1 <=> imag_2;
+			}
+			else [[likely]] {
+				return real_1 <=> real_2;
+			}
+		} break;
+		default: assert(false); //if this assert hits, the switch above needs more cases.
+			return std::strong_ordering::equal;
+		}
+	} //compare
+
+	void sort(Store& store, const TypedIdx ref)
+	{
+		const auto [index, type] = ref.split();
+		switch (type) {
+		case Type::sum: 
+			[[fallthrough]];
+		case Type::product:  {
+			TypedIdxColony::sort(store, index,
+				[&store](const TypedIdx lhs, const TypedIdx rhs) {
+					return compare(store, lhs, rhs) == std::strong_ordering::less;
+				});
+		} break;         
+		case Type::known_function: {
+			const KnownFunction& known_function = store.at(index).known_function;
+			for (const auto param : fn::range(known_function)) {
+				sort(store, param);
+			}
+		} break;
+		case Type::generic_function: {
+			const GenericFunction& generic_function = store.at(index).generic_function;
+			for (const auto param : fn::range(store, generic_function)) {
+				sort(store, param);
+			}
+		} break;          
+		case Type::variable: 
+			break;
+		case Type::complex: 
+			break;
+		default: assert(false); //if this assert hits, the switch above needs more cases.
+		}
+	} //sort
+
 } //namespace bmath::intern::arithmetic
+
 
 namespace bmath {
 	using namespace intern;
@@ -605,6 +767,11 @@ namespace bmath {
 		if (const auto val = arithmetic::combine_values_unexact(this->store, this->head)) {
 			this->head = arithmetic::TypedIdx(this->store.insert(*val), arithmetic::Type::complex);
 		}	
+	}
+
+	void ArithmeticTerm::sort() noexcept
+	{
+		arithmetic::sort(this->store, this->head);
 	}
 
 	ArithmeticTerm::ArithmeticTerm(std::string name)

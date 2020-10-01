@@ -3,6 +3,7 @@
 #include <complex>
 #include <span>
 #include <optional>
+#include <compare>
 
 #include "typedIndex.hpp"
 #include "termStore.hpp"
@@ -20,6 +21,17 @@ namespace bmath::intern::arithmetic {
 		complex,
 		COUNT	//has to be last element
 	};
+
+	//more unique (meaning harder to match) is smaller
+	constexpr auto uniqueness_table = std::to_array<std::pair<Type, int>>({
+		{ Type::generic_function, 00 }, //order of parameters is given -> most unique
+		{ Type::known_function  , 16 }, //order of parameters is given -> most unique
+		{ Type::product         , 32 }, //order of operands my vary -> second most unique
+		{ Type::sum             , 48 }, //order of operands my vary -> second most unique
+		{ Type::variable        , 64 }, //can only match pattern variable directly -> least unique
+		{ Type::complex         , 80 }, //can only match pattern variable directly -> least unique
+	});
+	constexpr int uniqueness(Type type) noexcept { return find(uniqueness_table, type); }
 
 	using TypedIdx = BasicTypedIdx<Type, Type::COUNT, std::uint32_t>;
 	using TypedIdxColony = TermSLC<std::uint32_t, TypedIdx, 3>;
@@ -108,17 +120,6 @@ namespace bmath::intern::arithmetic {
 	static_assert(sizeof(TypesUnion) * 8 == 128);
 	using Store = TermStore<TypesUnion>;
 
-	//everything using the TermSLC needs to have a way to get the right union member from the union
-	//these are refered in templates as UnionToSLC
-	struct ToString   { using Result = TermString128;  static Result& apply(TypesUnion& val) { return val.string;    } };
-	struct ToIndexSLC { using Result = TypedIdxColony; static Result& apply(TypesUnion& val) { return val.index_slc; } };
-	struct ToConstString   { using Result = const TermString128;  static Result& apply(const TypesUnion& val) { return val.string;    } };
-	struct ToConstIndexSLC { using Result = const TypedIdxColony; static Result& apply(const TypesUnion& val) { return val.index_slc; } };
-	using ToSum     = ToIndexSLC;
-	using ToProduct = ToIndexSLC;
-	using ToConstSum     = ToConstIndexSLC;
-	using ToConstProduct = ToConstIndexSLC;
-
 	//utility for both KnownFunction and GenericFunction
 	namespace fn {
 
@@ -204,6 +205,9 @@ namespace bmath::intern::arithmetic {
 		//appends only name, no parentheses or anything fancy
 		void append_name(const Store& store, const GenericFunction& func, std::string& str);
 
+		std::strong_ordering compare_name(const Store& store,
+			const GenericFunction& func_1, const GenericFunction& func_2);
+
 		//only expects actual name part of function, e.g. "asin", NOT "asin(...)"
 		//if name is one of FnType, that is returned, else FnType::UNKNOWN
 		FnType type_of(const ParseView input) noexcept;
@@ -215,10 +219,10 @@ namespace bmath::intern::arithmetic {
 		{ return { func.params, param_count(func.type) }; }
 
 		inline auto range(Store& store, GenericFunction& func) noexcept 
-		{ return SLCRange<ToIndexSLC, Store, TypedIdxColony, std::uint32_t>(store, func.params_idx); }
+		{ return TypedIdxColony::SLCRange<Store>(store, func.params_idx); }
 
 		inline auto range(const Store& store, const GenericFunction& func) noexcept 
-		{ return SLCRange<ToConstIndexSLC, const Store, TypedIdxColony, std::uint32_t>(store, func.params_idx); }
+		{ return TypedIdxColony::SLCRange<const Store>(store, func.params_idx); }
 
 	} //namespace fn
 
@@ -226,13 +230,14 @@ namespace bmath::intern::arithmetic {
 	namespace vdc {
 
 		inline auto range(Store& store, std::uint32_t vd_idx) noexcept
-		{ return SLCRange<ToIndexSLC, Store, TypedIdxColony, std::uint32_t>(store, vd_idx); }
+		{ return TypedIdxColony::SLCRange<Store>(store, vd_idx); }
 
 		inline auto range(const Store& store, std::uint32_t vd_idx) noexcept 
-		{ return SLCRange<ToConstIndexSLC, const Store, TypedIdxColony, std::uint32_t>(store, vd_idx); }
+		{ return TypedIdxColony::SLCRange<const Store>(store, vd_idx); }
 
 		struct SumTraits
 		{
+			using Object_T = Sum;
 			static constexpr Type type_name = Type::sum;
 			static constexpr double neutral_element = 0.0;
 			static constexpr char operator_char = '+';
@@ -242,6 +247,7 @@ namespace bmath::intern::arithmetic {
 
 		struct ProductTraits
 		{
+			using Object_T = Product;
 			static constexpr Type type_name = Type::product;
 			static constexpr double neutral_element = 1.0;
 			static constexpr char operator_char = '*';
@@ -270,6 +276,12 @@ namespace bmath::intern::arithmetic {
 	//  if a value was returned
 	[[nodiscard]] std::optional<Complex> combine_values_unexact(Store& store, const TypedIdx ref);
 
+	//compares two subterms in same term, assumes both to have their variadic parts sorted
+	std::strong_ordering compare(const Store& store, const TypedIdx ref_1, const TypedIdx ref_2);
+
+	//sorts variadic parts by compare
+	void sort(Store& store, const TypedIdx ref);
+
 }	//namespace bmath::intern::arithmetic
 
 namespace bmath {
@@ -285,6 +297,7 @@ namespace bmath {
 
 		void flatten_variadic() noexcept;
 		void combine_values_unexact() noexcept;
+		void sort() noexcept;
 
 		std::string show_memory_layout() const noexcept;
 		std::string to_string() const noexcept;
