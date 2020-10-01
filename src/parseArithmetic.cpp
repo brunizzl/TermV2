@@ -116,6 +116,34 @@ namespace bmath::intern::arithmetic {
 		}
 	} //build
 
+	template<typename VariadicTraits, typename TypedIdx_T, typename TermStore_T, typename BuildInverse, typename BuildAny>
+	TypedIdx_T build_variadic(TermStore_T& store, ParseView input, std::size_t op_idx, BuildInverse build_inverse, BuildAny build_any)
+	{
+		using Result_T = VariadicTraits::Object_T;
+
+		const auto subterm_view = input.steal_prefix(op_idx);
+		const TypedIdx_T subterm = build_any(store, subterm_view);
+		const std::size_t variadic_idx = store.insert(Result_T(subterm));
+		std::size_t last_node_idx = variadic_idx;
+		while (input.size()) {
+			const char current_operator = input.chars[0];
+			input.remove_prefix(1); //remove current_operator;
+			op_idx = find_first_of_skip_pars(input.tokens, VariadicTraits::operator_token);
+			const auto subterm_view = input.steal_prefix(op_idx);
+			const TypedIdx_T subterm = build_any(store, subterm_view);
+			switch (current_operator) {
+			case VariadicTraits::operator_char:
+				last_node_idx = Result_T::insert_new(store, last_node_idx, subterm);
+				break;
+			case VariadicTraits::inverse_operator_char:
+				last_node_idx = Result_T::insert_new(store, last_node_idx, build_inverse(store, subterm));
+				break;
+			default: assert(false);
+			}
+		}
+		return TypedIdx_T(variadic_idx, VariadicTraits::type_name);
+	} //build_variadic
+
 	TypedIdx build_function(Store& store, ParseView input, const std::size_t open_par)
 	{
 		const FnType type = fn::type_of(input.substr(0, open_par));

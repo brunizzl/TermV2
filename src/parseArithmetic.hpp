@@ -28,11 +28,14 @@ namespace bmath::intern::arithmetic {
 	//offset is used to determine error position relative to begin of whole term
 	Head find_head_type(const TokenView token_view, std::size_t offset);
 
-	//utility for build (as build_variadic and build_function)
+	//utility for build
 	TypedIdx build_value(Store& store, double re, double im = 0.0);
 
 	//returns head, offset is used to determine error position relative begin of whole term
 	TypedIdx build(Store& store, ParseView view);
+
+
+	//internal to parseArithmetic (and thus utility to be used in build):
 
 	//VariadicTraits must include:
 	//unsing declaration Object_T: type to construct (e.g. Sum)
@@ -48,34 +51,8 @@ namespace bmath::intern::arithmetic {
 	template<typename VariadicTraits, typename TypedIdx_T, typename TermStore_T,
 		typename BuildInverse, typename BuildAny>
 	TypedIdx_T build_variadic(TermStore_T& store, ParseView input, std::size_t op_idx,
-			BuildInverse build_inverse, BuildAny build_any)
-	{
-		using Result_T = VariadicTraits::Object_T;
-		const auto subterm_view = input.steal_prefix(op_idx);
-		const TypedIdx_T subterm = build_any(store, subterm_view);
-		const std::size_t variadic_idx = store.insert(Result_T(subterm));
-		std::size_t last_node_idx = variadic_idx;
-		while (input.size()) {
-			const char current_operator = input.chars[0];
-			input.remove_prefix(1); //remove current_operator;
-			op_idx = find_first_of_skip_pars(input.tokens, VariadicTraits::operator_token);
-			const auto subterm_view = input.steal_prefix(op_idx);
-			const TypedIdx_T subterm = build_any(store, subterm_view);
-			switch (current_operator) {
-			case VariadicTraits::operator_char:
-				last_node_idx = Result_T::insert_new(store, last_node_idx, subterm);
-				break;
-			case VariadicTraits::inverse_operator_char:
-				last_node_idx = Result_T::insert_new(store, last_node_idx, build_inverse(store, subterm));
-				break;
-			default: assert(false);
-			}
-		}
-		return TypedIdx_T(variadic_idx, VariadicTraits::type_name);
-	} //build_variadic
-
+			BuildInverse build_inverse, BuildAny build_any);
 
 	TypedIdx build_function(Store& store, ParseView input, const std::size_t open_par);
-
 
 } //namespace bmath::intern::arithmetic

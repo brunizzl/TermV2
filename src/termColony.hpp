@@ -25,7 +25,7 @@ namespace bmath::intern {
 
 		static constexpr Index_T null_index = Index_T();	//assumed to hold a value invalid as an actual index in a TermStore
 		static constexpr Value_T null_value = Value_T();
-		static constexpr std::size_t array_size = ArraySize;
+		static constexpr std::size_t array_size = ArraySize; //make visible to outside
 
 		Index_T next_idx;	//index of next SLC block in TermStore
 		Value_T values[ArraySize];
@@ -59,14 +59,23 @@ namespace bmath::intern {
 			}
         }
 
+		//convinience for that ugly reinterpret_cast thingy
+		template<typename TermUnion_T>
+		static TermSLC* ptr_at(TermStore<TermUnion_T>& store, std::size_t idx) 
+		{ return reinterpret_cast<TermSLC*>(&store.at(idx)); }
+
+		template<typename TermUnion_T>
+		static const TermSLC* const_ptr_at(const TermStore<TermUnion_T>& store, std::size_t idx) 
+		{ return reinterpret_cast<const TermSLC*>(&store.at(idx)); }
+
 		//also allows SLC::null_index to be passed in
 		template<typename TermUnion_T>
 		static void free_slc(TermStore<TermUnion_T>& store, Index_T slc_idx)
 		{
 			Index_T last_idx;
-			while (slc_idx != Index_T()) { // TypedIdx_T() should be equivalent to SLC::null_index
+			while (slc_idx != null_index) {
 				last_idx = slc_idx;
-				slc_idx = reinterpret_cast<const TermSLC* const>(&store.at(slc_idx))->next_idx;
+				slc_idx = const_ptr_at(store, slc_idx)->next_idx;
 				store.free(last_idx);
 			};
 		} //free_slc
@@ -77,7 +86,7 @@ namespace bmath::intern {
 		static std::size_t insert_new(TermStore<TermUnion_T>& store, std::size_t slc_idx, Value_T elem)
 		{
 			while (true) {
-				auto slc_ptr = reinterpret_cast<TermSLC* const>(&store.at(slc_idx));
+				const auto slc_ptr = ptr_at(store, slc_idx);
 				for (std::size_t i = 0; i < array_size; i++) {
 					if (slc_ptr->values[i] == null_value) {
 						slc_ptr->values[i] = elem;
@@ -89,7 +98,7 @@ namespace bmath::intern {
 				}
 				else {
 					const std::size_t new_idx = store.insert(TermSLC(elem));
-					reinterpret_cast<TermSLC* const>(&store.at(slc_idx))->next_idx = new_idx;
+					ptr_at(store, slc_idx)->next_idx = new_idx;
 					return new_idx;
 				}
 			}
@@ -102,10 +111,10 @@ namespace bmath::intern {
 			Index_T this_idx, const Index_T append_idx)
 		{
 			//static_assert(!std::is_same_v<UnionToSLC::Result, TermString128>, "append is not meant for strings");
-			auto* this_ptr = reinterpret_cast<TermSLC*>(&store.at(this_idx));
+			auto* this_ptr = ptr_at(store, this_idx);
 			while (this_ptr->next_idx != null_index) {
 				this_idx = this_ptr->next_idx;
-				this_ptr = reinterpret_cast<TermSLC*>(&store.at(this_idx));
+				this_ptr = ptr_at(store, this_idx);
 			}
 			this_ptr->next_idx = append_idx;
 			return this_idx;
@@ -114,12 +123,12 @@ namespace bmath::intern {
 		//a reference to just a TermSLC has the problem, that the adress of the next block depends not only on next_idx,
 		//but also on the Store holding the TermSLC. Thus this store-aware type is used to iterate over any TermSLC.
 		template<typename TermStore_T>
-		struct SLCRange
+		struct Range
 		{
 			TermStore_T& store;
 			Index_T slc_idx;
 
-			SLCRange(TermStore_T& new_store, Index_T new_slc_idx) :store(new_store), slc_idx(new_slc_idx) {}
+			Range(TermStore_T& new_store, Index_T new_slc_idx) :store(new_store), slc_idx(new_slc_idx) {}
 
 			struct Iterator
 			{
@@ -132,6 +141,9 @@ namespace bmath::intern {
 				using iterator_category = std::forward_iterator_tag;
 
 				using SLC_T = std::conditional_t<is_const, const TermSLC, TermSLC>;
+
+				//convinience for that ugly reinterpret_cast thingy
+				SLC_T* store_at(std::size_t idx) { return reinterpret_cast<SLC_T*>(&this->store.at(idx)); }
 
 				TermStore_T& store;
 				Index_T current_idx;			// == 0, if whole object represents end()
@@ -155,12 +167,12 @@ namespace bmath::intern {
 
 				enum class IncrementEffect { same_node, new_node, end };
 
-				IncrementEffect unchecked_increment() noexcept
+				IncrementEffect unchecked_increment()
 				{
 					if (++this->array_idx == SLC_T::array_size) [[unlikely]] {
-						auto& current = *reinterpret_cast<SLC_T*>(&this->store.at(this->current_idx));
+						auto& current = *this->store_at(current_idx);
 						if (current.next_idx == SLC_T::null_index) [[unlikely]] {
-							this->current_idx = 0;
+							this->current_idx = 0; //mark this as end
 							return IncrementEffect::end;
 						}
 						else {
@@ -172,11 +184,11 @@ namespace bmath::intern {
 					return IncrementEffect::same_node;
 				}
 
-				Iterator& operator++() noexcept
+				Iterator& operator++()
 				{
 					IncrementEffect what = this->unchecked_increment();
 					while (what != IncrementEffect::end) {
-						auto& current = *reinterpret_cast<SLC_T*>(&this->store.at(this->current_idx));
+						auto& current = *this->store_at(this->current_idx);
 						if (current.values[this->array_idx] != SLC_T::null_value) {
 							return *this;
 						}
@@ -185,16 +197,16 @@ namespace bmath::intern {
 					return *this;
 				}
 
-				Iterator operator++(int) noexcept
+				Iterator operator++(int)
 				{
 					Iterator result = *this;
 					this->operator++();
 					return result;
 				}
 
-				[[nodiscard]] auto& operator*() noexcept 
+				[[nodiscard]] auto& operator*() 
 				{ 
-					auto* const current = reinterpret_cast<SLC_T*>(&this->store.at(this->current_idx));
+					auto* const current = this->store_at(this->current_idx);
 					return current->values[array_idx]; 
 				}
 
@@ -207,47 +219,50 @@ namespace bmath::intern {
 				bool operator!=(const Iterator& other) const noexcept { return !(*this == other); }
 			};	//struct Iterator
 
-				//not meant to normally iterate through values, as also null_value might occur at begin
-			Iterator unchecked_begin() const noexcept
+			//not meant to normally iterate through values, as also null_value might occur at begin
+			Iterator unchecked_begin() noexcept
 			{
 				return Iterator(this->store, this->slc_idx, 0);
 			}
 
-			Iterator begin() noexcept 
+			Iterator begin() 
 			{ 
 				auto iter = this->unchecked_begin();
-				const auto* const current = reinterpret_cast<const TermSLC*>(&this->store.at(this->slc_idx));
-				if (current->values[0] == TermSLC::null_value) [[unlikely]] {
+				const auto current = const_ptr_at(this->store, this->slc_idx);
+				if (current->values[0] == null_value) [[unlikely]] {
 					++iter;
 				}
 				return iter; 
 			}
 
-			Iterator end() noexcept { return Iterator(this->store, 0, TermSLC::array_size); }
-		}; //struct SLCRange
+			Iterator end() noexcept { return Iterator(this->store, 0, array_size); }
+		}; //struct Range
 
-		template<typename TermStore_T, typename Compare>
-		static void sort(TermStore_T& store, const Index_T slc_idx, Compare compare)
+		template<typename TermUnion_T, typename Compare>
+		static void sort(TermStore<TermUnion_T>& store, const Index_T slc_idx, Compare compare)
 		{
 			StupidBufferVec<Value_T, 24> all_values;
-			auto range = SLCRange<TermStore_T>(store, slc_idx);
+			auto range = Range<TermStore<TermUnion_T>>(store, slc_idx);
 			for (const Value_T elem : range) {
 				all_values.push_back(elem);
 			}
 			std::sort(all_values.begin(), all_values.end(), compare);
 
-			auto iter = range.unchecked_begin();
-			for (std::size_t i = 0; i < all_values.size(); i++) { //copy sorted elements into beginning of 
+			auto iter = range.unchecked_begin(); //also expose empty slots
+			for (std::size_t i = 0; i < all_values.size(); i++) { //copy sorted elements back (leave no gaps)
 				*iter = all_values[i];
-				iter.unchecked_increment();
+				iter.unchecked_increment(); //also expose empty slots
 			}
 
-			auto current = reinterpret_cast<TermSLC* const>(&store.at(iter.current_idx));
-			while (++iter.array_idx < array_size) {
-				current->values[iter.array_idx] = null_value;
+			//clean up possible rest space (if previous SLC had gaps)
+			if (iter != range.end()) {
+				const auto current = ptr_at(store, iter.current_idx);
+				while (iter.array_idx < array_size) {
+					current->values[iter.array_idx++] = null_value;
+				}
+				free_slc(store, current->next_idx);
+				current->next_idx = null_index;
 			}
-			free_slc(store, current->next_idx);
-			current->next_idx = null_index;
 		} //sort
 
 	};	//struct TermSLC 	
@@ -280,10 +295,10 @@ namespace bmath::intern {
 	template<typename TermUnion_T>
 	void read(const TermStore<TermUnion_T>& store, std::size_t source_idx, std::string& dest)
 	{
-		auto current = reinterpret_cast<const TermString128*>(&store.at(source_idx));
+		auto current = TermString128::const_ptr_at(store, source_idx);
 		while (current->next_idx != TermString128::null_index) {
 			dest.append(current->values, TermString128::array_size);
-			current = reinterpret_cast<const TermString128*>(&store.at(current->next_idx));
+			current = TermString128::const_ptr_at(store, current->next_idx);
 		}
 		for (std::size_t i = 0; i < TermString128::array_size; i++) {
 			if (current->values[i] == '\0') [[unlikely]] {
@@ -294,8 +309,8 @@ namespace bmath::intern {
 	} //read
 
 	template<typename TermUnion_T1, typename TermUnion_T2>
-	std::strong_ordering string_compare(const TermStore<TermUnion_T1>& store_1, std::uint32_t idx_1,
-	                                    const TermStore<TermUnion_T2>& store_2, std::uint32_t idx_2)
+	std::strong_ordering string_compare(const TermStore<TermUnion_T1>& store_1, 
+		const TermStore<TermUnion_T2>& store_2, std::uint32_t idx_1, std::uint32_t idx_2)
 	{
 		const auto comp_array = [](const char* const lhs, const char* const rhs) -> std::strong_ordering {
 			for (std::size_t i = 0; i < TermString128::array_size; i++) { //string_view not yet supports <=>
@@ -307,8 +322,8 @@ namespace bmath::intern {
 			return std::strong_ordering::equal;
 		};
 
-		auto current_1 = reinterpret_cast<const TermString128*>(&store_1.at(idx_1));
-		auto current_2 = reinterpret_cast<const TermString128*>(&store_2.at(idx_2));
+		auto current_1 = TermString128::const_ptr_at(store_1, idx_1);
+		auto current_2 = TermString128::const_ptr_at(store_2, idx_2);
 		while (current_1->next_idx != TermString128::null_index &&
 		       current_2->next_idx != TermString128::null_index) 
 		{
@@ -317,8 +332,8 @@ namespace bmath::intern {
 				return cmp;
 			}
 			else {
-				current_1 = reinterpret_cast<const TermString128*>(&store_1.at(current_1->next_idx));
-				current_2 = reinterpret_cast<const TermString128*>(&store_2.at(current_2->next_idx));
+				current_1 = TermString128::const_ptr_at(store_1, current_1->next_idx);
+				current_2 = TermString128::const_ptr_at(store_2, current_2->next_idx);
 			}
 		}
 		if (current_1->next_idx == TermString128::null_index &&

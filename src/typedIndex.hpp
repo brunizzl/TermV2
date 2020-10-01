@@ -22,8 +22,6 @@ namespace bmath::intern {
 		static_assert(std::is_enum_v<TypesEnum>);
 		static_assert(std::is_unsigned_v<UnderlyingType>);
 
-		UnderlyingType data;
-
 		static constexpr UnderlyingType nr_enum_bits()
 		{
 			UnderlyingType power = 0;
@@ -32,6 +30,16 @@ namespace bmath::intern {
 			}
 			return power;
 		}
+
+		union
+		{
+			UnderlyingType data;
+			struct
+			{
+				TypesEnum type : nr_enum_bits();
+				UnderlyingType index : sizeof(UnderlyingType) * 8 - nr_enum_bits();
+			};
+		};
 
 		static constexpr UnderlyingType index_offset = nr_enum_bits();
 		static constexpr UnderlyingType enum_mask = (1 << index_offset) - 1;

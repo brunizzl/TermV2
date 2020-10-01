@@ -26,9 +26,9 @@
 			}
 			assert(false);
 		} break;            
-		case Type::known_function: {
-			const KnownFunction& known_function = store.at(index).known_function;
-			for (const auto param : fn::range(known_function)) {
+		case Type::function: {
+			const KnownFunction& function = store.at(index).function;
+			for (const auto param : fn::range(function)) {
 			}
 			assert(false);
 		} break;
@@ -140,6 +140,74 @@ namespace bmath::intern::arithmetic {
 			}
 		} //append_complex
 
+		std::string pretty_to_string(double real)
+		{
+			std::stringstream buffer;
+			buffer << real;
+			return buffer.str();
+		}
+
+		double is_negative_real (const Store& store, const TypedIdx ref) {
+			const auto [index, type] = ref.split();
+			if (type == Type::complex) {
+				const Complex& complex = store.at(index).complex;
+				if (complex.real() < 0.0 && complex.imag() == 0.0) {
+					return complex.real();
+				}
+			}
+			return 0.0;
+		}
+
+		struct GetNegativePowResult
+		{
+			TypedIdx base;
+			double expo;
+		};
+
+		std::optional<GetNegativePowResult> get_negative_pow(const Store& store, const TypedIdx ref)
+		{
+			const auto [index, type] = ref.split();
+			if (type == Type::known_function) {
+				const KnownFunction& function = store.at(index).known_function;
+				if (function.type == FnType::pow) {
+					if (const double expo = is_negative_real(store, function.params[1])) {
+						return { { function.params[0], expo } };
+					}
+				}
+			}
+			return {};
+		}
+
+		struct GetNegativeProductResult
+		{
+			double negative_factor;
+			std::vector<TypedIdx> other_factors;
+		};
+
+		std::optional<GetNegativeProductResult> get_negative_product(const Store& store, const TypedIdx ref)
+		{
+			const auto [index, type] = ref.split();
+			if (type == Type::product) {
+				std::vector<TypedIdx> other_factors;
+				double negative_factor;
+				bool found_negative_factor = false;
+				for (const auto factor : vdc::range(store, index)) {
+					if (!found_negative_factor) {
+						if (const auto negative_val = is_negative_real(store, factor) < 0.0) {
+							negative_factor = negative_val;
+							found_negative_factor = true;
+							continue;
+						}
+					}
+					other_factors.push_back(factor);
+				}
+				if (found_negative_factor) {
+					return { { negative_factor, other_factors} };
+				}
+			}
+			return {};
+		}
+
 	} //namespace print
 
 
@@ -202,9 +270,9 @@ namespace bmath::intern::arithmetic {
 				}
 			}
 			if (func_1.name_size == GenericFunction::NameSize::longer &&
-				func_2.name_size == GenericFunction::NameSize::longer) 					
+				func_2.name_size == GenericFunction::NameSize::longer) 			
 			{
-				return string_compare(store, func_1.long_name_idx, store, func_2.long_name_idx);
+				return string_compare(store, store, func_1.long_name_idx, func_2.long_name_idx);
 			}
 			else {
 				return func_1.name_size == GenericFunction::NameSize::small ?
@@ -379,6 +447,115 @@ namespace bmath::intern::arithmetic {
 			str.push_back(')');
 		}
 	} //append_to_string
+
+	void pretty_append_to_string(const Store& store, const TypedIdx ref, std::string& str, const int parent_precedence)
+	{
+
+		const auto [index, type] = ref.split();
+		const int own_precedence = print::operator_precedence(type);
+		const bool print_parentheses = own_precedence <= parent_precedence && print::needs_parentheses(type);
+		if (print_parentheses) {
+			str.push_back('(');
+		}
+
+		switch (type) {
+		case Type::sum: {
+			bool first = true;
+			for (const auto elem : vdc::range(store, index)) {
+				if (const auto product = print::get_negative_product(store, elem)) {
+					str.append(print::pretty_to_string(product->negative_factor) + '*');
+					for (const auto factor : product->other_factors) {
+						pretty_append_to_string(store, factor, str, print::operator_precedence(Type::product));
+					}
+				}
+				else if (const double summand = print::is_negative_real(store, elem)) {
+					str.append(print::pretty_to_string(summand));
+				}
+				else {
+					if (!first) {
+						str.push_back('+');
+					}
+					pretty_append_to_string(store, elem, str, own_precedence);
+				}
+				first = false;
+			}
+		} break;
+		case Type::product:  {
+			bool first = true;
+			for (const auto elem : vdc::range(store, index)) {
+				if (const auto pow = print::get_negative_pow(store, elem)) {
+					str.append(first ? "1/" : "/");
+					if (pow->expo == -1.0) {
+						str.push_back('(');
+						pretty_append_to_string(store, pow->base, str, print::operator_precedence(Type::known_function));
+						str.push_back(')');
+					}
+					else {
+						str.push_back('(');
+						pretty_append_to_string(store, pow->base, str, print::operator_precedence(Type::known_function));
+						str.append('^' + print::pretty_to_string(-pow->expo) + ')');
+					}
+				}
+				else {
+					if (!first) {
+						str.push_back('*');
+					}
+					pretty_append_to_string(store, elem, str, own_precedence);
+				}
+				first = false;
+			}
+		} break;        
+		case Type::known_function: {
+			const KnownFunction& function = store.at(index).known_function;
+			if (function.type == FnType::pow) {
+				str.push_back('(');
+				pretty_append_to_string(store, function.params[0], str, own_precedence);
+				str.push_back('^');
+				pretty_append_to_string(store, function.params[1], str, own_precedence);
+				str.push_back(')');
+
+			}
+			else {
+				str.append(fn::name_of(function.type));
+				str.push_back('(');
+				bool first = true;
+				for (const auto param : fn::range(function)) {
+					if (!std::exchange(first, false)) {
+						str.push_back(',');
+					}
+					pretty_append_to_string(store, param, str, own_precedence);
+				}
+				str.push_back(')');
+			}
+		} break;
+		case Type::generic_function: {
+			const GenericFunction& generic_function = store.at(index).generic_function;
+			fn::append_name(store, generic_function, str);
+			str.push_back('(');
+			bool first = true;
+			for (const auto param : fn::range(store, generic_function)) {
+				if (!std::exchange(first, false)) {
+					str.push_back(',');
+				}
+				pretty_append_to_string(store, param, str, own_precedence);
+			}
+			str.push_back(')');
+		} break;         
+		case Type::variable: {
+			const Variable& variable = store.at(index).variable;
+			read(store, index, str);
+		} break;
+		case Type::complex: {
+			const Complex& complex = store.at(index).complex;
+			print::append_complex(complex, str, parent_precedence, false);
+		} break;
+		default: assert(false); //if this assert hits, the switch above needs more cases.
+		}
+
+		if (print_parentheses) {
+			str.push_back(')');
+		}
+	} //pretty_append_to_string
 
 	void to_memory_layout(const Store& store, const TypedIdx ref, std::vector<std::string>& content)
 	{
@@ -694,7 +871,7 @@ namespace bmath::intern::arithmetic {
 			}
 		} break;           
 		case Type::variable: {
-			return string_compare(store, index_1, store, index_2);
+			return string_compare(store, store, index_1, index_2);
 		} break;   
 		case Type::complex: {
 			const Complex& complex_1 = store.at(index_1).complex;
@@ -726,6 +903,9 @@ namespace bmath::intern::arithmetic {
 		case Type::sum: 
 			[[fallthrough]];
 		case Type::product:  {
+			for (const auto elem : vdc::range(store, index)) {
+				sort(store, elem);
+			}
 			TypedIdxColony::sort(store, index,
 				[&store](const TypedIdx lhs, const TypedIdx rhs) {
 					return compare(store, lhs, rhs) == std::strong_ordering::less;
@@ -785,7 +965,7 @@ namespace bmath {
 		this->head = arithmetic::build(this->store, parse_string);
 	} //ArithmeticTerm
 
-	std::string bmath::ArithmeticTerm::show_memory_layout() const noexcept
+	std::string bmath::ArithmeticTerm::show_memory_layout() const
 	{
 		std::vector<std::string> elements;
 		elements.reserve(this->store.size() + 1);
@@ -814,11 +994,19 @@ namespace bmath {
 		return result;
 	} //show_memory_layout
 
-	std::string ArithmeticTerm::to_string() const noexcept
+	std::string ArithmeticTerm::to_string() const
 	{
 		std::string result;
 		result.reserve(this->store.size() * 2);
 		arithmetic::append_to_string(this->store, this->head, result);
+		return result;
+	}
+
+	std::string ArithmeticTerm::to_pretty_string() const
+	{
+		std::string result;
+		result.reserve(this->store.size() * 2);
+		arithmetic::pretty_append_to_string(this->store, this->head, result);
 		return result;
 	}
 

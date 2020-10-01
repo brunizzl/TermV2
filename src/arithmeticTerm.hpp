@@ -219,10 +219,10 @@ namespace bmath::intern::arithmetic {
 		{ return { func.params, param_count(func.type) }; }
 
 		inline auto range(Store& store, GenericFunction& func) noexcept 
-		{ return TypedIdxColony::SLCRange<Store>(store, func.params_idx); }
+		{ return TypedIdxColony::Range<Store>(store, func.params_idx); }
 
 		inline auto range(const Store& store, const GenericFunction& func) noexcept 
-		{ return TypedIdxColony::SLCRange<const Store>(store, func.params_idx); }
+		{ return TypedIdxColony::Range<const Store>(store, func.params_idx); }
 
 	} //namespace fn
 
@@ -230,10 +230,10 @@ namespace bmath::intern::arithmetic {
 	namespace vdc {
 
 		inline auto range(Store& store, std::uint32_t vd_idx) noexcept
-		{ return TypedIdxColony::SLCRange<Store>(store, vd_idx); }
+		{ return TypedIdxColony::Range<Store>(store, vd_idx); }
 
 		inline auto range(const Store& store, std::uint32_t vd_idx) noexcept 
-		{ return TypedIdxColony::SLCRange<const Store>(store, vd_idx); }
+		{ return TypedIdxColony::Range<const Store>(store, vd_idx); }
 
 		struct SumTraits
 		{
@@ -264,6 +264,9 @@ namespace bmath::intern::arithmetic {
 	[[nodiscard]] Complex eval_tree(const Store& store, const TypedIdx ref);
 
 	void append_to_string(const Store& store, const TypedIdx ref, std::string& str, const int parent_precedence = -1);
+
+	//prettier, but also slower
+	void pretty_append_to_string(const Store& store, const TypedIdx ref, std::string& str, const int parent_precedence = -1);
 
 	void to_memory_layout(const Store& store, const TypedIdx ref, std::vector<std::string>& content);
 
@@ -299,8 +302,9 @@ namespace bmath {
 		void combine_values_unexact() noexcept;
 		void sort() noexcept;
 
-		std::string show_memory_layout() const noexcept;
-		std::string to_string() const noexcept;
+		std::string show_memory_layout() const;
+		std::string to_string() const;
+		std::string to_pretty_string() const;
 	};	//class ArithmeticTerm
 
 }	//namespace bmath

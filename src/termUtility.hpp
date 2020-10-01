@@ -68,6 +68,7 @@ namespace bmath::intern {
 	template<typename Value_T, std::size_t BufferSize>
 	class StupidBufferVec
 	{
+		static_assert(BufferSize > 0);
 		static_assert(std::is_trivially_copyable_v<Value_T>);     //big part of the "Stupid" in the name
 		static_assert(std::is_trivially_destructible_v<Value_T>); //big part of the "Stupid" in the name
 		static_assert(std::is_default_constructible_v<Value_T>);  //big part of the "Stupid" in the name
@@ -81,10 +82,10 @@ namespace bmath::intern {
 		};
 
 	public:
-		std::size_t size() const noexcept { return this->size_; }
-		const Value_T* data() const noexcept { return this->data_; }
+		constexpr std::size_t size() const noexcept { return this->size_; }
+		constexpr const Value_T* data() const noexcept { return this->data_; }
 
-		StupidBufferVec() :size_(0), capacity(BufferSize), data_(local_data) {}
+		constexpr StupidBufferVec() :size_(0), data_(local_data) {}
 
 		~StupidBufferVec()
 		{
@@ -98,7 +99,7 @@ namespace bmath::intern {
 		StupidBufferVec& operator=(const StupidBufferVec&) = delete;
 		StupidBufferVec& operator=(StupidBufferVec&&) = delete;
 
-		void push_back(Value_T elem)
+		constexpr void push_back(Value_T elem)
 		{
 			if (this->size_ == BufferSize) [[unlikely]] {
 				Value_T * new_data = new Value_T[BufferSize * 2];
@@ -116,13 +117,13 @@ namespace bmath::intern {
 			this->data_[this->size_++] = elem;
 		}
 
-		const Value_T& operator[](std::size_t where) const noexcept { return this->data_[where]; }
-		Value_T& operator[](std::size_t where) noexcept { return this->data_[where]; }
+		constexpr const Value_T& operator[](std::size_t where) const noexcept { return this->data_[where]; }
+		constexpr Value_T& operator[](std::size_t where) noexcept { return this->data_[where]; }
 
-		const Value_T* begin() const noexcept { return this->data__; }
-		Value_T* begin() noexcept { return this->data_; }
-		const Value_T* end() const noexcept { return this->data_ + this->size_; }
-		Value_T* end() noexcept { return this->data_ + this->size_; }
+		constexpr const Value_T* begin() const noexcept { return this->data__; }
+		constexpr Value_T* begin() noexcept { return this->data_; }
+		constexpr const Value_T* end() const noexcept { return this->data_ + this->size_; }
+		constexpr Value_T* end() noexcept { return this->data_ + this->size_; }
 
 	};
 
