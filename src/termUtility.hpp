@@ -5,6 +5,7 @@
 #include <cassert>
 #include <array>
 #include <vector>
+#include <span>
 
 namespace bmath::intern {
 
@@ -66,7 +67,7 @@ namespace bmath::intern {
 	}
 
 	template<typename Value_T, std::size_t BufferSize>
-	class StupidBufferVec
+	class StupidBufferVector
 	{
 		static_assert(BufferSize > 0);
 		static_assert(std::is_trivially_copyable_v<Value_T>);     //big part of the "Stupid" in the name
@@ -85,19 +86,19 @@ namespace bmath::intern {
 		constexpr std::size_t size() const noexcept { return this->size_; }
 		constexpr const Value_T* data() const noexcept { return this->data_; }
 
-		constexpr StupidBufferVec() :size_(0), data_(local_data) {}
+		constexpr StupidBufferVector() :size_(0), data_(local_data) {}
 
-		~StupidBufferVec()
+		~StupidBufferVector()
 		{
 			if (this->size_ > BufferSize) [[unlikely]] {
 				delete[] this->data_;
 			}
 		}
 
-		StupidBufferVec(const StupidBufferVec&) = delete;
-		StupidBufferVec(StupidBufferVec&&) = delete;
-		StupidBufferVec& operator=(const StupidBufferVec&) = delete;
-		StupidBufferVec& operator=(StupidBufferVec&&) = delete;
+		StupidBufferVector(const StupidBufferVector&) = delete;
+		StupidBufferVector(StupidBufferVector&&) = delete;
+		StupidBufferVector& operator=(const StupidBufferVector&) = delete;
+		StupidBufferVector& operator=(StupidBufferVector&&) = delete;
 
 		constexpr void push_back(Value_T elem)
 		{
@@ -125,6 +126,9 @@ namespace bmath::intern {
 		constexpr const Value_T* end() const noexcept { return this->data_ + this->size_; }
 		constexpr Value_T* end() noexcept { return this->data_ + this->size_; }
 
-	};
+		constexpr std::span<const Value_T> range() const noexcept { return { this->data_, this->size_ }; }
+		constexpr std::span<Value_T> range() noexcept { return { this->data_, this->size_ }; }
+
+	}; //class StupidBufferVector
 
 } //namespace bmath::intern

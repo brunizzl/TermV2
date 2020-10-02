@@ -49,11 +49,9 @@ int main()
 		};
 		for (auto& term_name : term_names) {
 			std::cout << "-------------------------------------------------------------------------------------\n";
-			std::cout << "-- name: " << term_name << '\n';
-			std::cout << "-------------------------------------------------------------------------------------\n";
 
 			try {
-				bmath::ArithmeticTerm term(std::move(term_name));
+				bmath::ArithmeticTerm term(term_name);
 
 				std::cout << "nach bau: \n" << term.to_string() << "\n\n";
 				std::cout << "nach bau in huebsch: \n" << term.to_pretty_string() << "\n\n";

@@ -241,7 +241,7 @@ namespace bmath::intern {
 		template<typename TermUnion_T, typename Compare>
 		static void sort(TermStore<TermUnion_T>& store, const Index_T slc_idx, Compare compare)
 		{
-			StupidBufferVec<Value_T, 24> all_values;
+			StupidBufferVector<Value_T, 12> all_values;
 			auto range = Range<TermStore<TermUnion_T>>(store, slc_idx);
 			for (const Value_T elem : range) {
 				all_values.push_back(elem);

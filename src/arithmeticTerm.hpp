@@ -76,17 +76,17 @@ namespace bmath::intern::arithmetic {
 
 	struct GenericFunction
 	{
-		static constexpr std::size_t short_name_max = 4 + 7; //plus '\0' at end, supplied by name_size
+		static constexpr std::size_t short_name_max = 8 + 3; //plus '\0' at end, supplied by name_size
 
 		//if name_size == NameSize::small short_name is used, but as if would be of length 11
 		//this is perhaps undefined behavior, but im feeling unsave today >:)	
 		union
 		{
-			char short_name[4] = "";
+			char short_name[8] = "";
 			std::uint32_t long_name_idx;	//points to TermString128 containing name (if active)
 		};
 	private:
-		char short_name_extension[7] = ""; //just implementation detail, no one needs to see this
+		char short_name_extension[3] = ""; //just implementation detail, no one needs to see this
 	public:
 		//if small is active, it doubles in purpose as '\0' character to end the name
 		enum class NameSize :char { small = '\0', longer } name_size = NameSize::small;
