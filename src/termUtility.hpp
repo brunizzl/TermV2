@@ -16,7 +16,7 @@ namespace bmath::intern {
 		}
 	}
 
-	template<typename Exception_T = std::exception, typename... Args>
+	template<typename Exception_T, typename... Args>
 	constexpr void throw_if(bool cond, Args&&... args)
 	{
 		if (cond) [[unlikely]] {
@@ -24,11 +24,10 @@ namespace bmath::intern {
 		}
 	}
 
-	//stolen from Jason Turner: https://www.youtube.com/watch?v=INn3xa4pMfg
-	//(but also modified slightly)
-	template <typename Key, typename Value, std::size_t Size>
-	[[nodiscard]] constexpr Value find(
-		const std::array<std::pair<Key, Value>, Size>& data, const Key key) noexcept
+	//idea stolen from Jason Turner: https://www.youtube.com/watch?v=INn3xa4pMfg
+	template <typename Key_T, typename Value_T, std::size_t Size>
+	[[nodiscard]] constexpr Value_T find(
+		const std::array<std::pair<Key_T, Value_T>, Size>& data, const Key_T key) noexcept
 	{
 		const auto itr = std::find_if(begin(data), end(data),
 			[&key](const auto &v) { return v.first == key; });
@@ -38,10 +37,9 @@ namespace bmath::intern {
 		return itr->second;
 	}
 
-	template <typename Key, typename Value, std::size_t Size>
-	[[nodiscard]] constexpr Value search(
-		const std::array<std::pair<Key, Value>, Size>& data, 
-		const Key key, const Value null_value) noexcept 
+	template <typename Key_T, typename Value_T, std::size_t Size>
+	[[nodiscard]] constexpr Value_T search(
+		const std::array<std::pair<Key_T, Value_T>, Size>& data, const Key_T key, const Value_T null_value) noexcept 
 	{
 		const auto itr = std::find_if(begin(data), end(data),
 			[&key](const auto &v) { return v.first == key; });
@@ -52,24 +50,10 @@ namespace bmath::intern {
 		}
 	}
 
-	template<typename Val>
-	std::ostream& operator<<(std::ostream& str, const std::vector<Val>& vec)
-	{
-		str << "{ ";
-		bool first = true;
-		for (const auto& elem : vec) {
-			if (!std::exchange(first, false)) {
-				str << ", ";
-			}
-			str << elem;
-		}
-		str << '}';
-	}
-
 	template<typename Value_T, std::size_t BufferSize>
 	class StupidBufferVector
 	{
-		static_assert(BufferSize > 0);
+		static_assert(BufferSize > 0u);
 		static_assert(std::is_trivially_copyable_v<Value_T>);     //big part of the "Stupid" in the name
 		static_assert(std::is_trivially_destructible_v<Value_T>); //big part of the "Stupid" in the name
 		static_assert(std::is_default_constructible_v<Value_T>);  //big part of the "Stupid" in the name
@@ -85,8 +69,9 @@ namespace bmath::intern {
 	public:
 		constexpr std::size_t size() const noexcept { return this->size_; }
 		constexpr const Value_T* data() const noexcept { return this->data_; }
+		constexpr Value_T* data() noexcept { return this->data_; }
 
-		constexpr StupidBufferVector() :size_(0), data_(local_data) {}
+		constexpr StupidBufferVector() :size_(0u), data_(local_data) {}
 
 		~StupidBufferVector()
 		{
@@ -115,20 +100,111 @@ namespace bmath::intern {
 				this->data_ = new_data;
 				this->capacity *= 2;
 			}
-			this->data_[this->size_++] = elem;
+			this->data_[this->size_++] = std::move(elem);
+		}
+
+		constexpr Value_T pop_back() noexcept
+		{ 
+			assert(this->size_ > 0u && "tried popping on empty vector");
+			return std::move(this->data_[--this->size_]); 
 		}
 
 		constexpr const Value_T& operator[](std::size_t where) const noexcept { return this->data_[where]; }
 		constexpr Value_T& operator[](std::size_t where) noexcept { return this->data_[where]; }
 
-		constexpr const Value_T* begin() const noexcept { return this->data__; }
-		constexpr Value_T* begin() noexcept { return this->data_; }
+		constexpr const Value_T& front() const noexcept { return this->data_[0]; }
+		constexpr const Value_T& back() const noexcept { return this->data_[this->size_ - 1u]; }
+		constexpr Value_T& front() noexcept { return this->data_[0]; }
+		constexpr Value_T& back() noexcept { return this->data_[this->size_ - 1u]; }
+
+		constexpr const Value_T* begin() const noexcept { return this->data_; }
 		constexpr const Value_T* end() const noexcept { return this->data_ + this->size_; }
+		constexpr Value_T* begin() noexcept { return this->data_; }
 		constexpr Value_T* end() noexcept { return this->data_ + this->size_; }
 
 		constexpr std::span<const Value_T> range() const noexcept { return { this->data_, this->size_ }; }
 		constexpr std::span<Value_T> range() noexcept { return { this->data_, this->size_ }; }
 
 	}; //class StupidBufferVector
+
+	template<typename Value_T, std::size_t MaxSize>
+	class ShortVector
+	{
+		std::size_t size_ = 0u;
+		Value_T data_[MaxSize];
+
+	public:
+		constexpr std::size_t size() const noexcept { return this->size_; }
+		constexpr const Value_T* data() const noexcept { return this->data_; }
+		constexpr Value_T* data() noexcept { return this->data_; }
+
+		ShortVector() = default;
+
+		ShortVector(std::initializer_list<Value_T> init) :size_(init.size())
+		{
+			static_assert(std::is_trivially_copyable_v<Value_T>);
+			assert(init.size() <= MaxSize && "initializer length exeeds static limit");
+			std::copy(init.begin(), init.end(), this->data_);
+		}
+
+		constexpr void push_pack(Value_T elem)
+		{
+			assert(this->size_ < MaxSize && "tried pushing on full vector");
+			this->data_[this->size_++] = std::move(elem);
+		}
+
+		constexpr Value_T pop_back() 
+		{ 
+			assert(this->size_ > 0u && "tried popping on empty vector");
+			return std::move(this->data_[--this->size_]); 
+		}
+
+		constexpr const Value_T& operator[](std::size_t where) const noexcept { return this->data_[where]; }
+		constexpr Value_T& operator[](std::size_t where) noexcept { return this->data_[where]; }
+
+		constexpr const Value_T& front() const noexcept {  return this->data_[0]; }
+		constexpr const Value_T& back() const noexcept {  return this->data_[this->size_ - 1u]; }
+		constexpr Value_T& front() noexcept { return this->data_[0]; }
+		constexpr Value_T& back() noexcept { return this->data_[this->size_ - 1u]; }
+
+		constexpr const Value_T* begin() const noexcept { return this->data_; }
+		constexpr const Value_T* end() const noexcept { return this->data_ + this->size_; }
+		constexpr Value_T* begin() noexcept { return this->data_; }
+		constexpr Value_T* end() noexcept { return this->data_ + this->size_; }
+
+		constexpr std::span<const Value_T> range() const noexcept { return { this->data_, this->size_ }; }
+		constexpr std::span<Value_T> range() noexcept { return { this->data_, this->size_ }; }
+
+	}; //class ShortVector
+
+	template<typename Val>
+	std::ostream& operator<<(std::ostream& str, const std::vector<Val>& vec)
+	{
+		const char* spacer = "{ ";
+		for (const auto& elem : vec) {
+			str << std::exchange(spacer, ", ") << elem;
+		}
+		return str << " }";
+	}
+
+	template<typename Value_T, std::size_t BufferSize>
+	std::ostream& operator<<(std::ostream& str, const StupidBufferVector<Value_T, BufferSize>& vec)
+	{
+		const char* spacer = "{ ";
+		for (const auto& elem : vec) {
+			str << std::exchange(spacer, ", ") << elem;
+		}
+		return str << " }";
+	}
+
+	template<typename Value_T, std::size_t MaxSize>
+	std::ostream& operator<<(std::ostream& str, const ShortVector<Value_T, MaxSize>& vec)
+	{
+		const char* spacer = "{ ";
+		for (const auto& elem : vec) {
+			str << std::exchange(spacer, ", ") << elem;
+		}
+		return str << " }";
+	}
 
 } //namespace bmath::intern

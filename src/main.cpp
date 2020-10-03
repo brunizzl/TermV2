@@ -6,14 +6,19 @@
 #include "termColony.hpp"
 #include "arithmeticTerm.hpp"
 #include "parseTerm.hpp"
-#include "parseArithmetic.hpp"
+#include "ioArithmetic.hpp"
 
 using namespace bmath::intern::arithmetic;
 using namespace bmath::intern;
 using namespace bmath;
 
+
 int main()
 {
+	{
+		ShortVector<int, 10> test = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 0 };
+		std::cout << "test: " << test << "\n\n";
+	}
 	{
 		std::string parentheses = "1([[0]])2(0)[(0){()(0)}]({}{}{()})3";
 		TokenString tokens = tokenize(parentheses);
@@ -54,14 +59,12 @@ int main()
 				bmath::ArithmeticTerm term(term_name);
 
 				std::cout << "nach bau: \n" << term.to_string() << "\n\n";
-				std::cout << "nach bau in huebsch: \n" << term.to_pretty_string() << "\n\n";
 				//std::cout << "speicher nach bau:\n" << term.show_memory_layout() << "\n\n";
 
-				term.flatten_variadic();
+				term.combine_layers();
 				term.sort();
 				term.combine_values_unexact();
 
-				std::cout << "nach vereinfachen: \n" << term.to_string() << "\n\n";
 				std::cout << "nach vereinfachen in huebsch: \n" << term.to_pretty_string() << "\n\n";
 				std::cout << "speicher nach vereinfachen:\n" << term.show_memory_layout() << "\n\n\n";
 			}

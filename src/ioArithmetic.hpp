@@ -34,9 +34,6 @@ namespace bmath::intern::arithmetic {
 	//returns head, offset is used to determine error position relative begin of whole term
 	TypedIdx build(Store& store, ParseView view);
 
-
-	//internal to parseArithmetic (and thus utility to be used in build):
-
 	//VariadicTraits must include:
 	//unsing declaration Object_T: type to construct (e.g. Sum)
 	//<Enum type> type_name: name of operation in enum representing all types in store
@@ -54,5 +51,40 @@ namespace bmath::intern::arithmetic {
 			BuildInverse build_inverse, BuildAny build_any);
 
 	TypedIdx build_function(Store& store, ParseView input, const std::size_t open_par);
+
+	namespace print {
+
+		//operator precedence (used to decide if parentheses are nessecary in out string)
+		constexpr auto infixr_table = std::to_array<std::pair<Type, int>>({
+			{ Type::known_function,   0 },
+			{ Type::generic_function, 0 },
+			{ Type::sum,      	      2	},
+			{ Type::product,          4 },
+			{ Type::_pow,             5 },
+			{ Type::variable,         6 },
+			{ Type::complex,          6 },//may be printed as sum/product itself, then (maybe) has to add parentheses on its own
+		});
+		constexpr int infixr(Type type) { return find(infixr_table, type); }
+
+		void append_complex(const std::complex<double> val, std::string& dest, int parent_operator_precedence);
+
+		void append_real(double val, std::string& dest);
+
+		std::optional<double> get_negative_real(const Store& store, const TypedIdx ref);
+
+		//returns base, if ref is actually <base>^(-1)
+		std::optional<TypedIdx> get_pow_neg1(const Store& store, const TypedIdx ref);
+
+		struct GetNegativeProductResult { double negative_factor; std::vector<TypedIdx> other_factors; };
+		std::optional<GetNegativeProductResult> get_negative_product(const Store& store, const TypedIdx ref);
+
+		void append_to_string(const Store& store, const TypedIdx ref, std::string& str, const int parent_infixr = 0);
+
+		//prettier, but also slower
+		std::string to_pretty_string(const Store& store, const TypedIdx ref, const int parent_infixr = 0);
+
+		void to_memory_layout(const Store& store, const TypedIdx ref, std::vector<std::string>& content);
+
+	} //namespace print
 
 } //namespace bmath::intern::arithmetic

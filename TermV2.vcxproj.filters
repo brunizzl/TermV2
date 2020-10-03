@@ -24,7 +24,7 @@
     <ClCompile Include="src\parseTerm.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="src\parseArithmetic.cpp">
+    <ClCompile Include="src\ioArithmetic.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -47,7 +47,7 @@
     <ClInclude Include="src\parseTerm.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\parseArithmetic.hpp">
+    <ClInclude Include="src\ioArithmetic.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

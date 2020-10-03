@@ -16,6 +16,7 @@ namespace bmath::intern::arithmetic {
 		sum,
 		product,
 		known_function,
+		_pow, //may only appear in print context, as type pow is instance of known_function
 		generic_function,
 		variable,
 		complex,
@@ -257,33 +258,31 @@ namespace bmath::intern::arithmetic {
 
 	} //namespace vdc
 
-	//removes subtree starting at ref from store
-	void free_tree(Store& store, const TypedIdx ref);
+	//recursive tree traversal (some of these traversal functions are also found in namespace print)
+	namespace tree {
 
-	//evaluates tree if possible, throws if variables of unknown value /generic_functions are present
-	[[nodiscard]] Complex eval_tree(const Store& store, const TypedIdx ref);
+		//removes subtree starting at ref from store
+		void free(Store& store, const TypedIdx ref);
 
-	void append_to_string(const Store& store, const TypedIdx ref, std::string& str, const int parent_precedence = -1);
+		//evaluates tree if possible, throws if variables of unknown value /generic_functions are present
+		[[nodiscard]] Complex eval(const Store& store, const TypedIdx ref);
 
-	//prettier, but also slower
-	void pretty_append_to_string(const Store& store, const TypedIdx ref, std::string& str, const int parent_precedence = -1);
+		//flatten sums holding als summands and products holding products as factors
+		void combine_layers(Store& store, const TypedIdx ref);
 
-	void to_memory_layout(const Store& store, const TypedIdx ref, std::vector<std::string>& content);
+		//if a subtree can be fully evaluated, it will be, even if the result can not be stored exactly in 
+		//floating point/ the computation is unexact
+		//the evaluated subtree also deletes itself, meaning the caller needs to reinsert the value,
+		//  if a value was returned
+		[[nodiscard]] std::optional<Complex> combine_values_unexact(Store& store, const TypedIdx ref);
 
-	//flatten sums holding als summands and products holding products as factors
-	void flatten_variadic(Store& store, const TypedIdx ref);
+		//compares two subterms in same term, assumes both to have their variadic parts sorted
+		[[nodiscard]] std::strong_ordering compare(const Store& store, const TypedIdx ref_1, const TypedIdx ref_2);
 
-	//if a subtree can be fully evaluated, it will be, even if the result can not be stored exactly in 
-	//floating point/ the computation is unexact
-	//the evaluated subtree also deletes itself, meaning the caller needs to reinsert the value,
-	//  if a value was returned
-	[[nodiscard]] std::optional<Complex> combine_values_unexact(Store& store, const TypedIdx ref);
+		//sorts variadic parts by compare
+		void sort(Store& store, const TypedIdx ref);
 
-	//compares two subterms in same term, assumes both to have their variadic parts sorted
-	std::strong_ordering compare(const Store& store, const TypedIdx ref_1, const TypedIdx ref_2);
-
-	//sorts variadic parts by compare
-	void sort(Store& store, const TypedIdx ref);
+	} //namespace tree
 
 }	//namespace bmath::intern::arithmetic
 
@@ -298,7 +297,7 @@ namespace bmath {
 		ArithmeticTerm(std::string name);
 		ArithmeticTerm() = default;
 
-		void flatten_variadic() noexcept;
+		void combine_layers() noexcept;
 		void combine_values_unexact() noexcept;
 		void sort() noexcept;
 

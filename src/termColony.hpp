@@ -265,6 +265,17 @@ namespace bmath::intern {
 			}
 		} //sort
 
+		//O(n) operation, use with care.
+		template<typename TermUnion_T>
+		static std::size_t slow_size(const TermStore<TermUnion_T>& store, const Index_T slc_idx)
+		{
+			std::size_t result = 0;
+			for (const auto _ : Range<const TermStore<TermUnion_T>>(store, slc_idx)) {
+				result++;
+			}
+			return result;
+		} //slow_size
+
 	};	//struct TermSLC 	
 
 
