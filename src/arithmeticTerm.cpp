@@ -141,30 +141,26 @@ namespace bmath::intern::arithmetic {
 		{
 			const auto [index, type] = ref.split();
 			switch (type) {
-			case Type::sum:
-			{
+			case Type::sum: {
 				for (const auto summand : vdc::range(store, index)) {
 					free(store, summand);
 				}
 				Sum::free_slc(store, index);
 			} break;
-			case Type::product:
-			{
+			case Type::product: {
 				for (const auto factor : vdc::range(store, index)) {
 					free(store, factor);
 				}
 				Product::free_slc(store, index);
 			} break;
-			case Type::known_function:
-			{
+			case Type::known_function: {
 				const KnownFunction& known_function = store.at(index).known_function;
 				for (const auto param : fn::range(known_function)) {
 					free(store, param);
 				}
 				store.free(index);
 			} break;
-			case Type::generic_function:
-			{
+			case Type::generic_function: {
 				const GenericFunction& generic_function = store.at(index).generic_function;
 				for (const auto param : fn::range(store, generic_function)) {
 					free(store, param);
@@ -175,12 +171,10 @@ namespace bmath::intern::arithmetic {
 				}
 				store.free(index);
 			} break;
-			case Type::variable:
-			{
+			case Type::variable: {
 				TermString128::free_slc(store, index);
 			} break;
-			case Type::complex:
-			{
+			case Type::complex: {
 				store.free(index);
 			} break;
 			default: assert(false); //if this assert hits, the switch above needs more cases.
@@ -191,24 +185,21 @@ namespace bmath::intern::arithmetic {
 		{
 			const auto [index, type] = ref.split();
 			switch (type) {
-			case Type::sum:
-			{
+			case Type::sum: {
 				Complex value = 0.0;
 				for (const auto summand : vdc::range(store, index)) {
 					value += eval(store, summand);
 				}
 				return value;
 			} break;
-			case Type::product:
-			{
+			case Type::product: {
 				Complex value = 1.0;
 				for (const auto factor : vdc::range(store, index)) {
 					value *= eval(store, factor);
 				}
 				return value;
 			} break;
-			case Type::known_function:
-			{
+			case Type::known_function: {
 				const KnownFunction& known_function = store.at(index).known_function;
 				std::array<Complex, 3> results_values;
 				for (std::size_t i = 0; i < fn::param_count(known_function.type); i++) {
@@ -216,16 +207,14 @@ namespace bmath::intern::arithmetic {
 				}
 				return fn::eval(known_function.type, results_values);
 			} break;
-			case Type::generic_function:
-			{
+			case Type::generic_function: {
 				throw std::exception("eval found generic_function in term");
 			} break;
 			case Type::variable:
 			{
 				throw std::exception("eval found variable in term");
 			} break;
-			case Type::complex:
-			{
+			case Type::complex: {
 				return store.at(index).complex;
 			} break;
 			default:
@@ -240,8 +229,7 @@ namespace bmath::intern::arithmetic {
 			switch (type) {
 			case Type::sum:
 				[[fallthrough]];
-			case Type::product:
-			{
+			case Type::product: {
 				std::size_t current_append_node = index;
 				for (auto& elem : vdc::range(store, index)) {
 					const auto [elem_idx, elem_type] = elem.split();
@@ -254,15 +242,13 @@ namespace bmath::intern::arithmetic {
 					}
 				}
 			} break;
-			case Type::known_function:
-			{
+			case Type::known_function: {
 				const KnownFunction& known_function = store.at(index).known_function;
 				for (const auto param : fn::range(known_function)) {
 					combine_layers(store, param);
 				}
 			} break;
-			case Type::generic_function:
-			{
+			case Type::generic_function: {
 				const GenericFunction& generic_function = store.at(index).generic_function;
 				for (const auto param : fn::range(store, generic_function)) {
 					combine_layers(store, param);
@@ -280,8 +266,7 @@ namespace bmath::intern::arithmetic {
 		{
 			const auto [index, type] = ref.split();
 			switch (type) {
-			case Type::sum:
-			{
+			case Type::sum: {
 				Complex result_val = 0.0;
 				bool only_values = true;
 				for (auto& summand : vdc::range(store, index)) {
@@ -303,8 +288,7 @@ namespace bmath::intern::arithmetic {
 				}
 				return {};
 			} break;
-			case Type::product:
-			{
+			case Type::product: {
 				Complex result_val = 1.0;
 				bool only_values = true;
 				for (auto& factor : vdc::range(store, index)) {
@@ -326,8 +310,7 @@ namespace bmath::intern::arithmetic {
 				}
 				return {};
 			} break;
-			case Type::known_function:
-			{
+			case Type::known_function: {
 				KnownFunction& known_function = store.at(index).known_function;
 				std::array<Complex, 3> results_values;
 				std::bitset<3> results_computable = 0;
@@ -351,8 +334,7 @@ namespace bmath::intern::arithmetic {
 					return {};
 				}
 			} break;
-			case Type::generic_function:
-			{
+			case Type::generic_function: {
 				GenericFunction& function = store.at(index).generic_function;
 				for (auto& elem : fn::range(store, function)) {
 					if (const auto param_res = combine_values_unexact(store, elem)) {
@@ -361,12 +343,10 @@ namespace bmath::intern::arithmetic {
 				}
 				return {};
 			} break;
-			case Type::variable:
-			{
+			case Type::variable: {
 				return {};
 			} break;
-			case Type::complex:
-			{
+			case Type::complex: {
 				const Complex value = store.at(index).complex;
 				store.free(index);
 				return { value };
@@ -388,8 +368,7 @@ namespace bmath::intern::arithmetic {
 			switch (type_1) {
 			case Type::sum:
 				[[fallthrough]];
-			case Type::product:
-			{
+			case Type::product: {
 				auto range_1 = vdc::range(store, index_1);
 				auto range_2 = vdc::range(store, index_2);
 				auto iter_1 = range_1.begin();
@@ -409,8 +388,7 @@ namespace bmath::intern::arithmetic {
 						std::strong_ordering::greater;
 				}
 			} break;
-			case Type::known_function:
-			{
+			case Type::known_function: {
 				const KnownFunction& fn_1 = store.at(index_1).known_function;
 				const KnownFunction& fn_2 = store.at(index_2).known_function;
 				if (fn_1.type != fn_2.type) {
@@ -428,8 +406,7 @@ namespace bmath::intern::arithmetic {
 				}
 				return std::strong_ordering::equal;
 			} break;
-			case Type::generic_function:
-			{
+			case Type::generic_function: {
 				const GenericFunction& fn_1 = store.at(index_1).generic_function;
 				const GenericFunction& fn_2 = store.at(index_2).generic_function;
 				const auto name_cmp = fn::compare_name(store, fn_2, fn_1); //reverse order, as to_pretty_string is reversed again
@@ -455,12 +432,10 @@ namespace bmath::intern::arithmetic {
 						std::strong_ordering::greater;
 				}
 			} break;
-			case Type::variable:
-			{
+			case Type::variable: {
 				return string_compare(store, store, index_2, index_1); //reverse order, as to_pretty_string is reversed again
 			} break;
-			case Type::complex:
-			{
+			case Type::complex: {
 				const Complex& complex_1 = store.at(index_1).complex;
 				const Complex& complex_2 = store.at(index_2).complex;
 				static_assert(sizeof(double) * 8 == 64, "bit_cast may cast to something of doubles size.");
@@ -489,8 +464,7 @@ namespace bmath::intern::arithmetic {
 			switch (type) {
 			case Type::sum:
 				[[fallthrough]];
-			case Type::product:
-			{
+			case Type::product: {
 				for (const auto elem : vdc::range(store, index)) {
 					sort(store, elem);
 				}
@@ -499,15 +473,13 @@ namespace bmath::intern::arithmetic {
 						return compare(store, lhs, rhs) == std::strong_ordering::less;
 					});
 			} break;
-			case Type::known_function:
-			{
+			case Type::known_function: {
 				const KnownFunction& known_function = store.at(index).known_function;
 				for (const auto param : fn::range(known_function)) {
 					sort(store, param);
 				}
 			} break;
-			case Type::generic_function:
-			{
+			case Type::generic_function: {
 				const GenericFunction& generic_function = store.at(index).generic_function;
 				for (const auto param : fn::range(store, generic_function)) {
 					sort(store, param);

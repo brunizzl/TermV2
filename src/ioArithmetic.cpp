@@ -332,8 +332,7 @@ namespace bmath::intern::arithmetic {
 			}
 
 			switch (type) {
-			case Type::sum:
-			{
+			case Type::sum: {
 				bool first = true;
 				for (const auto summand : vdc::range(store, index)) {
 					if (!std::exchange(first, false)) {
@@ -342,8 +341,7 @@ namespace bmath::intern::arithmetic {
 					append_to_string(store, summand, str, own_infixr);
 				}
 			} break;
-			case Type::product:
-			{
+			case Type::product: {
 				bool first = true;
 				for (const auto factor : vdc::range(store, index)) {
 					if (!std::exchange(first, false)) {
@@ -352,8 +350,7 @@ namespace bmath::intern::arithmetic {
 					append_to_string(store, factor, str, own_infixr);
 				}
 			} break;
-			case Type::known_function:
-			{
+			case Type::known_function: {
 				const KnownFunction& known_function = store.at(index).known_function;
 				str.pop_back(); //pop open paren
 				str.append(fn::name_of(known_function.type));
@@ -366,8 +363,7 @@ namespace bmath::intern::arithmetic {
 					append_to_string(store, param, str, own_infixr);
 				}
 			} break;
-			case Type::generic_function:
-			{
+			case Type::generic_function: {
 				const GenericFunction& generic_function = store.at(index).generic_function;
 				str.pop_back(); //pop open paren
 				fn::append_name(store, generic_function, str);
@@ -380,13 +376,11 @@ namespace bmath::intern::arithmetic {
 					append_to_string(store, param, str, own_infixr);
 				}
 			} break;
-			case Type::variable:
-			{
+			case Type::variable: {
 				const Variable& variable = store.at(index).variable;
 				read(store, index, str);
 			} break;
-			case Type::complex:
-			{
+			case Type::complex: {
 				const Complex& complex = store.at(index).complex;
 				append_complex(complex, str, parent_infixr);
 			} break;
@@ -414,8 +408,7 @@ namespace bmath::intern::arithmetic {
 			std::string str;
 
 			switch (type) {
-			case Type::sum:
-			{
+			case Type::sum: {
 				bool first = true;
 				for (const auto summand : reverse_elems(vdc::range(store, index))) {
 					if (const auto product = get_negative_product(store, summand)) {
@@ -437,8 +430,7 @@ namespace bmath::intern::arithmetic {
 					first = false;
 				}
 			} break;
-			case Type::product:
-			{
+			case Type::product: {
 				bool first = true;
 				for (const auto elem : reverse_elems(vdc::range(store, index))) {
 					if (auto val = get_negative_real(store, elem)) {
@@ -460,8 +452,7 @@ namespace bmath::intern::arithmetic {
 					first = false;
 				}
 			} break;
-			case Type::known_function:
-			{
+			case Type::known_function: {
 				const KnownFunction& function = store.at(index).known_function;
 				if (function.type == FnType::pow) {
 					need_parentheses = infixr(Type::_pow) <= parent_infixr;
@@ -483,8 +474,7 @@ namespace bmath::intern::arithmetic {
 					str.push_back(')');
 				}
 			} break;
-			case Type::generic_function:
-			{
+			case Type::generic_function: {
 				need_parentheses = false;
 				const GenericFunction& generic_function = store.at(index).generic_function;
 				fn::append_name(store, generic_function, str);
@@ -498,13 +488,11 @@ namespace bmath::intern::arithmetic {
 				}
 				str.push_back(')');
 			} break;
-			case Type::variable:
-			{
+			case Type::variable: {
 				const Variable& variable = store.at(index).variable;
 				read(store, index, str);
 			} break;
-			case Type::complex:
-			{
+			case Type::complex: {
 				const Complex& complex = store.at(index).complex;
 				append_complex(complex, str, parent_infixr);
 			} break;
@@ -549,8 +537,7 @@ namespace bmath::intern::arithmetic {
 
 			std::string& current_str = content[index];
 			switch (type) {
-			case Type::sum:
-			{
+			case Type::sum: {
 				current_str.append("sum      : {");
 				bool first = true;
 				for (const auto elem : vdc::range(store, index)) {
@@ -563,8 +550,7 @@ namespace bmath::intern::arithmetic {
 				current_str.push_back('}');
 				show_typedidx_col_nodes(index, false);
 			} break;
-			case Type::product:
-			{
+			case Type::product: {
 				current_str.append("product  : {");
 				bool first = true;
 				for (const auto elem : vdc::range(store, index)) {
@@ -577,8 +563,7 @@ namespace bmath::intern::arithmetic {
 				current_str.push_back('}');
 				show_typedidx_col_nodes(index, false);
 			} break;
-			case Type::known_function:
-			{
+			case Type::known_function: {
 				const KnownFunction& known_function = store.at(index).known_function;
 				current_str.append("function : {");
 				bool first = true;
@@ -591,8 +576,7 @@ namespace bmath::intern::arithmetic {
 				}
 				current_str.push_back('}');
 			} break;
-			case Type::generic_function:
-			{
+			case Type::generic_function: {
 				const GenericFunction& generic_function = store.at(index).generic_function;
 				current_str.append("function?: {");
 				bool first = true;
@@ -609,13 +593,11 @@ namespace bmath::intern::arithmetic {
 					show_string_nodes(generic_function.long_name_idx, true);
 				}
 			} break;
-			case Type::variable:
-			{
+			case Type::variable: {
 				current_str.append("variable : ");
 				show_string_nodes(index, false);
 			} break;
-			case Type::complex:
-			{
+			case Type::complex: {
 				const Complex& complex = store.at(index).complex;
 				current_str.append("value    : ");
 			} break;
