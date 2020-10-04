@@ -138,9 +138,9 @@ namespace bmath::intern {
 		constexpr const Value_T* data() const noexcept { return this->data_; }
 		constexpr Value_T* data() noexcept { return this->data_; }
 
-		ShortVector() = default;
+		constexpr ShortVector() = default;
 
-		ShortVector(std::initializer_list<Value_T> init) :size_(init.size())
+		constexpr ShortVector(std::initializer_list<Value_T> init) :size_(init.size())
 		{
 			static_assert(std::is_trivially_copyable_v<Value_T>);
 			assert(init.size() <= MaxSize && "initializer length exeeds static limit");
@@ -206,5 +206,43 @@ namespace bmath::intern {
 		}
 		return str << " }";
 	}
+
+	namespace enum_impl {
+		enum class PH1 { COUNT }; //PH short for Placeholder
+		enum class PH2 { COUNT }; //PH short for Placeholder
+	}
+
+	template<typename E1, E1 count_1, typename E2, E2 count_2 = E2::COUNT,
+		typename E3 = enum_impl::PH1, E3 count_3 = E3::COUNT, 
+		typename E4 = enum_impl::PH2, E4 count_4 = E4::COUNT>
+	class CombinedEnum
+	{
+		template<typename E>
+		static constexpr unsigned u(E e) { return static_cast<unsigned>(e); }
+
+		static constexpr unsigned offset_1 = 0u;
+		static constexpr unsigned offset_2 = offset_1 + u(count_1) + 1u;
+		static constexpr unsigned offset_3 = offset_2 + u(count_2) + 1u;
+		static constexpr unsigned offset_4 = offset_3 + u(count_3) + 1u;
+	public:
+
+		enum class Val :unsigned {} val;
+
+		constexpr operator Val() const { return this->val; }
+		constexpr bool operator==(const CombinedEnum&) const = default;
+
+		constexpr CombinedEnum(E1 e) :val(static_cast<Val>(offset_1 + u(e))) {}
+		constexpr CombinedEnum(E2 e) :val(static_cast<Val>(offset_2 + u(e))) {}
+		constexpr CombinedEnum(E3 e) :val(static_cast<Val>(offset_3 + u(e))) {}
+		constexpr CombinedEnum(E4 e) :val(static_cast<Val>(offset_4 + u(e))) {}
+
+		explicit constexpr operator unsigned() const { return u(this->val); }
+		explicit constexpr operator E1() const { return static_cast<E1>(u(this->val) - offset_1); }
+		explicit constexpr operator E2() const { return static_cast<E2>(u(this->val) - offset_2); }
+		explicit constexpr operator E3() const { return static_cast<E3>(u(this->val) - offset_3); }
+		explicit constexpr operator E4() const { return static_cast<E4>(u(this->val) - offset_4); }
+
+		static constexpr Val COUNT = static_cast<Val>(offset_4 + u(count_4) + 1u);
+	};
 
 } //namespace bmath::intern

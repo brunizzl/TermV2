@@ -19,7 +19,7 @@ namespace bmath::intern {
 	template<typename TypesEnum, TypesEnum MaxEnumValue, typename UnderlyingType = std::uint32_t>
 	class [[nodiscard]] BasicTypedIdx
 	{
-		static_assert(std::is_enum_v<TypesEnum>);
+		//static_assert(std::is_enum_v<TypesEnum>);
 		static_assert(std::is_unsigned_v<UnderlyingType>);
 
 		static constexpr UnderlyingType nr_enum_bits()
@@ -36,8 +36,8 @@ namespace bmath::intern {
 			UnderlyingType data;
 			struct
 			{
-				TypesEnum type : nr_enum_bits();
-				UnderlyingType index : sizeof(UnderlyingType) * 8 - nr_enum_bits();
+				unsigned long type : nr_enum_bits();
+				unsigned long index : sizeof(UnderlyingType) * 8 - nr_enum_bits();
 			};
 		};
 

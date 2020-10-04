@@ -1,6 +1,7 @@
 #include <iostream>
 #include <charconv>
 #include <cassert>
+#include <numeric>
 
 #include "termStore.hpp"
 #include "termColony.hpp"
@@ -11,57 +12,6 @@
 using namespace bmath::intern::arithmetic;
 using namespace bmath::intern;
 using namespace bmath;
-
-enum class PrimaryColor { red, green, blue, COUNT };
-
-struct Color
-{
-	enum class Name { yellow = static_cast<unsigned>(PrimaryColor::COUNT) + 1u, magenta, cyan } val;
-	constexpr Color(PrimaryColor name) :val(static_cast<Name>(name)) {}
-	constexpr Color(Name name) : val(name) {}
-	constexpr operator Name() const { return this->val; } //implizite convertierung nach Name
-	constexpr bool operator==(const Color&) const = default; 
-	constexpr bool operator==(PrimaryColor c) const { return static_cast<Name>(c) == this->val; }
-};
-
-static_assert(Color(PrimaryColor::red) == Color(PrimaryColor::red));
-static_assert(Color(PrimaryColor::red) != Color(PrimaryColor::blue));
-static_assert(Color(PrimaryColor::red) == PrimaryColor::red);
-static_assert(Color(PrimaryColor::red) != PrimaryColor::blue);
-
-void function1(PrimaryColor c) {
-	switch (c) {
-	case PrimaryColor::red:	   //nur diese drei sind erlaubt
-	case PrimaryColor::green:  //nur diese drei sind erlaubt
-	case PrimaryColor::blue:   //nur diese drei sind erlaubt
-	//case 3u: <-(error: enum class muss explizit convertiert werden)
-	//case Color::Name::cyan: <-(error enum class muss explizit convertiert werden)
-		break;
-	}
-}
-
-void function2(Color c) {
-	switch (c) {
-	case Color::Name::yellow:		  //alle 6 (wenn auch mit hässlicher syntax) sind erlaubt
-	case Color::Name::magenta:		  //alle 6 (wenn auch mit hässlicher syntax) sind erlaubt
-	case Color::Name::cyan:			  //alle 6 (wenn auch mit hässlicher syntax) sind erlaubt
-	case Color(PrimaryColor::red):	  //alle 6 (wenn auch mit hässlicher syntax) sind erlaubt
-	case Color(PrimaryColor::green):  //alle 6 (wenn auch mit hässlicher syntax) sind erlaubt
-	case Color(PrimaryColor::blue):	  //alle 6 (wenn auch mit hässlicher syntax) sind erlaubt
-	//case 3u: <-(error: enum class muss explizit convertiert werden)
-		break;
-	}
-}
-
-int main_() {
-	function1(PrimaryColor::red);
-	//function1(Color::Name::cyan); <-(error: kann nicht von Klasse Color zu enum PrimaryColor konvertieren)
-	//function1(3u); <-(error: kann nicht implizit von unsigned nach PrimaryColor convertieren)
-	function2(PrimaryColor::red);
-	function2(Color::Name::cyan);
-	//function2(3u); <-(error: kann nicht implizit von unsigned nach Color convertieren)
-	return 0;
-}
 
 int main()
 {

@@ -12,11 +12,10 @@
 
 namespace bmath::intern::arithmetic {
 
-	enum class Type {
+	enum class Type :unsigned {
 		sum,
 		product,
 		known_function,
-		_pow, //may only appear in print context, as type pow is instance of known_function
 		generic_function,
 		variable,
 		complex,
@@ -54,7 +53,6 @@ namespace bmath::intern::arithmetic {
 		sqrt,	//params[0] := argument
 		pow,    //params[0] := base      params[1] := expo    
 		log,	//params[0] := base      params[1] := argument
-		_logn, //same as log, this enum may only occur during parsing
 		exp,	//params[0] := argument
 		sin,	//params[0] := argument
 		cos,	//params[0] := argument
@@ -209,9 +207,11 @@ namespace bmath::intern::arithmetic {
 		std::strong_ordering compare_name(const Store& store,
 			const GenericFunction& func_1, const GenericFunction& func_2);
 
+		enum class SpecialParseSyntax { logn, COUNT }; //special case to allow any log to a natural base to parsed a bit nicer
+		using ParseFnType = CombinedEnum<FnType, FnType::UNKNOWN, SpecialParseSyntax, SpecialParseSyntax::COUNT>;
 		//only expects actual name part of function, e.g. "asin", NOT "asin(...)"
-		//if name is one of FnType, that is returned, else FnType::UNKNOWN
-		FnType type_of(const ParseView input) noexcept;
+		//if name is one of ParseFnType, that is returned, else FnType::UNKNOWN
+		ParseFnType type_of(const ParseView input) noexcept;
 
 		inline std::span<TypedIdx> range(KnownFunction& func) noexcept
 		{ return { func.params, param_count(func.type) }; }

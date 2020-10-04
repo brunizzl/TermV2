@@ -146,7 +146,7 @@ namespace bmath::intern::arithmetic {
 
 	TypedIdx build_function(Store& store, ParseView input, const std::size_t open_par)
 	{
-		const FnType type = fn::type_of(input.substr(0, open_par));
+		const auto type = fn::type_of(input.substr(0, open_par));
 		if (type == FnType::UNKNOWN) { //build generic function
 			GenericFunction result;
 			{//writing name in result
@@ -185,7 +185,7 @@ namespace bmath::intern::arithmetic {
 			return TypedIdx(store.insert(result), Type::generic_function);
 		}
 		//known function, but with extra syntax (as "logn(...)" is allowed, where n is any natural number)
-		else if (type == FnType::_logn) { 
+		else if (type == fn::SpecialParseSyntax::logn) { 
 			double base_val;
 			const auto [ptr, error] = std::from_chars(input.chars + std::strlen("log"), input.chars + open_par, base_val);
 			throw_if<ParseFailure>(error == std::errc::invalid_argument, input.offset + std::strlen("log"), ParseFailure::What::illformed_val);
@@ -197,7 +197,7 @@ namespace bmath::intern::arithmetic {
 			return TypedIdx(store.insert(KnownFunction{ FnType::log, base, expo, TypedIdx() }), Type::known_function);
 		}
 		else { //generic known function
-			KnownFunction result{ type, TypedIdx(), TypedIdx(), TypedIdx() };
+			KnownFunction result{ FnType(type), TypedIdx(), TypedIdx(), TypedIdx() };
 			input.remove_suffix(1u);
 			input.remove_prefix(open_par + 1u);	//only arguments are left
 			std::size_t comma = find_first_of_skip_pars(input.tokens, ',');
@@ -455,10 +455,10 @@ namespace bmath::intern::arithmetic {
 			case Type::known_function: {
 				const KnownFunction& function = store.at(index).known_function;
 				if (function.type == FnType::pow) {
-					need_parentheses = infixr(Type::_pow) <= parent_infixr;
-					str += to_pretty_string(store, function.params[0], infixr(Type::_pow));
+					need_parentheses = infixr(PrintExtras::pow) <= parent_infixr;
+					str += to_pretty_string(store, function.params[0], infixr(PrintExtras::pow));
 					str.push_back('^');
-					str += to_pretty_string(store, function.params[1], infixr(Type::_pow));
+					str += to_pretty_string(store, function.params[1], infixr(PrintExtras::pow));
 				}
 				else {
 					need_parentheses = false;

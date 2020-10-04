@@ -54,17 +54,20 @@ namespace bmath::intern::arithmetic {
 
 	namespace print {
 
+		enum class PrintExtras { pow, COUNT };
+		using PrintType = CombinedEnum<Type, Type::COUNT, PrintExtras, PrintExtras::COUNT>;
+
 		//operator precedence (used to decide if parentheses are nessecary in out string)
-		constexpr auto infixr_table = std::to_array<std::pair<Type, int>>({
+		constexpr auto infixr_table = std::to_array<std::pair<PrintType, int>>({
 			{ Type::known_function,   0 },
 			{ Type::generic_function, 0 },
 			{ Type::sum,      	      2	},
 			{ Type::product,          4 },
-			{ Type::_pow,             5 },
+			{ PrintExtras::pow,       5 },
 			{ Type::variable,         6 },
 			{ Type::complex,          6 },//may be printed as sum/product itself, then (maybe) has to add parentheses on its own
 		});
-		constexpr int infixr(Type type) { return find(infixr_table, type); }
+		constexpr int infixr(PrintType type) { return find(infixr_table, type); }
 
 		void append_complex(const std::complex<double> val, std::string& dest, int parent_operator_precedence);
 

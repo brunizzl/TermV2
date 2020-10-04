@@ -121,14 +121,14 @@ namespace bmath::intern::arithmetic {
 
 		  //only expects actual name part of function, e.g. "asin", NOT "asin(...)"
 		  //if name is one of FnType, that is returned, else FnType::UNKNOWN
-		FnType type_of(const ParseView input) noexcept
+		ParseFnType type_of(const ParseView input) noexcept
 		{
 			const auto name = input.to_string_view();
 			//special syntax allowed for log, to also accept "logn()" for any natural n
 			if (name.starts_with("log") && 
 				name.find_first_not_of("0123456789", std::strlen("log")) == TokenView::npos) [[unlikely]] 
 			{
-				return FnType::_logn;
+				return SpecialParseSyntax::logn;
 			}
 			return search(type_table, name, FnType::UNKNOWN);
 		} //type_of

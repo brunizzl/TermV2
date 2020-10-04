@@ -136,6 +136,28 @@ namespace bmath::intern {
 			return result;
 		} //free_slots
 
+		[[nodiscard]] std::size_t count_free_slots() const noexcept
+		{
+			std::size_t result = 0;
+			for (std::size_t table_pos = 0; table_pos < this->vector.size(); table_pos += table_dist) {
+				if (this->vector[table_pos].table.all()) [[unlikely]] {	//currently optimizes for case with only one table present
+					continue;
+				}
+				else {
+					const OccupancyTable table = this->vector[table_pos].table;
+					for (std::size_t relative_pos = 1; relative_pos < table_dist; relative_pos++) {	//first bit encodes position of table -> start one later
+						if (table_pos + relative_pos == this->vector.size()) [[unlikely]] {
+							break;
+						}
+						if (!table.test(relative_pos)) {
+							result++;
+						}
+					}
+				}
+			}
+			return result;
+		} //count_free_slots
+
 	};	//class TermStore_Table
 
 
@@ -247,7 +269,21 @@ namespace bmath::intern {
 				}
 			}
 			return result;
-		}
+		} //free_slots
+
+		[[nodiscard]] std::size_t count_free_slots() const noexcept
+		{
+			std::size_t result = 0;
+			if (this->vector.size()) {
+				FreeList node = this->vector[FreeList::start_idx].free_list;
+				while (node.next != FreeList::start_idx) {
+					result++;
+					node = this->vector[node.next].free_list;
+				}
+			}
+			return result;
+		} //count_free_slots
+
 	};	//class TermStore_FreeList
 
 	template<typename TermUnion_T>
