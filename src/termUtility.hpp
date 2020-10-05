@@ -143,7 +143,7 @@ namespace bmath::intern {
 		constexpr ShortVector(std::initializer_list<Value_T> init) :size_(init.size())
 		{
 			static_assert(std::is_trivially_copyable_v<Value_T>);
-			assert(init.size() <= MaxSize && "initializer length exeeds static limit");
+			assert(init.size() <= MaxSize && "initializer length exeeds static vector limit");
 			std::copy(init.begin(), init.end(), this->data_);
 		}
 
@@ -215,7 +215,7 @@ namespace bmath::intern {
 	template<typename E1, E1 count_1, typename E2, E2 count_2 = E2::COUNT,
 		typename E3 = enum_impl::PH1, E3 count_3 = E3::COUNT, 
 		typename E4 = enum_impl::PH2, E4 count_4 = E4::COUNT>
-	class CombinedEnum
+	class SumEnum
 	{
 		template<typename E>
 		static constexpr unsigned u(E e) { return static_cast<unsigned>(e); }
@@ -229,12 +229,12 @@ namespace bmath::intern {
 		enum class Val :unsigned {} val;
 
 		constexpr operator Val() const { return this->val; }
-		constexpr bool operator==(const CombinedEnum&) const = default;
+		constexpr bool operator==(const SumEnum&) const = default;
 
-		constexpr CombinedEnum(E1 e) :val(static_cast<Val>(offset_1 + u(e))) {}
-		constexpr CombinedEnum(E2 e) :val(static_cast<Val>(offset_2 + u(e))) {}
-		constexpr CombinedEnum(E3 e) :val(static_cast<Val>(offset_3 + u(e))) {}
-		constexpr CombinedEnum(E4 e) :val(static_cast<Val>(offset_4 + u(e))) {}
+		constexpr SumEnum(E1 e) :val(static_cast<Val>(offset_1 + u(e))) {}
+		constexpr SumEnum(E2 e) :val(static_cast<Val>(offset_2 + u(e))) {}
+		constexpr SumEnum(E3 e) :val(static_cast<Val>(offset_3 + u(e))) {}
+		constexpr SumEnum(E4 e) :val(static_cast<Val>(offset_4 + u(e))) {}
 
 		explicit constexpr operator unsigned() const { return u(this->val); }
 		explicit constexpr operator E1() const { return static_cast<E1>(u(this->val) - offset_1); }
@@ -244,5 +244,8 @@ namespace bmath::intern {
 
 		static constexpr Val COUNT = static_cast<Val>(offset_4 + u(count_4) + 1u);
 	};
+
+	template<typename E1, typename E2, typename E3 = enum_impl::PH1, typename E4 = enum_impl::PH2>
+	using ImplicitSumEnum = SumEnum<E1, E1::COUNT, E2, E2::COUNT, E3, E3::COUNT, E4, E4::COUNT>;
 
 } //namespace bmath::intern

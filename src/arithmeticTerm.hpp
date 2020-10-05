@@ -208,7 +208,7 @@ namespace bmath::intern::arithmetic {
 			const GenericFunction& func_1, const GenericFunction& func_2);
 
 		enum class SpecialParseSyntax { logn, COUNT }; //special case to allow any log to a natural base to parsed a bit nicer
-		using ParseFnType = CombinedEnum<FnType, FnType::UNKNOWN, SpecialParseSyntax, SpecialParseSyntax::COUNT>;
+		using ParseFnType = SumEnum<FnType, FnType::UNKNOWN, SpecialParseSyntax, SpecialParseSyntax::COUNT>;
 		//only expects actual name part of function, e.g. "asin", NOT "asin(...)"
 		//if name is one of ParseFnType, that is returned, else FnType::UNKNOWN
 		ParseFnType type_of(const ParseView input) noexcept;
