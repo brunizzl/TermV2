@@ -13,11 +13,41 @@ using namespace bmath::intern::arithmetic;
 using namespace bmath::intern;
 using namespace bmath;
 
+
+enum class E1 { a, b, c, COUNT };
+enum class E2 { d, e, f, COUNT };
+
+using E_ = SumEnumRecursive<E1, E2>;
+
+enum class E3 { g, h, i, COUNT };
+
+static_assert(sizeof(E_) == sizeof(unsigned));
+
+void f(E_ e)
+{
+	switch (e) {
+	case E_(E1::a): std::cout << "a\n"; break;
+	case E_(E1::b):	std::cout << "b\n"; break;
+	case E_(E1::c):	std::cout << "c\n"; break;
+	case E_(E2::d):	std::cout << "d\n"; break;
+	case E_(E2::e):	std::cout << "e\n"; break;
+	case E_(E2::f):	std::cout << "f\n"; break;
+	default:
+		std::cout << "upsie!\n"; break;
+	}
+}
+
 int main()
 {
 	{
 		ShortVector<int, 10> test = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 0 };
 		std::cout << "test: " << test << "\n\n";
+		f(E1::a);
+		f(E1::b);
+		f(E1::c);
+		f(E2::d);	
+		f(E2::e);	
+		f(E2::f);	
 	}
 	{
 		std::string parentheses = "1([[0]])2(0)[(0){()(0)}]({}{}{()})3";

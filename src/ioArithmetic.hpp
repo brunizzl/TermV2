@@ -61,7 +61,7 @@ namespace bmath::intern::arithmetic {
 		constexpr auto infixr_table = std::to_array<std::pair<PrintType, int>>({
 			{ Type::known_function,   0 },
 			{ Type::generic_function, 0 },
-			{ Type::sum,      	      2	},
+			{ Type::sum,              2	},
 			{ Type::product,          4 },
 			{ PrintExtras::pow,       5 },
 			{ Type::variable,         6 },

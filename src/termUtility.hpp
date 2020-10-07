@@ -6,6 +6,7 @@
 #include <array>
 #include <vector>
 #include <span>
+#include <type_traits>
 
 namespace bmath::intern {
 
@@ -247,5 +248,43 @@ namespace bmath::intern {
 
 	template<typename E1, typename E2, typename E3 = enum_impl::PH1, typename E4 = enum_impl::PH2>
 	using ImplicitSumEnum = SumEnum<E1, E1::COUNT, E2, E2::COUNT, E3, E3::COUNT, E4, E4::COUNT>;
+
+	template<typename... Enums>
+	class SumEnumRecursive;
+
+	template<>
+	class SumEnumRecursive<>
+	{
+	protected:
+		static constexpr unsigned next_offset = 0u;
+
+	public:
+		enum class Val :unsigned {} val;
+
+		constexpr SumEnumRecursive(Val e) :val(e) {}
+
+		constexpr operator Val() const { return this->val; }
+
+		explicit constexpr operator unsigned() const { return static_cast<unsigned>(this->val); }
+	};
+
+	template<typename Enum, typename... TailEnums>
+	class SumEnumRecursive<Enum, TailEnums...> :public SumEnumRecursive<TailEnums...>
+	{
+		using Base = SumEnumRecursive<TailEnums...>;
+		static constexpr unsigned this_offset = Base::next_offset;
+
+	protected:
+		using Val = typename Base::Val;
+		static constexpr unsigned next_offset = this_offset + static_cast<unsigned>(Enum::COUNT) + 1u;
+
+	public:
+		using Base::Base;
+		constexpr SumEnumRecursive(Enum e) :Base(static_cast<Val>(this_offset + static_cast<unsigned>(e))) {}
+
+		constexpr bool operator==(const SumEnumRecursive&) const = default;
+		explicit constexpr operator Enum() const { return static_cast<Enum>(this->val); }
+		static constexpr Val COUNT = static_cast<Val>(next_offset);
+	};
 
 } //namespace bmath::intern
