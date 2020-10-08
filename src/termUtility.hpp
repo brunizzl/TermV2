@@ -208,70 +208,26 @@ namespace bmath::intern {
 		return str << " }";
 	}
 
-	namespace enum_impl {
-		enum class PH1 { COUNT }; //PH short for Placeholder
-		enum class PH2 { COUNT }; //PH short for Placeholder
-	}
-
-	template<typename E1, E1 count_1, typename E2, E2 count_2 = E2::COUNT,
-		typename E3 = enum_impl::PH1, E3 count_3 = E3::COUNT, 
-		typename E4 = enum_impl::PH2, E4 count_4 = E4::COUNT>
-	class SumEnum
-	{
-		template<typename E>
-		static constexpr unsigned u(E e) { return static_cast<unsigned>(e); }
-
-		static constexpr unsigned offset_1 = 0u;
-		static constexpr unsigned offset_2 = offset_1 + u(count_1) + 1u;
-		static constexpr unsigned offset_3 = offset_2 + u(count_2) + 1u;
-		static constexpr unsigned offset_4 = offset_3 + u(count_3) + 1u;
-	public:
-
-		enum class Val :unsigned {} val;
-
-		constexpr operator Val() const { return this->val; }
-		constexpr bool operator==(const SumEnum&) const = default;
-
-		constexpr SumEnum(E1 e) :val(static_cast<Val>(offset_1 + u(e))) {}
-		constexpr SumEnum(E2 e) :val(static_cast<Val>(offset_2 + u(e))) {}
-		constexpr SumEnum(E3 e) :val(static_cast<Val>(offset_3 + u(e))) {}
-		constexpr SumEnum(E4 e) :val(static_cast<Val>(offset_4 + u(e))) {}
-
-		explicit constexpr operator unsigned() const { return u(this->val); }
-		explicit constexpr operator E1() const { return static_cast<E1>(u(this->val) - offset_1); }
-		explicit constexpr operator E2() const { return static_cast<E2>(u(this->val) - offset_2); }
-		explicit constexpr operator E3() const { return static_cast<E3>(u(this->val) - offset_3); }
-		explicit constexpr operator E4() const { return static_cast<E4>(u(this->val) - offset_4); }
-
-		static constexpr Val COUNT = static_cast<Val>(offset_4 + u(count_4) + 1u);
-	};
-
-	template<typename E1, typename E2, typename E3 = enum_impl::PH1, typename E4 = enum_impl::PH2>
-	using ImplicitSumEnum = SumEnum<E1, E1::COUNT, E2, E2::COUNT, E3, E3::COUNT, E4, E4::COUNT>;
-
 	template<typename... Enums>
-	class SumEnumRecursive;
+	class SumEnum;
 
 	template<>
-	class SumEnumRecursive<>
+	class SumEnum<>
 	{
 	protected:
 		static constexpr unsigned next_offset = 0u;
+		enum class Val :unsigned {} val;
+		constexpr SumEnum(Val e) :val(e) {}
 
 	public:
-		enum class Val :unsigned {} val;
-
-		constexpr SumEnumRecursive(Val e) :val(e) {}
-
 		constexpr operator Val() const { return this->val; }
-
 		explicit constexpr operator unsigned() const { return static_cast<unsigned>(this->val); }
 	};
 
 	template<typename Enum, typename... TailEnums>
-	class SumEnumRecursive<Enum, TailEnums...> :public SumEnumRecursive<TailEnums...>
+	class SumEnum<Enum, TailEnums...> :public SumEnum<TailEnums...>
 	{
-		using Base = SumEnumRecursive<TailEnums...>;
+		using Base = SumEnum<TailEnums...>;
 		static constexpr unsigned this_offset = Base::next_offset;
 
 	protected:
@@ -280,9 +236,30 @@ namespace bmath::intern {
 
 	public:
 		using Base::Base;
-		constexpr SumEnumRecursive(Enum e) :Base(static_cast<Val>(this_offset + static_cast<unsigned>(e))) {}
+		constexpr SumEnum(Enum e) :Base(static_cast<Val>(this_offset + static_cast<unsigned>(e))) {}
 
-		constexpr bool operator==(const SumEnumRecursive&) const = default;
+		constexpr bool operator==(const SumEnum&) const = default;
+		explicit constexpr operator Enum() const { return static_cast<Enum>(this->val); }
+		static constexpr Val COUNT = static_cast<Val>(next_offset);
+	};
+
+	template<typename T, auto V> struct TV; //pair of Type and value (TV -> TypeValue)
+
+	template<typename Enum, auto Count, typename... TailEnums>
+	class SumEnum<TV<Enum, Count>, TailEnums...> :public SumEnum<TailEnums...>
+	{
+		using Base = SumEnum<TailEnums...>;
+		static constexpr unsigned this_offset = Base::next_offset;
+
+	protected:
+		using Val = typename Base::Val;
+		static constexpr unsigned next_offset = this_offset + static_cast<unsigned>(Count) + 1u;
+
+	public:
+		using Base::Base;
+		constexpr SumEnum(Enum e) :Base(static_cast<Val>(this_offset + static_cast<unsigned>(e))) {}
+
+		constexpr bool operator==(const SumEnum&) const = default;
 		explicit constexpr operator Enum() const { return static_cast<Enum>(this->val); }
 		static constexpr Val COUNT = static_cast<Val>(next_offset);
 	};

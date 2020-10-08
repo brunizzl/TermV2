@@ -17,21 +17,25 @@ using namespace bmath;
 enum class E1 { a, b, c, COUNT };
 enum class E2 { d, e, f, COUNT };
 
-using E_ = SumEnumRecursive<E1, E2>;
+using E = SumEnum<E1, E2>;
 
-enum class E3 { g, h, i, COUNT };
+enum class E3 { g, h, i, jens };
+enum class E4 { j, k, l, monica };
 
-static_assert(sizeof(E_) == sizeof(unsigned));
+using EE = SumEnum<E, TV<E3, E3::jens>, TV<E4, E4::monica>>;
 
-void f(E_ e)
+static_assert(sizeof(E) == sizeof(unsigned));
+static_assert(EE(E3::g) == E3::g);
+
+void f(E e)
 {
 	switch (e) {
-	case E_(E1::a): std::cout << "a\n"; break;
-	case E_(E1::b):	std::cout << "b\n"; break;
-	case E_(E1::c):	std::cout << "c\n"; break;
-	case E_(E2::d):	std::cout << "d\n"; break;
-	case E_(E2::e):	std::cout << "e\n"; break;
-	case E_(E2::f):	std::cout << "f\n"; break;
+	case E(E1::a): std::cout << "a\n"; break;
+	case E(E1::b):	std::cout << "b\n"; break;
+	case E(E1::c):	std::cout << "c\n"; break;
+	case E(E2::d):	std::cout << "d\n"; break;
+	case E(E2::e):	std::cout << "e\n"; break;
+	case E(E2::f):	std::cout << "f\n"; break;
 	default:
 		std::cout << "upsie!\n"; break;
 	}
@@ -48,6 +52,7 @@ int main()
 		f(E2::d);	
 		f(E2::e);	
 		f(E2::f);	
+		std::cout << "EE::COUNT = " << unsigned(EE::COUNT) << "\n\n";
 	}
 	{
 		std::string parentheses = "1([[0]])2(0)[(0){()(0)}]({}{}{()})3";

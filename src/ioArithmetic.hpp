@@ -55,7 +55,7 @@ namespace bmath::intern::arithmetic {
 	namespace print {
 
 		enum class PrintExtras { pow, COUNT };
-		using PrintType = ImplicitSumEnum<Type, PrintExtras>;
+		using PrintType = SumEnum<Type, PrintExtras>;
 
 		//operator precedence (used to decide if parentheses are nessecary in out string)
 		constexpr auto infixr_table = std::to_array<std::pair<PrintType, int>>({
