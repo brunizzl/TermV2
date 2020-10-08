@@ -22,7 +22,7 @@ using E = SumEnum<E1, E2>;
 enum class E3 { g, h, i, jens };
 enum class E4 { j, k, l, monica };
 
-using EE = SumEnum<E, TV<E3, E3::jens>, TV<E4, E4::monica>>;
+using EE = SumEnum<E, Pair<E3, E3::jens>, Pair<E4, E4::monica>>;
 
 static_assert(sizeof(E) == sizeof(unsigned));
 static_assert(EE(E3::g) == E3::g);
@@ -31,13 +31,12 @@ void f(E e)
 {
 	switch (e) {
 	case E(E1::a): std::cout << "a\n"; break;
-	case E(E1::b):	std::cout << "b\n"; break;
-	case E(E1::c):	std::cout << "c\n"; break;
-	case E(E2::d):	std::cout << "d\n"; break;
-	case E(E2::e):	std::cout << "e\n"; break;
-	case E(E2::f):	std::cout << "f\n"; break;
-	default:
-		std::cout << "upsie!\n"; break;
+	case E(E1::b): std::cout << "b\n"; break;
+	case E(E1::c): std::cout << "c\n"; break;
+	case E(E2::d): std::cout << "d\n"; break;
+	case E(E2::e): std::cout << "e\n"; break;
+	case E(E2::f): std::cout << "f\n"; break;
+	default: std::cout << "upsie!\n"; break;
 	}
 }
 

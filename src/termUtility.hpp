@@ -178,8 +178,8 @@ namespace bmath::intern {
 
 	}; //class ShortVector
 
-	template<typename Val>
-	std::ostream& operator<<(std::ostream& str, const std::vector<Val>& vec)
+	template<typename Value>
+	std::ostream& operator<<(std::ostream& str, const std::vector<Value>& vec)
 	{
 		const char* spacer = "{ ";
 		for (const auto& elem : vec) {
@@ -211,17 +211,20 @@ namespace bmath::intern {
 	template<typename... Enums>
 	class SumEnum;
 
+	//template<typename... Enums>
+	//using SumEnum2 = SumEnum<Enums...>;
+
 	template<>
 	class SumEnum<>
 	{
 	protected:
+		enum class Value :unsigned {} value;
 		static constexpr unsigned next_offset = 0u;
-		enum class Val :unsigned {} val;
-		constexpr SumEnum(Val e) :val(e) {}
+		constexpr SumEnum(Value e) :value(e) {}
 
 	public:
-		constexpr operator Val() const { return this->val; }
-		explicit constexpr operator unsigned() const { return static_cast<unsigned>(this->val); }
+		constexpr operator Value() const { return this->value; }
+		explicit constexpr operator unsigned() const { return static_cast<unsigned>(this->value); }
 	};
 
 	template<typename Enum, typename... TailEnums>
@@ -231,37 +234,37 @@ namespace bmath::intern {
 		static constexpr unsigned this_offset = Base::next_offset;
 
 	protected:
-		using Val = typename Base::Val;
+		using Value = typename Base::Value;
 		static constexpr unsigned next_offset = this_offset + static_cast<unsigned>(Enum::COUNT) + 1u;
 
 	public:
 		using Base::Base;
-		constexpr SumEnum(Enum e) :Base(static_cast<Val>(this_offset + static_cast<unsigned>(e))) {}
+		constexpr SumEnum(Enum e) :Base(static_cast<Value>(this_offset + static_cast<unsigned>(e))) {}
+		explicit constexpr operator Enum() const { return static_cast<Enum>(this->value); }
 
-		constexpr bool operator==(const SumEnum&) const = default;
-		explicit constexpr operator Enum() const { return static_cast<Enum>(this->val); }
-		static constexpr Val COUNT = static_cast<Val>(next_offset);
+		constexpr bool operator==(const SumEnum&) const = default;      //only relevant for outhermost instance
+		static constexpr Value COUNT = static_cast<Value>(next_offset); //only relevant for outhermost instance
 	};
 
-	template<typename T, auto V> struct TV; //pair of Type and value (TV -> TypeValue)
+	template<typename T, auto V> struct Pair; //pair of Type and Value
 
 	template<typename Enum, auto Count, typename... TailEnums>
-	class SumEnum<TV<Enum, Count>, TailEnums...> :public SumEnum<TailEnums...>
+	class SumEnum<Pair<Enum, Count>, TailEnums...> :public SumEnum<TailEnums...>
 	{
 		using Base = SumEnum<TailEnums...>;
 		static constexpr unsigned this_offset = Base::next_offset;
 
 	protected:
-		using Val = typename Base::Val;
+		using Value = typename Base::Value;
 		static constexpr unsigned next_offset = this_offset + static_cast<unsigned>(Count) + 1u;
 
 	public:
 		using Base::Base;
-		constexpr SumEnum(Enum e) :Base(static_cast<Val>(this_offset + static_cast<unsigned>(e))) {}
+		constexpr SumEnum(Enum e) :Base(static_cast<Value>(this_offset + static_cast<unsigned>(e))) {}
+		explicit constexpr operator Enum() const { return static_cast<Enum>(this->value); }
 
-		constexpr bool operator==(const SumEnum&) const = default;
-		explicit constexpr operator Enum() const { return static_cast<Enum>(this->val); }
-		static constexpr Val COUNT = static_cast<Val>(next_offset);
+		constexpr bool operator==(const SumEnum&) const = default;      //only relevant for outhermost instance   
+		static constexpr Value COUNT = static_cast<Value>(next_offset); //only relevant for outhermost instance   
 	};
 
 } //namespace bmath::intern
