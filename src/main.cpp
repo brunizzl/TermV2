@@ -9,7 +9,6 @@
 #include "parseTerm.hpp"
 #include "ioArithmetic.hpp"
 
-using namespace bmath::intern::arithmetic;
 using namespace bmath::intern;
 using namespace bmath;
 
@@ -18,14 +17,6 @@ enum class E1 { a, b, c, COUNT };
 enum class E2 { d, e, f, COUNT };
 
 using E = SumEnum<E1, E2>;
-
-enum class E3 { g, h, i, jens };
-enum class E4 { j, k, l, monica };
-
-using EE = SumEnum<E, Pair<E3, E3::jens>, Pair<E4, E4::monica>>;
-
-static_assert(sizeof(E) == sizeof(unsigned));
-static_assert(EE(E3::g) == E3::g);
 
 void f(E e)
 {
@@ -51,7 +42,7 @@ int main()
 		f(E2::d);	
 		f(E2::e);	
 		f(E2::f);	
-		std::cout << "EE::COUNT = " << unsigned(EE::COUNT) << "\n\n";
+		std::cout << "E::COUNT = " << unsigned(E::COUNT) << "\n\n";
 	}
 	{
 		std::string parentheses = "1([[0]])2(0)[(0){()(0)}]({}{}{()})3";
@@ -65,9 +56,9 @@ int main()
 	}
 	{
 		std::vector<std::string> term_names = {
-			"-(b+c)*2i-5*(a+3e*2weinachtsmannVomNordpolUnterWasserWeilKlimawandel)",
-			"loge(2)*herbert(20e-10, a 2, 6anneliese(fred, marko * 4))/5",
-			"1/5*herbert(20e-10, a 2, 6anneliese(fred, marko * 4))",
+			"-(b+c)*2*i-5*(a+3 e 2 weinachtsmannVomNordpolUnterWasserWeilKlimawandel)",
+			"loge(2)*herbert(20e-10, a 2, 6 anneliese(fred, marko * 4))/5",
+			"1/5*herbert(20e-10, a 2, 6 anneliese(fred, marko * 4))",
 			"sin(1) + 3 + sin(3) + fred + 1 + sin(7) - hans + jens + herbert + 7 + anneliese + fred + sin(3) + marco + 3 + bernd",
 			"1/5*herbert(3)",
 			"a+ln(b^2)+ln(c)+2-b^2-c*a",
@@ -90,6 +81,8 @@ int main()
 			std::cout << "-------------------------------------------------------------------------------------\n";
 
 			try {
+				std::cout << "baue aus string: \"" << term_name << "\"\n\n";
+
 				bmath::ArithmeticTerm term(term_name);
 
 				std::cout << "nach bau: \n" << term.to_string() << "\n\n";

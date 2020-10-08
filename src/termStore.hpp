@@ -12,7 +12,6 @@ namespace bmath::intern {
 	template <typename TermUnion_T>
 	class [[nodiscard]] TermStore_Table
 	{
-		static_assert(std::is_default_constructible_v<TermUnion_T>, "required for default constructor of TermStore");
 		static_assert(std::is_trivially_destructible_v<TermUnion_T>, "required to allow TermUnion_T to be used in VecElem union");
 		static_assert(std::is_trivially_copyable_v<TermUnion_T>, "dunno, feels like a sane thing.");
 

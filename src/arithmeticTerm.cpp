@@ -51,8 +51,25 @@
 	} //prototype
 */
 
-namespace bmath::intern::arithmetic {
+namespace bmath::intern {
 
+	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	/////////////////////////////////////////////////////////////////////local definitions//////////////////////////////////////////////////////////////////////////////////
+	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	//more unique (meaning harder to match) is smaller
+	constexpr auto uniqueness_table = std::to_array<std::pair<pattern::PnType, int>>({
+		{ Type::generic_function            , 00 }, //order of parameters is given -> most unique
+		{ Type::known_function              , 16 }, //order of parameters is given -> most unique
+		{ Type::product                     , 32 }, //order of operands my vary -> second most unique
+		{ Type::sum                         , 48 }, //order of operands my vary -> second most unique
+		{ Type::variable                    , 64 }, //can only match pattern variable directly -> least unique
+		{ Type::complex                     , 80 }, //can only match pattern variable directly -> least unique
+		{ pattern::PnSpecial::match_variable, 96 }, //always place at end, not really part of uniqueness, but still.
+	});
+	constexpr int uniqueness(pattern::PnType type) noexcept { return find(uniqueness_table, type); }
+
+	//utility for both KnownFunction and GenericFunction
 	namespace fn {
 
 		Complex eval(FnType type, const std::array<Complex, 3>& params)
@@ -84,15 +101,13 @@ namespace bmath::intern::arithmetic {
 			}
 		} //eval
 
-		void append_name(const Store& store, const GenericFunction& func, std::string& str)
-		{
-			if (func.name_size == GenericFunction::NameSize::small) {
-				str.append(func.short_name);
-			}
-			else {
-				read(store, func.long_name_idx, str);
-			}
-		} //append_name
+	} //namespace fn
+
+	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	/////////////////////////////////////////////////////////////////////exported in header/////////////////////////////////////////////////////////////////////////////////
+	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	namespace fn {
 
 		std::strong_ordering compare_name(const Store& store, const GenericFunction& func_1, const GenericFunction& func_2)
 		{
@@ -118,20 +133,6 @@ namespace bmath::intern::arithmetic {
 					std::strong_ordering::greater;
 			}
 		}
-
-		  //only expects actual name part of function, e.g. "asin", NOT "asin(...)"
-		  //if name is one of FnType, that is returned, else FnType::UNKNOWN
-		ParseFnType type_of(const ParseView input) noexcept
-		{
-			const auto name = input.to_string_view();
-			//special syntax allowed for log, to also accept "logn()" for any natural n
-			if (name.starts_with("log") && 
-				name.find_first_not_of("0123456789", std::strlen("log")) == TokenView::npos) [[unlikely]] 
-			{
-				return SpecialParseSyntax::logn;
-			}
-			return search(type_table, name, FnType::UNKNOWN);
-		} //type_of
 
 	} //namespace fn
 
@@ -165,7 +166,7 @@ namespace bmath::intern::arithmetic {
 				for (const auto param : fn::range(store, generic_function)) {
 					free(store, param);
 				}
-				TypedIdxColony::free_slc(store, generic_function.params_idx);
+				TypedIdxSLC::free_slc(store, generic_function.params_idx);
 				if (generic_function.name_size == GenericFunction::NameSize::longer) {
 					TermString128::free_slc(store, generic_function.long_name_idx);
 				}
@@ -234,8 +235,8 @@ namespace bmath::intern::arithmetic {
 				for (auto& elem : vdc::range(store, index)) {
 					const auto [elem_idx, elem_type] = elem.split();
 					if (elem_type == type) {
-						elem = TypedIdxColony::null_value;
-						current_append_node = TypedIdxColony::append(store, current_append_node, elem_idx);
+						elem = TypedIdxSLC::null_value;
+						current_append_node = TypedIdxSLC::append(store, current_append_node, elem_idx);
 					}
 					else {
 						combine_layers(store, elem);
@@ -468,7 +469,7 @@ namespace bmath::intern::arithmetic {
 				for (const auto elem : vdc::range(store, index)) {
 					sort(store, elem);
 				}
-				TypedIdxColony::sort(store, index,
+				TypedIdxSLC::sort(store, index,
 					[&store](const TypedIdx lhs, const TypedIdx rhs) {
 						return compare(store, lhs, rhs) == std::strong_ordering::less;
 					});
@@ -495,12 +496,30 @@ namespace bmath::intern::arithmetic {
 
 	} //namespace tree
 
-} //namespace bmath::intern::arithmetic
+
+	namespace pattern {
+
+
+
+	} //namespace pattern
+
+} //namespace bmath::intern
 
 
 namespace bmath {
 	using namespace intern;
-	using namespace intern::arithmetic;
+
+	ArithmeticTerm::ArithmeticTerm(std::string name)
+		:store(name.size() / 2)
+	{
+		auto parse_string = ParseString(std::move(name));
+		parse_string.allow_implicit_product();
+		parse_string.remove_space();
+		const std::size_t error_pos = find_first_not_arithmetic(TokenView(parse_string.tokens));
+		intern::throw_if<ParseFailure>(error_pos != TokenView::npos, error_pos, ParseFailure::What::illegal_char);
+		this->head = build(this->store, parse_string);
+		name = std::move(parse_string.name); //give content of name back to name
+	} //ArithmeticTerm
 
 	void ArithmeticTerm::combine_layers() noexcept
 	{
@@ -518,17 +537,6 @@ namespace bmath {
 	{
 		tree::sort(this->store, this->head);
 	}
-
-	ArithmeticTerm::ArithmeticTerm(std::string name)
-		:store(name.size() / 2)
-	{
-		auto parse_string = ParseString(std::move(name));
-		parse_string.allow_implicit_product();
-		parse_string.remove_space();
-		const std::size_t error_pos = find_first_not_arithmetic(TokenView(parse_string.tokens));
-		intern::throw_if<ParseFailure>(error_pos != TokenView::npos, error_pos, ParseFailure::What::illegal_char);
-		this->head = build(this->store, parse_string);
-	} //ArithmeticTerm
 
 	std::string bmath::ArithmeticTerm::show_memory_layout() const
 	{

@@ -5,14 +5,208 @@
 #include "ioArithmetic.hpp"
 #include "termUtility.hpp"
 
-namespace bmath::intern::arithmetic {
+namespace bmath::intern {
 
+	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	/////////////////////////////////////////////////////////////////////local definitions//////////////////////////////////////////////////////////////////////////////////
+	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	//utility for both KnownFunction and GenericFunction
+	namespace fn {
+
+		constexpr auto name_table = std::to_array<std::pair<FnType, std::string_view>>({
+			{ FnType::asinh, { "asinh" } },	
+			{ FnType::acosh, { "acosh" } },
+			{ FnType::atanh, { "atanh" } },	
+			{ FnType::asin , { "asin"  } },	
+			{ FnType::acos , { "acos"  } },	
+			{ FnType::atan , { "atan"  } },	
+			{ FnType::sinh , { "sinh"  } },	
+			{ FnType::cosh , { "cosh"  } },	
+			{ FnType::tanh , { "tanh"  } },	
+			{ FnType::sqrt , { "sqrt"  } },	
+			{ FnType::pow  , { "pow"   } },   
+			{ FnType::log  , { "log"   } },	
+			{ FnType::exp  , { "exp"   } },	
+			{ FnType::sin  , { "sin"   } },	
+			{ FnType::cos  , { "cos"   } },	
+			{ FnType::tan  , { "tan"   } },	
+			{ FnType::abs  , { "abs"   } },	
+			{ FnType::arg  , { "arg"   } },	
+			{ FnType::ln   , { "ln"    } },	
+			{ FnType::re   , { "re"    } },	
+			{ FnType::im   , { "im"    } },	
+		});
+		constexpr std::string_view name_of(FnType type) noexcept 
+		{ return find(name_table, type); }
+
+		constexpr auto type_table = std::to_array<std::pair<std::string_view, FnType>>({
+			{ { "asinh" }, FnType::asinh },	
+			{ { "acosh" }, FnType::acosh },
+			{ { "atanh" }, FnType::atanh },	
+			{ { "asin"  }, FnType::asin  },	
+			{ { "acos"  }, FnType::acos  },	
+			{ { "atan"  }, FnType::atan  },	
+			{ { "sinh"  }, FnType::sinh  },	
+			{ { "cosh"  }, FnType::cosh  },	
+			{ { "tanh"  }, FnType::tanh  },	
+			{ { "sqrt"  }, FnType::sqrt  },	
+			{ { "pow"   }, FnType::pow   },   
+			{ { "log"   }, FnType::log   },	
+			{ { "exp"   }, FnType::exp   },	
+			{ { "sin"   }, FnType::sin   },	
+			{ { "cos"   }, FnType::cos   },	
+			{ { "tan"   }, FnType::tan   },	
+			{ { "abs"   }, FnType::abs   },	
+			{ { "arg"   }, FnType::arg   },	
+			{ { "ln"    }, FnType::ln    },	
+			{ { "re"    }, FnType::re    },	
+			{ { "im"    }, FnType::im    },	
+		});
+		//only expects actual name part of function, e.g. "asin", NOT "asin(...)"
+		//if name is one of ParseFnType, that is returned, else FnType::UNKNOWN
+		constexpr FnType type_of(const std::string_view name) noexcept { return search(type_table, name, FnType::UNKNOWN); }
+
+		//appends only name, no parentheses or anything fancy
+		void append_name(const Store& store, const GenericFunction& func, std::string& str)
+		{
+			if (func.name_size == GenericFunction::NameSize::small) {
+				str.append(func.short_name);
+			}
+			else {
+				read(store, func.long_name_idx, str);
+			}
+		} //append_name
+
+
+	} //namespace fn
+
+	namespace vdc {
+
+		struct BasicSumTraits
+		{
+			static constexpr Type type_name = Type::sum;
+			static constexpr char operator_char = '+';
+			static constexpr char inverse_operator_char = '-';
+			static constexpr Token operator_token = token::sum;
+		};
+
+		struct SumTraits : public BasicSumTraits { using Object_T = Sum; };
+		struct PnSumTraits : public BasicSumTraits { using Object_T = pattern::PnSum; };
+
+
+
+		struct BasicProductTraits
+		{
+			static constexpr Type type_name = Type::product;
+			static constexpr char operator_char = '*';
+			static constexpr char inverse_operator_char = '/';
+			static constexpr Token operator_token = token::product;
+		};
+
+		struct ProductTraits : public BasicProductTraits { using Object_T = Product; };
+		struct PnProductTraits : public BasicProductTraits { using Object_T = pattern::PnProduct; };
+
+	} //namespace vdc
+
+	//VariadicTraits must include:
+	//unsing declaration Object_T: type to construct (e.g. Sum)
+	//<Enum type> type_name: name of operation in enum representing all types in store
+	//char operator_char: the character symbolizing the operation, e.g. '+'
+	//char inverse_operator_char: the character symbolizing the inverse operation, e.g. '-'
+	//Token operator_token: the token symbolizing both normal and inverse operation, e.g. token::sum
+
+	//BuildInverse recieves an already build term (by TypedIdx_T) and returns the inverse (by TypedIdx_T)
+	//  e.g. for sum, it should turn "a" -> "a*(-1)", for product "a" -> "a^(-1)"
+	//BuildAny can buld any type of term, this function will very likely already call build_variadic.
+	template<typename VariadicTraits, typename TypedIdx_T, typename TermStore_T,
+		typename BuildInverse, typename BuildAny>
+		TypedIdx_T build_variadic(TermStore_T& store, ParseView input, std::size_t op_idx,
+			BuildInverse build_inverse, BuildAny build_any);
+
+	TypedIdx build_function(Store& store, ParseView input, const std::size_t open_par);
+
+	namespace print {
+
+		enum class PrintExtras { pow, COUNT };
+		using PrintType = SumEnum<PrintExtras, Type>;
+
+		//operator precedence (used to decide if parentheses are nessecary in out string)
+		constexpr auto infixr_table = std::to_array<std::pair<PrintType, int>>({
+			{ Type::known_function,   0 },
+			{ Type::generic_function, 0 },
+			{ Type::sum,              2	},
+			{ Type::product,          4 },
+			{ PrintExtras::pow,       5 },
+			{ Type::variable,         6 },
+			{ Type::complex,          6 },//may be printed as sum/product itself, then (maybe) has to add parentheses on its own
+			});
+		constexpr int infixr(PrintType type) { return find(infixr_table, type); }
+
+		std::optional<double> get_negative_real (const Store& store, const TypedIdx ref) {
+			const auto [index, type] = ref.split();
+			if (type == Type::complex) {
+				const Complex& complex = store.at(index).complex;
+				if (complex.real() < 0.0 && complex.imag() == 0.0) {
+					return { complex.real() };
+				}
+			}
+			return {};
+		} //get_negative_real
+
+		  //returns base, if ref is actually <base>^(-1)
+		std::optional<TypedIdx> get_pow_neg1(const Store& store, const TypedIdx ref)
+		{
+			const auto [index, type] = ref.split();
+			if (type == Type::known_function) {
+				const KnownFunction& function = store.at(index).known_function;
+				if (function.type == FnType::pow) {
+					if (const auto expo = get_negative_real(store, function.params[1])) {
+						if (expo == -1.0) {
+							return { function.params[0] };
+						}
+					}
+				}
+			}
+			return {};
+		} //get_pow_neg1
+
+		struct GetNegativeProductResult { double negative_factor; std::vector<TypedIdx> other_factors; };
+		std::optional<GetNegativeProductResult> get_negative_product(const Store& store, const TypedIdx ref)
+		{
+			const auto [index, type] = ref.split();
+			if (type == Type::product) {
+				std::vector<TypedIdx> other_factors;
+				double negative_factor;
+				bool found_negative_factor = false;
+				for (const auto factor : vdc::range(store, index)) {
+					if (!found_negative_factor) {
+						if (const auto negative_val = get_negative_real(store, factor)) {
+							negative_factor = *negative_val;
+							found_negative_factor = true;
+							continue;
+						}
+					}
+					other_factors.push_back(factor);
+				}
+				if (found_negative_factor) {
+					return { { negative_factor, other_factors} };
+				}
+			}
+			return {};
+		} //get_negative_product
+
+	} //namespace print
+
+	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	/////////////////////////////////////////////////////////////////////exported in header/////////////////////////////////////////////////////////////////////////////////
+	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	std::size_t find_first_not_arithmetic(const TokenView view)
 	{
 		using namespace token;
 		const char allowed_tokens[] = { character, number, open_grouping, clse_grouping, 
-			unary_minus, sum, product, ',', '^', '\0' }; //'\0' only as end symbol for allowed_tokens
+			unary_minus, sum, product, ',', '^', '\0' }; //'\0' only as end symbol for allowed_tokens, not as part of aritmetic symbols
 		return view.find_first_not_of(allowed_tokens);
 	}
 
@@ -146,7 +340,7 @@ namespace bmath::intern::arithmetic {
 
 	TypedIdx build_function(Store& store, ParseView input, const std::size_t open_par)
 	{
-		const auto type = fn::type_of(input.substr(0, open_par));
+		const auto type = fn::type_of(input.to_string_view(open_par));
 		if (type == FnType::UNKNOWN) { //build generic function
 			GenericFunction result;
 			{//writing name in result
@@ -171,7 +365,7 @@ namespace bmath::intern::arithmetic {
 				const std::size_t comma = find_first_of_skip_pars(input.tokens, ',');
 				const auto param_view = input.steal_prefix(comma); //now input starts with comma
 				const TypedIdx param = build(store, param_view);
-				result.params_idx = store.insert(TypedIdxColony(param));
+				result.params_idx = store.insert(TypedIdxSLC(param));
 			}
 			std::size_t last_node_idx = result.params_idx;
 			while (input.size()) {
@@ -179,24 +373,12 @@ namespace bmath::intern::arithmetic {
 				const std::size_t comma = find_first_of_skip_pars(input.tokens, ',');
 				const auto param_view = input.steal_prefix(comma);
 				const TypedIdx param = build(store, param_view);
-				last_node_idx = TypedIdxColony::insert_new(store, last_node_idx, param);
+				last_node_idx = TypedIdxSLC::insert_new(store, last_node_idx, param);
 			}
 
 			return TypedIdx(store.insert(result), Type::generic_function);
 		}
-		//known function, but with extra syntax (as "logn(...)" is allowed, where n is any natural number)
-		else if (type == fn::SpecialParseSyntax::logn) { 
-			double base_val;
-			const auto [ptr, error] = std::from_chars(input.chars + std::strlen("log"), input.chars + open_par, base_val);
-			throw_if<ParseFailure>(error == std::errc::invalid_argument, input.offset + std::strlen("log"), ParseFailure::What::illformed_val);
-			throw_if<ParseFailure>(ptr != input.chars + open_par, input.offset + std::strlen("log"), ParseFailure::What::illformed_val);
-			const TypedIdx base = build_value(store, base_val);
-			input.remove_suffix(1u);
-			input.remove_prefix(open_par + 1u);
-			const TypedIdx expo = build(store, input);
-			return TypedIdx(store.insert(KnownFunction{ FnType::log, base, expo, TypedIdx() }), Type::known_function);
-		}
-		else { //generic known function
+		else { //build known function
 			KnownFunction result{ FnType(type), TypedIdx(), TypedIdx(), TypedIdx() };
 			input.remove_suffix(1u);
 			input.remove_prefix(open_par + 1u);	//only arguments are left
@@ -272,57 +454,6 @@ namespace bmath::intern::arithmetic {
 			dest.append(buffer.str());
 		}
 
-		std::optional<double> get_negative_real (const Store& store, const TypedIdx ref) {
-			const auto [index, type] = ref.split();
-			if (type == Type::complex) {
-				const Complex& complex = store.at(index).complex;
-				if (complex.real() < 0.0 && complex.imag() == 0.0) {
-					return { complex.real() };
-				}
-			}
-			return {};
-		} //get_negative_real
-
-		std::optional<TypedIdx> get_pow_neg1(const Store& store, const TypedIdx ref)
-		{
-			const auto [index, type] = ref.split();
-			if (type == Type::known_function) {
-				const KnownFunction& function = store.at(index).known_function;
-				if (function.type == FnType::pow) {
-					if (const auto expo = get_negative_real(store, function.params[1])) {
-						if (expo == -1.0) {
-							return { function.params[0] };
-						}
-					}
-				}
-			}
-			return {};
-		} //get_pow_neg1
-
-		std::optional<GetNegativeProductResult> get_negative_product(const Store& store, const TypedIdx ref)
-		{
-			const auto [index, type] = ref.split();
-			if (type == Type::product) {
-				std::vector<TypedIdx> other_factors;
-				double negative_factor;
-				bool found_negative_factor = false;
-				for (const auto factor : vdc::range(store, index)) {
-					if (!found_negative_factor) {
-						if (const auto negative_val = get_negative_real(store, factor)) {
-							negative_factor = *negative_val;
-							found_negative_factor = true;
-							continue;
-						}
-					}
-					other_factors.push_back(factor);
-				}
-				if (found_negative_factor) {
-					return { { negative_factor, other_factors} };
-				}
-			}
-			return {};
-		} //get_negative_product
-
 		void append_to_string(const Store& store, const TypedIdx ref, std::string& str, const int parent_infixr)
 		{
 			const auto [index, type] = ref.split();
@@ -377,7 +508,7 @@ namespace bmath::intern::arithmetic {
 				}
 			} break;
 			case Type::variable: {
-				const Variable& variable = store.at(index).variable;
+				const Variable& variable = store.at(index).string;
 				read(store, index, str);
 			} break;
 			case Type::complex: {
@@ -489,7 +620,7 @@ namespace bmath::intern::arithmetic {
 				str.push_back(')');
 			} break;
 			case Type::variable: {
-				const Variable& variable = store.at(index).variable;
+				const Variable& variable = store.at(index).string;
 				read(store, index, str);
 			} break;
 			case Type::complex: {
@@ -512,11 +643,11 @@ namespace bmath::intern::arithmetic {
 			const auto [index, type] = ref.split();
 
 			auto show_typedidx_col_nodes = [&store, &content, index](std::uint32_t idx, bool show_first) {
-				const TypedIdxColony* col = &store.at(idx).index_slc;
+				const TypedIdxSLC* col = &store.at(idx).index_slc;
 				if (show_first) {
 					content[idx].append("(SLC node part of index " + std::to_string(index) + ')');
 				}
-				while (col->next_idx != TypedIdxColony::null_index) {
+				while (col->next_idx != TypedIdxSLC::null_index) {
 					content[col->next_idx].append("(SLC node part of index " + std::to_string(index) + ')');
 					col = &store.at(col->next_idx).index_slc;
 				}
@@ -611,4 +742,4 @@ namespace bmath::intern::arithmetic {
 
 	} //namespace print
 
-} //namespace bmath::intern::arithmetic
+} //namespace bmath::intern

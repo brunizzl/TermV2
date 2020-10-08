@@ -131,6 +131,10 @@ namespace bmath::intern {
 	template<typename Value_T, std::size_t MaxSize>
 	class ShortVector
 	{
+		static_assert(std::is_trivially_copyable_v<Value_T>);     //big part of the "Stupid" in the name
+		static_assert(std::is_trivially_destructible_v<Value_T>); //big part of the "Stupid" in the name
+		static_assert(std::is_default_constructible_v<Value_T>);  //big part of the "Stupid" in the name
+
 		std::size_t size_ = 0u;
 		Value_T data_[MaxSize];
 
@@ -211,21 +215,18 @@ namespace bmath::intern {
 	template<typename... Enums>
 	class SumEnum;
 
-	//template<typename... Enums>
-	//using SumEnum2 = SumEnum<Enums...>;
-
 	template<>
 	class SumEnum<>
 	{
 	protected:
-		enum class Value :unsigned {} value;
+		enum class Value :unsigned {} value; //only data held by SumEnum
 		static constexpr unsigned next_offset = 0u;
 		constexpr SumEnum(Value e) :value(e) {}
 
 	public:
 		constexpr operator Value() const { return this->value; }
 		explicit constexpr operator unsigned() const { return static_cast<unsigned>(this->value); }
-	};
+	}; //class SumEnum
 
 	template<typename Enum, typename... TailEnums>
 	class SumEnum<Enum, TailEnums...> :public SumEnum<TailEnums...>
@@ -244,7 +245,7 @@ namespace bmath::intern {
 
 		constexpr bool operator==(const SumEnum&) const = default;      //only relevant for outhermost instance
 		static constexpr Value COUNT = static_cast<Value>(next_offset); //only relevant for outhermost instance
-	};
+	}; //class SumEnum
 
 	template<typename T, auto V> struct Pair; //pair of Type and Value
 
@@ -265,6 +266,6 @@ namespace bmath::intern {
 
 		constexpr bool operator==(const SumEnum&) const = default;      //only relevant for outhermost instance   
 		static constexpr Value COUNT = static_cast<Value>(next_offset); //only relevant for outhermost instance   
-	};
+	}; //class SumEnum
 
 } //namespace bmath::intern

@@ -46,9 +46,7 @@ namespace bmath::intern {
 
 		ParseString(std::string new_name);
 
-		//allows a number to be directly followed by a variable or function name
-		//e.g. inserts multiplication operator in between
-		//also changes spaces out to multiplication operator if appropriate
+		//changes spaces out to multiplication operator if appropriate
 		void allow_implicit_product() noexcept;
 
 		//will not remove '\n' and the like, only ' ' -> assumes standardize_whitespace already run
@@ -108,7 +106,8 @@ namespace bmath::intern {
 			return to_steal;
 		}
 
-		constexpr std::string_view to_string_view() const noexcept { return { this->chars, this->size() }; }
+		constexpr std::string_view to_string_view(const std::size_t length = std::string_view::npos) const noexcept 
+		{ return { this->chars, length > this->size() ? this->size() : length }; }
 	};
 
 	using Token = char;
@@ -137,12 +136,13 @@ namespace bmath::intern {
 	//'^' 		
 	//'!' 
 	//'?' 
+	//'\'' (used to mark string literals in pattern term)
 	//'=' representing '=', but only used as single char, not to compare
 	//'<' representing only "smaller than, not part of "<="
 	//'>' representing only "larger than, not part of ">="
-	//'|' representing '|'
-	//'&' representing '&'
-	//' ' representing ' '
+	//'|'
+	//'&'
+	//' '
 
 	constexpr bool is_literal(Token token) { return token == token::character || token == token::number; }
 

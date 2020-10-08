@@ -16,10 +16,10 @@ namespace bmath::intern {
 
 	//stores both an index and an enum value in the same variable 
 	//with the lower bits representing the enum, the upper bits representing the (shifted) index
-	template<typename TypesEnum, TypesEnum MaxEnumValue, typename UnderlyingType = std::uint32_t>
+	template<typename TypesEnum, auto MaxEnumValue = TypesEnum::COUNT, typename UnderlyingType = std::uint32_t>
 	class [[nodiscard]] BasicTypedIdx
 	{
-		//static_assert(std::is_enum_v<TypesEnum>);
+		static_assert(std::is_convertible_v<TypesEnum, decltype(MaxEnumValue)>);
 		static_assert(std::is_unsigned_v<UnderlyingType>);
 
 		static constexpr UnderlyingType nr_enum_bits()
