@@ -516,7 +516,7 @@ namespace bmath {
 		parse_string.allow_implicit_product();
 		parse_string.remove_space();
 		const std::size_t error_pos = find_first_not_arithmetic(TokenView(parse_string.tokens));
-		intern::throw_if<ParseFailure>(error_pos != TokenView::npos, error_pos, ParseFailure::What::illegal_char);
+		intern::throw_if<ParseFailure>(error_pos != TokenView::npos, error_pos, "illegal character");
 		this->head = build(this->store, parse_string);
 		name = std::move(parse_string.name); //give content of name back to name
 	} //ArithmeticTerm

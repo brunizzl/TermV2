@@ -11,14 +11,7 @@ namespace bmath {
 	struct ParseFailure
 	{
 		std::size_t where;	//index of invalid token
-		enum class What
-		{
-			illegal_char,
-			poor_grouping,
-			illegal_ops,	//short for illegal operators
-			illformed_val,
-			wrong_param_count,
-		} what;
+		const char* what;
 	}; //struct ParseFailure
 
 } //namespace bmath
@@ -42,15 +35,14 @@ namespace bmath::intern {
 	struct ParseString
 	{
 		TokenString tokens;
-		std::string name;
+		std::string& name;
 
-		ParseString(std::string new_name);
+		ParseString(std::string& new_name);
 
 		//changes spaces out to multiplication operator if appropriate
 		void allow_implicit_product() noexcept;
 
 		//will not remove '\n' and the like, only ' ' -> assumes standardize_whitespace already run
-		//caution: runs in O(n^2), but input size_ is assumed to be small enough.
 		void remove_space() noexcept;
 
 		std::size_t size() const noexcept { assert(tokens.size() == name.size()); return tokens.size(); }
@@ -117,6 +109,9 @@ namespace bmath::intern {
 	namespace token {
 		//'c' representing any character in a closer sense: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_"
 		//'c' might also represent (non-leading) digits if occuring in a name: "0123456789" (note: no '.' allowed)
+		//'c' also represents '\''. this has two meanings: 
+		//    1. if variable name starts with '\'', it has to end with '\'', then the name is quoted (may only occur in pattern?)
+		//    2. if variable -/ function name has '\'' somewhere in between or at end, it is interpreted as normal character.
 		constexpr Token character = 'c';
 		//'n' representing any char composing a number literal: "0123456789."
 		//'n' might also represent "+-e" if used to specify numbers 
@@ -127,21 +122,12 @@ namespace bmath::intern {
 		constexpr Token unary_minus = '-';
 		constexpr Token sum = 'A';     //representing '+' and '-' as binary operators
 		constexpr Token product = 'M'; //representing '*' and '/' as binary operators
-		constexpr Token smaller_equal = 's'; //may only occur in pairs to represent "<="
-		constexpr Token larger_equal = 'l';  //may only occur in pairs to represent ">="
-		constexpr Token equal = 'e';         //may only occur in pairs to represent "=="
 	}
 	//characters representing themselfs (thus not needing an alias in token namespace):
 	//',' 
-	//'^' 		
-	//'!' 
-	//'?' 
-	//'\'' (used to mark string literals in pattern term)
+	//'^'
 	//'=' representing '=', but only used as single char, not to compare
-	//'<' representing only "smaller than, not part of "<="
-	//'>' representing only "larger than, not part of ">="
 	//'|'
-	//'&'
 	//' '
 
 	constexpr bool is_literal(Token token) { return token == token::character || token == token::number; }

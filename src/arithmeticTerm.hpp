@@ -134,10 +134,12 @@ namespace bmath::intern {
 		constexpr std::size_t param_count(FnType type) noexcept 
 		{ return find(param_count_table, type); }
 
-		inline std::span<TypedIdx> range(KnownFunction& func) noexcept
+		template<typename TypedIdx_T>
+		std::span<TypedIdx_T> range(BasicKnownFunction<TypedIdx_T>& func) noexcept
 		{ return { func.params, param_count(func.type) }; }
 
-		inline std::span<const TypedIdx> range(const KnownFunction& func) noexcept
+		template<typename TypedIdx_T>
+		std::span<const TypedIdx_T> range(const BasicKnownFunction<TypedIdx_T>& func) noexcept
 		{ return { func.params, param_count(func.type) }; }
 
 		inline auto range(Store& store, GenericFunction& func) noexcept 

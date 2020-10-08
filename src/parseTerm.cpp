@@ -16,26 +16,23 @@ namespace bmath::intern {
 	/////////////////////////////////////////////////////////////////////exported in header/////////////////////////////////////////////////////////////////////////////////
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	ParseString::ParseString(std::string new_name)
+	ParseString::ParseString(std::string& new_name) :name(new_name)
 	{
-		//all groups of whitespaces are shortened /changed to only a single ' '
-		//caution: runs in O(n^2), but input size_ is assumed to be small enough.
+		//all groups of whitespaces are shortened /changed to only a single space
 		const auto standardize_whitespace = [](std::string& str) {
-			for (std::size_t prev_idx = 0; prev_idx + 1 < str.length(); prev_idx++) {
-				const std::size_t curr_idx = prev_idx + 1;
-				const char prev = str[prev_idx];
-				const char curr = str[curr_idx];
-				if (std::isspace(curr)) {
-					str[curr_idx] = ' ';
-					if (prev == ' ') {
-						str.erase(prev_idx--, 1);//erase this char -> set prev_idx one back, as string got shorter
-					}
+			std::size_t last_correct_idx = -1;
+			for (const char c : str) {
+				if (!std::isspace(c)) {
+					str[++last_correct_idx] = c; //no whitespace -> just insert it as is
+				}
+				else if (last_correct_idx != -1 && str[last_correct_idx] != ' ') {
+					str[++last_correct_idx] = ' '; //last was no whitespace -> insert single whitespace
 				}
 			}
+			str.erase(last_correct_idx + 1);
 		}; //standardize_whitespace
 
 		standardize_whitespace(new_name);
-		this->name = std::move(new_name);
 		this->tokens = tokenize(name);
 	}
 
@@ -56,14 +53,10 @@ namespace bmath::intern {
 
 	void ParseString::remove_space() noexcept
 	{
-		for (std::size_t i = 0; i < this->size(); i++) {
-			if (this->tokens[i] == ' ') {
-				assert(this->name[i] == ' ' && "name and tokens represent different data");
-				this->name.erase(i, 1);
-				this->tokens.erase(i, 1);
-				i--;
-			}
-		}
+		assert(this->tokens.size() == this->name.size());
+		this->name.erase(std::remove(this->name.begin(), this->name.end(), ' '), this->name.end());
+		this->tokens.erase(std::remove(this->tokens.begin(), this->tokens.end(), ' '), this->tokens.end());
+		assert(this->tokens.size() == this->name.size());
 	} //remove_space
 
 
@@ -80,7 +73,7 @@ namespace bmath::intern {
 			int nr_brace = 0;	//counts number of '{' minus number of '}', (may never be negative in valid string)
 			for (std::size_t i = 0u; i < name.length(); i++) {
 				const char current = name[i];
-				if (in_interval(current, 'a', 'z') || in_interval(current, 'A', 'Z') || current == '_') {
+				if (in_interval(current, 'a', 'z') || in_interval(current, 'A', 'Z') || current == '_' || current == '\'') {
 					tokenized[i] = token::character;
 					continue;
 				}
@@ -90,19 +83,13 @@ namespace bmath::intern {
 				}
 
 				switch (current) {
-				case '^': [[fallthrough]];
 				case ',': [[fallthrough]];
-				case '!': [[fallthrough]];
-				case '?': [[fallthrough]];
+				case '^': [[fallthrough]];
 				case '=': [[fallthrough]];
 				case '|': [[fallthrough]];
-				case '&': [[fallthrough]];
-				case '<': [[fallthrough]];
-				case '>': [[fallthrough]];
 				case ' ':
 					tokenized[i] = current;
 					continue;
-
 				case '+': [[fallthrough]];
 				case '-': 
 					tokenized[i] = token::sum;
@@ -111,7 +98,6 @@ namespace bmath::intern {
 				case '/': 
 					tokenized[i] = token::product;
 					continue;
-
 				case '(': 
 					nr_paren++;
 					tokenized[i] = token::open_grouping;
@@ -125,26 +111,26 @@ namespace bmath::intern {
 					tokenized[i] = token::open_grouping;
 					continue;
 				case ')': 
-					throw_if<ParseFailure>(--nr_paren < 0, i, ParseFailure::What::poor_grouping);
-					throw_if<ParseFailure>(name[find_open_par(i, TokenView(tokenized))] != '(', i, ParseFailure::What::poor_grouping);
+					throw_if<ParseFailure>(--nr_paren < 0, i, "poor grouping, expected matching open parenthesis");
+					throw_if<ParseFailure>(name[find_open_par(i, TokenView(tokenized))] != '(', i, "poor grouping, expected matching open parenthesis");
 					tokenized[i] = token::clse_grouping;
 					continue;
 				case ']':
-					throw_if<ParseFailure>(--nr_brack < 0, i, ParseFailure::What::poor_grouping);
-					throw_if<ParseFailure>(name[find_open_par(i, TokenView(tokenized))] != '[', i, ParseFailure::What::poor_grouping);
+					throw_if<ParseFailure>(--nr_brack < 0, i, "poor grouping, expected matching open bracket");
+					throw_if<ParseFailure>(name[find_open_par(i, TokenView(tokenized))] != '[', i, "poor grouping, expected matching open bracket");
 					tokenized[i] = token::clse_grouping;
 					continue;
 				case '}':
-					throw_if<ParseFailure>(--nr_brace < 0, i, ParseFailure::What::poor_grouping);
-					throw_if<ParseFailure>(name[find_open_par(i, TokenView(tokenized))] != '{', i, ParseFailure::What::poor_grouping);
+					throw_if<ParseFailure>(--nr_brace < 0, i, "poor grouping, expected matching open brace");
+					throw_if<ParseFailure>(name[find_open_par(i, TokenView(tokenized))] != '{', i, "poor grouping, expected matching open brace");
 					tokenized[i] = token::clse_grouping;
 					continue;
 				}
-				throw ParseFailure{ i, ParseFailure::What::illegal_char };	//programm only reaches here if current is not valid.
+				throw ParseFailure{ i, "unexpected character" };	//programm only reaches here if current is not valid.
 			}
-			throw_if<ParseFailure>(nr_paren != 0, name.length(), ParseFailure::What::poor_grouping);
-			throw_if<ParseFailure>(nr_brack != 0, name.length(), ParseFailure::What::poor_grouping);
-			throw_if<ParseFailure>(nr_brace != 0, name.length(), ParseFailure::What::poor_grouping);
+			throw_if<ParseFailure>(nr_paren != 0, name.length() - 1, "poor grouping, not all parenteses where closed");
+			throw_if<ParseFailure>(nr_brack != 0, name.length() - 1, "poor grouping, not all brackets where closed");
+			throw_if<ParseFailure>(nr_brace != 0, name.length() - 1, "poor grouping, not all braces where closed");
 		}
 
 		if (name.front() == '-') {
@@ -157,7 +143,7 @@ namespace bmath::intern {
 			const char prev = tokenized[prev_idx];
 			const char curr = tokenized[curr_idx];
 			throw_if<ParseFailure>((prev == token::sum || prev == token::product) && (curr == token::sum || curr == token::product),
-				curr_idx, ParseFailure::What::illegal_ops);
+				curr_idx, "illegal operator sequence");
 
 			//change token representing digits occuring in names to token::character
 			if (prev == token::character && curr == token::number) { 
@@ -179,19 +165,6 @@ namespace bmath::intern {
 			//change token::unary_minus to part of number, if it is
 			else if (prev == token::unary_minus && curr == token::number) {
 				tokenized[prev_idx] = token::number;
-			}
-			//change comparison character pairs to their representing tokens
-			else if (prev == '<' && curr == '=') {
-				tokenized[prev_idx] = token::smaller_equal;
-				tokenized[curr_idx] = token::smaller_equal;
-			}
-			else if (prev == '>' && curr == '=') {
-				tokenized[prev_idx] = token::larger_equal;
-				tokenized[curr_idx] = token::larger_equal;
-			}
-			else if (prev == '=' && curr == '=') {
-				tokenized[prev_idx] = token::equal;
-				tokenized[curr_idx] = token::equal;
 			}
 		}
 

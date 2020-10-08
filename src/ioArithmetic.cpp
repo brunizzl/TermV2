@@ -78,7 +78,6 @@ namespace bmath::intern {
 			}
 		} //append_name
 
-
 	} //namespace fn
 
 	namespace vdc {
@@ -119,12 +118,17 @@ namespace bmath::intern {
 	//BuildInverse recieves an already build term (by TypedIdx_T) and returns the inverse (by TypedIdx_T)
 	//  e.g. for sum, it should turn "a" -> "a*(-1)", for product "a" -> "a^(-1)"
 	//BuildAny can buld any type of term, this function will very likely already call build_variadic.
-	template<typename VariadicTraits, typename TypedIdx_T, typename TermStore_T,
-		typename BuildInverse, typename BuildAny>
-		TypedIdx_T build_variadic(TermStore_T& store, ParseView input, std::size_t op_idx,
-			BuildInverse build_inverse, BuildAny build_any);
+	template<typename VariadicTraits, typename TypedIdx_T, typename TermStore_T, typename BuildInverse, typename BuildAny>
+	[[nodiscard]] TypedIdx_T build_variadic(TermStore_T& store, ParseView input, std::size_t op_idx, BuildInverse build_inverse, BuildAny build_any);
 
-	TypedIdx build_function(Store& store, ParseView input, const std::size_t open_par);
+	template<typename TypedIdx_T, typename TermStore_T, typename BuildAny>
+	[[nodiscard]] TypedIdx_T build_function(TermStore_T& store, ParseView input, const std::size_t open_par, BuildAny build_any);
+
+	template<typename TypedIdx_T, typename TermStore_T>
+	[[nodiscard]] TypedIdx_T build_value(TermStore_T& store, double re, double im = 0.0)
+	{
+		return TypedIdx_T(store.insert(Complex{ std::complex<double>(re, im) }), Type::complex);
+	}
 
 	namespace print {
 
@@ -231,8 +235,8 @@ namespace bmath::intern {
 		if ((op = token_view.find_first_not_of(token::character)) == TokenView::npos) {
 			return Head{ 0, Head::Type::variable };
 		}
-		throw_if<ParseFailure>(token_view[op] != '(', op + offset, ParseFailure::What::illegal_char);
-		throw_if<ParseFailure>(!token_view.ends_with(')'), token_view.length() + offset, ParseFailure::What::poor_grouping);
+		throw_if<ParseFailure>(token_view[op] != '(', op + offset, "illegal character, expected '('");
+		throw_if<ParseFailure>(!token_view.ends_with(')'), token_view.length() + offset, "poor grouping, expected ')'");
 		if (op == 0) {
 			return Head{ 0, Head::Type::group };
 		}
@@ -241,14 +245,9 @@ namespace bmath::intern {
 		}
 	} //find_head_type
 
-	TypedIdx build_value(Store& store, double re, double im)
-	{
-		return TypedIdx(store.insert(Complex{ std::complex<double>(re, im) }), Type::complex);
-	}
-
 	TypedIdx build(Store& store, ParseView input)
 	{
-		throw_if<ParseFailure>(input.size() == 0, input.offset, ParseFailure::What::illegal_ops);
+		throw_if<ParseFailure>(input.size() == 0, input.offset, "recieved empty substring");
 		Head head = find_head_type(input.tokens, input.offset);
 		while (head.type == Head::Type::group) {
 			input.remove_prefix(1);
@@ -259,7 +258,7 @@ namespace bmath::intern {
 		case Head::Type::sum: {
 			return build_variadic<vdc::SumTraits, TypedIdx>(store, input, head.where, 
 				[](Store& store, TypedIdx to_invert) {
-					const TypedIdx minus_1 = build_value(store, -1.0);
+					const TypedIdx minus_1 = build_value<TypedIdx>(store, -1.0);
 					return TypedIdx(store.insert(Product({ minus_1, to_invert })), Type::product);
 				},
 				build);
@@ -267,13 +266,13 @@ namespace bmath::intern {
 		case Head::Type::negate: {
 			input.remove_prefix(1);  //remove minus sign
 			const TypedIdx to_negate = build(store, input);
-			const TypedIdx minus_1 = build_value(store, -1.0);
+			const TypedIdx minus_1 = build_value<TypedIdx>(store, -1.0);
 			return TypedIdx(store.insert(Product({ to_negate, minus_1 })), Type::product);
 		} break;
 		case Head::Type::product: {
 			return build_variadic<vdc::ProductTraits, TypedIdx>(store, input, head.where, 
 				[](Store& store, TypedIdx to_invert) {
-					const TypedIdx minus_1 = build_value(store, -1.0);
+					const TypedIdx minus_1 = build_value<TypedIdx>(store, -1.0);
 					return TypedIdx(store.insert(
 						KnownFunction{ FnType::pow, to_invert, minus_1, TypedIdx() }), Type::known_function);
 				},
@@ -289,16 +288,16 @@ namespace bmath::intern {
 		case Head::Type::value: {
 			double val;
 			const auto [ptr, error] = std::from_chars(input.chars, input.chars + input.size(), val);
-			throw_if<ParseFailure>(error == std::errc::invalid_argument, input.offset, ParseFailure::What::illformed_val);
-			throw_if<ParseFailure>(ptr != input.chars + input.size(), std::size_t(input.offset + ptr - input.chars + 1), ParseFailure::What::illformed_val);
-			return build_value(store, val);
+			throw_if<ParseFailure>(error == std::errc::invalid_argument, input.offset, "value syntax is illformed");
+			throw_if<ParseFailure>(ptr != input.chars + input.size(), std::size_t(input.offset + ptr - input.chars + 1), "value syntax is illformed");
+			return build_value<TypedIdx>(store, val);
 		} break;
 		case Head::Type::function: {
-			return build_function(store, input, head.where);
+			return build_function<TypedIdx>(store, input, head.where, build);
 		} break;
 		case Head::Type::variable: {
 			if (input.chars[0] == 'i' && input.size() == 1) {
-				return build_value(store, 0.0, 1.0);
+				return build_value<TypedIdx>(store, 0.0, 1.0);
 			}
 			else {
 				return TypedIdx(insert_string(store, input.to_string_view()), Type::variable);
@@ -338,8 +337,11 @@ namespace bmath::intern {
 		return TypedIdx_T(variadic_idx, VariadicTraits::type_name);
 	} //build_variadic
 
-	TypedIdx build_function(Store& store, ParseView input, const std::size_t open_par)
+	template<typename TypedIdx_T, typename TermStore_T, typename BuildAny>
+	[[nodiscard]] TypedIdx_T build_function(TermStore_T& store, ParseView input, const std::size_t open_par, BuildAny build_any)
 	{
+		using TypedIdxSLC_T = TermSLC<std::uint32_t, TypedIdx_T, 3>;
+
 		const auto type = fn::type_of(input.to_string_view(open_par));
 		if (type == FnType::UNKNOWN) { //build generic function
 			GenericFunction result;
@@ -356,44 +358,40 @@ namespace bmath::intern {
 					}
 				}
 			}
-
 			//writing parameters in result
 			input.remove_suffix(1);            //"pow(2,4)" -> "pow(2,4"
 			input.remove_prefix(open_par + 1); //"pow(2,4" ->      "2,4"
-
 			{
 				const std::size_t comma = find_first_of_skip_pars(input.tokens, ',');
 				const auto param_view = input.steal_prefix(comma); //now input starts with comma
-				const TypedIdx param = build(store, param_view);
-				result.params_idx = store.insert(TypedIdxSLC(param));
+				const TypedIdx_T param = build_any(store, param_view);
+				result.params_idx = store.insert(TypedIdxSLC_T(param));
 			}
 			std::size_t last_node_idx = result.params_idx;
 			while (input.size()) {
 				input.remove_prefix(1); //erase comma
 				const std::size_t comma = find_first_of_skip_pars(input.tokens, ',');
 				const auto param_view = input.steal_prefix(comma);
-				const TypedIdx param = build(store, param_view);
-				last_node_idx = TypedIdxSLC::insert_new(store, last_node_idx, param);
+				const TypedIdx_T param = build_any(store, param_view);
+				last_node_idx = TypedIdxSLC_T::insert_new(store, last_node_idx, param);
 			}
-
-			return TypedIdx(store.insert(result), Type::generic_function);
+			return TypedIdx_T(store.insert(result), Type::generic_function);
 		}
 		else { //build known function
-			KnownFunction result{ FnType(type), TypedIdx(), TypedIdx(), TypedIdx() };
+			BasicKnownFunction<TypedIdx_T> result{ FnType(type), TypedIdx_T(), TypedIdx_T(), TypedIdx_T() };
 			input.remove_suffix(1u);
 			input.remove_prefix(open_par + 1u);	//only arguments are left
 			std::size_t comma = find_first_of_skip_pars(input.tokens, ',');
 			auto param_view = input.steal_prefix(comma);
 			for (auto& param : fn::range(result)) {
-				throw_if<ParseFailure>(param_view.size() == 0u, input.offset, ParseFailure::What::wrong_param_count);
+				throw_if<ParseFailure>(param_view.size() == 0u, input.offset, "too few function parameters");
 				param = build(store, param_view);
 				comma = find_first_of_skip_pars(input.tokens, ',');
 				param_view = input.steal_prefix(comma);
 			}
-			throw_if<ParseFailure>(param_view.size() > 0u, input.offset, ParseFailure::What::wrong_param_count);
-			return TypedIdx(store.insert(result), Type::known_function);
+			throw_if<ParseFailure>(param_view.size() > 0u, input.offset, "too many function parameters");
+			return TypedIdx_T(store.insert(result), Type::known_function);
 		}
-			
 	} //build_function
 
 	namespace print {

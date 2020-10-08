@@ -26,13 +26,18 @@ namespace bmath::intern {
 
 	//decides what type the outhermost element has
 	//offset is used to determine error position relative to begin of whole term
-	Head find_head_type(const TokenView token_view, std::size_t offset);
-
-	//utility for build
-	TypedIdx build_value(Store& store, double re, double im = 0.0);
+	[[nodiscard]] Head find_head_type(const TokenView token_view, std::size_t offset);
 
 	//returns head
-	TypedIdx build(Store& store, ParseView view);
+	[[nodiscard]] TypedIdx build(Store& store, ParseView view);
+
+	namespace pattern {
+
+		PnTypedIdx build(PnTerm& term, ParseView view);
+
+		PnTypedIdx build_tree(PnStore& store, ParseView view);
+
+	} //namespace pattern
 
 	namespace print {
 
