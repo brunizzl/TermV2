@@ -15,53 +15,53 @@ namespace bmath::intern {
 	namespace fn {
 
 		constexpr auto name_table = std::to_array<std::pair<FnType, std::string_view>>({
-			{ FnType::asinh, { "asinh" } },	
-			{ FnType::acosh, { "acosh" } },
-			{ FnType::atanh, { "atanh" } },	
-			{ FnType::asin , { "asin"  } },	
-			{ FnType::acos , { "acos"  } },	
-			{ FnType::atan , { "atan"  } },	
-			{ FnType::sinh , { "sinh"  } },	
-			{ FnType::cosh , { "cosh"  } },	
-			{ FnType::tanh , { "tanh"  } },	
-			{ FnType::sqrt , { "sqrt"  } },	
-			{ FnType::pow  , { "pow"   } },   
-			{ FnType::log  , { "log"   } },	
-			{ FnType::exp  , { "exp"   } },	
-			{ FnType::sin  , { "sin"   } },	
-			{ FnType::cos  , { "cos"   } },	
-			{ FnType::tan  , { "tan"   } },	
-			{ FnType::abs  , { "abs"   } },	
-			{ FnType::arg  , { "arg"   } },	
-			{ FnType::ln   , { "ln"    } },	
-			{ FnType::re   , { "re"    } },	
-			{ FnType::im   , { "im"    } },	
+			{ FnType::asinh, "asinh" },	
+			{ FnType::acosh, "acosh" },
+			{ FnType::atanh, "atanh" },	
+			{ FnType::asin , "asin"  },	
+			{ FnType::acos , "acos"  },	
+			{ FnType::atan , "atan"  },	
+			{ FnType::sinh , "sinh"  },	
+			{ FnType::cosh , "cosh"  },	
+			{ FnType::tanh , "tanh"  },	
+			{ FnType::sqrt , "sqrt"  },	
+			{ FnType::pow  , "pow"   },   
+			{ FnType::log  , "log"   },	
+			{ FnType::exp  , "exp"   },	
+			{ FnType::sin  , "sin"   },	
+			{ FnType::cos  , "cos"   },	
+			{ FnType::tan  , "tan"   },	
+			{ FnType::abs  , "abs"   },	
+			{ FnType::arg  , "arg"   },	
+			{ FnType::ln   , "ln"    },	
+			{ FnType::re   , "re"    },	
+			{ FnType::im   , "im"    },	
 		});
 		constexpr std::string_view name_of(FnType type) noexcept 
 		{ return find(name_table, type); }
 
 		constexpr auto type_table = std::to_array<std::pair<std::string_view, FnType>>({
-			{ { "asinh" }, FnType::asinh },	
-			{ { "acosh" }, FnType::acosh },
-			{ { "atanh" }, FnType::atanh },	
-			{ { "asin"  }, FnType::asin  },	
-			{ { "acos"  }, FnType::acos  },	
-			{ { "atan"  }, FnType::atan  },	
-			{ { "sinh"  }, FnType::sinh  },	
-			{ { "cosh"  }, FnType::cosh  },	
-			{ { "tanh"  }, FnType::tanh  },	
-			{ { "sqrt"  }, FnType::sqrt  },	
-			{ { "pow"   }, FnType::pow   },   
-			{ { "log"   }, FnType::log   },	
-			{ { "exp"   }, FnType::exp   },	
-			{ { "sin"   }, FnType::sin   },	
-			{ { "cos"   }, FnType::cos   },	
-			{ { "tan"   }, FnType::tan   },	
-			{ { "abs"   }, FnType::abs   },	
-			{ { "arg"   }, FnType::arg   },	
-			{ { "ln"    }, FnType::ln    },	
-			{ { "re"    }, FnType::re    },	
-			{ { "im"    }, FnType::im    },	
+			{ "asinh", FnType::asinh },	
+			{ "acosh", FnType::acosh },
+			{ "atanh", FnType::atanh },	
+			{ "asin" , FnType::asin  },	
+			{ "acos" , FnType::acos  },	
+			{ "atan" , FnType::atan  },	
+			{ "sinh" , FnType::sinh  },	
+			{ "cosh" , FnType::cosh  },	
+			{ "tanh" , FnType::tanh  },	
+			{ "sqrt" , FnType::sqrt  },	
+			{ "pow"  , FnType::pow   },   
+			{ "log"  , FnType::log   },	
+			{ "exp"  , FnType::exp   },	
+			{ "sin"  , FnType::sin   },	
+			{ "cos"  , FnType::cos   },	
+			{ "tan"  , FnType::tan   },	
+			{ "abs"  , FnType::abs   },	
+			{ "arg"  , FnType::arg   },	
+			{ "ln"   , FnType::ln    },	
+			{ "re"   , FnType::re    },	
+			{ "im"   , FnType::im    },	
 		});
 		//only expects actual name part of function, e.g. "asin", NOT "asin(...)"
 		//if name is one of ParseFnType, that is returned, else FnType::UNKNOWN
@@ -76,7 +76,7 @@ namespace bmath::intern {
 			else {
 				read(store, func.long_name_idx, str);
 			}
-		} //append_name
+		} //append_name  y
 
 	} //namespace fn
 
@@ -130,6 +130,46 @@ namespace bmath::intern {
 		return TypedIdx_T(store.insert(Complex{ std::complex<double>(re, im) }), Type::complex);
 	}
 
+	namespace pattern {
+
+		constexpr auto restriction_name_table = std::to_array<std::pair<Restriction, std::string_view>>({
+			{ Restriction::sum          , "sum"           },
+			{ Restriction::product      , "product"       },
+			{ Restriction::function     , "function"      },
+			{ Restriction::variable     , "variable"      },
+			{ Restriction::complex      , "complex"       },
+			{ Restriction::natural      , "natural"       },
+			{ Restriction::integer      , "integer"       },
+			{ Restriction::real         , "real"          },
+			{ Restriction::not_minus_one, "not_minus_one" },
+			{ Restriction::negative     , "negative"      },
+			{ Restriction::not_negative , "not_negative"  },
+			{ Restriction::positive     , "positive"      },
+			{ Restriction::not_positive , "not_positive"  },
+			{ Restriction::none         , "none"          },
+		});
+		constexpr std::string_view restriction_name(const Restriction r) noexcept { return find(restriction_name_table, r); }
+
+		constexpr auto restriction_type_table = std::to_array<std::pair<std::string_view, Restriction>>({
+			{"sum"          ,  Restriction::sum           },
+			{"product"      ,  Restriction::product       },
+			{"function"     ,  Restriction::function      },
+			{"variable"     ,  Restriction::variable      },
+			{"complex"      ,  Restriction::complex       },
+			{"natural"      ,  Restriction::natural       },
+			{"integer"      ,  Restriction::integer       },
+			{"real"         ,  Restriction::real          },
+			{"not_minus_one",  Restriction::not_minus_one },
+			{"negative"     ,  Restriction::negative      },
+			{"not_negative" ,  Restriction::not_negative  },
+			{"positive"     ,  Restriction::positive      },
+			{"not_positive" ,  Restriction::not_positive  },
+			{"none"         ,  Restriction::none          },
+		});
+		constexpr Restriction restriction_type(const std::string_view sv) noexcept { return search(restriction_type_table, sv, Restriction::UNKNOWN); }
+
+	} //namespace pattern
+
 	namespace print {
 
 		enum class PrintExtras { pow, COUNT };
@@ -147,59 +187,6 @@ namespace bmath::intern {
 			});
 		constexpr int infixr(PrintType type) { return find(infixr_table, type); }
 
-		std::optional<double> get_negative_real (const Store& store, const TypedIdx ref) {
-			const auto [index, type] = ref.split();
-			if (type == Type::complex) {
-				const Complex& complex = store.at(index).complex;
-				if (complex.real() < 0.0 && complex.imag() == 0.0) {
-					return { complex.real() };
-				}
-			}
-			return {};
-		} //get_negative_real
-
-		  //returns base, if ref is actually <base>^(-1)
-		std::optional<TypedIdx> get_pow_neg1(const Store& store, const TypedIdx ref)
-		{
-			const auto [index, type] = ref.split();
-			if (type == Type::known_function) {
-				const KnownFunction& function = store.at(index).known_function;
-				if (function.type == FnType::pow) {
-					if (const auto expo = get_negative_real(store, function.params[1])) {
-						if (expo == -1.0) {
-							return { function.params[0] };
-						}
-					}
-				}
-			}
-			return {};
-		} //get_pow_neg1
-
-		struct GetNegativeProductResult { double negative_factor; std::vector<TypedIdx> other_factors; };
-		std::optional<GetNegativeProductResult> get_negative_product(const Store& store, const TypedIdx ref)
-		{
-			const auto [index, type] = ref.split();
-			if (type == Type::product) {
-				std::vector<TypedIdx> other_factors;
-				double negative_factor;
-				bool found_negative_factor = false;
-				for (const auto factor : vdc::range(store, index)) {
-					if (!found_negative_factor) {
-						if (const auto negative_val = get_negative_real(store, factor)) {
-							negative_factor = *negative_val;
-							found_negative_factor = true;
-							continue;
-						}
-					}
-					other_factors.push_back(factor);
-				}
-				if (found_negative_factor) {
-					return { { negative_factor, other_factors} };
-				}
-			}
-			return {};
-		} //get_negative_product
-
 	} //namespace print
 
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -210,7 +197,7 @@ namespace bmath::intern {
 	{
 		using namespace token;
 		const char allowed_tokens[] = { character, number, open_grouping, clse_grouping, 
-			unary_minus, sum, product, ',', '^', '\0' }; //'\0' only as end symbol for allowed_tokens, not as part of aritmetic symbols
+			unary_minus, sum, product, comma, hat, '\0' }; //'\0' only as end symbol for allowed_tokens, not as part of aritmetic symbols
 		return view.find_first_not_of(allowed_tokens);
 	}
 
@@ -226,7 +213,7 @@ namespace bmath::intern {
 		if ((op = find_first_of_skip_pars(token_view, token::product)) != TokenView::npos) {
 			return Head{ op, Head::Type::product };
 		}
-		if ((op = find_first_of_skip_pars(token_view, '^')) != TokenView::npos) {
+		if ((op = find_first_of_skip_pars(token_view, token::hat)) != TokenView::npos) {
 			return Head{ op, Head::Type::power };
 		}
 		if (token_view.find_first_not_of(token::number) == TokenView::npos) {
@@ -235,8 +222,8 @@ namespace bmath::intern {
 		if ((op = token_view.find_first_not_of(token::character)) == TokenView::npos) {
 			return Head{ 0, Head::Type::variable };
 		}
-		throw_if<ParseFailure>(token_view[op] != '(', op + offset, "illegal character, expected '('");
-		throw_if<ParseFailure>(!token_view.ends_with(')'), token_view.length() + offset, "poor grouping, expected ')'");
+		throw_if<ParseFailure>(token_view[op] != token::open_grouping, op + offset, "illegal character, expected '('");
+		throw_if<ParseFailure>(!token_view.ends_with(token::clse_grouping), token_view.length() + offset, "poor grouping, expected ')'");
 		if (op == 0) {
 			return Head{ 0, Head::Type::group };
 		}
@@ -362,7 +349,7 @@ namespace bmath::intern {
 			input.remove_suffix(1);            //"pow(2,4)" -> "pow(2,4"
 			input.remove_prefix(open_par + 1); //"pow(2,4" ->      "2,4"
 			{
-				const std::size_t comma = find_first_of_skip_pars(input.tokens, ',');
+				const std::size_t comma = find_first_of_skip_pars(input.tokens, token::comma);
 				const auto param_view = input.steal_prefix(comma); //now input starts with comma
 				const TypedIdx_T param = build_any(store, param_view);
 				result.params_idx = store.insert(TypedIdxSLC_T(param));
@@ -370,7 +357,7 @@ namespace bmath::intern {
 			std::size_t last_node_idx = result.params_idx;
 			while (input.size()) {
 				input.remove_prefix(1); //erase comma
-				const std::size_t comma = find_first_of_skip_pars(input.tokens, ',');
+				const std::size_t comma = find_first_of_skip_pars(input.tokens, token::comma);
 				const auto param_view = input.steal_prefix(comma);
 				const TypedIdx_T param = build_any(store, param_view);
 				last_node_idx = TypedIdxSLC_T::insert_new(store, last_node_idx, param);
@@ -381,18 +368,38 @@ namespace bmath::intern {
 			BasicKnownFunction<TypedIdx_T> result{ FnType(type), TypedIdx_T(), TypedIdx_T(), TypedIdx_T() };
 			input.remove_suffix(1u);
 			input.remove_prefix(open_par + 1u);	//only arguments are left
-			std::size_t comma = find_first_of_skip_pars(input.tokens, ',');
+			std::size_t comma = find_first_of_skip_pars(input.tokens, token::comma);
 			auto param_view = input.steal_prefix(comma);
 			for (auto& param : fn::range(result)) {
 				throw_if<ParseFailure>(param_view.size() == 0u, input.offset, "too few function parameters");
 				param = build(store, param_view);
-				comma = find_first_of_skip_pars(input.tokens, ',');
+				comma = find_first_of_skip_pars(input.tokens, token::comma);
 				param_view = input.steal_prefix(comma);
 			}
 			throw_if<ParseFailure>(param_view.size() > 0u, input.offset, "too many function parameters");
 			return TypedIdx_T(store.insert(result), Type::known_function);
 		}
 	} //build_function
+
+	namespace pattern {
+
+		PatternParts split(const ParseView input)
+		{
+			const std::size_t bar = find_first_of_skip_pars(input.tokens, token::bar);
+			throw_if<ParseFailure>(count_skip_pars(input.tokens, token::bar) > 1u, input.offset + bar, "expected only this '|', no further ones at top grouping level");
+			const std::size_t equals = find_first_of_skip_pars(input.tokens, token::equals);
+			throw_if<ParseFailure>(count_skip_pars(input.tokens, token::equals) > 1u, input.offset + equals, "expected only this '=', no further ones at top grouping level");
+			throw_if<ParseFailure>(equals == TokenView::npos, input.size() - 1u, "expected '=' at top grouping level");
+
+			if (bar != TokenView::npos) {
+				return PatternParts{ input.substr(0, bar), input.substr(bar + 1, equals), input.substr(equals + 1) };
+			}
+			else {
+				return PatternParts{ input.substr(0, 0), input.substr(0, equals), input.substr(equals + 1) };
+			}
+		}
+
+	} //namespace pattern
 
 	namespace print {
 
@@ -523,6 +530,57 @@ namespace bmath::intern {
 
 		std::string to_pretty_string(const Store& store, const TypedIdx ref, const int parent_infixr)
 		{
+			const auto get_negative_real = [](const Store& store, const TypedIdx ref) ->std::optional<double> {
+				const auto [index, type] = ref.split();
+				if (type == Type::complex) {
+					const Complex& complex = store.at(index).complex;
+					if (complex.real() < 0.0 && complex.imag() == 0.0) {
+						return { complex.real() };
+					}
+				}
+				return {};
+			}; //get_negative_real
+
+			 //returns base, if ref is actually <base>^(-1)
+			const auto get_pow_neg1 = [get_negative_real](const Store & store, const TypedIdx ref) -> std::optional<TypedIdx> {
+				const auto [index, type] = ref.split();
+				if (type == Type::known_function) {
+					const KnownFunction& function = store.at(index).known_function;
+					if (function.type == FnType::pow) {
+						if (const auto expo = get_negative_real(store, function.params[1])) {
+							if (expo == -1.0) {
+								return { function.params[0] };
+							}
+						}
+					}
+				}
+				return {};
+			}; //get_pow_neg1
+
+			struct GetNegativeProductResult { double negative_factor; std::vector<TypedIdx> other_factors; };
+			const auto get_negative_product = [get_negative_real](const Store& store, const TypedIdx ref) -> std::optional<GetNegativeProductResult> {
+				const auto [index, type] = ref.split();
+				if (type == Type::product) {
+					std::vector<TypedIdx> other_factors;
+					double negative_factor;
+					bool found_negative_factor = false;
+					for (const auto factor : vdc::range(store, index)) {
+						if (!found_negative_factor) {
+							if (const auto negative_val = get_negative_real(store, factor)) {
+								negative_factor = *negative_val;
+								found_negative_factor = true;
+								continue;
+							}
+						}
+						other_factors.push_back(factor);
+					}
+					if (found_negative_factor) {
+						return { { negative_factor, other_factors} };
+					}
+				}
+				return {};
+			}; //get_negative_product
+
 			const auto reverse_elems = [](auto range) {
 				std::vector<TypedIdx> result;
 				for (const auto elem : range) {

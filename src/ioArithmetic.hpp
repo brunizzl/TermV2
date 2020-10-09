@@ -33,9 +33,35 @@ namespace bmath::intern {
 
 	namespace pattern {
 
-		PnTypedIdx build(PnTerm& term, ParseView view);
+		struct PatternParts
+		{
+			ParseView declarations;
+			ParseView lhs;
+			ParseView rhs;
+		};
 
-		PnTypedIdx build_tree(PnStore& store, ParseView view);
+		//input is assumed to be of form "<declarations> | <lhs> = <rhs>"
+		//or, if no MatchVariables occur, of form "<lhs> = <rhs>"
+		PatternParts split(const ParseView input);
+
+		//lookup if new MatchVariable with name "name" is parsed, to get the Restriction and shared_data_idx
+		struct NameLookup 
+		{
+			std::string_view name;
+			std::uint32_t shared_data_idx;
+			Restriction restriction;
+		};
+
+		std::vector<NameLookup> parse_declarations(ParseView declarations);
+
+		struct PatternBuildFunction
+		{
+			const decltype(PnTerm::shared_match_data)& shared_match_data;
+
+			std::vector<NameLookup>& name_map;
+
+			PnTypedIdx operator()(PnStore& store, ParseView view);
+		};
 
 	} //namespace pattern
 

@@ -65,7 +65,7 @@ namespace bmath::intern {
 		{ return reinterpret_cast<TermSLC*>(&store.at(idx)); }
 
 		template<typename TermUnion_T>
-		static const TermSLC* const_ptr_at(const TermStore<TermUnion_T>& store, std::size_t idx) 
+		static const TermSLC* ptr_at(const TermStore<TermUnion_T>& store, std::size_t idx) 
 		{ return reinterpret_cast<const TermSLC*>(&store.at(idx)); }
 
 		//also allows SLC::null_index to be passed in
@@ -75,7 +75,7 @@ namespace bmath::intern {
 			Index_T last_idx;
 			while (slc_idx != null_index) {
 				last_idx = slc_idx;
-				slc_idx = const_ptr_at(store, slc_idx)->next_idx;
+				slc_idx = ptr_at(store, slc_idx)->next_idx;
 				store.free(last_idx);
 			};
 		} //free_slc
@@ -228,7 +228,7 @@ namespace bmath::intern {
 			Iterator begin() 
 			{ 
 				auto iter = this->unchecked_begin();
-				const auto current = const_ptr_at(this->store, this->slc_idx);
+				const auto current = ptr_at(this->store, this->slc_idx);
 				if (current->values[0] == null_value) [[unlikely]] {
 					++iter;
 				}
@@ -306,10 +306,10 @@ namespace bmath::intern {
 	template<typename TermUnion_T>
 	void read(const TermStore<TermUnion_T>& store, std::size_t source_idx, std::string& dest)
 	{
-		auto current = TermString128::const_ptr_at(store, source_idx);
+		auto current = TermString128::ptr_at(store, source_idx);
 		while (current->next_idx != TermString128::null_index) {
 			dest.append(current->values, TermString128::array_size);
-			current = TermString128::const_ptr_at(store, current->next_idx);
+			current = TermString128::ptr_at(store, current->next_idx);
 		}
 		for (std::size_t i = 0; i < TermString128::array_size; i++) {
 			if (current->values[i] == '\0') [[unlikely]] {
@@ -333,8 +333,8 @@ namespace bmath::intern {
 			return std::strong_ordering::equal;
 		};
 
-		auto current_1 = TermString128::const_ptr_at(store_1, idx_1);
-		auto current_2 = TermString128::const_ptr_at(store_2, idx_2);
+		auto current_1 = TermString128::ptr_at(store_1, idx_1);
+		auto current_2 = TermString128::ptr_at(store_2, idx_2);
 		while (current_1->next_idx != TermString128::null_index &&
 		       current_2->next_idx != TermString128::null_index) 
 		{
@@ -343,8 +343,8 @@ namespace bmath::intern {
 				return cmp;
 			}
 			else {
-				current_1 = TermString128::const_ptr_at(store_1, current_1->next_idx);
-				current_2 = TermString128::const_ptr_at(store_2, current_2->next_idx);
+				current_1 = TermString128::ptr_at(store_1, current_1->next_idx);
+				current_2 = TermString128::ptr_at(store_2, current_2->next_idx);
 			}
 		}
 		if (current_1->next_idx == TermString128::null_index &&

@@ -10,7 +10,7 @@ namespace bmath {
 
 	struct ParseFailure
 	{
-		std::size_t where;	//index of invalid token
+		std::size_t where;	//index of invalid token /character
 		const char* what;
 	}; //struct ParseFailure
 
@@ -110,7 +110,7 @@ namespace bmath::intern {
 		//'c' representing any character in a closer sense: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_"
 		//'c' might also represent (non-leading) digits if occuring in a name: "0123456789" (note: no '.' allowed)
 		//'c' also represents '\''. this has two meanings: 
-		//    1. if variable name starts with '\'', it has to end with '\'', then the name is quoted (may only occur in pattern?)
+		//    1. if variable name starts with '\'', it has to end with '\'', then the name is quoted (only in pattern context)
 		//    2. if variable -/ function name has '\'' somewhere in between or at end, it is interpreted as normal character.
 		constexpr Token character = 'c';
 		//'n' representing any char composing a number literal: "0123456789."
@@ -122,15 +122,15 @@ namespace bmath::intern {
 		constexpr Token unary_minus = '-';
 		constexpr Token sum = 'A';     //representing '+' and '-' as binary operators
 		constexpr Token product = 'M'; //representing '*' and '/' as binary operators
-	}
-	//characters representing themselfs (thus not needing an alias in token namespace):
-	//',' 
-	//'^'
-	//'=' representing '=', but only used as single char, not to compare
-	//'|'
-	//' '
 
-	constexpr bool is_literal(Token token) { return token == token::character || token == token::number; }
+		//characters representing themselfs:
+		constexpr Token comma = ',';
+		constexpr Token hat = '^';
+		constexpr Token equals = '='; //only used as single char, not to compare
+		constexpr Token bar = '|';
+		constexpr Token colon = ':';
+		constexpr Token space = ' ';
+	}
 
 	TokenString tokenize(const std::string_view name);
 

@@ -38,13 +38,15 @@ namespace bmath::intern {
 
 	void ParseString::allow_implicit_product() noexcept
 	{
+		const auto is_literal = [](const Token token) { return token == token::character || token == token::number; };
+
 		assert(this->tokens.length() == this->name.length());
 		for (std::size_t prev_idx = 0; prev_idx + 2 < this->tokens.length(); prev_idx++) {
 			const std::size_t curr_idx = prev_idx + 1;
 			const Token prev = this->tokens[prev_idx];
 			const Token curr = this->tokens[prev_idx + 1];
 			const Token next = this->tokens[prev_idx + 2];
-			if (is_literal(prev) && curr == ' ' && is_literal(next)) {
+			if (is_literal(prev) && curr == token::space && is_literal(next)) {
 				this->tokens[curr_idx] = token::product;
 				this->name[curr_idx] = '*';
 			}
@@ -55,7 +57,7 @@ namespace bmath::intern {
 	{
 		assert(this->tokens.size() == this->name.size());
 		this->name.erase(std::remove(this->name.begin(), this->name.end(), ' '), this->name.end());
-		this->tokens.erase(std::remove(this->tokens.begin(), this->tokens.end(), ' '), this->tokens.end());
+		this->tokens.erase(std::remove(this->tokens.begin(), this->tokens.end(), token::space), this->tokens.end());
 		assert(this->tokens.size() == this->name.size());
 	} //remove_space
 
@@ -83,13 +85,13 @@ namespace bmath::intern {
 				}
 
 				switch (current) {
-				case ',': [[fallthrough]];
-				case '^': [[fallthrough]];
-				case '=': [[fallthrough]];
-				case '|': [[fallthrough]];
-				case ' ':
-					tokenized[i] = current;
-					continue;
+				case ',': tokenized[i] = token::comma;  continue;
+				case '^': tokenized[i] = token::hat;    continue;
+				case '=': tokenized[i] = token::equals; continue;
+				case '|': tokenized[i] = token::bar;    continue;
+				case ':': tokenized[i] = token::colon;  continue;
+				case ' ': tokenized[i] = token::space;  continue;
+
 				case '+': [[fallthrough]];
 				case '-': 
 					tokenized[i] = token::sum;
@@ -98,6 +100,7 @@ namespace bmath::intern {
 				case '/': 
 					tokenized[i] = token::product;
 					continue;
+
 				case '(': 
 					nr_paren++;
 					tokenized[i] = token::open_grouping;
@@ -162,7 +165,7 @@ namespace bmath::intern {
 			else if (prev == token::open_grouping && name[curr_idx] == '-') {
 				tokenized[curr_idx] = token::unary_minus;
 			}
-			//change token::unary_minus to part of number, if it is
+			//change token::unary_minus to part of number, if it is (as unary_minus is not needed to seperate summands anyways)
 			else if (prev == token::unary_minus && curr == token::number) {
 				tokenized[prev_idx] = token::number;
 			}
@@ -173,29 +176,29 @@ namespace bmath::intern {
 
 	std::size_t find_open_par(std::size_t clsd_par, const TokenView name)
 	{
-		std::size_t open_par = name.find_last_of('(', clsd_par - 1u);
-		clsd_par = name.find_last_of(')', clsd_par - 1u);
+		std::size_t open_par = name.find_last_of(token::open_grouping, clsd_par - 1u);
+		clsd_par = name.find_last_of(token::clse_grouping, clsd_par - 1u);
 		while (clsd_par > open_par && clsd_par != TokenView::npos) {
-			open_par = name.find_last_of('(', open_par - 1u);
-			clsd_par = name.find_last_of(')', clsd_par - 1u);
+			open_par = name.find_last_of(token::open_grouping, open_par - 1u);
+			clsd_par = name.find_last_of(token::clse_grouping, clsd_par - 1u);
 		}
 		return open_par;
 	} //find_open_par
 
 	std::size_t find_closed_par(std::size_t open_par, const TokenView name)
 	{
-		std::size_t clsd_par = name.find_first_of(')', open_par + 1u);
-		open_par = name.find_first_of('(', open_par + 1u);
+		std::size_t clsd_par = name.find_first_of(token::clse_grouping, open_par + 1u);
+		open_par = name.find_first_of(token::open_grouping, open_par + 1u);
 		while (open_par < clsd_par) {
-			clsd_par = name.find_first_of(')', clsd_par + 1u);
-			open_par = name.find_first_of('(', open_par + 1u);
+			clsd_par = name.find_first_of(token::clse_grouping, clsd_par + 1u);
+			open_par = name.find_first_of(token::open_grouping, open_par + 1u);
 		}
 		return clsd_par;
 	} //find_closed_par
 
 	std::size_t find_first_of_skip_pars(const TokenView name, const Token token)
 	{
-		std::size_t open_par = name.find_first_of('(');
+		std::size_t open_par = name.find_first_of(token::open_grouping);
 		std::size_t after_clsd_par = 0u;
 		while (open_par != TokenView::npos) {
 			const TokenView search_view(name.substr(after_clsd_par, open_par - after_clsd_par)); //only search "...)here(..."			
@@ -203,7 +206,7 @@ namespace bmath::intern {
 				return found + after_clsd_par;
 			}
 			after_clsd_par = find_closed_par(open_par, name) + 1u;
-			open_par = name.find_first_of('(', after_clsd_par);
+			open_par = name.find_first_of(token::open_grouping, after_clsd_par);
 		}
 		return name.find_first_of(token, after_clsd_par);
 	} //find_first_of_skip_pars
@@ -211,7 +214,7 @@ namespace bmath::intern {
 	std::size_t count_skip_pars(const TokenView name, const Token token)
 	{
 		std::size_t count = 0u;
-		std::size_t open_par = name.find_first_of('(');
+		std::size_t open_par = name.find_first_of(token::open_grouping);
 		std::size_t after_clsd_par = 0u;
 		while (open_par != TokenView::npos) {
 			const Token* begin = name.data() + after_clsd_par;
@@ -219,7 +222,7 @@ namespace bmath::intern {
 			count += std::count(begin, end, token);
 
 			after_clsd_par = find_closed_par(open_par, name) + 1u;
-			open_par = name.find_first_of('(', after_clsd_par);
+			open_par = name.find_first_of(token::open_grouping, after_clsd_par);
 		}
 		const Token* begin = name.data() + after_clsd_par;
 		const Token* end = name.data() + name.length();

@@ -499,7 +499,10 @@ namespace bmath::intern {
 
 	namespace pattern {
 
+		PnTerm::PnTerm(ParseView name)
+		{
 
+		}
 
 	} //namespace pattern
 

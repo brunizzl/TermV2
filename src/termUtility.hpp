@@ -221,9 +221,9 @@ namespace bmath::intern {
 	protected:
 		enum class Value :unsigned {} value; //only data held by SumEnum
 		static constexpr unsigned next_offset = 0u;
-		constexpr SumEnum(Value e) :value(e) {}
 
 	public:
+		constexpr SumEnum(Value e) :value(e) {}
 		constexpr operator Value() const { return this->value; }
 		explicit constexpr operator unsigned() const { return static_cast<unsigned>(this->value); }
 	}; //class SumEnum

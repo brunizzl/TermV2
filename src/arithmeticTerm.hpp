@@ -203,30 +203,31 @@ namespace bmath::intern {
 		using PnComplex = std::complex<double>;
 
 		//used to restrict match_variable to only match terms complying with restriction
-		enum class Value
+		enum class Restriction
 		{
+			none,
+			sum,
+			product,
+			function,
+			variable,
 			natural, //includes 0
 			integer,
 			real,
-			value,
+			complex,
 			not_minus_one,
 			negative,     //implies real   	
 			not_negative, //implies real   
 			positive,     //implies real    
 			not_positive, //implies real        
-			COUNT	//has to be last element
+			UNKNOWN	//has to be last element
 		};
-
-		enum class None { none };//default case, MatchVariable is unrestricted
-
-		using Restriction = SumEnum<Type, Value, Pair<None, None::none>>;
 
 		//in a valid pattern, all MatchVariables of same name share the same restriction and the same shared_data_idx.
 		struct MatchVariable
 		{
 			PnTypedIdx match_idx; //remembers 
 			std::uint32_t shared_data_idx; //points not in pattern tree, but extra vector called shared_match_data.
-			Restriction restriction = None::none;
+			Restriction restriction = Restriction::none;
 			char name[4] = "";
 		};
 
@@ -258,9 +259,13 @@ namespace bmath::intern {
 
 		struct PnTerm
 		{
-			ShortVector<SharedMatchData, 6> shared_match_data;
-			PnStore store;
-			PnTypedIdx head;
+			std::vector<SharedMatchData> shared_match_data;
+			PnStore lhs_store;
+			PnStore rhs_store;
+			PnTypedIdx lhs_head;
+			PnTypedIdx rhs_head;
+
+			PnTerm(ParseView name);
 		};
 
 	} //namespace pattern
