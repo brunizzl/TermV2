@@ -91,15 +91,19 @@ namespace bmath::intern {
 		constexpr ParseView steal_prefix(const std::size_t count) noexcept
 		{
 			const std::size_t remove = std::min(count, this->tokens.size());
-			ParseView to_steal(TokenView(this->tokens.substr(0, remove)), this->chars, this->offset);
+			const ParseView to_steal(TokenView(this->tokens.substr(0, remove)), this->chars, this->offset);
 			this->tokens.remove_prefix(remove);
 			this->chars += remove;
 			this->offset += remove;
 			return to_steal;
 		}
 
-		constexpr std::string_view to_string_view(const std::size_t length = std::string_view::npos) const noexcept 
-		{ return { this->chars, length > this->size() ? this->size() : length }; }
+		constexpr std::string_view to_string_view(const std::size_t start = 0u, const std::size_t end = std::string_view::npos) 
+			const noexcept 
+		{ 
+			assert(start <= end);
+			return { this->chars + start, end > this->size() ? this->size() - start : end - start }; 
+		}
 	};
 
 	using Token = char;
@@ -114,8 +118,8 @@ namespace bmath::intern {
 		//    2. if variable -/ function name has '\'' somewhere in between or at end, it is interpreted as normal character.
 		constexpr Token character = 'c';
 		//'n' representing any char composing a number literal: "0123456789."
-		//'n' might also represent "+-e" if used to specify numbers 
-		//  as by engeneering notation: <base>'e'<optional '+' or '-'><exponent>
+		//'n' might also represent "+-eE" if used to specify numbers 
+		//  as by engeneering notation: "<base><'e' or 'E'><optional '+' or '-'><exponent>"
 		constexpr Token number = 'n';
 		constexpr Token open_grouping = '('; //representing "([{"
 		constexpr Token clse_grouping = ')'; //representing ")]}"
@@ -123,13 +127,14 @@ namespace bmath::intern {
 		constexpr Token sum = 'A';     //representing '+' and '-' as binary operators
 		constexpr Token product = 'M'; //representing '*' and '/' as binary operators
 
-		//characters representing themselfs:
+		//tokens representing themselfs as chars:
 		constexpr Token comma = ',';
 		constexpr Token hat = '^';
 		constexpr Token equals = '='; //only used as single char, not to compare
 		constexpr Token bar = '|';
 		constexpr Token colon = ':';
 		constexpr Token space = ' ';
+		constexpr Token imag_unit = 'i';
 	}
 
 	TokenString tokenize(const std::string_view name);

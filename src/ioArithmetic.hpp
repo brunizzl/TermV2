@@ -19,6 +19,7 @@ namespace bmath::intern {
 			power,       //where specifies position of found operator
 			value,       //where is unspecidied
 			variable,    //where is unspecified
+			imag_unit,   //where is unspecified
 			group,       //where is unspecified
 			function,    //where specifies position of opening parenthesis
 		} type;
@@ -44,23 +45,22 @@ namespace bmath::intern {
 		//or, if no MatchVariables occur, of form "<lhs> = <rhs>"
 		PatternParts split(const ParseView input);
 
-		//lookup if new MatchVariable with name "name" is parsed, to get the Restriction and shared_data_idx
+		//lookup if new MatchVariable with name "name" is parsed, to get the Form and shared_data_idx
 		struct NameLookup 
 		{
 			std::string_view name;
-			std::uint32_t shared_data_idx;
-			Restriction restriction;
+			Form form;
 		};
 
 		std::vector<NameLookup> parse_declarations(ParseView declarations);
 
 		struct PatternBuildFunction
 		{
-			const decltype(PnTerm::shared_match_data)& shared_match_data;
+			//the index of name in name_map is also shared_data_idx of MatchVariable
+			const std::vector<NameLookup>& name_map;
 
-			std::vector<NameLookup>& name_map;
-
-			PnTypedIdx operator()(PnStore& store, ParseView view);
+			//equivalent to build() for pattern
+			PnTypedIdx operator()(PnStore& store, ParseView input) const;
 		};
 
 	} //namespace pattern
@@ -71,12 +71,14 @@ namespace bmath::intern {
 
 		void append_real(double val, std::string& dest);
 
-		void append_to_string(const Store& store, const TypedIdx ref, std::string& str, const int parent_infixr = 0);
+		template<typename Store_T, typename TypedIdx_T>
+		void append_to_string(const Store_T& store, const TypedIdx_T ref, std::string& str, const int parent_infixr = 0);
 
 		//prettier, but also slower
 		std::string to_pretty_string(const Store& store, const TypedIdx ref, const int parent_infixr = 0);
 
-		void to_memory_layout(const Store& store, const TypedIdx ref, std::vector<std::string>& content);
+		template<typename Store_T, typename TypedIdx_T>
+		std::string show_memory_layout(const Store_T& store, const TypedIdx_T head);
 
 	} //namespace print
 

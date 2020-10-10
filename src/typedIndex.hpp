@@ -46,6 +46,7 @@ namespace bmath::intern {
 		static constexpr UnderlyingType index_mask = ~enum_mask;
 
 	public:
+		using Enum_T = TypesEnum;
 		static constexpr std::size_t max_index = index_mask >> index_offset;
 
 		explicit constexpr BasicTypedIdx() :data(static_cast<UnderlyingType>(MaxEnumValue)) {}

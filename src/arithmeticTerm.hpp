@@ -105,6 +105,96 @@ namespace bmath::intern {
 	static_assert(sizeof(TypesUnion) * 8 == 128);
 	using Store = TermStore<TypesUnion>;
 
+	namespace pattern {
+
+		enum class PnSpecial { match_variable, COUNT };
+		using PnType = SumEnum<PnSpecial, Type>;
+		static constexpr unsigned _match_variable = unsigned(PnType(PnSpecial::match_variable));
+
+		using PnTypedIdx = BasicTypedIdx<PnType>;
+		using PnTypedIdxSLC = TermSLC<std::uint32_t, PnTypedIdx, 3>;
+
+		using PnSum = PnTypedIdxSLC;
+		using PnProduct = PnTypedIdxSLC;
+		using PnKnownFunction = BasicKnownFunction<PnTypedIdx>;
+
+		//used to restrict match_variable to only match terms complying with form
+		enum class Form
+		{
+			any,
+			sum,
+			product,
+			function,
+			variable,
+			natural, //includes 0
+			integer,
+			real,
+			complex,
+			not_minus_one,
+			negative,     //implies real   	
+			not_negative, //implies real   
+			positive,     //implies real    
+			not_positive, //implies real        
+			UNKNOWN	//has to be last element
+		};
+
+		template<typename Store_T, typename TypedIdx_T>
+		bool has_form(const Store_T& store, const TypedIdx_T ref, const Form form);
+
+		//in a valid pattern, all MatchVariables of same name share the same form and the same shared_data_idx.
+		struct MatchVariable
+		{
+			TypedIdx match_idx; //remembers what is is matched with (if so)
+			std::uint32_t shared_data_idx; //points not in pattern tree, but extra vector called shared_match_data.
+			Form form = Form::any;
+			std::array<char, 4u> name;
+		};
+
+		union PnTypesUnion
+		{
+			PnKnownFunction known_function;
+			GenericFunction generic_function;
+			Complex complex;
+			PnTypedIdxSLC index_slc; //representing GenericFunction's extra parameters, Sum or Product 
+			TermString128 string;	//PnVariable is a string and GenericFunction may allocate additional string nodes
+			MatchVariable match_variable;
+
+			PnTypesUnion(const PnKnownFunction& val) :known_function(val)   {}
+			PnTypesUnion(const GenericFunction& val) :generic_function(val) {}
+			PnTypesUnion(const Complex&         val) :complex(val)          {}
+			PnTypesUnion(const PnTypedIdxSLC&   val) :index_slc(val)        {}
+			PnTypesUnion(const TermString128&   val) :string(val)           {} 
+			PnTypesUnion(const MatchVariable&   val) :match_variable(val)   {} 
+		};
+		static_assert(sizeof(PnTypesUnion) * 8 == 128);
+
+		using PnStore = TermStore<PnTypesUnion>;
+
+		//all MatchVariables of same name in pattern (e.g. "a" in pattern "a*b+a" share the same SharedMatchData to know 
+		//whitch actually matched, and if the name "a" is already matched, even if the current instance is not.
+		struct SharedMatchData
+		{
+			TypedIdx match_idx = TypedIdx(); //default initialized to type == Type::COUNT and index == 0
+		};
+
+		struct PnTerm
+		{
+			static constexpr std::size_t max_var_count = 6u;
+
+			std::array<SharedMatchData, max_var_count> shared_match_data;
+			PnTypedIdx lhs_head;
+			PnTypedIdx rhs_head;
+			PnStore lhs_store;
+			PnStore rhs_store;
+
+			PnTerm(std::string& name);
+			std::string to_string() const;
+			std::string lhs_memory_layout() const;
+			std::string rhs_memory_layout() const;
+		};
+
+	} //namespace pattern
+
 	//utility for both KnownFunction and GenericFunction
 	namespace fn {
 
@@ -148,6 +238,12 @@ namespace bmath::intern {
 		inline auto range(const Store& store, const GenericFunction& func) noexcept 
 		{ return TypedIdxSLC::Range<const Store>(store, func.params_idx); }
 
+		inline auto range(pattern::PnStore& store, GenericFunction& func) noexcept 
+		{ return pattern::PnTypedIdxSLC::Range<pattern::PnStore>(store, func.params_idx); }
+
+		inline auto range(const pattern::PnStore& store, const GenericFunction& func) noexcept 
+		{ return pattern::PnTypedIdxSLC::Range<const pattern::PnStore>(store, func.params_idx); }
+
 	} //namespace fn
 
 	//utility for variadic types (Sum and Product)
@@ -159,19 +255,24 @@ namespace bmath::intern {
 		inline auto range(const Store& store, std::uint32_t vd_idx) noexcept 
 		{ return TypedIdxSLC::Range<const Store>(store, vd_idx); }
 
+		inline auto range(pattern::PnStore& store, std::uint32_t vd_idx) noexcept
+		{ return pattern::PnTypedIdxSLC::Range<pattern::PnStore>(store, vd_idx); }
+
+		inline auto range(const pattern::PnStore& store, std::uint32_t vd_idx) noexcept 
+		{ return pattern::PnTypedIdxSLC::Range<const pattern::PnStore>(store, vd_idx); }
+
 	} //namespace vdc
 
 	//recursive tree traversal (some of these traversal functions are also found in namespace print)
 	namespace tree {
 
 		//removes subtree starting at ref from store
-		void free(Store& store, const TypedIdx ref);
-
-		//evaluates tree if possible, throws if variables of unknown value /generic_functions are present
-		[[nodiscard]] Complex eval(const Store& store, const TypedIdx ref);
+		template<typename Store_T, typename TypedIdx_T>
+		void free(Store_T& store, const TypedIdx_T ref);
 
 		//flatten sums holding als summands and products holding products as factors
-		void combine_layers(Store& store, const TypedIdx ref);
+		template<typename Store_T, typename TypedIdx_T>
+		void combine_layers(Store_T& store, const TypedIdx_T ref);
 
 		//if a subtree can be fully evaluated, it will be, even if the result can not be stored exactly in 
 		//floating point/ the computation is unexact
@@ -179,96 +280,20 @@ namespace bmath::intern {
 		//  if a value was returned
 		[[nodiscard]] std::optional<Complex> combine_values_unexact(Store& store, const TypedIdx ref);
 
-		//compares two subterms in same term, assumes both to have their variadic parts sorted
-		[[nodiscard]] std::strong_ordering compare(const Store& store, const TypedIdx ref_1, const TypedIdx ref_2);
+		//same as combine_values_unexact, but is quite conservative in what computation is allowed to do.
+		template<typename Store_T, typename TypedIdx_T>
+		[[nodiscard]] std::optional<Complex> combine_values_exact(Store_T& store, const TypedIdx_T ref);
+
+		//compares two subterms of perhaps different stores, assumes both to have their variadic parts sorted
+		template<typename Store_T1, typename Store_T2, typename TypedIdx_T1, typename TypedIdx_T2>
+		[[nodiscard]] std::strong_ordering compare(const Store_T1& store_1, const Store_T2& store_2, 
+			const TypedIdx_T1 ref_1, const TypedIdx_T2 ref_2);
 
 		//sorts variadic parts by compare
-		void sort(Store& store, const TypedIdx ref);
+		template<typename Store_T, typename TypedIdx_T>
+		void sort(Store_T& store, const TypedIdx_T ref);
 
 	} //namespace tree
-
-	namespace pattern {
-
-		enum class PnSpecial { match_variable, COUNT };
-		using PnType = SumEnum<PnSpecial, Type>;
-
-		using PnTypedIdx = BasicTypedIdx<PnType>;
-		using PnTypedIdxSLC = TermSLC<std::uint32_t, PnTypedIdx, 3>;
-
-		using PnSum = PnTypedIdxSLC;
-		using PnProduct = PnTypedIdxSLC;
-		using PnKnownFunction = BasicKnownFunction<PnTypedIdx>;
-		using PnGenericFunction = GenericFunction;
-		using PnVariable = TermString128;
-		using PnComplex = std::complex<double>;
-
-		//used to restrict match_variable to only match terms complying with restriction
-		enum class Restriction
-		{
-			none,
-			sum,
-			product,
-			function,
-			variable,
-			natural, //includes 0
-			integer,
-			real,
-			complex,
-			not_minus_one,
-			negative,     //implies real   	
-			not_negative, //implies real   
-			positive,     //implies real    
-			not_positive, //implies real        
-			UNKNOWN	//has to be last element
-		};
-
-		//in a valid pattern, all MatchVariables of same name share the same restriction and the same shared_data_idx.
-		struct MatchVariable
-		{
-			PnTypedIdx match_idx; //remembers 
-			std::uint32_t shared_data_idx; //points not in pattern tree, but extra vector called shared_match_data.
-			Restriction restriction = Restriction::none;
-			char name[4] = "";
-		};
-
-		union PnTypesUnion
-		{
-			PnKnownFunction known_function;
-			PnGenericFunction generic_function;
-			PnComplex complex;
-			PnTypedIdxSLC index_slc; //representing GenericFunction's extra parameters, Sum or Product 
-			TermString128 string;	//PnVariable is a string and GenericFunction may allocate additional string nodes
-			MatchVariable match_variable;
-
-			PnTypesUnion(const PnKnownFunction&   val) :known_function(val)   {}
-			PnTypesUnion(const PnGenericFunction& val) :generic_function(val) {}
-			PnTypesUnion(const PnComplex&         val) :complex(val)          {}
-			PnTypesUnion(const PnTypedIdxSLC&     val) :index_slc(val)        {}
-			PnTypesUnion(const TermString128&     val) :string(val)           {} 
-			PnTypesUnion(const MatchVariable&     val) :match_variable(val)   {} 
-		};
-
-		using PnStore = TermStore<PnTypesUnion>;
-
-		//all MatchVariables of same name in pattern (e.g. "a" in pattern "a*b+a" share the same SharedMatchData to know 
-		//whitch actually matched, and if the name "a" is already matched, even if the current instance is not.
-		struct SharedMatchData
-		{
-			PnTypedIdx match_idx = PnTypedIdx(); //default initialized to type == PnType::COUNT and index == 0
-		};
-
-		struct PnTerm
-		{
-			std::vector<SharedMatchData> shared_match_data;
-			PnStore lhs_store;
-			PnStore rhs_store;
-			PnTypedIdx lhs_head;
-			PnTypedIdx rhs_head;
-
-			PnTerm(ParseView name);
-		};
-
-	} //namespace pattern
 
 }	//namespace bmath::intern
 
@@ -280,11 +305,12 @@ namespace bmath {
 		intern::TypedIdx head;
 
 	public:
-		ArithmeticTerm(std::string name);
+		ArithmeticTerm(std::string& name);
 		ArithmeticTerm() = default;
 
 		void combine_layers() noexcept;
 		void combine_values_unexact() noexcept;
+		void combine_values_exact() noexcept;
 		void sort() noexcept;
 
 		std::string show_memory_layout() const;

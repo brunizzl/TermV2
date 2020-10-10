@@ -12,37 +12,61 @@
 using namespace bmath::intern;
 using namespace bmath;
 
-
 enum class E1 { a, b, c, COUNT };
-enum class E2 { d, e, f, COUNT };
+enum class E2 { a, b, c, COUNT };
 
 using E = SumEnum<E1, E2>;
 
-void f(E e)
+void f1(E e)
 {
-	switch (e) {
-	case E(E1::a): std::cout << "a\n"; break;
-	case E(E1::b): std::cout << "b\n"; break;
-	case E(E1::c): std::cout << "c\n"; break;
-	case E(E2::d): std::cout << "d\n"; break;
-	case E(E2::e): std::cout << "e\n"; break;
-	case E(E2::f): std::cout << "f\n"; break;
-	default: std::cout << "upsie!\n"; break;
+	std::cout << unsigned(e) << " ";
+	if (e.is_type<E1>()) {
+		std::cout << "E1\n";
+	}
+	else if (e.is_type<E2>()) {
+		std::cout << "E2\n";
+	}
+	else {
+		std::cout << "upsi!\n";
 	}
 }
+
+void f2(E e)
+{
+	switch (e) {
+	case E(E1::a): std::cout << "E1::a\n"; break;
+	case E(E1::b): std::cout << "E1::b\n"; break;
+	case E(E1::c): std::cout << "E1::c\n"; break;
+	case E(E1::COUNT): std::cout << "E1::COUNT\n"; break;
+	case E(E2::a): std::cout << "E2::a\n"; break;
+	case E(E2::b): std::cout << "E2::b\n"; break;
+	case E(E2::c): std::cout << "E2::c\n"; break;
+	case E(E2::COUNT): std::cout << "E2::COUNT\n"; break;
+	}
+}
+
 
 int main()
 {
 	{
-		ShortVector<int, 10> test = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 0 };
-		std::cout << "test: " << test << "\n\n";
-		f(E1::a);
-		f(E1::b);
-		f(E1::c);
-		f(E2::d);	
-		f(E2::e);	
-		f(E2::f);	
-		std::cout << "E::COUNT = " << unsigned(E::COUNT) << "\n\n";
+		std::cout << "E::COUNT = " << unsigned(E::COUNT) << "\n";
+		f1(E1::a);
+		f1(E1::b);
+		f1(E1::c);
+		f1(E1::COUNT);
+		f1(E2::a);
+		f1(E2::b);
+		f1(E2::c);
+		f1(E2::COUNT);
+		std::cout << "\n";
+		f2(E1::a);
+		f2(E1::b);
+		f2(E1::c);
+		f2(E1::COUNT);
+		f2(E2::a);
+		f2(E2::b);
+		f2(E2::c);
+		f2(E2::COUNT);
 	}
 	{
 		std::string parentheses = "1([[0]])2(0)[(0){()(0)}]({}{}{()})3";
@@ -86,7 +110,7 @@ int main()
 
 				term.combine_layers();
 				term.sort();
-				term.combine_values_unexact();
+				term.combine_values_exact();
 
 				std::cout << "nach vereinfachen in huebsch: \n" << term.to_pretty_string() << "\n\n";
 				std::cout << "speicher nach vereinfachen:\n" << term.show_memory_layout() << "\n\n\n";
@@ -97,5 +121,14 @@ int main()
 				std::cout << std::string(failure.where, ' ') << "^\n\n";
 			}
 		}
+	}
+	{
+		using namespace bmath::intern::pattern;
+		std::string s = "a, b | a^2 + 2 a b + b^2 = (a + b)^2";
+		//std::string s = "cos('pi') = -1";
+		const PnTerm term(s);
+		std::cout << "pattern: " << term.to_string() << "\n\n";
+		std::cout << "lhs speicher:\n" << term.lhs_memory_layout() << "\n\n";
+		std::cout << "rhs speicher:\n" << term.rhs_memory_layout() << "\n\n";
 	}
 }

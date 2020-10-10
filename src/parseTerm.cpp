@@ -10,7 +10,17 @@ namespace bmath::intern {
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	/////////////////////////////////////////////////////////////////////local definitions//////////////////////////////////////////////////////////////////////////////////
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	
+
+	template<const auto x, const auto... xs, typename T>
+	constexpr bool is_one_of(const T y) 
+	{ 
+		if constexpr (!sizeof...(xs)) { return y == x; }
+		else                          { return y == x || is_one_of<xs...>(y); }
+	}	
+
+	constexpr bool is_number_literal(const Token t) { return is_one_of<token::number, token::imag_unit>(t); }
+	constexpr bool is_literal(const Token t) { return is_one_of<token::character, token::number, token::imag_unit>(t); }
+	constexpr bool is_operator(const Token t) { return is_one_of<token::sum, token::product, token::hat>(t); }
 	
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	/////////////////////////////////////////////////////////////////////exported in header/////////////////////////////////////////////////////////////////////////////////
@@ -38,8 +48,6 @@ namespace bmath::intern {
 
 	void ParseString::allow_implicit_product() noexcept
 	{
-		const auto is_literal = [](const Token token) { return token == token::character || token == token::number; };
-
 		assert(this->tokens.length() == this->name.length());
 		for (std::size_t prev_idx = 0; prev_idx + 2 < this->tokens.length(); prev_idx++) {
 			const std::size_t curr_idx = prev_idx + 1;
@@ -75,7 +83,11 @@ namespace bmath::intern {
 			int nr_brace = 0;	//counts number of '{' minus number of '}', (may never be negative in valid string)
 			for (std::size_t i = 0u; i < name.length(); i++) {
 				const char current = name[i];
-				if (in_interval(current, 'a', 'z') || in_interval(current, 'A', 'Z') || current == '_' || current == '\'') {
+				if (current == 'i') {
+					tokenized[i] = token::imag_unit;
+					continue;
+				}
+				if (in_interval(current, 'a', 'z') || in_interval(current, 'A', 'Z') || is_one_of<'_', '\''>(current)) {
 					tokenized[i] = token::character;
 					continue;
 				}
@@ -136,40 +148,47 @@ namespace bmath::intern {
 			throw_if<ParseFailure>(nr_brace != 0, name.length() - 1, "poor grouping, not all braces where closed");
 		}
 
-		if (name.front() == '-') {
-			tokenized.front() = token::unary_minus;
-		} 
-		//change tokens to better matches, decided by also looking at the previous token
-		//caution: only test up to second last element, as all matches so far implemented dont exist at the end anyways
-		for (std::size_t prev_idx = 0u; prev_idx + 2u < name.length(); prev_idx++) {
+		//optimize token choice by not looking at single Token / char, but at two at once
+		Token last_nonspace_tn = '\0';
+		for (std::size_t prev_idx = 0u; prev_idx + 1u < name.length(); prev_idx++) {
 			const std::size_t curr_idx = prev_idx + 1u;
-			const char prev = tokenized[prev_idx];
-			const char curr = tokenized[curr_idx];
-			throw_if<ParseFailure>((prev == token::sum || prev == token::product) && (curr == token::sum || curr == token::product),
-				curr_idx, "illegal operator sequence");
+			const Token prev_tn = tokenized[prev_idx];
+			const Token curr_tn = tokenized[curr_idx];
+			const char prev_ch = name[prev_idx];
+			const char curr_ch = name[curr_idx];
 
-			//change token representing digits occuring in names to token::character
-			if (prev == token::character && curr == token::number) { 
+			if (prev_tn != token::space) {
+				last_nonspace_tn = prev_tn;
+			}
+
+			throw_if<ParseFailure>(is_operator(prev_tn) && is_operator(curr_tn), curr_idx, "illegal operator sequence");
+
+			//change 'i' occuring at start of names names to token::character
+			if (prev_tn == token::imag_unit && curr_tn == token::character) {
+				tokenized[prev_idx] = token::character;
+			}
+			//change token representing digits or 'i' occuring in names to token::character
+			else if (prev_tn == token::character && is_number_literal(curr_tn)) { 
 				tokenized[curr_idx] = token::character;
 			}
 			//change token representing any of "e+-" occuring in numbers to token::number
-			else if (prev == token::number && (name[curr_idx] == 'e' || name[curr_idx] == 'E') &&
-				(tokenized[curr_idx + 1] == token::sum || tokenized[curr_idx + 1] == token::number)) 
+			else if (prev_tn == token::number && is_one_of<'e', 'E'>(curr_ch) ||
+			         prev_tn == token::number && is_one_of<'e', 'E'>(prev_ch) && curr_tn == token::sum) 
 			{
 				tokenized[curr_idx] = token::number;
 			}
-			else if (prev == token::number && curr == token::sum && (name[prev_idx] == 'e' || name[prev_idx] == 'E')) {
-				tokenized[curr_idx] = token::number;
-			}
 			//change unary minus to token::unary_minus
-			else if (prev == token::open_grouping && name[curr_idx] == '-') {
+			else if (is_one_of<token::open_grouping, token::equals>(last_nonspace_tn) && curr_ch == '-') {
 				tokenized[curr_idx] = token::unary_minus;
 			}
-			//change token::unary_minus to part of number, if it is (as unary_minus is not needed to seperate summands anyways)
-			else if (prev == token::unary_minus && curr == token::number) {
+			// if it is, change token::unary_minus to part of number
+			else if (prev_tn == token::unary_minus && curr_tn == token::number) {
 				tokenized[prev_idx] = token::number;
 			}
 		}
+		if (name.front() == '-') {
+			tokenized.front() = token::unary_minus;
+		} 
 
 		return tokenized;
 	} //tokenize

@@ -68,7 +68,8 @@ namespace bmath::intern {
 		constexpr FnType type_of(const std::string_view name) noexcept { return search(type_table, name, FnType::UNKNOWN); }
 
 		//appends only name, no parentheses or anything fancy
-		void append_name(const Store& store, const GenericFunction& func, std::string& str)
+		template<typename Store_T>
+		void append_name(const Store_T& store, const GenericFunction& func, std::string& str)
 		{
 			if (func.name_size == GenericFunction::NameSize::small) {
 				str.append(func.short_name);
@@ -76,7 +77,7 @@ namespace bmath::intern {
 			else {
 				read(store, func.long_name_idx, str);
 			}
-		} //append_name  y
+		} //append_name 
 
 	} //namespace fn
 
@@ -132,58 +133,63 @@ namespace bmath::intern {
 
 	namespace pattern {
 
-		constexpr auto restriction_name_table = std::to_array<std::pair<Restriction, std::string_view>>({
-			{ Restriction::sum          , "sum"           },
-			{ Restriction::product      , "product"       },
-			{ Restriction::function     , "function"      },
-			{ Restriction::variable     , "variable"      },
-			{ Restriction::complex      , "complex"       },
-			{ Restriction::natural      , "natural"       },
-			{ Restriction::integer      , "integer"       },
-			{ Restriction::real         , "real"          },
-			{ Restriction::not_minus_one, "not_minus_one" },
-			{ Restriction::negative     , "negative"      },
-			{ Restriction::not_negative , "not_negative"  },
-			{ Restriction::positive     , "positive"      },
-			{ Restriction::not_positive , "not_positive"  },
-			{ Restriction::none         , "none"          },
+		constexpr auto form_name_table = std::to_array<std::pair<Form, std::string_view>>({
+			{ Form::sum          , "sum"           },
+			{ Form::product      , "product"       },
+			{ Form::function     , "function"      },
+			{ Form::variable     , "variable"      },
+			{ Form::complex      , "complex"       },
+			{ Form::natural      , "natural"       },
+			{ Form::integer      , "integer"       },
+			{ Form::real         , "real"          },
+			{ Form::not_minus_one, "not_minus_one" },
+			{ Form::negative     , "negative"      },
+			{ Form::not_negative , "not_negative"  },
+			{ Form::positive     , "positive"      },
+			{ Form::not_positive , "not_positive"  },
+			{ Form::any          , "any"           },
 		});
-		constexpr std::string_view restriction_name(const Restriction r) noexcept { return find(restriction_name_table, r); }
+		constexpr std::string_view form_name(const Form r) noexcept { return find(form_name_table, r); }
 
-		constexpr auto restriction_type_table = std::to_array<std::pair<std::string_view, Restriction>>({
-			{"sum"          ,  Restriction::sum           },
-			{"product"      ,  Restriction::product       },
-			{"function"     ,  Restriction::function      },
-			{"variable"     ,  Restriction::variable      },
-			{"complex"      ,  Restriction::complex       },
-			{"natural"      ,  Restriction::natural       },
-			{"integer"      ,  Restriction::integer       },
-			{"real"         ,  Restriction::real          },
-			{"not_minus_one",  Restriction::not_minus_one },
-			{"negative"     ,  Restriction::negative      },
-			{"not_negative" ,  Restriction::not_negative  },
-			{"positive"     ,  Restriction::positive      },
-			{"not_positive" ,  Restriction::not_positive  },
-			{"none"         ,  Restriction::none          },
+		constexpr auto form_type_table = std::to_array<std::pair<std::string_view, Form>>({
+			{"sum"          ,  Form::sum           },
+			{"product"      ,  Form::product       },
+			{"function"     ,  Form::function      },
+			{"variable"     ,  Form::variable      },
+			{"complex"      ,  Form::complex       },
+			{"natural"      ,  Form::natural       },
+			{"integer"      ,  Form::integer       },
+			{"real"         ,  Form::real          },
+			{"not_minus_one",  Form::not_minus_one },
+			{"negative"     ,  Form::negative      },
+			{"not_negative" ,  Form::not_negative  },
+			{"positive"     ,  Form::positive      },
+			{"not_positive" ,  Form::not_positive  },
+			{"any"          ,  Form::any           },
 		});
-		constexpr Restriction restriction_type(const std::string_view sv) noexcept { return search(restriction_type_table, sv, Restriction::UNKNOWN); }
+		constexpr Form form_type(const std::string_view sv) noexcept { return search(form_type_table, sv, Form::UNKNOWN); }
 
 	} //namespace pattern
 
 	namespace print {
 
 		enum class PrintExtras { pow, COUNT };
-		using PrintType = SumEnum<PrintExtras, Type>;
+		using PrintType = SumEnum<PrintExtras, pattern::PnSpecial, Type>;
+
+		constexpr PrintType to_print_type(pattern::PnType t) { return PrintType(unsigned(t)); }
+		static_assert(unsigned(pattern::PnType(Type::sum)) == unsigned(PrintType(Type::sum)), "to_print_type invalid");
+		static_assert(unsigned(pattern::PnType(pattern::PnSpecial::match_variable)) == unsigned(PrintType(pattern::PnSpecial::match_variable)), "to_print_type invalid");
 
 		//operator precedence (used to decide if parentheses are nessecary in out string)
 		constexpr auto infixr_table = std::to_array<std::pair<PrintType, int>>({
-			{ Type::known_function,   0 },
-			{ Type::generic_function, 0 },
-			{ Type::sum,              2	},
-			{ Type::product,          4 },
-			{ PrintExtras::pow,       5 },
-			{ Type::variable,         6 },
-			{ Type::complex,          6 },//may be printed as sum/product itself, then (maybe) has to add parentheses on its own
+			{ Type::known_function,               0 },
+			{ Type::generic_function,             0 },
+			{ Type::sum,                          2	},
+			{ Type::product,                      4 },
+			{ PrintExtras::pow,                   5 },
+			{ Type::variable,                     6 },
+			{ Type::complex,                      6 },//may be printed as sum/product itself, then (maybe) has to add parentheses on its own
+			{ pattern::PnSpecial::match_variable, 6 },
 			});
 		constexpr int infixr(PrintType type) { return find(infixr_table, type); }
 
@@ -197,7 +203,7 @@ namespace bmath::intern {
 	{
 		using namespace token;
 		const char allowed_tokens[] = { character, number, open_grouping, clse_grouping, 
-			unary_minus, sum, product, comma, hat, '\0' }; //'\0' only as end symbol for allowed_tokens, not as part of aritmetic symbols
+			unary_minus, sum, product, comma, hat, imag_unit, '\0' }; //'\0' only as end symbol for allowed_tokens, not as part of aritmetic symbols
 		return view.find_first_not_of(allowed_tokens);
 	}
 
@@ -221,6 +227,9 @@ namespace bmath::intern {
 		}
 		if ((op = token_view.find_first_not_of(token::character)) == TokenView::npos) {
 			return Head{ 0, Head::Type::variable };
+		}
+		if (token_view.size() == 1u && token_view[0u] == token::imag_unit) {
+			return Head{ 0, Head::Type::imag_unit };
 		}
 		throw_if<ParseFailure>(token_view[op] != token::open_grouping, op + offset, "illegal character, expected '('");
 		throw_if<ParseFailure>(!token_view.ends_with(token::clse_grouping), token_view.length() + offset, "poor grouping, expected ')'");
@@ -283,12 +292,10 @@ namespace bmath::intern {
 			return build_function<TypedIdx>(store, input, head.where, build);
 		} break;
 		case Head::Type::variable: {
-			if (input.chars[0] == 'i' && input.size() == 1) {
-				return build_value<TypedIdx>(store, 0.0, 1.0);
-			}
-			else {
-				return TypedIdx(insert_string(store, input.to_string_view()), Type::variable);
-			}
+			return TypedIdx(insert_string(store, input.to_string_view()), Type::variable);
+		} break;
+		case Head::Type::imag_unit: {
+			return build_value<TypedIdx>(store, 0.0, 1.0);
 		} break;
 		default: 
 			assert(false); 
@@ -297,7 +304,7 @@ namespace bmath::intern {
 	} //build
 
 	template<typename VariadicTraits, typename TypedIdx_T, typename TermStore_T, typename BuildInverse, typename BuildAny>
-	TypedIdx_T build_variadic(TermStore_T& store, ParseView input, std::size_t op_idx, BuildInverse build_inverse, BuildAny build_any)
+	TypedIdx_T build_variadic(TermStore_T& store, ParseView input, std::size_t op_idx, const BuildInverse build_inverse, const BuildAny build_any)
 	{
 		using Result_T = VariadicTraits::Object_T;
 
@@ -325,11 +332,11 @@ namespace bmath::intern {
 	} //build_variadic
 
 	template<typename TypedIdx_T, typename TermStore_T, typename BuildAny>
-	[[nodiscard]] TypedIdx_T build_function(TermStore_T& store, ParseView input, const std::size_t open_par, BuildAny build_any)
+	[[nodiscard]] TypedIdx_T build_function(TermStore_T& store, ParseView input, const std::size_t open_par, const BuildAny build_any)
 	{
 		using TypedIdxSLC_T = TermSLC<std::uint32_t, TypedIdx_T, 3>;
 
-		const auto type = fn::type_of(input.to_string_view(open_par));
+		const auto type = fn::type_of(input.to_string_view(0u, open_par));
 		if (type == FnType::UNKNOWN) { //build generic function
 			GenericFunction result;
 			{//writing name in result
@@ -372,7 +379,7 @@ namespace bmath::intern {
 			auto param_view = input.steal_prefix(comma);
 			for (auto& param : fn::range(result)) {
 				throw_if<ParseFailure>(param_view.size() == 0u, input.offset, "too few function parameters");
-				param = build(store, param_view);
+				param = build_any(store, param_view);
 				comma = find_first_of_skip_pars(input.tokens, token::comma);
 				param_view = input.steal_prefix(comma);
 			}
@@ -392,10 +399,125 @@ namespace bmath::intern {
 			throw_if<ParseFailure>(equals == TokenView::npos, input.size() - 1u, "expected '=' at top grouping level");
 
 			if (bar != TokenView::npos) {
-				return PatternParts{ input.substr(0, bar), input.substr(bar + 1, equals), input.substr(equals + 1) };
+				return PatternParts{ input.substr(0u, bar), input.substr(bar + 1u, equals - bar - 1u), input.substr(equals + 1u) };
 			}
 			else {
-				return PatternParts{ input.substr(0, 0), input.substr(0, equals), input.substr(equals + 1) };
+				return PatternParts{ input.substr(0u, 0u), input.substr(0u, equals), input.substr(equals + 1u) };
+			}
+		}
+
+		std::vector<NameLookup> parse_declarations(ParseView declarations)
+		{
+			const auto parse_declaration = [](ParseView var_view) -> NameLookup {
+				const std::size_t colon = find_first_of_skip_pars(var_view.tokens, token::colon);
+				if (colon != TokenView::npos) {
+					const Form form = form_type(var_view.to_string_view(colon + 1u));
+					throw_if<ParseFailure>(form == Form::UNKNOWN, var_view.offset + colon + 1u, "unknown form");
+					return { var_view.to_string_view(0, colon), form };
+				}
+				else {
+					return { var_view.to_string_view(), Form::any };
+				}
+			};
+
+			std::vector<NameLookup> result;
+			result.reserve(count_skip_pars(declarations.tokens, token::comma) + 1u);
+			{
+				const std::size_t comma = find_first_of_skip_pars(declarations.tokens, token::comma);
+				result.push_back(parse_declaration(declarations.steal_prefix(comma)));
+			}
+			while (declarations.size()) {
+				declarations.remove_prefix(1); //erase comma
+				const std::size_t comma = find_first_of_skip_pars(declarations.tokens, token::comma);
+				result.push_back(parse_declaration(declarations.steal_prefix(comma)));
+			}
+			return result;
+		}
+
+		PnTypedIdx PatternBuildFunction::operator()(PnStore& store, ParseView input) const
+		{
+			const auto match_var_name = [](std::string_view name) -> std::array<char, 4u> {
+				if (name.size() >= 3u) {
+					return { name[0u], name[1u], name[2u], '\0' };
+				}
+				if (name.size() == 2u) {
+					return { name[0u], name[1u], '\0', '\0' };
+				}
+				if (name.size() == 1u) {
+					return { name[0u], '\0', '\0', '\0' };
+				}
+				assert(false && "expected positive name size");
+				return {};
+			};
+
+			throw_if<ParseFailure>(input.size() == 0u, input.offset, "recieved empty substring");
+			Head head = find_head_type(input.tokens, input.offset);
+			while (head.type == Head::Type::group) {
+				input.remove_prefix(1);
+				input.remove_suffix(1);
+				head = find_head_type(input.tokens, input.offset);
+			}
+			switch (head.type) {
+			case Head::Type::sum: {
+				return build_variadic<vdc::PnSumTraits, PnTypedIdx>(store, input, head.where, 
+					[](PnStore& store, PnTypedIdx to_invert) {
+						const PnTypedIdx minus_1 = build_value<PnTypedIdx>(store, -1.0);
+						return PnTypedIdx(store.insert(PnProduct({ minus_1, to_invert })), Type::product);
+					},
+					*this);
+			} break;
+			case Head::Type::negate: {
+				input.remove_prefix(1);  //remove minus sign
+				const PnTypedIdx to_negate = this->operator()(store, input);
+				const PnTypedIdx minus_1 = build_value<PnTypedIdx>(store, -1.0);
+				return PnTypedIdx(store.insert(PnProduct({ to_negate, minus_1 })), Type::product);
+			} break;
+			case Head::Type::product: {
+				return build_variadic<vdc::PnProductTraits, PnTypedIdx>(store, input, head.where, 
+					[](PnStore& store, PnTypedIdx to_invert) {
+						const PnTypedIdx minus_1 = build_value<PnTypedIdx>(store, -1.0);
+						return PnTypedIdx(store.insert(
+							PnKnownFunction{ FnType::pow, to_invert, minus_1, PnTypedIdx() }), Type::known_function);
+					},
+					*this);
+			} break;
+			case Head::Type::power: {
+				const auto base_view = input.steal_prefix(head.where);
+				input.remove_prefix(1);
+				const PnTypedIdx base = this->operator()(store, base_view);
+				const PnTypedIdx expo = this->operator()(store, input);
+				return PnTypedIdx(store.insert(PnKnownFunction{ FnType::pow, base, expo, PnTypedIdx() }), Type::known_function);
+			} break;
+			case Head::Type::value: {
+				double val;
+				const auto [ptr, error] = std::from_chars(input.chars, input.chars + input.size(), val);
+				throw_if<ParseFailure>(error == std::errc::invalid_argument, input.offset, "value syntax is illformed");
+				throw_if<ParseFailure>(ptr != input.chars + input.size(), std::size_t(input.offset + ptr - input.chars + 1), "value syntax is illformed");
+				return build_value<PnTypedIdx>(store, val);
+			} break;
+			case Head::Type::function: {
+				return build_function<PnTypedIdx>(store, input, head.where, *this);
+			} break;
+			case Head::Type::variable: {
+				if (input.chars[0] == '\'') {
+					throw_if<ParseFailure>(input.chars[input.size() - 1u] != '\'', input.offset + 1u, "found no matching \"'\"");
+					return PnTypedIdx(insert_string(store, input.to_string_view(1u, input.size() - 1u)), Type::variable);
+				}
+				else {
+					const auto name_it = std::find_if(this->name_map.begin(), this->name_map.end(),
+						[search_name = input.to_string_view()](const auto& x) { return x.name == search_name; });
+					throw_if<ParseFailure>(name_it == this->name_map.end(), input.offset, "variable was not declared");
+					const auto name = match_var_name(input.to_string_view());
+					const MatchVariable var = { TypedIdx(), std::uint32_t(name_it - this->name_map.begin()), name_it->form, name };
+					return PnTypedIdx(store.insert(var), PnSpecial::match_variable);
+				}
+			} break;
+			case Head::Type::imag_unit: {
+				return build_value<PnTypedIdx>(store, 0.0, 1.0);
+			} break;
+			default: 
+				assert(false); 
+				return PnTypedIdx();
 			}
 		}
 
@@ -459,16 +581,21 @@ namespace bmath::intern {
 			dest.append(buffer.str());
 		}
 
-		void append_to_string(const Store& store, const TypedIdx ref, std::string& str, const int parent_infixr)
+		template<typename Store_T, typename TypedIdx_T>
+		void append_to_string(const Store_T& store, const TypedIdx_T ref, std::string& str, const int parent_infixr)
 		{
+			using Type_T = TypedIdx_T::Enum_T;
+			using TypedIdxSLC_T = TermSLC<std::uint32_t, TypedIdx_T, 3>;
+			constexpr bool pattern = std::is_same_v<Type_T, pattern::PnType>;
+
 			const auto [index, type] = ref.split();
-			const int own_infixr = infixr(type);
+			const int own_infixr = infixr(to_print_type(type));
 			if (own_infixr <= parent_infixr) {
 				str.push_back('(');
 			}
 
 			switch (type) {
-			case Type::sum: {
+			case Type_T(Type::sum): {
 				bool first = true;
 				for (const auto summand : vdc::range(store, index)) {
 					if (!std::exchange(first, false)) {
@@ -477,7 +604,7 @@ namespace bmath::intern {
 					append_to_string(store, summand, str, own_infixr);
 				}
 			} break;
-			case Type::product: {
+			case Type_T(Type::product): {
 				bool first = true;
 				for (const auto factor : vdc::range(store, index)) {
 					if (!std::exchange(first, false)) {
@@ -486,9 +613,9 @@ namespace bmath::intern {
 					append_to_string(store, factor, str, own_infixr);
 				}
 			} break;
-			case Type::known_function: {
-				const KnownFunction& known_function = store.at(index).known_function;
-				str.pop_back(); //pop open paren
+			case Type_T(Type::known_function): {
+				const BasicKnownFunction<TypedIdx_T>& known_function = store.at(index).known_function;
+				str.pop_back(); //pop '('
 				str.append(fn::name_of(known_function.type));
 				str.push_back('(');
 				bool first = true;
@@ -499,7 +626,7 @@ namespace bmath::intern {
 					append_to_string(store, param, str, own_infixr);
 				}
 			} break;
-			case Type::generic_function: {
+			case Type_T(Type::generic_function): {
 				const GenericFunction& generic_function = store.at(index).generic_function;
 				str.pop_back(); //pop open paren
 				fn::append_name(store, generic_function, str);
@@ -512,13 +639,28 @@ namespace bmath::intern {
 					append_to_string(store, param, str, own_infixr);
 				}
 			} break;
-			case Type::variable: {
+			case Type_T(Type::variable): {
 				const Variable& variable = store.at(index).string;
-				read(store, index, str);
+				if constexpr (pattern) {
+					str.push_back('\'');
+					read(store, index, str);
+					str.push_back('\'');
+				}
+				else {
+					read(store, index, str);
+				}
 			} break;
-			case Type::complex: {
+			case Type_T(Type::complex): {
 				const Complex& complex = store.at(index).complex;
 				append_complex(complex, str, parent_infixr);
+			} break;
+			case Type_T(pattern::_match_variable): if constexpr (pattern) {
+				const pattern::MatchVariable& var = store.at(index).match_variable;
+				str.append(var.name.data());
+				if (var.form != pattern::Form::any) {
+					str.push_back(':');
+					str.append(form_name(var.form));
+				}
 			} break;
 			default: assert(false); //if this assert hits, the switch above needs more cases.
 			}
@@ -527,6 +669,8 @@ namespace bmath::intern {
 				str.push_back(')');
 			}
 		} //append_to_string
+		template void append_to_string<Store, TypedIdx>(const Store& store, const TypedIdx ref, std::string& str, const int parent_infixr);
+		template void append_to_string<pattern::PnStore, pattern::PnTypedIdx>(const pattern::PnStore& store, const pattern::PnTypedIdx ref, std::string& str, const int parent_infixr);
 
 		std::string to_pretty_string(const Store& store, const TypedIdx ref, const int parent_infixr)
 		{
@@ -694,16 +838,21 @@ namespace bmath::intern {
 			}
 		} //to_pretty_string
 
-		void to_memory_layout(const Store& store, const TypedIdx ref, std::vector<std::string>& content)
+		template<typename Store_T, typename TypedIdx_T>
+		void to_memory_layout(const Store_T& store, const TypedIdx_T ref, std::vector<std::string>& content)
 		{
+			using Type_T = TypedIdx_T::Enum_T;
+			using TypedIdxSLC_T = TermSLC<std::uint32_t, TypedIdx_T, 3>;
+			constexpr bool pattern = std::is_same_v<Type_T, pattern::PnType>;
+
 			const auto [index, type] = ref.split();
 
 			auto show_typedidx_col_nodes = [&store, &content, index](std::uint32_t idx, bool show_first) {
-				const TypedIdxSLC* col = &store.at(idx).index_slc;
+				const TypedIdxSLC_T* col = &store.at(idx).index_slc;
 				if (show_first) {
 					content[idx].append("(SLC node part of index " + std::to_string(index) + ')');
 				}
-				while (col->next_idx != TypedIdxSLC::null_index) {
+				while (col->next_idx != TypedIdxSLC_T::null_index) {
 					content[col->next_idx].append("(SLC node part of index " + std::to_string(index) + ')');
 					col = &store.at(col->next_idx).index_slc;
 				}
@@ -724,8 +873,8 @@ namespace bmath::intern {
 
 			std::string& current_str = content[index];
 			switch (type) {
-			case Type::sum: {
-				current_str.append("sum      : {");
+			case Type_T(Type::sum): {
+				current_str.append("sum       : {");
 				bool first = true;
 				for (const auto elem : vdc::range(store, index)) {
 					if (!std::exchange(first, false)) {
@@ -737,8 +886,8 @@ namespace bmath::intern {
 				current_str.push_back('}');
 				show_typedidx_col_nodes(index, false);
 			} break;
-			case Type::product: {
-				current_str.append("product  : {");
+			case Type_T(Type::product): {
+				current_str.append("product   : {");
 				bool first = true;
 				for (const auto elem : vdc::range(store, index)) {
 					if (!std::exchange(first, false)) {
@@ -750,9 +899,9 @@ namespace bmath::intern {
 				current_str.push_back('}');
 				show_typedidx_col_nodes(index, false);
 			} break;
-			case Type::known_function: {
-				const KnownFunction& known_function = store.at(index).known_function;
-				current_str.append("function : {");
+			case Type_T(Type::known_function): {
+				const BasicKnownFunction<TypedIdx_T>& known_function = store.at(index).known_function;
+				current_str.append("function  : {");
 				bool first = true;
 				for (const auto param : fn::range(known_function)) {
 					if (!std::exchange(first, false)) {
@@ -763,9 +912,9 @@ namespace bmath::intern {
 				}
 				current_str.push_back('}');
 			} break;
-			case Type::generic_function: {
+			case Type_T(Type::generic_function): {
 				const GenericFunction& generic_function = store.at(index).generic_function;
-				current_str.append("function?: {");
+				current_str.append("function? : {");
 				bool first = true;
 				for (const auto param : fn::range(store, generic_function)) {
 					if (!std::exchange(first, false)) {
@@ -780,13 +929,16 @@ namespace bmath::intern {
 					show_string_nodes(generic_function.long_name_idx, true);
 				}
 			} break;
-			case Type::variable: {
-				current_str.append("variable : ");
+			case Type_T(Type::variable): {
+				current_str.append("variable  : ");
 				show_string_nodes(index, false);
 			} break;
-			case Type::complex: {
+			case Type_T(Type::complex): {
 				const Complex& complex = store.at(index).complex;
-				current_str.append("value    : ");
+				current_str.append("value     : ");
+			} break;
+			case Type_T(pattern::_match_variable): if constexpr (pattern) {
+				current_str.append("match_var : ");
 			} break;
 			default: assert(false); //if this assert hits, the switch above needs more cases.
 			}
@@ -795,6 +947,38 @@ namespace bmath::intern {
 			current_str.append(std::max(0, 35 - (int)current_str.size()), ' ');
 			append_to_string(store, ref, current_str, 0);
 		} //to_memory_layout
+
+		template<typename Store_T, typename TypedIdx_T>
+		std::string show_memory_layout(const Store_T& store, const TypedIdx_T head)
+		{
+			std::vector<std::string> elements;
+			elements.reserve(store.size() + 1);
+			for (std::size_t i = 0; i < store.size(); i++) {
+				elements.push_back("");
+				if (i < 10) { //please std::format, i need you :(
+					elements[i] = " ";
+				}
+				elements[i].append(std::to_string(i));
+				elements[i].append(" | ");
+			}
+			to_memory_layout(store, head, elements);
+
+			for (const auto i : store.free_slots()) {
+				elements[i].append("-----free slot-----");
+			}		
+
+			for (auto& elem : elements) {
+				elem.push_back('\n');
+			}
+			std::string result("   | head at index: " + std::to_string(head.get_index()) + '\n');
+			result.reserve(store.size() * 15);
+			for (auto& elem : elements) {
+				result.append(elem);
+			}
+			return result;
+		} //show_memory_layout
+		template std::string show_memory_layout<Store, TypedIdx>(const Store& store, const TypedIdx head);
+		template std::string show_memory_layout<pattern::PnStore, pattern::PnTypedIdx>(const pattern::PnStore& store, const pattern::PnTypedIdx head);
 
 	} //namespace print
 

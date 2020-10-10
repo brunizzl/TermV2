@@ -14,36 +14,42 @@
 /*
 	void prototype(const Store & store, const TypedIdx ref)
 	{
+		using Type_T = TypedIdx_T::Enum_T;
+		using TypedIdxSLC_T = TermSLC<std::uint32_t, TypedIdx_T, 3>;
+		constexpr bool pattern = std::is_same_v<Type_T, pattern::PnType>;
+
 		const auto [index, type] = ref.split();
 		switch (type) {
-		case Type::sum: {
-			for (const auto elem : vdc::range(store, index)) {
+		case Type_T(Type::sum): {
+			for (const auto summand : vdc::range(store, index)) {
 			}
 			assert(false);
 		} break;
-		case Type::product:  {
-			for (const auto elem : vdc::range(store, index)) {
-			}
-			assert(false);
-		} break;            
-		case Type::function: {
-			const KnownFunction& function = store.at(index).function;
-			for (const auto param : fn::range(function)) {
+		case Type_T(Type::product): {
+			for (const auto factor : vdc::range(store, index)) {
 			}
 			assert(false);
 		} break;
-		case Type::generic_function: {
+		case Type_T(Type::known_function): {
+			const BasicKnownFunction<TypedIdx_T>& known_function = store.at(index).known_function;
+			for (const auto param : fn::range(known_function)) {
+			}
+			assert(false);
+		} break;
+		case Type_T(Type::generic_function): {
 			const GenericFunction& generic_function = store.at(index).generic_function;
 			for (const auto param : fn::range(store, generic_function)) {
 			}
 			assert(false);
-		} break;           
-		case Type::variable: {
-			const Variable& variable = store.at(index).variable;
+		} break;
+		case Type_T(Type::variable): {
+			const Variable& variable = store.at(index).string;
 			assert(false);
-		} break;   
-		case Type::complex: {
-			const Complex& complex = store.at(index).complex;
+		} break;
+		case Type_T(Type::complex): {
+			assert(false);
+		} break;
+		case Type_T(pattern::_match_variable): if constexpr (pattern) {
 			assert(false);
 		} break;
 		default: assert(false); //if this assert hits, the switch above needs more cases.
@@ -107,9 +113,63 @@ namespace bmath::intern {
 	/////////////////////////////////////////////////////////////////////exported in header/////////////////////////////////////////////////////////////////////////////////
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+	namespace pattern {
+		
+		template<typename Store_T, typename TypedIdx_T>
+		bool has_form(const Store_T & store, const TypedIdx_T ref, const Form form)
+		{
+			return false;
+		}
+
+		PnTerm::PnTerm(std::string& name) 
+			:shared_match_data({ SharedMatchData{ TypedIdx() }, { TypedIdx() }, { TypedIdx() }, { TypedIdx() }, { TypedIdx() }, { TypedIdx() }, })
+		{
+			auto parse_string = ParseString(name);
+			parse_string.allow_implicit_product();
+			parse_string.remove_space();
+			const auto parts = split(parse_string);
+			const auto name_map = parse_declarations(parts.declarations);
+			throw_if<ParseFailure>(name_map.size() > max_var_count, 0u, "too many variables declared");
+			const PatternBuildFunction build_function = { name_map };
+			this->lhs_head = build_function(this->lhs_store, parts.lhs);
+			this->rhs_head = build_function(this->rhs_store, parts.rhs);
+			tree::combine_layers(this->lhs_store, this->lhs_head);
+			tree::combine_layers(this->rhs_store, this->rhs_head);
+			if (const auto val = tree::combine_values_exact(this->lhs_store, this->lhs_head)) {
+				this->lhs_head = PnTypedIdx(this->lhs_store.insert(*val), Type::complex);
+			}
+			if (const auto val = tree::combine_values_exact(this->rhs_store, this->rhs_head)) {
+				this->rhs_head = PnTypedIdx(this->rhs_store.insert(*val), Type::complex);
+			}			
+			tree::sort(this->lhs_store, this->lhs_head);
+			tree::sort(this->rhs_store, this->rhs_head);
+		}
+
+		std::string PnTerm::to_string() const
+		{
+			std::string str;
+			bmath::intern::print::append_to_string(this->lhs_store, this->lhs_head, str);
+			str.append(" = ");
+			bmath::intern::print::append_to_string(this->rhs_store, this->rhs_head, str);
+			return str;
+		}
+
+		std::string PnTerm::lhs_memory_layout() const
+		{
+			return print::show_memory_layout(this->lhs_store, this->lhs_head);
+		}
+
+		std::string PnTerm::rhs_memory_layout() const
+		{
+			return print::show_memory_layout(this->rhs_store, this->rhs_head);
+		}
+
+	} //namespace pattern
+
 	namespace fn {
 
-		std::strong_ordering compare_name(const Store& store, const GenericFunction& func_1, const GenericFunction& func_2)
+		template<typename Store_T1, typename Store_T2>
+		std::strong_ordering compare_name(const Store_T1& store_1, const Store_T2& store_2, const GenericFunction& func_1, const GenericFunction& func_2)
 		{
 			if (func_1.name_size == GenericFunction::NameSize::small &&
 				func_2.name_size == GenericFunction::NameSize::small) 
@@ -121,11 +181,14 @@ namespace bmath::intern {
 				if (cmp > 0) {
 					return std::strong_ordering::greater;
 				}
+				else {
+					return std::strong_ordering::equal;
+				}
 			}
 			if (func_1.name_size == GenericFunction::NameSize::longer &&
 				func_2.name_size == GenericFunction::NameSize::longer) 			
 			{
-				return string_compare(store, store, func_1.long_name_idx, func_2.long_name_idx);
+				return string_compare(store_1, store_2, func_1.long_name_idx, func_2.long_name_idx);
 			}
 			else {
 				return func_1.name_size == GenericFunction::NameSize::small ?
@@ -138,126 +201,94 @@ namespace bmath::intern {
 
 	namespace tree {
 
-		void free(Store& store, const TypedIdx ref)
+		template<typename Store_T, typename TypedIdx_T>
+		void free(Store_T& store, const TypedIdx_T ref)
 		{
+			using Type_T = TypedIdx_T::Enum_T;
+			using TypedIdxSLC_T = TermSLC<std::uint32_t, TypedIdx_T, 3>;
+			constexpr bool pattern = std::is_same_v<Type_T, pattern::PnType>;
+
 			const auto [index, type] = ref.split();
 			switch (type) {
-			case Type::sum: {
-				for (const auto summand : vdc::range(store, index)) {
-					free(store, summand);
-				}
-				Sum::free_slc(store, index);
-			} break;
-			case Type::product: {
+			case Type_T(Type::sum): 
+				[[fallthrough]];
+			case Type_T(Type::product): {
 				for (const auto factor : vdc::range(store, index)) {
 					free(store, factor);
 				}
-				Product::free_slc(store, index);
+				TypedIdxSLC_T::free_slc(store, index);
 			} break;
-			case Type::known_function: {
-				const KnownFunction& known_function = store.at(index).known_function;
+			case Type_T(Type::known_function): {
+				const BasicKnownFunction<TypedIdx_T>& known_function = store.at(index).known_function;
 				for (const auto param : fn::range(known_function)) {
 					free(store, param);
 				}
 				store.free(index);
 			} break;
-			case Type::generic_function: {
+			case Type_T(Type::generic_function): {
 				const GenericFunction& generic_function = store.at(index).generic_function;
 				for (const auto param : fn::range(store, generic_function)) {
 					free(store, param);
 				}
-				TypedIdxSLC::free_slc(store, generic_function.params_idx);
+				TypedIdxSLC_T::free_slc(store, generic_function.params_idx);
 				if (generic_function.name_size == GenericFunction::NameSize::longer) {
 					TermString128::free_slc(store, generic_function.long_name_idx);
 				}
 				store.free(index);
 			} break;
-			case Type::variable: {
+			case Type_T(Type::variable): {
 				TermString128::free_slc(store, index);
 			} break;
-			case Type::complex: {
+			case Type_T(Type::complex): {
+			} break;
+			case Type_T(pattern::_match_variable): if constexpr (pattern) {
 				store.free(index);
 			} break;
 			default: assert(false); //if this assert hits, the switch above needs more cases.
 			}
-		}
+		} //free
 
-		Complex eval(const Store& store, const TypedIdx ref)
+		template<typename Store_T, typename TypedIdx_T>
+		void combine_layers(Store_T& store, const TypedIdx_T ref)
 		{
+			using Type_T = TypedIdx_T::Enum_T;
+			using TypedIdxSLC_T = TermSLC<std::uint32_t, TypedIdx_T, 3>;
+			constexpr bool pattern = std::is_same_v<Type_T, pattern::PnType>;
+
 			const auto [index, type] = ref.split();
 			switch (type) {
-			case Type::sum: {
-				Complex value = 0.0;
-				for (const auto summand : vdc::range(store, index)) {
-					value += eval(store, summand);
-				}
-				return value;
-			} break;
-			case Type::product: {
-				Complex value = 1.0;
-				for (const auto factor : vdc::range(store, index)) {
-					value *= eval(store, factor);
-				}
-				return value;
-			} break;
-			case Type::known_function: {
-				const KnownFunction& known_function = store.at(index).known_function;
-				std::array<Complex, 3> results_values;
-				for (std::size_t i = 0; i < fn::param_count(known_function.type); i++) {
-					results_values[i] = eval(store, known_function.params[i]);
-				}
-				return fn::eval(known_function.type, results_values);
-			} break;
-			case Type::generic_function: {
-				throw std::exception("eval found generic_function in term");
-			} break;
-			case Type::variable:
-			{
-				throw std::exception("eval found variable in term");
-			} break;
-			case Type::complex: {
-				return store.at(index).complex;
-			} break;
-			default:
-				assert(false); //if this assert hits, the switch above needs more cases.
-				return Complex(0.0, 0.0);
-			}
-		} //eval
-
-		void combine_layers(Store& store, const TypedIdx ref)
-		{
-			const auto [index, type] = ref.split();
-			switch (type) {
-			case Type::sum:
+			case Type_T(Type::sum):
 				[[fallthrough]];
-			case Type::product: {
+			case Type_T(Type::product): {
 				std::size_t current_append_node = index;
 				for (auto& elem : vdc::range(store, index)) {
 					const auto [elem_idx, elem_type] = elem.split();
 					if (elem_type == type) {
-						elem = TypedIdxSLC::null_value;
-						current_append_node = TypedIdxSLC::append(store, current_append_node, elem_idx);
+						elem = TypedIdxSLC_T::null_value;
+						current_append_node = TypedIdxSLC_T::append(store, current_append_node, elem_idx);
 					}
 					else {
 						combine_layers(store, elem);
 					}
 				}
 			} break;
-			case Type::known_function: {
-				const KnownFunction& known_function = store.at(index).known_function;
+			case Type_T(Type::known_function): {
+				const BasicKnownFunction<TypedIdx_T>& known_function = store.at(index).known_function;
 				for (const auto param : fn::range(known_function)) {
 					combine_layers(store, param);
 				}
 			} break;
-			case Type::generic_function: {
+			case Type_T(Type::generic_function): {
 				const GenericFunction& generic_function = store.at(index).generic_function;
 				for (const auto param : fn::range(store, generic_function)) {
 					combine_layers(store, param);
 				}
 			} break;
-			case Type::variable:
+			case Type_T(Type::variable):
 				break;
-			case Type::complex:
+			case Type_T(Type::complex):
+				break;
+			case Type_T(pattern::_match_variable):
 				break;
 			default: assert(false); //if this assert hits, the switch above needs more cases.
 			}
@@ -355,10 +386,99 @@ namespace bmath::intern {
 			default: assert(false); //if this assert hits, the switch above needs more cases.
 				return {};
 			}
-		}
+		} //combine_values_unexact
 
-		std::strong_ordering compare(const Store& store, const TypedIdx ref_1, const TypedIdx ref_2)
+		template<typename Store_T, typename TypedIdx_T>
+		std::optional<Complex> combine_values_exact(Store_T& store, const TypedIdx_T ref)
 		{
+			using Type_T = TypedIdx_T::Enum_T;
+			using TypedIdxSLC_T = TermSLC<std::uint32_t, TypedIdx_T, 3>;
+			constexpr bool pattern = std::is_same_v<Type_T, pattern::PnType>;
+
+			const auto [index, type] = ref.split();
+			switch (type) {
+			case Type_T(Type::sum): {
+				Complex result_val = 0.0;
+				bool only_values = true;
+				for (auto& summand : vdc::range(store, index)) {
+					if (const auto summand_val = combine_values_exact(store, summand)) {
+						result_val += *summand_val;
+						summand = TypedIdxSLC_T::null_value;
+					}
+					else {
+						only_values = false;
+					}
+				}
+				if (only_values) {
+					TypedIdxSLC_T::free_slc(store, index); //all summands have already (implicitly) been freed in the loop above
+					return { result_val };
+				}
+				else if (result_val != 0.0) {
+					const auto new_summand = TypedIdx_T(store.insert(result_val), Type::complex);
+					TypedIdxSLC_T::insert_new(store, index, new_summand);
+				}
+				return {};
+			} break;
+			case Type_T(Type::product): {
+				Complex result_val = 1.0;
+				bool only_values = true;
+				for (auto& factor : vdc::range(store, index)) {
+					if (const auto factor_val = combine_values_exact(store, factor)) {
+						result_val *= *factor_val;
+						factor = TypedIdxSLC_T::null_value;
+					}
+					else {
+						only_values = false;
+					}
+				}
+				if (only_values) {
+					TypedIdxSLC_T::free_slc(store, index); //all factors have already been freed in the loop above
+					return { result_val };
+				}
+				else if (result_val != 1.0) {
+					const auto new_factor = TypedIdx_T(store.insert(result_val), Type::complex);
+					TypedIdxSLC_T::insert_new(store, index, new_factor);
+				}
+				return {};
+			} break;
+			case Type_T(Type::known_function): {
+				BasicKnownFunction<TypedIdx_T>& function = store.at(index).known_function;
+				for (auto& elem : fn::range(function)) {
+					if (const auto param_res = combine_values_exact(store, elem)) {
+						elem = TypedIdx_T(store.insert(*param_res), Type::complex);
+					}
+				}
+				return {};
+			} break;
+			case Type_T(Type::generic_function): {
+				GenericFunction& function = store.at(index).generic_function;
+				for (auto& elem : fn::range(store, function)) {
+					if (const auto param_res = combine_values_exact(store, elem)) {
+						elem = TypedIdx_T(store.insert(*param_res), Type::complex);
+					}
+				}
+				return {};
+			} break;
+			case Type_T(Type::variable): 
+				return {};
+			case Type_T(Type::complex): {
+				const Complex value = store.at(index).complex;
+				store.free(index);
+				return { value };
+			} break;
+			case Type_T(pattern::_match_variable): 
+				return {};
+			default: assert(false); //if this assert hits, the switch above needs more cases.
+				return {};
+			}
+		} //combine_values_exact
+
+		template<typename Store_T1, typename Store_T2, typename TypedIdx_T1, typename TypedIdx_T2>
+		std::strong_ordering compare(const Store_T1& store_1, const Store_T2& store_2, const TypedIdx_T1 ref_1, const TypedIdx_T2 ref_2)
+		{
+			using Type_T = TypedIdx_T1::Enum_T;
+			constexpr bool pattern = std::is_same_v<Type_T, pattern::PnType>;
+
 			const auto [index_1, type_1] = ref_1.split();
 			const auto [index_2, type_2] = ref_2.split();
 			if (type_1 != type_2) [[likely]] {
@@ -367,15 +487,15 @@ namespace bmath::intern {
 			}
 
 			switch (type_1) {
-			case Type::sum:
+			case Type_T(Type::sum):
 				[[fallthrough]];
-			case Type::product: {
-				auto range_1 = vdc::range(store, index_1);
-				auto range_2 = vdc::range(store, index_2);
+			case Type_T(Type::product): {
+				auto range_1 = vdc::range(store_1, index_1);
+				auto range_2 = vdc::range(store_2, index_2);
 				auto iter_1 = range_1.begin();
 				auto iter_2 = range_2.begin();
 				for (; iter_1 != range_1.end() && iter_2 != range_2.end(); ++iter_1, ++iter_2) {
-					const auto iter_compare = compare(store, *iter_1, *iter_2);
+					const auto iter_compare = compare(store_1, store_2, *iter_1, *iter_2);
 					if (iter_compare != std::strong_ordering::equal) [[likely]] {
 						return iter_compare;
 					}
@@ -389,9 +509,9 @@ namespace bmath::intern {
 						std::strong_ordering::greater;
 				}
 			} break;
-			case Type::known_function: {
-				const KnownFunction& fn_1 = store.at(index_1).known_function;
-				const KnownFunction& fn_2 = store.at(index_2).known_function;
+			case Type_T(Type::known_function): {
+				const BasicKnownFunction<TypedIdx_T1>& fn_1 = store_1.at(index_1).known_function;
+				const BasicKnownFunction<TypedIdx_T2>& fn_2 = store_2.at(index_2).known_function;
 				if (fn_1.type != fn_2.type) {
 					return fn_1.type <=> fn_2.type;
 				}
@@ -400,26 +520,26 @@ namespace bmath::intern {
 				auto iter_1 = range_1.begin();
 				auto iter_2 = range_2.begin();
 				for (; iter_1 != range_1.end(); ++iter_1, ++iter_2) { //iter_1 and iter_2 both go over same number of params
-					const auto iter_compare = compare(store, *iter_1, *iter_2);
+					const auto iter_compare = compare(store_1, store_2, *iter_1, *iter_2);
 					if (iter_compare != std::strong_ordering::equal) [[likely]] {
 						return iter_compare;
 					}
 				}
 				return std::strong_ordering::equal;
 			} break;
-			case Type::generic_function: {
-				const GenericFunction& fn_1 = store.at(index_1).generic_function;
-				const GenericFunction& fn_2 = store.at(index_2).generic_function;
-				const auto name_cmp = fn::compare_name(store, fn_2, fn_1); //reverse order, as to_pretty_string is reversed again
+			case Type_T(Type::generic_function): {
+				const GenericFunction& fn_1 = store_1.at(index_1).generic_function;
+				const GenericFunction& fn_2 = store_2.at(index_2).generic_function;
+				const auto name_cmp = fn::compare_name(store_1, store_2, fn_2, fn_1); //reverse order, as to_pretty_string is reversed again
 				if (name_cmp != std::strong_ordering::equal) {
 					return name_cmp;
 				}
-				auto range_1 = fn::range(store, fn_1);
-				auto range_2 = fn::range(store, fn_2);
+				auto range_1 = fn::range(store_1, fn_1);
+				auto range_2 = fn::range(store_2, fn_2);
 				auto iter_1 = range_1.begin();
 				auto iter_2 = range_2.begin();
 				for (; iter_1 != range_1.end() && iter_2 != range_2.end(); ++iter_1, ++iter_2) {
-					const auto iter_compare = compare(store, *iter_1, *iter_2);
+					const auto iter_compare = compare(store_1, store_2, *iter_1, *iter_2);
 					if (iter_compare != std::strong_ordering::equal) [[likely]] {
 						return iter_compare;
 					}
@@ -433,62 +553,81 @@ namespace bmath::intern {
 						std::strong_ordering::greater;
 				}
 			} break;
-			case Type::variable: {
-				return string_compare(store, store, index_2, index_1); //reverse order, as to_pretty_string is reversed again
+			case Type_T(Type::variable): {
+				return string_compare(store_1, store_2, index_2, index_1); //reverse order, as to_pretty_string is reversed again
 			} break;
-			case Type::complex: {
-				const Complex& complex_1 = store.at(index_1).complex;
-				const Complex& complex_2 = store.at(index_2).complex;
+			case Type_T(Type::complex): {
+				const Complex& complex_1 = store_1.at(index_1).complex;
+				const Complex& complex_2 = store_2.at(index_2).complex;
 				static_assert(sizeof(double) * 8 == 64, "bit_cast may cast to something of doubles size.");
-				const auto real_1 = std::bit_cast<std::uint64_t>(complex_1.real());
+				const auto real_1 = std::bit_cast<std::uint64_t>(complex_1.real()); //with not actually comparing the doubles as such, strong ordering is possible
 				const auto real_2 = std::bit_cast<std::uint64_t>(complex_2.real());
 				const auto imag_1 = std::bit_cast<std::uint64_t>(complex_1.imag());
 				const auto imag_2 = std::bit_cast<std::uint64_t>(complex_2.imag());
-				if (real_1 == real_2 && imag_1 == imag_2) {
-					return std::strong_ordering::equal;
+				if (real_1 != real_2) {
+					return real_2 <=> real_1; //reverse order, as to_pretty_string is reversed again
 				}
-				if (real_1 == real_2) {
-					return imag_1 <=> imag_2;
+				if (imag_1 != imag_2) {
+					return imag_2 <=> imag_1; //reverse order, as to_pretty_string is reversed again
 				}
-				else [[likely]] {
-					return real_1 <=> real_2;
+				return std::strong_ordering::equal;
+			} break;
+			case Type_T(pattern::_match_variable): if constexpr (pattern) {
+				const pattern::MatchVariable& var_1 = store_1.at(index_1).match_variable;
+				const pattern::MatchVariable& var_2 = store_2.at(index_2).match_variable;
+				if (var_1.form != var_2.form) {
+					return var_1.form <=> var_2.form;
 				}
+				//if (var_1.name != var_2.name) { //c++20 i need you :(
+				//	return var_1.name <=> var_2.name; //reverse to make pretty_string prettier
+				//}
+				if (var_1.shared_data_idx != var_2.shared_data_idx) {
+					return var_1.shared_data_idx <=> var_2.shared_data_idx; //reverse to make pretty_string prettier
+				}
+				return std::strong_ordering::equal;
 			} break;
 			default: assert(false); //if this assert hits, the switch above needs more cases.
-				return std::strong_ordering::equal;
 			}
+			return std::strong_ordering::equal;
 		} //compare
 
-		void sort(Store& store, const TypedIdx ref)
+		template<typename Store_T, typename TypedIdx_T>
+		void sort(Store_T& store, const TypedIdx_T ref)
 		{
+			using Type_T = TypedIdx_T::Enum_T;
+			using TypedIdxSLC_T = TermSLC<std::uint32_t, TypedIdx_T, 3>;
+			constexpr bool pattern = std::is_same_v<Type_T, pattern::PnType>;
+
 			const auto [index, type] = ref.split();
 			switch (type) {
-			case Type::sum:
+			case Type_T(Type::sum):
 				[[fallthrough]];
-			case Type::product: {
+			case Type_T(Type::product): {
 				for (const auto elem : vdc::range(store, index)) {
 					sort(store, elem);
 				}
-				TypedIdxSLC::sort(store, index,
-					[&store](const TypedIdx lhs, const TypedIdx rhs) {
-						return compare(store, lhs, rhs) == std::strong_ordering::less;
+				TypedIdxSLC_T::sort(store, index,
+					[&store](const TypedIdx_T lhs, const TypedIdx_T rhs) {
+						return compare(store, store, lhs, rhs) == std::strong_ordering::less;
 					});
 			} break;
-			case Type::known_function: {
-				const KnownFunction& known_function = store.at(index).known_function;
+			case Type_T(Type::known_function): {
+				const BasicKnownFunction<TypedIdx_T>& known_function = store.at(index).known_function;
 				for (const auto param : fn::range(known_function)) {
 					sort(store, param);
 				}
 			} break;
-			case Type::generic_function: {
+			case Type_T(Type::generic_function): {
 				const GenericFunction& generic_function = store.at(index).generic_function;
 				for (const auto param : fn::range(store, generic_function)) {
 					sort(store, param);
 				}
 			} break;
-			case Type::variable:
+			case Type_T(Type::variable):
 				break;
-			case Type::complex:
+			case Type_T(Type::complex):
+				break;
+			case Type_T(pattern::_match_variable): 
 				break;
 			default: assert(false); //if this assert hits, the switch above needs more cases.
 			}
@@ -496,26 +635,16 @@ namespace bmath::intern {
 
 	} //namespace tree
 
-
-	namespace pattern {
-
-		PnTerm::PnTerm(ParseView name)
-		{
-
-		}
-
-	} //namespace pattern
-
 } //namespace bmath::intern
 
 
 namespace bmath {
 	using namespace intern;
 
-	ArithmeticTerm::ArithmeticTerm(std::string name)
+	ArithmeticTerm::ArithmeticTerm(std::string& name)
 		:store(name.size() / 2)
 	{
-		auto parse_string = ParseString(std::move(name));
+		auto parse_string = ParseString(name);
 		parse_string.allow_implicit_product();
 		parse_string.remove_space();
 		const std::size_t error_pos = find_first_not_arithmetic(TokenView(parse_string.tokens));
@@ -536,6 +665,13 @@ namespace bmath {
 		}	
 	}
 
+	void ArithmeticTerm::combine_values_exact() noexcept
+	{
+		if (const auto val = tree::combine_values_exact(this->store, this->head)) {
+			this->head = TypedIdx(this->store.insert(*val), Type::complex);
+		}	
+	}
+
 	void ArithmeticTerm::sort() noexcept
 	{
 		tree::sort(this->store, this->head);
@@ -543,31 +679,7 @@ namespace bmath {
 
 	std::string bmath::ArithmeticTerm::show_memory_layout() const
 	{
-		std::vector<std::string> elements;
-		elements.reserve(this->store.size() + 1);
-		for (std::size_t i = 0; i < this->store.size(); i++) {
-			elements.push_back("");
-			if (i < 10) { //please std::format, i need you :(
-				elements[i] = " ";
-			}
-			elements[i].append(std::to_string(i));
-			elements[i].append(" | ");
-		}
-		print::to_memory_layout(this->store, this->head, elements);
-
-		for (const auto i : this->store.free_slots()) {
-			elements[i].append("-----free slot-----");
-		}		
-
-		for (auto& elem : elements) {
-			elem.push_back('\n');
-		}
-		std::string result("   | head at index: " + std::to_string(this->head.get_index()) + '\n');
-		result.reserve(this->store.size() * 15);
-		for (auto& elem : elements) {
-			result.append(elem);
-		}
-		return result;
+		return print::show_memory_layout(this->store, this->head);
 	} //show_memory_layout
 
 	std::string ArithmeticTerm::to_string() const

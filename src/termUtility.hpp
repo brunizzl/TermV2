@@ -63,7 +63,7 @@ namespace bmath::intern {
 		Value_T* data_;
 		union
 		{
-			std::size_t capacity;
+			std::size_t capacity = 0u;
 			Value_T local_data[BufferSize];
 		};
 
@@ -225,8 +225,12 @@ namespace bmath::intern {
 	public:
 		constexpr SumEnum(Value e) :value(e) {}
 		constexpr operator Value() const { return this->value; }
+		explicit constexpr SumEnum(unsigned e) :value(static_cast<Value>(e)) {}
 		explicit constexpr operator unsigned() const { return static_cast<unsigned>(this->value); }
-	}; //class SumEnum
+
+		template<typename E> constexpr bool is_type() const 
+		{ static_assert(false, "requested type not possible in this SumEnum"); return false; }
+	}; //class SumEnum<>
 
 	template<typename Enum, typename... TailEnums>
 	class SumEnum<Enum, TailEnums...> :public SumEnum<TailEnums...>
@@ -243,9 +247,19 @@ namespace bmath::intern {
 		constexpr SumEnum(Enum e) :Base(static_cast<Value>(this_offset + static_cast<unsigned>(e))) {}
 		explicit constexpr operator Enum() const { return static_cast<Enum>(this->value); }
 
+		template<typename E> constexpr bool is_type() const
+		{ 
+			return static_cast<const Base>(*this).is_type<E>();
+		}
+
+		template<> constexpr bool is_type<Enum>() const 
+		{ 
+			return unsigned(this->value) >= this_offset && unsigned(this->value) < next_offset; 
+		}
+
 		constexpr bool operator==(const SumEnum&) const = default;      //only relevant for outhermost instance
 		static constexpr Value COUNT = static_cast<Value>(next_offset); //only relevant for outhermost instance
-	}; //class SumEnum
+	}; //class SumEnum<Enum, TailEnums...>
 
 	template<typename T, auto V> struct Pair; //pair of Type and Value
 
@@ -264,8 +278,18 @@ namespace bmath::intern {
 		constexpr SumEnum(Enum e) :Base(static_cast<Value>(this_offset + static_cast<unsigned>(e))) {}
 		explicit constexpr operator Enum() const { return static_cast<Enum>(this->value); }
 
+		template<typename E> constexpr bool is_type() const
+		{
+			return static_cast<const Base>(*this).is_type<E>();
+		}
+
+		template<> constexpr bool is_type<Enum>() const 
+		{ 
+			return unsigned(this->value) >= this_offset && unsigned(this->value) < next_offset; 
+		}
+
 		constexpr bool operator==(const SumEnum&) const = default;      //only relevant for outhermost instance   
 		static constexpr Value COUNT = static_cast<Value>(next_offset); //only relevant for outhermost instance   
-	}; //class SumEnum
+	}; //class SumEnum<Pair<Enum, Count>, TailEnums...>
 
 } //namespace bmath::intern
