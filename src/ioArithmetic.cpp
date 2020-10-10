@@ -37,35 +37,9 @@ namespace bmath::intern {
 			{ FnType::re   , "re"    },	
 			{ FnType::im   , "im"    },	
 		});
-		constexpr std::string_view name_of(FnType type) noexcept 
-		{ return find(name_table, type); }
 
-		constexpr auto type_table = std::to_array<std::pair<std::string_view, FnType>>({
-			{ "asinh", FnType::asinh },	
-			{ "acosh", FnType::acosh },
-			{ "atanh", FnType::atanh },	
-			{ "asin" , FnType::asin  },	
-			{ "acos" , FnType::acos  },	
-			{ "atan" , FnType::atan  },	
-			{ "sinh" , FnType::sinh  },	
-			{ "cosh" , FnType::cosh  },	
-			{ "tanh" , FnType::tanh  },	
-			{ "sqrt" , FnType::sqrt  },	
-			{ "pow"  , FnType::pow   },   
-			{ "log"  , FnType::log   },	
-			{ "exp"  , FnType::exp   },	
-			{ "sin"  , FnType::sin   },	
-			{ "cos"  , FnType::cos   },	
-			{ "tan"  , FnType::tan   },	
-			{ "abs"  , FnType::abs   },	
-			{ "arg"  , FnType::arg   },	
-			{ "ln"   , FnType::ln    },	
-			{ "re"   , FnType::re    },	
-			{ "im"   , FnType::im    },	
-		});
-		//only expects actual name part of function, e.g. "asin", NOT "asin(...)"
-		//if name is one of ParseFnType, that is returned, else FnType::UNKNOWN
-		constexpr FnType type_of(const std::string_view name) noexcept { return search(type_table, name, FnType::UNKNOWN); }
+		constexpr std::string_view name_of(const FnType type) noexcept { return find_snd(name_table, type); }
+		constexpr FnType type_of(const std::string_view name) noexcept { return search_fst(name_table, name, FnType::UNKNOWN); }
 
 		//appends only name, no parentheses or anything fancy
 		template<typename Store_T>
@@ -134,40 +108,24 @@ namespace bmath::intern {
 	namespace pattern {
 
 		constexpr auto form_name_table = std::to_array<std::pair<Form, std::string_view>>({
-			{ Form::sum          , "sum"           },
-			{ Form::product      , "product"       },
-			{ Form::function     , "function"      },
-			{ Form::variable     , "variable"      },
-			{ Form::complex      , "complex"       },
-			{ Form::natural      , "natural"       },
-			{ Form::integer      , "integer"       },
-			{ Form::real         , "real"          },
-			{ Form::not_minus_one, "not_minus_one" },
-			{ Form::negative     , "negative"      },
-			{ Form::not_negative , "not_negative"  },
-			{ Form::positive     , "positive"      },
-			{ Form::not_positive , "not_positive"  },
-			{ Form::any          , "any"           },
+			{ Type::sum                 , "sum"           },
+			{ Type::product             , "product"       },
+			{ Type::variable            , "variable"      },
+			{ Type::complex             , "complex"       },
+			{ FormSpecial::function     , "function"      },
+			{ FormSpecial::natural      , "natural"       },
+			{ FormSpecial::integer      , "integer"       },
+			{ FormSpecial::real         , "real"          },
+			{ FormSpecial::not_minus_one, "not_minus_one" },
+			{ FormSpecial::negative     , "negative"      },
+			{ FormSpecial::not_negative , "not_negative"  },
+			{ FormSpecial::positive     , "positive"      },
+			{ FormSpecial::not_positive , "not_positive"  },
+			{ FormSpecial::any          , "any"           },
 		});
-		constexpr std::string_view form_name(const Form r) noexcept { return find(form_name_table, r); }
 
-		constexpr auto form_type_table = std::to_array<std::pair<std::string_view, Form>>({
-			{"sum"          ,  Form::sum           },
-			{"product"      ,  Form::product       },
-			{"function"     ,  Form::function      },
-			{"variable"     ,  Form::variable      },
-			{"complex"      ,  Form::complex       },
-			{"natural"      ,  Form::natural       },
-			{"integer"      ,  Form::integer       },
-			{"real"         ,  Form::real          },
-			{"not_minus_one",  Form::not_minus_one },
-			{"negative"     ,  Form::negative      },
-			{"not_negative" ,  Form::not_negative  },
-			{"positive"     ,  Form::positive      },
-			{"not_positive" ,  Form::not_positive  },
-			{"any"          ,  Form::any           },
-		});
-		constexpr Form form_type(const std::string_view sv) noexcept { return search(form_type_table, sv, Form::UNKNOWN); }
+		constexpr std::string_view form_name(const Form r) noexcept { return find_snd(form_name_table, r); }
+		constexpr Form form_type(const std::string_view s) noexcept { return search_fst(form_name_table, s, Form(FormSpecial::UNKNOWN)); }
 
 	} //namespace pattern
 
@@ -191,7 +149,7 @@ namespace bmath::intern {
 			{ Type::complex,                      6 },//may be printed as sum/product itself, then (maybe) has to add parentheses on its own
 			{ pattern::PnSpecial::match_variable, 6 },
 			});
-		constexpr int infixr(PrintType type) { return find(infixr_table, type); }
+		constexpr int infixr(PrintType type) { return find_snd(infixr_table, type); }
 
 	} //namespace print
 
@@ -412,11 +370,11 @@ namespace bmath::intern {
 				const std::size_t colon = find_first_of_skip_pars(var_view.tokens, token::colon);
 				if (colon != TokenView::npos) {
 					const Form form = form_type(var_view.to_string_view(colon + 1u));
-					throw_if<ParseFailure>(form == Form::UNKNOWN, var_view.offset + colon + 1u, "unknown form");
+					throw_if<ParseFailure>(form == FormSpecial::UNKNOWN, var_view.offset + colon + 1u, "unknown form");
 					return { var_view.to_string_view(0, colon), form };
 				}
 				else {
-					return { var_view.to_string_view(), Form::any };
+					return { var_view.to_string_view(), FormSpecial::any };
 				}
 			};
 
@@ -657,7 +615,7 @@ namespace bmath::intern {
 			case Type_T(pattern::_match_variable): if constexpr (pattern) {
 				const pattern::MatchVariable& var = store.at(index).match_variable;
 				str.append(var.name.data());
-				if (var.form != pattern::Form::any) {
+				if (var.form != pattern::FormSpecial::any) {
 					str.push_back(':');
 					str.append(form_name(var.form));
 				}

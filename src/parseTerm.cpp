@@ -167,6 +167,10 @@ namespace bmath::intern {
 			if (prev_tn == token::imag_unit && curr_tn == token::character) {
 				tokenized[prev_idx] = token::character;
 			}
+			if (prev_tn == token::imag_unit && curr_tn == token::imag_unit) {
+				tokenized[prev_idx] = token::character;
+				tokenized[curr_idx] = token::character;
+			}
 			//change token representing digits or 'i' occuring in names to token::character
 			else if (prev_tn == token::character && is_number_literal(curr_tn)) { 
 				tokenized[curr_idx] = token::character;

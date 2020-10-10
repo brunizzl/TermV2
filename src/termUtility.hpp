@@ -26,29 +26,38 @@ namespace bmath::intern {
 	}
 
 	//idea stolen from Jason Turner: https://www.youtube.com/watch?v=INn3xa4pMfg
-	template <typename Key_T, typename Value_T, std::size_t Size>
-	[[nodiscard]] constexpr Value_T find(
-		const std::array<std::pair<Key_T, Value_T>, Size>& data, const Key_T key) noexcept
+	template <typename Fst_T, typename Snd_T, std::size_t Size>
+	[[nodiscard]] constexpr Snd_T find_snd(
+		const std::array<std::pair<Fst_T, Snd_T>, Size>& data, const Fst_T key) noexcept
 	{
-		const auto itr = std::find_if(begin(data), end(data),
-			[&key](const auto &v) { return v.first == key; });
-		if (itr == end(data)) {
-			assert(false);
-		}
+		const auto itr = std::find_if(begin(data), end(data), [&key](const auto &v) { return v.first == key; });
+		assert(itr != end(data));
 		return itr->second;
 	}
 
-	template <typename Key_T, typename Value_T, std::size_t Size>
-	[[nodiscard]] constexpr Value_T search(
-		const std::array<std::pair<Key_T, Value_T>, Size>& data, const Key_T key, const Value_T null_value) noexcept 
+	template <typename Fst_T, typename Snd_T, std::size_t Size>
+	[[nodiscard]] constexpr Snd_T search_snd(
+		const std::array<std::pair<Fst_T, Snd_T>, Size>& data, const Fst_T key, const Snd_T null_value) noexcept 
 	{
-		const auto itr = std::find_if(begin(data), end(data),
-			[&key](const auto &v) { return v.first == key; });
-		if (itr != end(data)) {
-			return itr->second;
-		} else {
-			return null_value;
-		}
+		const auto itr = std::find_if(begin(data), end(data), [&key](const auto &v) { return v.first == key; });
+		return itr != end(data) ? itr->second : null_value;
+	}
+
+	template <typename Fst_T, typename Snd_T, std::size_t Size>
+	[[nodiscard]] constexpr Snd_T find_fst(
+		const std::array<std::pair<Fst_T, Snd_T>, Size>& data, const Snd_T key) noexcept
+	{
+		const auto itr = std::find_if(begin(data), end(data), [&key](const auto &v) { return v.second == key; });
+		assert(itr != end(data));
+		return itr->first;
+	}
+
+	template <typename Fst_T, typename Snd_T, std::size_t Size>
+	[[nodiscard]] constexpr Fst_T search_fst(
+		const std::array<std::pair<Fst_T, Snd_T>, Size>& data, const Snd_T key, const Fst_T null_value) noexcept 
+	{
+		const auto itr = std::find_if(begin(data), end(data), [&key](const auto &v) { return v.second == key; });
+		return itr != end(data) ? itr->first : null_value;
 	}
 
 	template<typename Value_T, std::size_t BufferSize>
@@ -228,7 +237,7 @@ namespace bmath::intern {
 		explicit constexpr SumEnum(unsigned e) :value(static_cast<Value>(e)) {}
 		explicit constexpr operator unsigned() const { return static_cast<unsigned>(this->value); }
 
-		template<typename E> constexpr bool is_type() const 
+		template<typename E> constexpr bool is() const 
 		{ static_assert(false, "requested type not possible in this SumEnum"); return false; }
 	}; //class SumEnum<>
 
@@ -240,19 +249,32 @@ namespace bmath::intern {
 
 	protected:
 		using Value = typename Base::Value;
-		static constexpr unsigned next_offset = this_offset + static_cast<unsigned>(Enum::COUNT) + 1u;
+		static constexpr unsigned next_offset = unsigned(Enum::COUNT) + this_offset + 1u;
 
 	public:
 		using Base::Base;
-		constexpr SumEnum(Enum e) :Base(static_cast<Value>(this_offset + static_cast<unsigned>(e))) {}
-		explicit constexpr operator Enum() const { return static_cast<Enum>(this->value); }
+		constexpr SumEnum(Enum e) :Base(static_cast<Value>(unsigned(e) + this_offset)) {}
 
-		template<typename E> constexpr bool is_type() const
-		{ 
-			return static_cast<const Base>(*this).is_type<E>();
+		template<typename E, std::enable_if_t<std::is_convertible_v<E, Enum> && !std::is_same_v<E, Enum>, int> = 0>
+		constexpr SumEnum(E e) : Base(unsigned(Enum(e)) + this_offset) {} //Enum itself is SumEnum<...> and can be build from E
+
+		explicit constexpr operator Enum() const { return static_cast<Enum>(unsigned(this->value) - this_offset); }
+
+		template<typename E, std::enable_if_t<!std::is_convertible_v<E, Enum> && !std::is_same_v<E, Enum>, int> = 0> 
+		constexpr bool is() const //default case: search in parent types
+		{
+			return static_cast<const Base>(*this).is<E>(); 
 		}
 
-		template<> constexpr bool is_type<Enum>() const 
+		template<typename E, std::enable_if_t<std::is_convertible_v<E, Enum> && !std::is_same_v<E, Enum>, int> = 0> 
+		constexpr bool is() const //Enum itself is SumEnum<...> and can be build from E -> hand over to Enum
+		{
+			static_assert(!std::is_integral_v<E>);
+			return this->operator Enum().is<E>(); 
+		}
+
+		template<typename E, std::enable_if_t<std::is_same_v<E, Enum>, int> = 0> 
+		constexpr bool is() const //E is same as Enum -> just compare offsets
 		{ 
 			return unsigned(this->value) >= this_offset && unsigned(this->value) < next_offset; 
 		}
@@ -271,19 +293,32 @@ namespace bmath::intern {
 
 	protected:
 		using Value = typename Base::Value;
-		static constexpr unsigned next_offset = this_offset + static_cast<unsigned>(Count) + 1u;
+		static constexpr unsigned next_offset = unsigned(Count) + this_offset + 1u;
 
 	public:
 		using Base::Base;
-		constexpr SumEnum(Enum e) :Base(static_cast<Value>(this_offset + static_cast<unsigned>(e))) {}
-		explicit constexpr operator Enum() const { return static_cast<Enum>(this->value); }
+		constexpr SumEnum(Enum e) :Base(static_cast<Value>(unsigned(e) + this_offset)) {}
 
-		template<typename E> constexpr bool is_type() const
+		template<typename E, std::enable_if_t<std::is_convertible_v<E, Enum> && !std::is_same_v<E, Enum>, int> = 0>
+		constexpr SumEnum(E e) : Base(unsigned(Enum(e)) + this_offset) {} //Enum itself is SumEnum<...> and can be build from E
+
+		explicit constexpr operator Enum() const { return static_cast<Enum>(unsigned(this->value) - this_offset); }
+
+		template<typename E, std::enable_if_t<!std::is_convertible_v<E, Enum> && !std::is_same_v<E, Enum>, int> = 0> 
+		constexpr bool is() const //default case: search in parent types
 		{
-			return static_cast<const Base>(*this).is_type<E>();
+			return static_cast<const Base>(*this).is<E>(); 
 		}
 
-		template<> constexpr bool is_type<Enum>() const 
+		template<typename E, std::enable_if_t<std::is_convertible_v<E, Enum> && !std::is_same_v<E, Enum>, int> = 0> 
+		constexpr bool is() const //Enum itself is SumEnum<...> and can be build from E -> hand over to Enum
+		{
+			static_assert(!std::is_integral_v<E>);
+			return this->operator Enum().is<E>(); 
+		}
+
+		template<typename E, std::enable_if_t<std::is_same_v<E, Enum>, int> = 0> 
+		constexpr bool is() const //E is same as Enum -> just compare offsets
 		{ 
 			return unsigned(this->value) >= this_offset && unsigned(this->value) < next_offset; 
 		}

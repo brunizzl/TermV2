@@ -73,7 +73,7 @@ namespace bmath::intern {
 		{ Type::complex                     , 80 }, //can only match pattern variable directly -> least unique
 		{ pattern::PnSpecial::match_variable, 96 }, //always place at end, not really part of uniqueness, but still.
 	});
-	constexpr int uniqueness(pattern::PnType type) noexcept { return find(uniqueness_table, type); }
+	constexpr int uniqueness(pattern::PnType type) noexcept { return find_snd(uniqueness_table, type); }
 
 	//utility for both KnownFunction and GenericFunction
 	namespace fn {

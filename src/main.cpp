@@ -14,16 +14,15 @@ using namespace bmath;
 
 enum class E1 { a, b, c, COUNT };
 enum class E2 { a, b, c, COUNT };
+using E12 = SumEnum<E1, E2>;
 
-using E = SumEnum<E1, E2>;
-
-void f1(E e)
+void f1(E12 e)
 {
-	std::cout << unsigned(e) << " ";
-	if (e.is_type<E1>()) {
+	std::cout << unsigned(e) << "\t";
+	if (e.is<E1>()) {
 		std::cout << "E1\n";
 	}
-	else if (e.is_type<E2>()) {
+	else if (e.is<E2>()) {
 		std::cout << "E2\n";
 	}
 	else {
@@ -31,17 +30,46 @@ void f1(E e)
 	}
 }
 
-void f2(E e)
+void f2(E12 e)
 {
 	switch (e) {
-	case E(E1::a): std::cout << "E1::a\n"; break;
-	case E(E1::b): std::cout << "E1::b\n"; break;
-	case E(E1::c): std::cout << "E1::c\n"; break;
-	case E(E1::COUNT): std::cout << "E1::COUNT\n"; break;
-	case E(E2::a): std::cout << "E2::a\n"; break;
-	case E(E2::b): std::cout << "E2::b\n"; break;
-	case E(E2::c): std::cout << "E2::c\n"; break;
-	case E(E2::COUNT): std::cout << "E2::COUNT\n"; break;
+	case E12(E1::a): std::cout << "E1::a\n"; break;
+	case E12(E1::b): std::cout << "E1::b\n"; break;
+	case E12(E1::c): std::cout << "E1::c\n"; break;
+	case E12(E1::COUNT): std::cout << "E1::COUNT\n"; break;
+	case E12(E2::a): std::cout << "E2::a\n"; break;
+	case E12(E2::b): std::cout << "E2::b\n"; break;
+	case E12(E2::c): std::cout << "E2::c\n"; break;
+	case E12(E2::COUNT): std::cout << "E2::COUNT\n"; break;
+	default: std::cout << "upsi!\n"; break;
+	}
+}
+
+enum class E3 { a, b, c, COUNT };
+using E123 = SumEnum<E12, E3>;
+
+void f3(E123 e)
+{
+	std::cout << unsigned(e) << "\t";
+	if (e.is<E1>()) {
+		std::cout << "E1";
+	}
+	else if (e.is<E2>()) {
+		std::cout << "E2";
+	}
+	else if (e.is<E3>()) {
+		std::cout << "E3";
+	}
+	else {
+		std::cout << "upsi!";
+	}
+
+	if (e.is<E12>()) {
+		std::cout << "\t -> ";
+		f2(e.operator E12());
+	}
+	else {
+		std::cout << "\n";
 	}
 }
 
@@ -49,7 +77,7 @@ void f2(E e)
 int main()
 {
 	{
-		std::cout << "E::COUNT = " << unsigned(E::COUNT) << "\n";
+		std::cout << "E::COUNT = " << unsigned(E12::COUNT) << "\n";
 		f1(E1::a);
 		f1(E1::b);
 		f1(E1::c);
@@ -67,6 +95,20 @@ int main()
 		f2(E2::b);
 		f2(E2::c);
 		f2(E2::COUNT);
+		std::cout << "\n";
+		f3(E1::a);
+		f3(E1::b);
+		f3(E1::c);
+		f3(E1::COUNT);
+		f3(E2::a);
+		f3(E2::b);
+		f3(E2::c);
+		f3(E2::COUNT);
+		f3(E3::a);
+		f3(E3::b);
+		f3(E3::c);
+		f3(E3::COUNT);
+		std::cout << "\n";
 	}
 	{
 		std::string parentheses = "1([[0]])2(0)[(0){()(0)}]({}{}{()})3";

@@ -119,17 +119,13 @@ namespace bmath::intern {
 		using PnKnownFunction = BasicKnownFunction<PnTypedIdx>;
 
 		//used to restrict match_variable to only match terms complying with form
-		enum class Form
+		enum class FormSpecial
 		{
 			any,
-			sum,
-			product,
 			function,
-			variable,
 			natural, //includes 0
 			integer,
 			real,
-			complex,
 			not_minus_one,
 			negative,     //implies real   	
 			not_negative, //implies real   
@@ -137,6 +133,10 @@ namespace bmath::intern {
 			not_positive, //implies real        
 			UNKNOWN	//has to be last element
 		};
+
+		//note: of Type, only sum, product, complex or variable may be used, as there is (currently)
+		//no need to differentiate between known_function and unknown_function.
+		using Form = SumEnum<Pair<FormSpecial, FormSpecial::UNKNOWN>, Type>;
 
 		template<typename Store_T, typename TypedIdx_T>
 		bool has_form(const Store_T& store, const TypedIdx_T ref, const Form form);
@@ -146,7 +146,7 @@ namespace bmath::intern {
 		{
 			TypedIdx match_idx; //remembers what is is matched with (if so)
 			std::uint32_t shared_data_idx; //points not in pattern tree, but extra vector called shared_match_data.
-			Form form = Form::any;
+			Form form = FormSpecial::any;
 			std::array<char, 4u> name;
 		};
 
@@ -222,7 +222,7 @@ namespace bmath::intern {
 			{ FnType::im   , 1 },	
 		});
 		constexpr std::size_t param_count(FnType type) noexcept 
-		{ return find(param_count_table, type); }
+		{ return find_snd(param_count_table, type); }
 
 		template<typename TypedIdx_T>
 		std::span<TypedIdx_T> range(BasicKnownFunction<TypedIdx_T>& func) noexcept
