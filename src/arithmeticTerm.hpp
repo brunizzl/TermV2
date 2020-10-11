@@ -121,16 +121,17 @@ namespace bmath::intern {
 		//used to restrict match_variable to only match terms complying with restr
 		enum class Form
 		{
-			any,
 			function,
-			natural, //includes 0
+			natural,   //{1, 2, 3, ...}
+			natural_0, //{0, 1, 2, ...}
 			integer,
 			real,
 			negative,     //implies real   
 			positive,     //implies real     	
 			not_negative, //implies real  
 			not_positive, //implies real 
-			not_minus_one,       
+			not_minus_one,   
+			any,    
 			UNKNOWN	//has to be last element
 		};
 
@@ -139,7 +140,7 @@ namespace bmath::intern {
 		using Restriction = SumEnum<Pair<Form, Form::UNKNOWN>, Type>;
 
 		template<typename Store_T, typename TypedIdx_T>
-		bool has_form(const Store_T& store, const TypedIdx_T ref, const Restriction restr);
+		bool meets_restriction(const Store_T& store, const TypedIdx_T ref, const Restriction restr);
 
 		//in a valid pattern, all MatchVariables of same name share the same restr and the same shared_data_idx.
 		struct MatchVariable
@@ -147,7 +148,7 @@ namespace bmath::intern {
 			TypedIdx match_idx; //remembers what is is matched with (if so)
 			std::uint32_t shared_data_idx; //points not in pattern tree, but extra vector called shared_match_data.
 			Restriction restr = Form::any;
-			std::array<char, 4u> name;
+			std::array<char, 4u> name; //just convinience for debugging, not actually needed, thus this crappy
 		};
 
 		union PnTypesUnion

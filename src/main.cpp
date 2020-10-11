@@ -167,7 +167,9 @@ int main()
 	{
 		std::cout << "-------------------------------------------------------------------------------------\n";
 		using namespace bmath::intern::pattern;
-		std::string s = "a, b | a^2 + 2 a b + b^2 = (a + b)^2";
+		std::string s = "a , b | a^2 + 2 a b + b^2 = (a + b)^2";
+		//std::string s = "as :sum,    | -as  =     sum{ -a  | a <- as }";
+		//std::string s = "as :product | 1/as = product{ 1/a | a <- as }";
 		//std::string s = "cos('pi') = -1";
 		const PnTerm term(s);
 		std::cout << "pattern: " << term.to_string() << "\n\n";

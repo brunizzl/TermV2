@@ -3,12 +3,10 @@ Classes meant to simplify mathematical terms
 
 ## Planung Patterns
 
-Zeile hat Aufbau: "*lhs* = *rhs*"
+Zeile hat Aufbau: "*deklarationen* | *muster* = *muster*"
 
-### Matching Seite
-Pattern Aufbau (lhs): "*Muster Term*" oder "*Muster Term* | *Bedingungen*"
                 
-*Muster Term* kann enthalten: 
+*muster* kann enthalten: 
 - alle Elemente eines normalen Terms
     - Summe
     - Produkt
@@ -16,21 +14,8 @@ Pattern Aufbau (lhs): "*Muster Term*" oder "*Muster Term* | *Bedingungen*"
     - Generische Funktion
     - Variable
     - Wert
-- Muster Variablen 
-- *vielleicht* eingeschränkte Mustervariablen (sonst nur in *Bedingungen* erlauben?)
-- *vielleicht* Summen Muster: "*Muster Variable*:sum{ *Summand Muster* }"
-- *vielleicht* Produkt Muster: "*Muster Variable*:product{ *Faktor Muster* }"
-- *vielleicht* *vielleicht* erweitertes Summen Muster: "*Muster Variable*:sum{ *Summand Muster* | *Bedingungen* }" 
-- *vielleicht* *vielleicht* erweitertes Produkt Muster: "*Muster Variable*:product{ *Faktor Muster* | *Bedingungen* }" 
+- Globale Mustervariablen (müssen in *deklarationen* deklariert werden, mehrfach pro Seite nutzbar)
+- lokale Mustervariablen (nur innerhalb von Summen Muster oder Produkt Muster erlaubt, nur jeweils einfach)
+- Summen Muster: "sum{ *Summand Muster* | *deklarationen von lokalen Mustervariablen* \<\- *auflistung Globale Mustervariablen* }"
+- Produkt Muster: "product{ *Faktor Muster* | *deklarationen von lokalen Mustervariablen* \<\- *auflistung Globale Mustervariablen* }"
     
-*Bedingungen* ist komma separierte Aufzählung aus Logikausdrücken. Ein Logikausdruck kann enthalten:
-- Negation: "!*Logik Operand*"
-- Und: "*Logik Operand1* && *Logik Operand2*"
-- Oder: "*Logik Operand1* || *Logik Operand2*"
-- Prädikat: "*Name*(*Muster Term*)" (prädikat aus vorher bekannter menge mit enum?)
-- Vergleich: "*Muster Term* *op* *Muster Term*" mit op aus "==", "!=", "\<=", "\>=" "\<" "\>"
-
-
-
-### Ergebnis Seite   
-Ergebnis Aufbau (rhs): ???

@@ -148,6 +148,9 @@ namespace bmath::intern {
 			throw_if<ParseFailure>(nr_brace != 0, name.length() - 1, "poor grouping, not all braces where closed");
 		}
 
+		if (name.front() == '-') {
+			tokenized.front() = token::unary_minus;
+		} 
 		//optimize token choice by not looking at single Token / char, but at two at once
 		Token last_nonspace_tn = '\0';
 		for (std::size_t prev_idx = 0u; prev_idx + 1u < name.length(); prev_idx++) {
@@ -190,9 +193,6 @@ namespace bmath::intern {
 				tokenized[prev_idx] = token::number;
 			}
 		}
-		if (name.front() == '-') {
-			tokenized.front() = token::unary_minus;
-		} 
 
 		return tokenized;
 	} //tokenize

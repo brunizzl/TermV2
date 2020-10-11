@@ -116,7 +116,7 @@ namespace bmath::intern {
 	namespace pattern {
 		
 		template<typename Store_T, typename TypedIdx_T>
-		bool has_form(const Store_T & store, const TypedIdx_T ref, const Restriction restr)
+		bool meets_restriction(const Store_T & store, const TypedIdx_T ref, const Restriction restr)
 		{
 			const auto [index, type] = ref.split();
 
@@ -149,10 +149,10 @@ namespace bmath::intern {
 					return false;
 				}
 			}
-		} //has_form
+		} //meets_restriction
 
 		PnTerm::PnTerm(std::string& name) 
-			:shared_match_data({ SharedMatchData{ TypedIdx() }, { TypedIdx() }, { TypedIdx() }, { TypedIdx() }, { TypedIdx() }, { TypedIdx() }, })
+			:shared_match_data({ SharedMatchData{}, {}, {}, {}, {}, {}, })
 		{
 			auto parse_string = ParseString(name);
 			parse_string.allow_implicit_product();

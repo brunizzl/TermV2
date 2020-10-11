@@ -108,13 +108,14 @@ namespace bmath::intern {
 	namespace pattern {
 
 		constexpr auto form_name_table = std::to_array<std::pair<Restriction, std::string_view>>({
-			{ Type::sum                 , "sum"           },
-			{ Type::product             , "product"       },
-			{ Type::variable            , "variable"      },
-			{ Type::complex             , "complex"       },
-			{ Form::function     , "function"      },
-			{ Form::natural      , "natural"       },
-			{ Form::integer      , "integer"       },
+			{ Type::sum          , "sum"           },
+			{ Type::product      , "product"       },
+			{ Type::variable     , "variable"      },
+			{ Type::complex      , "complex"       },
+			{ Form::function     , "fn"            },
+			{ Form::natural      , "nat"           },
+			{ Form::natural_0     , "nat0"          },
+			{ Form::integer      , "int"           },
 			{ Form::real         , "real"          },
 			{ Form::not_minus_one, "not_minus_one" },
 			{ Form::negative     , "negative"      },
