@@ -260,13 +260,13 @@ namespace bmath::intern {
 
 		explicit constexpr operator Enum() const { return static_cast<Enum>(unsigned(this->value) - this_offset); }
 
-		template<typename E, std::enable_if_t<!std::is_convertible_v<E, Enum> && !std::is_same_v<E, Enum>, int> = 0> 
+		template<typename E, std::enable_if_t<std::is_convertible_v<E, Base> && !std::is_same_v<E, Enum>, int> = 0> 
 		constexpr bool is() const //default case: search in parent types
 		{
 			return static_cast<const Base>(*this).is<E>(); 
 		}
 
-		template<typename E, std::enable_if_t<std::is_convertible_v<E, Enum> && !std::is_same_v<E, Enum>, int> = 0> 
+		template<typename E, std::enable_if_t<!std::is_convertible_v<E, Base> && !std::is_same_v<E, Enum>, int> = 0> 
 		constexpr bool is() const //Enum itself is SumEnum<...> and can be build from E -> hand over to Enum
 		{
 			static_assert(!std::is_integral_v<E>);
@@ -304,13 +304,13 @@ namespace bmath::intern {
 
 		explicit constexpr operator Enum() const { return static_cast<Enum>(unsigned(this->value) - this_offset); }
 
-		template<typename E, std::enable_if_t<!std::is_convertible_v<E, Enum> && !std::is_same_v<E, Enum>, int> = 0> 
+		template<typename E, std::enable_if_t<std::is_convertible_v<E, Base> && !std::is_same_v<E, Enum>, int> = 0> 
 		constexpr bool is() const //default case: search in parent types
 		{
 			return static_cast<const Base>(*this).is<E>(); 
 		}
 
-		template<typename E, std::enable_if_t<std::is_convertible_v<E, Enum> && !std::is_same_v<E, Enum>, int> = 0> 
+		template<typename E, std::enable_if_t<!std::is_convertible_v<E, Base> && !std::is_same_v<E, Enum>, int> = 0> 
 		constexpr bool is() const //Enum itself is SumEnum<...> and can be build from E -> hand over to Enum
 		{
 			static_assert(!std::is_integral_v<E>);

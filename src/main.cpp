@@ -12,102 +12,77 @@
 using namespace bmath::intern;
 using namespace bmath;
 
-enum class E1 { a, b, c, COUNT };
-enum class E2 { a, b, c, COUNT };
-using E12 = SumEnum<E1, E2>;
+enum class A1 { a, b, c, COUNT };
+enum class A2 { a, b, c, COUNT };
+using A12 = SumEnum<A1, A2>;
 
-void f1(E12 e)
+void f1(A12 e)
 {
-	std::cout << unsigned(e) << "\t";
-	if (e.is<E1>()) {
-		std::cout << "E1\n";
-	}
-	else if (e.is<E2>()) {
-		std::cout << "E2\n";
-	}
-	else {
-		std::cout << "upsi!\n";
-	}
+	bool hit = false;
+	if (e.is<A1>()) { std::cout << "A1 \t"; hit = true; }
+	if (e.is<A2>()) { std::cout << "A2 \t"; hit = true; }
+	if (!hit) { std::cout << "upsi!\n"; }
+	else      { std::cout << "\n"; }
 }
 
-void f2(E12 e)
+enum class A3 { a, b, c, COUNT };
+using A123 = SumEnum<A12, A3>;
+
+void f2(A123 e)
 {
-	switch (e) {
-	case E12(E1::a): std::cout << "E1::a\n"; break;
-	case E12(E1::b): std::cout << "E1::b\n"; break;
-	case E12(E1::c): std::cout << "E1::c\n"; break;
-	case E12(E1::COUNT): std::cout << "E1::COUNT\n"; break;
-	case E12(E2::a): std::cout << "E2::a\n"; break;
-	case E12(E2::b): std::cout << "E2::b\n"; break;
-	case E12(E2::c): std::cout << "E2::c\n"; break;
-	case E12(E2::COUNT): std::cout << "E2::COUNT\n"; break;
-	default: std::cout << "upsi!\n"; break;
-	}
+	bool hit = false;
+	if                (e.is<A3>()) { std::cout << "A3 \t";        hit = true; }
+	if (e.is<A12>() && e.is<A1>()) { std::cout << "A12 && A1 \t"; hit = true; }
+	if (e.is<A12>() && e.is<A2>()) { std::cout << "A12 && A2 \t"; hit = true; }
+	if (!hit) { std::cout << "upsi!\n"; }
+	else      { std::cout << "\n"; }
 }
 
-enum class E3 { a, b, c, COUNT };
-using E123 = SumEnum<E12, E3>;
+enum class B1 { a, b, c, COUNT };
+enum class B2 { a, b, c, COUNT };
+using BB1 = SumEnum<B1>;
+using B12B1 = SumEnum<BB1, B2, B1>;
 
-void f3(E123 e)
+void g1(B12B1 e)
 {
-	std::cout << unsigned(e) << "\t";
-	if (e.is<E1>()) {
-		std::cout << "E1";
-	}
-	else if (e.is<E2>()) {
-		std::cout << "E2";
-	}
-	else if (e.is<E3>()) {
-		std::cout << "E3";
-	}
-	else {
-		std::cout << "upsi!";
-	}
-
-	if (e.is<E12>()) {
-		std::cout << "\t -> ";
-		f2(e.operator E12());
-	}
-	else {
-		std::cout << "\n";
-	}
+	bool hit = false;
+	if (e.is<B1>())  { std::cout << "B1 \t";  hit = true; }
+	if (e.is<B2>())  { std::cout << "B2 \t";  hit = true; }
+	if (e.is<BB1>()) { std::cout << "BB1 \t"; hit = true; }
+	if (!hit) { std::cout << "upsi!\n"; }
+	else      { std::cout << "\n"; }
 }
-
 
 int main()
 {
 	{
-		std::cout << "E::COUNT = " << unsigned(E12::COUNT) << "\n";
-		f1(E1::a);
-		f1(E1::b);
-		f1(E1::c);
-		f1(E1::COUNT);
-		f1(E2::a);
-		f1(E2::b);
-		f1(E2::c);
-		f1(E2::COUNT);
+		f1(A1::a);
+		f1(A1::b);
+		f1(A1::c);
+		f1(A2::a);
+		f1(A2::b);
+		f1(A2::c);
 		std::cout << "\n";
-		f2(E1::a);
-		f2(E1::b);
-		f2(E1::c);
-		f2(E1::COUNT);
-		f2(E2::a);
-		f2(E2::b);
-		f2(E2::c);
-		f2(E2::COUNT);
+		f2(A1::a);
+		f2(A1::b);
+		f2(A1::c);
+		f2(A2::a);
+		f2(A2::b);
+		f2(A2::c);
+		f2(A3::a);
+		f2(A3::b);
+		f2(A3::c);
 		std::cout << "\n";
-		f3(E1::a);
-		f3(E1::b);
-		f3(E1::c);
-		f3(E1::COUNT);
-		f3(E2::a);
-		f3(E2::b);
-		f3(E2::c);
-		f3(E2::COUNT);
-		f3(E3::a);
-		f3(E3::b);
-		f3(E3::c);
-		f3(E3::COUNT);
+		g1(B1::a);
+		g1(B1::b);
+		g1(B1::c);
+		g1(B2::a);
+		g1(B2::b);
+		g1(B2::c);
+		g1(BB1(B1::a));
+		g1(BB1(B1::b));
+		g1(BB1(B1::c));
+		std::cout << "\n";
 		std::cout << "\n";
 	}
 	{
