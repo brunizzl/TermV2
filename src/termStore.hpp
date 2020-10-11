@@ -166,7 +166,6 @@ namespace bmath::intern {
 	template <typename TermUnion_T, typename TypedIdx_T = std::size_t>
 	class [[nodiscard]] TermStore_FreeList
 	{
-		static_assert(std::is_default_constructible_v<TermUnion_T>, "required for default constructor of TermStore");
 		static_assert(std::is_trivially_destructible_v<TermUnion_T>, "required to allow TermUnion_T to be used in VecElem union");
 		static_assert(std::is_trivially_copyable_v<TermUnion_T>, "dunno, feels like a sane thing.");
 

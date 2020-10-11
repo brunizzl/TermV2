@@ -165,6 +165,7 @@ int main()
 		}
 	}
 	{
+		std::cout << "-------------------------------------------------------------------------------------\n";
 		using namespace bmath::intern::pattern;
 		std::string s = "a, b | a^2 + 2 a b + b^2 = (a + b)^2";
 		//std::string s = "cos('pi') = -1";

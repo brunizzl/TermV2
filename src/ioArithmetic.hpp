@@ -41,15 +41,15 @@ namespace bmath::intern {
 			ParseView rhs;
 		};
 
-		//input is assumed to be of form "<declarations> | <lhs> = <rhs>"
-		//or, if no MatchVariables occur, of form "<lhs> = <rhs>"
+		//input is assumed to be of restr "<declarations> | <lhs> = <rhs>"
+		//or, if no MatchVariables occur, of restr "<lhs> = <rhs>"
 		PatternParts split(const ParseView input);
 
-		//lookup if new MatchVariable with name "name" is parsed, to get the Form and shared_data_idx
+		//lookup if new MatchVariable with name "name" is parsed, to get the Restriction and shared_data_idx
 		struct NameLookup 
 		{
 			std::string_view name;
-			Form form;
+			Restriction restr;
 		};
 
 		std::vector<NameLookup> parse_declarations(ParseView declarations);

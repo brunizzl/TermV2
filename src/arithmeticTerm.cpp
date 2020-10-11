@@ -116,10 +116,40 @@ namespace bmath::intern {
 	namespace pattern {
 		
 		template<typename Store_T, typename TypedIdx_T>
-		bool has_form(const Store_T & store, const TypedIdx_T ref, const Form form)
+		bool has_form(const Store_T & store, const TypedIdx_T ref, const Restriction restr)
 		{
-			return false;
-		}
+			const auto [index, type] = ref.split();
+
+			if (restr == Form::any) {
+				return true;
+			}
+			else if (restr.is<Type>()) {
+				return restr == type;
+			}
+			else if (restr == Form::function) {
+				return type == Type::known_function || type == Type::generic_function;
+			}
+			else {
+				const bool is_value = type == Type::complex;
+				const auto [re, im] = is_value ? store.at(index).complex : Complex(0.0, 0.0);
+
+				bool accept = true;
+				switch (Form(restr)) {
+				case Form::natural: accept &= re >= 0.0;                 [[fallthrough]];
+				case Form::integer: accept &= re - long long(re) == 0.0; [[fallthrough]];
+				case Form::real:    accept &= im == 0.0;
+					return accept && is_value;
+				case Form::negative:      return re <   0.0 && im == 0.0;
+				case Form::positive:      return re >   0.0 && im == 0.0;
+				case Form::not_negative:  return re >=  0.0 && im == 0.0 && is_value;
+				case Form::not_positive:  return re <=  0.0 && im == 0.0 && is_value;
+				case Form::not_minus_one: return re != -1.0 || im != 0.0;
+				default:
+					assert(false);
+					return false;
+				}
+			}
+		} //has_form
 
 		PnTerm::PnTerm(std::string& name) 
 			:shared_match_data({ SharedMatchData{ TypedIdx() }, { TypedIdx() }, { TypedIdx() }, { TypedIdx() }, { TypedIdx() }, { TypedIdx() }, })
@@ -575,8 +605,8 @@ namespace bmath::intern {
 			case Type_T(pattern::_match_variable): if constexpr (pattern) {
 				const pattern::MatchVariable& var_1 = store_1.at(index_1).match_variable;
 				const pattern::MatchVariable& var_2 = store_2.at(index_2).match_variable;
-				if (var_1.form != var_2.form) {
-					return var_1.form <=> var_2.form;
+				if (var_1.restr != var_2.restr) {
+					return var_1.restr <=> var_2.restr;
 				}
 				//if (var_1.name != var_2.name) { //c++20 i need you :(
 				//	return var_1.name <=> var_2.name; //reverse to make pretty_string prettier

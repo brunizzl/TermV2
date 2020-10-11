@@ -274,7 +274,7 @@ namespace bmath::intern {
 		}
 
 		template<typename E, std::enable_if_t<std::is_same_v<E, Enum>, int> = 0> 
-		constexpr bool is() const //E is same as Enum -> just compare offsets
+		constexpr bool is() const //E is same as Enum -> just check if this is between offsets
 		{ 
 			return unsigned(this->value) >= this_offset && unsigned(this->value) < next_offset; 
 		}
@@ -318,7 +318,7 @@ namespace bmath::intern {
 		}
 
 		template<typename E, std::enable_if_t<std::is_same_v<E, Enum>, int> = 0> 
-		constexpr bool is() const //E is same as Enum -> just compare offsets
+		constexpr bool is() const //E is same as Enum -> just check if this is between offsets
 		{ 
 			return unsigned(this->value) >= this_offset && unsigned(this->value) < next_offset; 
 		}

@@ -118,35 +118,35 @@ namespace bmath::intern {
 		using PnProduct = PnTypedIdxSLC;
 		using PnKnownFunction = BasicKnownFunction<PnTypedIdx>;
 
-		//used to restrict match_variable to only match terms complying with form
-		enum class FormSpecial
+		//used to restrict match_variable to only match terms complying with restr
+		enum class Form
 		{
 			any,
 			function,
 			natural, //includes 0
 			integer,
 			real,
-			not_minus_one,
-			negative,     //implies real   	
-			not_negative, //implies real   
-			positive,     //implies real    
-			not_positive, //implies real        
+			negative,     //implies real   
+			positive,     //implies real     	
+			not_negative, //implies real  
+			not_positive, //implies real 
+			not_minus_one,       
 			UNKNOWN	//has to be last element
 		};
 
 		//note: of Type, only sum, product, complex or variable may be used, as there is (currently)
 		//no need to differentiate between known_function and unknown_function.
-		using Form = SumEnum<Pair<FormSpecial, FormSpecial::UNKNOWN>, Type>;
+		using Restriction = SumEnum<Pair<Form, Form::UNKNOWN>, Type>;
 
 		template<typename Store_T, typename TypedIdx_T>
-		bool has_form(const Store_T& store, const TypedIdx_T ref, const Form form);
+		bool has_form(const Store_T& store, const TypedIdx_T ref, const Restriction restr);
 
-		//in a valid pattern, all MatchVariables of same name share the same form and the same shared_data_idx.
+		//in a valid pattern, all MatchVariables of same name share the same restr and the same shared_data_idx.
 		struct MatchVariable
 		{
 			TypedIdx match_idx; //remembers what is is matched with (if so)
 			std::uint32_t shared_data_idx; //points not in pattern tree, but extra vector called shared_match_data.
-			Form form = FormSpecial::any;
+			Restriction restr = Form::any;
 			std::array<char, 4u> name;
 		};
 

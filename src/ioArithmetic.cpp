@@ -107,25 +107,25 @@ namespace bmath::intern {
 
 	namespace pattern {
 
-		constexpr auto form_name_table = std::to_array<std::pair<Form, std::string_view>>({
+		constexpr auto form_name_table = std::to_array<std::pair<Restriction, std::string_view>>({
 			{ Type::sum                 , "sum"           },
 			{ Type::product             , "product"       },
 			{ Type::variable            , "variable"      },
 			{ Type::complex             , "complex"       },
-			{ FormSpecial::function     , "function"      },
-			{ FormSpecial::natural      , "natural"       },
-			{ FormSpecial::integer      , "integer"       },
-			{ FormSpecial::real         , "real"          },
-			{ FormSpecial::not_minus_one, "not_minus_one" },
-			{ FormSpecial::negative     , "negative"      },
-			{ FormSpecial::not_negative , "not_negative"  },
-			{ FormSpecial::positive     , "positive"      },
-			{ FormSpecial::not_positive , "not_positive"  },
-			{ FormSpecial::any          , "any"           },
+			{ Form::function     , "function"      },
+			{ Form::natural      , "natural"       },
+			{ Form::integer      , "integer"       },
+			{ Form::real         , "real"          },
+			{ Form::not_minus_one, "not_minus_one" },
+			{ Form::negative     , "negative"      },
+			{ Form::not_negative , "not_negative"  },
+			{ Form::positive     , "positive"      },
+			{ Form::not_positive , "not_positive"  },
+			{ Form::any          , "any"           },
 		});
 
-		constexpr std::string_view form_name(const Form r) noexcept { return find_snd(form_name_table, r); }
-		constexpr Form form_type(const std::string_view s) noexcept { return search_fst(form_name_table, s, Form(FormSpecial::UNKNOWN)); }
+		constexpr std::string_view form_name(const Restriction r) noexcept { return find_snd(form_name_table, r); }
+		constexpr Restriction form_type(const std::string_view s) noexcept { return search_fst(form_name_table, s, Restriction(Form::UNKNOWN)); }
 
 	} //namespace pattern
 
@@ -369,12 +369,12 @@ namespace bmath::intern {
 			const auto parse_declaration = [](ParseView var_view) -> NameLookup {
 				const std::size_t colon = find_first_of_skip_pars(var_view.tokens, token::colon);
 				if (colon != TokenView::npos) {
-					const Form form = form_type(var_view.to_string_view(colon + 1u));
-					throw_if<ParseFailure>(form == FormSpecial::UNKNOWN, var_view.offset + colon + 1u, "unknown form");
-					return { var_view.to_string_view(0, colon), form };
+					const Restriction restr = form_type(var_view.to_string_view(colon + 1u));
+					throw_if<ParseFailure>(restr == Form::UNKNOWN, var_view.offset + colon + 1u, "unknown restriction");
+					return { var_view.to_string_view(0, colon), restr };
 				}
 				else {
-					return { var_view.to_string_view(), FormSpecial::any };
+					return { var_view.to_string_view(), Form::any };
 				}
 			};
 
@@ -466,7 +466,7 @@ namespace bmath::intern {
 						[search_name = input.to_string_view()](const auto& x) { return x.name == search_name; });
 					throw_if<ParseFailure>(name_it == this->name_map.end(), input.offset, "variable was not declared");
 					const auto name = match_var_name(input.to_string_view());
-					const MatchVariable var = { TypedIdx(), std::uint32_t(name_it - this->name_map.begin()), name_it->form, name };
+					const MatchVariable var = { TypedIdx(), std::uint32_t(name_it - this->name_map.begin()), name_it->restr, name };
 					return PnTypedIdx(store.insert(var), PnSpecial::match_variable);
 				}
 			} break;
@@ -615,9 +615,9 @@ namespace bmath::intern {
 			case Type_T(pattern::_match_variable): if constexpr (pattern) {
 				const pattern::MatchVariable& var = store.at(index).match_variable;
 				str.append(var.name.data());
-				if (var.form != pattern::FormSpecial::any) {
+				if (var.restr != pattern::Form::any) {
 					str.push_back(':');
-					str.append(form_name(var.form));
+					str.append(form_name(var.restr));
 				}
 			} break;
 			default: assert(false); //if this assert hits, the switch above needs more cases.
