@@ -25,6 +25,13 @@ namespace bmath::intern {
 		}
 	}
 
+	template<const auto x, const auto... xs, typename T>
+	constexpr bool is_one_of(const T y) 
+	{ 
+		if constexpr (!sizeof...(xs)) { return y == x; }
+		else                          { return y == x || is_one_of<xs...>(y); }
+	}	
+
 	//idea stolen from Jason Turner: https://www.youtube.com/watch?v=INn3xa4pMfg
 	template <typename Fst_T, typename Snd_T, std::size_t Size>
 	[[nodiscard]] constexpr Snd_T find_snd(
@@ -238,12 +245,14 @@ namespace bmath::intern {
 		explicit constexpr operator unsigned() const { return static_cast<unsigned>(this->value); }
 
 		template<typename E> constexpr bool is() const 
-		{ static_assert(false, "requested type not possible in this SumEnum"); return false; }
+		{ static_assert(false, "function is<>: requested type not oart of this SumEnum"); return false; }
 	}; //class SumEnum<>
 
 	template<typename Enum, typename... TailEnums>
 	class SumEnum<Enum, TailEnums...> :public SumEnum<TailEnums...>
 	{
+		static_assert(!std::is_integral_v<Enum>, "only expect actual enums or other SumEnums as template parameters");
+
 		using Base = SumEnum<TailEnums...>;
 		static constexpr unsigned this_offset = Base::next_offset;
 
@@ -263,6 +272,7 @@ namespace bmath::intern {
 		template<typename E, std::enable_if_t<std::is_convertible_v<E, Base> && !std::is_same_v<E, Enum>, int> = 0> 
 		constexpr bool is() const //default case: search in parent types
 		{
+			static_assert(!std::is_integral_v<E>);
 			return static_cast<const Base>(*this).is<E>(); 
 		}
 
@@ -276,6 +286,7 @@ namespace bmath::intern {
 		template<typename E, std::enable_if_t<std::is_same_v<E, Enum>, int> = 0> 
 		constexpr bool is() const //E is same as Enum -> just check if this is between offsets
 		{ 
+			static_assert(!std::is_integral_v<E>);
 			return unsigned(this->value) >= this_offset && unsigned(this->value) < next_offset; 
 		}
 
@@ -288,6 +299,8 @@ namespace bmath::intern {
 	template<typename Enum, auto Count, typename... TailEnums>
 	class SumEnum<Pair<Enum, Count>, TailEnums...> :public SumEnum<TailEnums...>
 	{
+		static_assert(!std::is_integral_v<Enum>, "only expect actual enums or other SumEnums as template parameters");
+
 		using Base = SumEnum<TailEnums...>;
 		static constexpr unsigned this_offset = Base::next_offset;
 
@@ -307,6 +320,7 @@ namespace bmath::intern {
 		template<typename E, std::enable_if_t<std::is_convertible_v<E, Base> && !std::is_same_v<E, Enum>, int> = 0> 
 		constexpr bool is() const //default case: search in parent types
 		{
+			static_assert(!std::is_integral_v<E>);
 			return static_cast<const Base>(*this).is<E>(); 
 		}
 
@@ -320,6 +334,7 @@ namespace bmath::intern {
 		template<typename E, std::enable_if_t<std::is_same_v<E, Enum>, int> = 0> 
 		constexpr bool is() const //E is same as Enum -> just check if this is between offsets
 		{ 
+			static_assert(!std::is_integral_v<E>);
 			return unsigned(this->value) >= this_offset && unsigned(this->value) < next_offset; 
 		}
 

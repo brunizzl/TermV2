@@ -50,9 +50,18 @@ void g1(B12B1 e)
 	std::cout << (hit ? "\n" : "upsi!\n");
 }
 
+void cmp(double a, double b)
+{
+	std::cout << (a == b) << "  " << a - b << "\n";
+}
+
 int main()
 {
 	{
+		cmp(std::pow(7.0, 14.0), 678223072849.0);
+		cmp(std::pow(875.0, 3.0), 669921875.0);
+		cmp(std::pow(754.0, 4.0), 323210442256.0);
+		cmp(std::pow(9.0, 9.0), 387420489.0);
 		f1(A1::a);
 		f1(A1::b);
 		f1(A1::c);
@@ -109,6 +118,10 @@ int main()
 			"sin(x)*b+3*b",
 			"a*d+a*b*c",
 			"a/(a b)",
+			"1+3*4-6",
+			"a * (7 ^ 14 + 9)",
+			"2.2 + 4",
+			"1e-2 + 5",
 		};
 		for (auto& term_name : term_names) {
 			std::cout << "-------------------------------------------------------------------------------------\n";
@@ -142,9 +155,9 @@ int main()
 		//std::string s = "as :sum,    | -as  =     sum{ -a  | a <- as }";
 		//std::string s = "as :product | 1/as = product{ 1/a | a <- as }";
 		//std::string s = "cos('pi') = -1";
-		const PnTerm term(s);
-		std::cout << "pattern: " << term.to_string() << "\n\n";
-		std::cout << "lhs speicher:\n" << term.lhs_memory_layout() << "\n\n";
-		std::cout << "rhs speicher:\n" << term.rhs_memory_layout() << "\n\n";
+		const PnTerm pattern(s);
+		std::cout << "pattern: " << pattern.to_string() << "\n\n";
+		std::cout << "lhs speicher:\n" << pattern.lhs_memory_layout() << "\n\n";
+		std::cout << "rhs speicher:\n" << pattern.rhs_memory_layout() << "\n\n";
 	}
 }

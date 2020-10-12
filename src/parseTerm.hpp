@@ -18,6 +18,37 @@ namespace bmath {
 
 namespace bmath::intern {
 
+	using Token = char;
+	//TokenString is intended to be used along the string to be parsed to associate every char with what it represents 
+	//A TokenString may only hold a combination of the following chars:
+	//names for characters standing for not (only) themselves:
+	namespace token {
+		//'c' representing any character in a closer sense: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_"
+		//'c' might also represent (non-leading) digits if occuring in a name: "0123456789" (note: no '.' allowed)
+		//'c' also represents '\''. this has two meanings: 
+		//    1. if variable name starts with '\'', it has to end with '\'', then the name is quoted (only in pattern context)
+		//    2. if variable -/ function name has '\'' somewhere in between or at end, it is interpreted as normal character.
+		constexpr Token character = 'c';
+		//'n' representing any char composing a number literal: "0123456789."
+		//'n' might also represent "+-eE" if used to specify numbers 
+		//  as by engeneering notation: "<base><'e' or 'E'><optional '+' or '-'><exponent>"
+		constexpr Token number = 'n';
+		constexpr Token open_grouping = '('; //representing "([{"
+		constexpr Token clse_grouping = ')'; //representing ")]}"
+		constexpr Token unary_minus = '-';
+		constexpr Token sum = 'A';     //representing '+' and '-' as binary operators
+		constexpr Token product = 'M'; //representing '*' and '/' as binary operators
+
+									   //tokens representing themselfs as chars:
+		constexpr Token comma = ',';
+		constexpr Token hat = '^';
+		constexpr Token equals = '='; //only used as single char, not to compare
+		constexpr Token bar = '|';
+		constexpr Token colon = ':';
+		constexpr Token space = ' ';
+		constexpr Token imag_unit = 'i';
+	}
+
 	struct TokenString :std::string
 	{
 		using std::string::basic_string;
@@ -31,6 +62,45 @@ namespace bmath::intern {
 		constexpr explicit TokenView(const std::string_view& other) :std::string_view(other) {}
 		constexpr explicit TokenView(std::string_view&& other) :std::string_view(other) {}
 	};
+
+	namespace parse_detail {
+
+		template<bool Const>
+		struct ParseIterator
+		{
+			using Token_T = std::conditional_t<Const, const Token, Token>;
+			using Char_T = std::conditional_t<Const, const char, char>;
+
+			using value_type      = std::pair<Token_T, Char_T>;
+			using difference_type = std::ptrdiff_t;	//no random access
+			using pointer         = std::pair<Token_T*, Char_T*>;
+			using reference       = std::pair<Token_T&, Char_T&>;
+			using iterator_category = std::random_access_iterator_tag;
+
+			using DerefResult = std::conditional_t<Const, std::pair<Token, char>, reference>;
+
+			Token_T* tokens;
+			Char_T* chars;
+
+			constexpr ParseIterator(Token_T* const new_tokens, Char_T* const new_chars) noexcept :tokens(new_tokens), chars(new_chars) {}
+			constexpr ParseIterator(const ParseIterator&) noexcept = default;
+			constexpr ParseIterator& operator=(const ParseIterator&) noexcept = default;
+			constexpr ParseIterator& operator++() noexcept { this->tokens++; this->chars++; return *this; }
+			constexpr ParseIterator& operator--() noexcept { this->tokens--; this->chars--; return *this; }
+			constexpr ParseIterator operator++(int) noexcept { auto res = *this; this->operator++(); return res; }
+			constexpr ParseIterator operator--(int) noexcept { auto res = *this; this->operator--(); return res; }
+			constexpr ParseIterator operator+(const difference_type dx) noexcept { return { this->tokens + dx, this->chars + dx }; }
+			constexpr ParseIterator operator-(const difference_type dx) noexcept { return { this->tokens - dx, this->chars - dx }; }
+			constexpr difference_type operator-(const ParseIterator& snd) noexcept { return this->tokens - snd.tokens; }
+			constexpr DerefResult operator*() const noexcept { return std::make_pair(*this->tokens, *this->chars); }
+			constexpr bool operator==(const ParseIterator& other) const noexcept = default;
+			constexpr auto operator<=>(const ParseIterator& other) const noexcept = default;
+		};
+
+		using Iter = ParseIterator<false>;
+		using ConstIter = ParseIterator<true>;
+
+	} //namespace parse_detail
 
 	struct ParseString
 	{
@@ -46,6 +116,13 @@ namespace bmath::intern {
 		void remove_space() noexcept;
 
 		std::size_t size() const noexcept { assert(tokens.size() == name.size()); return tokens.size(); }
+
+		constexpr parse_detail::Iter begin() noexcept { return { this->tokens.data(), this->name.data() }; }
+		constexpr parse_detail::ConstIter begin() const noexcept { return { this->tokens.data(), this->name.data() }; }
+		constexpr parse_detail::Iter end() noexcept 
+		{ return { this->tokens.data() + this->tokens.size(), this->name.data() + this->tokens.size() }; }
+		constexpr parse_detail::ConstIter end() const noexcept 
+		{ return { this->tokens.data() + this->tokens.size(), this->name.data() + this->tokens.size() }; }
 	};
 
 	//as parsing always needs both a string_view to the actual input and a TokenView to the tokenized input, 
@@ -104,38 +181,11 @@ namespace bmath::intern {
 			assert(start <= end);
 			return { this->chars + start, end > this->size() ? this->size() - start : end - start }; 
 		}
+
+		constexpr parse_detail::ConstIter begin() const noexcept { return { this->tokens.data(), this->chars }; }
+		constexpr parse_detail::ConstIter end() const noexcept 
+		{ return { this->tokens.data() + this->tokens.size(), this->chars + this->tokens.size() }; }
 	};
-
-	using Token = char;
-	//TokenString is intended to be used along the string to be parsed to associate every char with what it represents 
-	//A TokenString may only hold a combination of the following chars:
-	//names for characters standing for not (only) themselves:
-	namespace token {
-		//'c' representing any character in a closer sense: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_"
-		//'c' might also represent (non-leading) digits if occuring in a name: "0123456789" (note: no '.' allowed)
-		//'c' also represents '\''. this has two meanings: 
-		//    1. if variable name starts with '\'', it has to end with '\'', then the name is quoted (only in pattern context)
-		//    2. if variable -/ function name has '\'' somewhere in between or at end, it is interpreted as normal character.
-		constexpr Token character = 'c';
-		//'n' representing any char composing a number literal: "0123456789."
-		//'n' might also represent "+-eE" if used to specify numbers 
-		//  as by engeneering notation: "<base><'e' or 'E'><optional '+' or '-'><exponent>"
-		constexpr Token number = 'n';
-		constexpr Token open_grouping = '('; //representing "([{"
-		constexpr Token clse_grouping = ')'; //representing ")]}"
-		constexpr Token unary_minus = '-';
-		constexpr Token sum = 'A';     //representing '+' and '-' as binary operators
-		constexpr Token product = 'M'; //representing '*' and '/' as binary operators
-
-		//tokens representing themselfs as chars:
-		constexpr Token comma = ',';
-		constexpr Token hat = '^';
-		constexpr Token equals = '='; //only used as single char, not to compare
-		constexpr Token bar = '|';
-		constexpr Token colon = ':';
-		constexpr Token space = ' ';
-		constexpr Token imag_unit = 'i';
-	}
 
 	TokenString tokenize(const std::string_view name);
 

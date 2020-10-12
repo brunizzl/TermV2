@@ -5,9 +5,6 @@
 
 namespace bmath::intern {
 
-	//returns position of first non_arithmetic token in view
-	std::size_t find_first_not_arithmetic(const TokenView view);
-
 	struct Head
 	{
 		std::size_t where;
@@ -19,15 +16,39 @@ namespace bmath::intern {
 			power,       //where specifies position of found operator
 			value,       //where is unspecidied
 			variable,    //where is unspecified
-			imag_unit,   //where is unspecified
 			group,       //where is unspecified
 			function,    //where specifies position of opening parenthesis
+			natural_computable,  //where is unspecified
+			complex_computable,  //where is unspecified
 		} type;
 	};
 
+	namespace compute {
+
+		enum class Result { not_exactly_computable, natural, complex };
+
+		//quite conservative in what operations are allowed, but still sometimes returns allowed if eval is unexact.
+		// (happens if numbers are too large to be stored exactly)
+		Result exactly_computable(const ParseView view) noexcept;
+
+		//only expects operations '+', '*', '-' on numbers in { a + bi | a, b in Z }
+		std::complex<double> eval_complex(ParseView view);
+
+		//only expects operations '+', '*', '^' on numbers in N
+		double eval_natural(ParseView view);
+
+		//expects view.tokens to eighter consisting of only token::number, 
+		//  or have single non-number-token at end beeing token::imag_unit
+		std::complex<double> parse_value(ParseView view);
+
+	} //namespace compute
+
+	//returns position of first non-arithmetic token in view
+	std::size_t find_first_not_arithmetic(const TokenView view);
+
 	//decides what type the outhermost element has
 	//offset is used to determine error position relative to begin of whole term
-	[[nodiscard]] Head find_head_type(const TokenView token_view, std::size_t offset);
+	[[nodiscard]] Head find_head_type(const ParseView view);
 
 	//returns head
 	[[nodiscard]] TypedIdx build(Store& store, ParseView view);

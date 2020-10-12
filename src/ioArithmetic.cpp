@@ -1,6 +1,7 @@
 
 #include <charconv>
 #include <algorithm>
+#include <numeric>
 
 #include "ioArithmetic.hpp"
 #include "termUtility.hpp"
@@ -100,9 +101,9 @@ namespace bmath::intern {
 	[[nodiscard]] TypedIdx_T build_function(TermStore_T& store, ParseView input, const std::size_t open_par, BuildAny build_any);
 
 	template<typename TypedIdx_T, typename TermStore_T>
-	[[nodiscard]] TypedIdx_T build_value(TermStore_T& store, double re, double im = 0.0)
+	[[nodiscard]] TypedIdx_T build_value(TermStore_T& store, const std::complex<double> complex)
 	{
-		return TypedIdx_T(store.insert(Complex{ std::complex<double>(re, im) }), Type::complex);
+		return TypedIdx_T(store.insert(complex), Type::complex);
 	}
 
 	namespace pattern {
@@ -158,56 +159,164 @@ namespace bmath::intern {
 	/////////////////////////////////////////////////////////////////////exported in header/////////////////////////////////////////////////////////////////////////////////
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+	namespace compute {
+
+		Result exactly_computable(const ParseView view) noexcept
+		{
+			if (view.tokens.find_first_of(token::character) == TokenView::npos) {
+				if (view.to_string_view().find_first_of("/-.i") == std::string_view::npos) {
+					return Result::natural; //found no minus or i -> natural number is result
+				}
+				if (view.to_string_view().find_first_of("/^.eE")  == std::string_view::npos) { //eE is forbidden as it otherwise enables non-integer numbers (e.g. "1e-20") 
+					return Result::complex; //found no power -> complex with { a + bi | a, b in Z } is result
+				}
+			}
+			return Result::not_exactly_computable;
+		} //exactly_computable
+
+		std::complex<double> eval_complex(ParseView view)
+		{
+			const auto split = [](const ParseView view, const std::size_t at) {
+				return std::make_pair(view.substr(0, at), view.substr(at + 1));
+			};
+
+			do {
+				if (view.size() == 1u && view.tokens.starts_with(token::imag_unit)) { 
+					return std::complex<double>(0.0, 1.0); 
+				}				
+				if (const auto sum_pos = find_first_of_skip_pars(view.tokens, token::sum); sum_pos != TokenView::npos) {
+					const auto [lhs, rhs] = split(view, sum_pos);
+					switch (view.chars[sum_pos]) {
+					case '+': return eval_complex(lhs) + eval_complex(rhs);
+					case '-': return eval_complex(lhs) - eval_complex(rhs);
+					}
+				}				
+				if (const auto product_pos = find_first_of_skip_pars(view.tokens, token::product); product_pos != TokenView::npos) {
+					const auto [lhs, rhs] = split(view, product_pos);
+					return eval_complex(lhs) * eval_complex(rhs);
+				}
+				if (view.tokens.starts_with(token::unary_minus)) {
+					view.remove_prefix(1u);
+					return - eval_complex(view);
+				}				
+				if (const auto not_number_pos = view.tokens.find_first_not_of(token::number); 
+					not_number_pos == TokenView::npos ||
+					not_number_pos + 1u == view.size() && view.tokens.ends_with(token::imag_unit)) 
+				{
+					return parse_value(view);
+				}
+				throw_if<ParseFailure>(!view.tokens.starts_with(token::open_grouping), view.offset, "expected '(' or the like");
+				throw_if<ParseFailure>(!view.tokens.ends_with(token::clse_grouping), view.offset + view.size(), "expected ')' or the like");
+				view.remove_prefix(1u);
+				view.remove_suffix(1u);
+			} while (view.size());
+			throw ParseFailure{ view.offset, "run out of characters" };
+		} //eval_complex
+
+		double eval_natural(ParseView view)
+		{
+			const auto split = [](const ParseView view, const std::size_t at) {
+				return std::make_pair(view.substr(0, at), view.substr(at + 1));
+			};
+
+			do {			
+				if (const auto sum_pos = find_first_of_skip_pars(view.tokens, token::sum); sum_pos != TokenView::npos) {
+					const auto [lhs, rhs] = split(view, sum_pos);
+					return eval_natural(lhs) + eval_natural(rhs);
+				}				
+				if (const auto product_pos = find_first_of_skip_pars(view.tokens, token::product); product_pos != TokenView::npos) {
+					const auto [lhs, rhs] = split(view, product_pos);
+					return eval_natural(lhs) * eval_natural(rhs);
+				}				
+				if (const auto pow_pos = find_first_of_skip_pars(view.tokens, token::hat); pow_pos != TokenView::npos) {
+					const auto [lhs, rhs] = split(view, pow_pos);
+					return std::pow(eval_natural(lhs), eval_natural(rhs));
+				}
+				if (view.tokens.find_first_not_of(token::number) == TokenView::npos) {
+					double val;
+					const auto [ptr, error] = std::from_chars(view.chars, view.chars + view.size(), val);
+					throw_if<ParseFailure>(error == std::errc::invalid_argument, view.offset, "value syntax is illformed");
+					throw_if<ParseFailure>(ptr != view.chars + view.size(), std::size_t(view.offset + ptr - view.chars + 1), "value syntax is illformed");
+					return val;
+				}
+				throw_if<ParseFailure>(!view.tokens.starts_with(token::open_grouping), view.offset, "expected '(' or the like");
+				throw_if<ParseFailure>(!view.tokens.ends_with(token::clse_grouping), view.offset + view.size(), "expected ')' or the like");
+				view.remove_prefix(1u);
+				view.remove_suffix(1u);
+			} while (view.size());
+			throw ParseFailure{ view.offset, "run out of characters" };
+		} //eval_natural
+
+		std::complex<double> parse_value(ParseView view)
+		{
+			const bool imag = view.tokens.ends_with(token::imag_unit);
+			if (imag) {
+				view.remove_suffix(1u);
+			}
+			double value;
+			const auto [ptr, error] = std::from_chars(view.chars, view.chars + view.size(), value);
+			throw_if<ParseFailure>(error == std::errc::invalid_argument, view.offset, "value syntax is illformed");
+			throw_if<ParseFailure>(ptr != view.chars + view.size(), std::size_t(view.offset + ptr - view.chars + 1u), "value syntax is illformed");
+			return std::complex<double>(imag ? 0.0 : value, imag ? value : 0.0);
+		} //parse_value
+
+	} //namespace compute
+
 	std::size_t find_first_not_arithmetic(const TokenView view)
 	{
 		using namespace token;
-		const char allowed_tokens[] = { character, number, open_grouping, clse_grouping, 
-			unary_minus, sum, product, comma, hat, imag_unit, '\0' }; //'\0' only as end symbol for allowed_tokens, not as part of aritmetic symbols
+		//'\0' only as end symbol for allowed_tokens, not as part of aritmetic symbols
+		const Token allowed_tokens[] = { character, comma, hat, unary_minus, sum, product, number, imag_unit, open_grouping, clse_grouping, '\0' }; 
 		return view.find_first_not_of(allowed_tokens);
 	}
 
-	Head find_head_type(const TokenView token_view, std::size_t offset)
+	Head find_head_type(const ParseView view)
 	{
-		std::size_t op;
-		if ((op = find_first_of_skip_pars(token_view, token::sum)) != TokenView::npos) {
-			return Head{ op, Head::Type::sum };
+		switch (compute::exactly_computable(view)) {
+		case compute::Result::complex: return Head{ 0u, Head::Type::complex_computable };
+		case compute::Result::natural: return Head{ 0u, Head::Type::natural_computable };
 		}
-		if (token_view.front() == token::unary_minus) {
-			return Head{ 0, Head::Type::negate };
+
+		if (const std::size_t sum_pos = find_first_of_skip_pars(view.tokens, token::sum); sum_pos != TokenView::npos) {
+			return Head{ sum_pos, Head::Type::sum };
 		}
-		if ((op = find_first_of_skip_pars(token_view, token::product)) != TokenView::npos) {
-			return Head{ op, Head::Type::product };
+		if (view.tokens.front() == token::unary_minus) {
+			return Head{ 0u, Head::Type::negate };
 		}
-		if ((op = find_first_of_skip_pars(token_view, token::hat)) != TokenView::npos) {
-			return Head{ op, Head::Type::power };
+		if (const std::size_t product_pos = find_first_of_skip_pars(view.tokens, token::product); product_pos != TokenView::npos) {
+			return Head{ product_pos, Head::Type::product };
 		}
-		if (token_view.find_first_not_of(token::number) == TokenView::npos) {
-			return Head{ 0, Head::Type::value };
+		if (const std::size_t pow_pos = find_first_of_skip_pars(view.tokens, token::hat); pow_pos != TokenView::npos) {
+			return Head{ pow_pos, Head::Type::power };
 		}
-		if ((op = token_view.find_first_not_of(token::character)) == TokenView::npos) {
-			return Head{ 0, Head::Type::variable };
+		if (const auto not_number_pos = view.tokens.find_first_not_of(token::number); 
+			not_number_pos == TokenView::npos ||
+			not_number_pos + 1u == view.size() && view.tokens.ends_with(token::imag_unit))  {
+			return Head{ 0u, Head::Type::value };
 		}
-		if (token_view.size() == 1u && token_view[0u] == token::imag_unit) {
-			return Head{ 0, Head::Type::imag_unit };
+
+		const std::size_t first_not_character = view.tokens.find_first_not_of(token::character);
+		if (first_not_character == TokenView::npos) {
+			return Head{ 0u, Head::Type::variable };
 		}
-		throw_if<ParseFailure>(token_view[op] != token::open_grouping, op + offset, "illegal character, expected '('");
-		throw_if<ParseFailure>(!token_view.ends_with(token::clse_grouping), token_view.length() + offset, "poor grouping, expected ')'");
-		if (op == 0) {
-			return Head{ 0, Head::Type::group };
+		throw_if<ParseFailure>(view.tokens[first_not_character] != token::open_grouping, first_not_character + view.offset, "illegal character, expected '('");
+		throw_if<ParseFailure>(!view.tokens.ends_with(token::clse_grouping), view.tokens.length() + view.offset, "poor grouping, expected ')'");
+		if (first_not_character == 0u) {
+			return Head{ 0u, Head::Type::group };
 		}
 		else {
-			return Head{ op, Head::Type::function };
+			return Head{ first_not_character, Head::Type::function };
 		}
 	} //find_head_type
 
 	TypedIdx build(Store& store, ParseView input)
 	{
 		throw_if<ParseFailure>(input.size() == 0, input.offset, "recieved empty substring");
-		Head head = find_head_type(input.tokens, input.offset);
+		Head head = find_head_type(input);
 		while (head.type == Head::Type::group) {
 			input.remove_prefix(1);
 			input.remove_suffix(1);
-			head = find_head_type(input.tokens, input.offset);
+			head = find_head_type(input);
 		}
 		switch (head.type) {
 		case Head::Type::sum: {
@@ -240,21 +349,20 @@ namespace bmath::intern {
 			const TypedIdx expo = build(store, input);
 			return TypedIdx(store.insert(KnownFunction{ FnType::pow, base, expo, TypedIdx() }), Type::known_function);
 		} break;
+		case Head::Type::complex_computable: {
+			return build_value<TypedIdx>(store, compute::eval_complex(input));
+		} break;
+		case Head::Type::natural_computable: { 
+			return build_value<TypedIdx>(store, compute::eval_natural(input));
+		} break;
 		case Head::Type::value: {
-			double val;
-			const auto [ptr, error] = std::from_chars(input.chars, input.chars + input.size(), val);
-			throw_if<ParseFailure>(error == std::errc::invalid_argument, input.offset, "value syntax is illformed");
-			throw_if<ParseFailure>(ptr != input.chars + input.size(), std::size_t(input.offset + ptr - input.chars + 1), "value syntax is illformed");
-			return build_value<TypedIdx>(store, val);
+			return build_value<TypedIdx>(store, compute::parse_value(input));
 		} break;
 		case Head::Type::function: {
 			return build_function<TypedIdx>(store, input, head.where, build);
 		} break;
 		case Head::Type::variable: {
 			return TypedIdx(insert_string(store, input.to_string_view()), Type::variable);
-		} break;
-		case Head::Type::imag_unit: {
-			return build_value<TypedIdx>(store, 0.0, 1.0);
 		} break;
 		default: 
 			assert(false); 
@@ -410,11 +518,11 @@ namespace bmath::intern {
 			};
 
 			throw_if<ParseFailure>(input.size() == 0u, input.offset, "recieved empty substring");
-			Head head = find_head_type(input.tokens, input.offset);
+			Head head = find_head_type(input);
 			while (head.type == Head::Type::group) {
 				input.remove_prefix(1);
 				input.remove_suffix(1);
-				head = find_head_type(input.tokens, input.offset);
+				head = find_head_type(input);
 			}
 			switch (head.type) {
 			case Head::Type::sum: {
@@ -447,12 +555,14 @@ namespace bmath::intern {
 				const PnTypedIdx expo = this->operator()(store, input);
 				return PnTypedIdx(store.insert(PnKnownFunction{ FnType::pow, base, expo, PnTypedIdx() }), Type::known_function);
 			} break;
+			case Head::Type::complex_computable: {
+				return build_value<PnTypedIdx>(store, compute::eval_complex(input));
+			} break;
+			case Head::Type::natural_computable: { 
+				return build_value<PnTypedIdx>(store, compute::eval_natural(input));
+			} break;
 			case Head::Type::value: {
-				double val;
-				const auto [ptr, error] = std::from_chars(input.chars, input.chars + input.size(), val);
-				throw_if<ParseFailure>(error == std::errc::invalid_argument, input.offset, "value syntax is illformed");
-				throw_if<ParseFailure>(ptr != input.chars + input.size(), std::size_t(input.offset + ptr - input.chars + 1), "value syntax is illformed");
-				return build_value<PnTypedIdx>(store, val);
+				return build_value<PnTypedIdx>(store, compute::parse_value(input));
 			} break;
 			case Head::Type::function: {
 				return build_function<PnTypedIdx>(store, input, head.where, *this);
@@ -470,9 +580,6 @@ namespace bmath::intern {
 					const MatchVariable var = { TypedIdx(), std::uint32_t(name_it - this->name_map.begin()), name_it->restr, name };
 					return PnTypedIdx(store.insert(var), PnSpecial::match_variable);
 				}
-			} break;
-			case Head::Type::imag_unit: {
-				return build_value<PnTypedIdx>(store, 0.0, 1.0);
 			} break;
 			default: 
 				assert(false); 
