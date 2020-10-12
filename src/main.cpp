@@ -21,8 +21,7 @@ void f1(A12 e)
 	bool hit = false;
 	if (e.is<A1>()) { std::cout << "A1 \t"; hit = true; }
 	if (e.is<A2>()) { std::cout << "A2 \t"; hit = true; }
-	if (!hit) { std::cout << "upsi!\n"; }
-	else      { std::cout << "\n"; }
+	std::cout << (hit ? "\n" : "upsi!\n");
 }
 
 enum class A3 { a, b, c, COUNT };
@@ -34,8 +33,7 @@ void f2(A123 e)
 	if                (e.is<A3>()) { std::cout << "A3 \t";        hit = true; }
 	if (e.is<A12>() && e.is<A1>()) { std::cout << "A12 && A1 \t"; hit = true; }
 	if (e.is<A12>() && e.is<A2>()) { std::cout << "A12 && A2 \t"; hit = true; }
-	if (!hit) { std::cout << "upsi!\n"; }
-	else      { std::cout << "\n"; }
+	std::cout << (hit ? "\n" : "upsi!\n");
 }
 
 enum class B1 { a, b, c, COUNT };
@@ -49,8 +47,7 @@ void g1(B12B1 e)
 	if (e.is<B1>())  { std::cout << "B1 \t";  hit = true; }
 	if (e.is<B2>())  { std::cout << "B2 \t";  hit = true; }
 	if (e.is<BB1>()) { std::cout << "BB1 \t"; hit = true; }
-	if (!hit) { std::cout << "upsi!\n"; }
-	else      { std::cout << "\n"; }
+	std::cout << (hit ? "\n" : "upsi!\n");
 }
 
 int main()
@@ -82,7 +79,6 @@ int main()
 		g1(BB1(B1::a));
 		g1(BB1(B1::b));
 		g1(BB1(B1::c));
-		std::cout << "\n";
 		std::cout << "\n";
 	}
 	{

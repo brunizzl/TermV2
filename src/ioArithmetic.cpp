@@ -405,7 +405,7 @@ namespace bmath::intern {
 				if (name.size() == 1u) {
 					return { name[0u], '\0', '\0', '\0' };
 				}
-				assert(false && "expected positive name size");
+				assert(false && "expected positive match_variable name size");
 				return {};
 			};
 
