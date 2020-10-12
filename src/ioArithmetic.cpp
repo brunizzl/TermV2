@@ -153,6 +153,62 @@ namespace bmath::intern {
 			});
 		constexpr int infixr(PrintType type) { return find_snd(infixr_table, type); }
 
+		void append_complex(const std::complex<double> val, std::string& dest, int parent_operator_precedence)
+		{
+			enum class Flag { showpos, noshowpos };
+			const auto add_im_to_stream = [](std::stringstream& buffer, const double im, Flag flag) {
+				if (im == -1.0) {
+					buffer << '-';
+				}
+				else if (im == 1.0) {
+					if (flag == Flag::showpos) {
+						buffer << '+';
+					}
+				}
+				else {
+					buffer << (flag == Flag::showpos ? std::showpos : std::noshowpos) << im;
+				}
+				buffer << 'i';
+			};
+
+			bool parentheses = false;
+			std::stringstream buffer;
+
+			if (val.real() != 0.0 && val.imag() != 0.0) {
+				parentheses = parent_operator_precedence > infixr(Type::sum);
+				buffer << val.real();
+				add_im_to_stream(buffer, val.imag(), Flag::showpos);		
+			}
+			else if (val.real() != 0.0 && val.imag() == 0.0) {
+				parentheses = val.real() < 0.0 && parent_operator_precedence > infixr(Type::sum);	//leading '-'
+				buffer << val.real();
+			}
+			else if (val.real() == 0.0 && val.imag() != 0.0) {
+				parentheses = val.imag() < 0.0 && parent_operator_precedence > infixr(Type::sum);	//leading '-'	
+				parentheses |= parent_operator_precedence > infixr(Type::product);	//*i
+				add_im_to_stream(buffer, val.imag(), Flag::noshowpos);
+			}
+			else {
+				buffer << '0';
+			}
+
+			if (parentheses) {
+				dest.push_back('(');
+				dest.append(buffer.str());
+				dest.push_back(')');
+			}
+			else {
+				dest.append(buffer.str());
+			}
+		} //append_complex
+
+		void append_real(double val, std::string& dest)
+		{
+			std::stringstream buffer;
+			buffer << val;
+			dest.append(buffer.str());
+		}
+
 	} //namespace print
 
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -280,7 +336,7 @@ namespace bmath::intern {
 		if (const std::size_t sum_pos = find_first_of_skip_pars(view.tokens, token::sum); sum_pos != TokenView::npos) {
 			return Head{ sum_pos, Head::Type::sum };
 		}
-		if (view.tokens.front() == token::unary_minus) {
+		if (view.tokens.starts_with(token::unary_minus)) {
 			return Head{ 0u, Head::Type::negate };
 		}
 		if (const std::size_t product_pos = find_first_of_skip_pars(view.tokens, token::product); product_pos != TokenView::npos) {
@@ -300,7 +356,7 @@ namespace bmath::intern {
 			return Head{ 0u, Head::Type::variable };
 		}
 		throw_if<ParseFailure>(view.tokens[first_not_character] != token::open_grouping, first_not_character + view.offset, "illegal character, expected '('");
-		throw_if<ParseFailure>(!view.tokens.ends_with(token::clse_grouping), view.tokens.length() + view.offset, "poor grouping, expected ')'");
+		throw_if<ParseFailure>(!view.tokens.ends_with(token::clse_grouping), view.size() + view.offset, "poor grouping, expected ')'");
 		if (first_not_character == 0u) {
 			return Head{ 0u, Head::Type::group };
 		}
@@ -311,11 +367,11 @@ namespace bmath::intern {
 
 	TypedIdx build(Store& store, ParseView input)
 	{
-		throw_if<ParseFailure>(input.size() == 0, input.offset, "recieved empty substring");
+		throw_if<ParseFailure>(input.size() == 0u, input.offset, "recieved empty substring");
 		Head head = find_head_type(input);
 		while (head.type == Head::Type::group) {
-			input.remove_prefix(1);
-			input.remove_suffix(1);
+			input.remove_prefix(1u);
+			input.remove_suffix(1u);
 			head = find_head_type(input);
 		}
 		switch (head.type) {
@@ -328,7 +384,7 @@ namespace bmath::intern {
 				build);
 		} break;
 		case Head::Type::negate: {
-			input.remove_prefix(1);  //remove minus sign
+			input.remove_prefix(1u);  //remove minus sign
 			const TypedIdx to_negate = build(store, input);
 			const TypedIdx minus_1 = build_value<TypedIdx>(store, -1.0);
 			return TypedIdx(store.insert(Product({ to_negate, minus_1 })), Type::product);
@@ -344,7 +400,7 @@ namespace bmath::intern {
 		} break;
 		case Head::Type::power: {
 			const auto base_view = input.steal_prefix(head.where);
-			input.remove_prefix(1);
+			input.remove_prefix(1u);
 			const TypedIdx base = build(store, base_view);
 			const TypedIdx expo = build(store, input);
 			return TypedIdx(store.insert(KnownFunction{ FnType::pow, base, expo, TypedIdx() }), Type::known_function);
@@ -380,8 +436,8 @@ namespace bmath::intern {
 		const std::size_t variadic_idx = store.insert(Result_T(subterm));
 		std::size_t last_node_idx = variadic_idx;
 		while (input.size()) {
-			const char current_operator = input.chars[0];
-			input.remove_prefix(1); //remove current_operator;
+			const char current_operator = input.chars[0u];
+			input.remove_prefix(1u); //remove current_operator;
 			op_idx = find_first_of_skip_pars(input.tokens, VariadicTraits::operator_token);
 			const auto subterm_view = input.steal_prefix(op_idx);
 			const TypedIdx_T subterm = build_any(store, subterm_view);
@@ -401,7 +457,7 @@ namespace bmath::intern {
 	template<typename TypedIdx_T, typename TermStore_T, typename BuildAny>
 	[[nodiscard]] TypedIdx_T build_function(TermStore_T& store, ParseView input, const std::size_t open_par, const BuildAny build_any)
 	{
-		using TypedIdxSLC_T = TermSLC<std::uint32_t, TypedIdx_T, 3>;
+		using TypedIdxSLC_T = TermSLC<std::uint32_t, TypedIdx_T, 3u>;
 
 		const auto type = fn::type_of(input.to_string_view(0u, open_par));
 		if (type == FnType::UNKNOWN) { //build generic function
@@ -414,14 +470,14 @@ namespace bmath::intern {
 				}
 				else {
 					result.name_size = GenericFunction::NameSize::small;
-					for (std::size_t i = 0; i < name.size(); i++) {
+					for (std::size_t i = 0u; i < name.size(); i++) {
 						result.short_name[i] = name[i]; //maybe go over bound of short_name and into short_name_extension (undefined behavior oh wee!)
 					}
 				}
 			}
 			//writing parameters in result
-			input.remove_suffix(1);            //"pow(2,4)" -> "pow(2,4"
-			input.remove_prefix(open_par + 1); //"pow(2,4" ->      "2,4"
+			input.remove_suffix(1u);            //"pow(2,4)" -> "pow(2,4"
+			input.remove_prefix(open_par + 1u); //"pow(2,4" ->      "2,4"
 			{
 				const std::size_t comma = find_first_of_skip_pars(input.tokens, token::comma);
 				const auto param_view = input.steal_prefix(comma); //now input starts with comma
@@ -430,7 +486,7 @@ namespace bmath::intern {
 			}
 			std::size_t last_node_idx = result.params_idx;
 			while (input.size()) {
-				input.remove_prefix(1); //erase comma
+				input.remove_prefix(1u); //erase comma
 				const std::size_t comma = find_first_of_skip_pars(input.tokens, token::comma);
 				const auto param_view = input.steal_prefix(comma);
 				const TypedIdx_T param = build_any(store, param_view);
@@ -520,8 +576,8 @@ namespace bmath::intern {
 			throw_if<ParseFailure>(input.size() == 0u, input.offset, "recieved empty substring");
 			Head head = find_head_type(input);
 			while (head.type == Head::Type::group) {
-				input.remove_prefix(1);
-				input.remove_suffix(1);
+				input.remove_prefix(1u);
+				input.remove_suffix(1u);
 				head = find_head_type(input);
 			}
 			switch (head.type) {
@@ -534,7 +590,7 @@ namespace bmath::intern {
 					*this);
 			} break;
 			case Head::Type::negate: {
-				input.remove_prefix(1);  //remove minus sign
+				input.remove_prefix(1u);  //remove minus sign
 				const PnTypedIdx to_negate = this->operator()(store, input);
 				const PnTypedIdx minus_1 = build_value<PnTypedIdx>(store, -1.0);
 				return PnTypedIdx(store.insert(PnProduct({ to_negate, minus_1 })), Type::product);
@@ -550,7 +606,7 @@ namespace bmath::intern {
 			} break;
 			case Head::Type::power: {
 				const auto base_view = input.steal_prefix(head.where);
-				input.remove_prefix(1);
+				input.remove_prefix(1u);
 				const PnTypedIdx base = this->operator()(store, base_view);
 				const PnTypedIdx expo = this->operator()(store, input);
 				return PnTypedIdx(store.insert(PnKnownFunction{ FnType::pow, base, expo, PnTypedIdx() }), Type::known_function);
@@ -568,7 +624,7 @@ namespace bmath::intern {
 				return build_function<PnTypedIdx>(store, input, head.where, *this);
 			} break;
 			case Head::Type::variable: {
-				if (input.chars[0] == '\'') {
+				if (input.chars[0u] == '\'') {
 					throw_if<ParseFailure>(input.chars[input.size() - 1u] != '\'', input.offset + 1u, "found no matching \"'\"");
 					return PnTypedIdx(insert_string(store, input.to_string_view(1u, input.size() - 1u)), Type::variable);
 				}
@@ -591,67 +647,11 @@ namespace bmath::intern {
 
 	namespace print {
 
-		void append_complex(const std::complex<double> val, std::string& dest, int parent_operator_precedence)
-		{
-			enum class Flag { showpos, noshowpos };
-			const auto add_im_to_stream = [](std::stringstream& buffer, const double im, Flag flag) {
-				if (im == -1) {
-					buffer << '-';
-				}
-				else if (im == 1) {
-					if (flag == Flag::showpos) {
-						buffer << '+';
-					}
-				}
-				else {
-					buffer << (flag == Flag::showpos ? std::showpos : std::noshowpos) << im;
-				}
-				buffer << 'i';
-			};
-
-			bool parentheses = false;
-			std::stringstream buffer;
-
-			if (val.real() != 0 && val.imag() != 0) {
-				parentheses = parent_operator_precedence > infixr(Type::sum);
-				buffer << val.real();
-				add_im_to_stream(buffer, val.imag(), Flag::showpos);		
-			}
-			else if (val.real() != 0 && val.imag() == 0) {
-				parentheses = val.real() < 0 && parent_operator_precedence > infixr(Type::sum);	//leading '-'
-				buffer << val.real();
-			}
-			else if (val.real() == 0 && val.imag() != 0) {
-				parentheses = val.imag() < 0 && parent_operator_precedence > infixr(Type::sum);	//leading '-'	
-				parentheses |= parent_operator_precedence > infixr(Type::product);	//*i
-				add_im_to_stream(buffer, val.imag(), Flag::noshowpos);
-			}
-			else {
-				buffer << '0';
-			}
-
-			if (parentheses) {
-				dest.push_back('(');
-				dest.append(buffer.str());
-				dest.push_back(')');
-			}
-			else {
-				dest.append(buffer.str());
-			}
-		} //append_complex
-
-		void append_real(double val, std::string& dest)
-		{
-			std::stringstream buffer;
-			buffer << val;
-			dest.append(buffer.str());
-		}
-
 		template<typename Store_T, typename TypedIdx_T>
 		void append_to_string(const Store_T& store, const TypedIdx_T ref, std::string& str, const int parent_infixr)
 		{
 			using Type_T = TypedIdx_T::Enum_T;
-			using TypedIdxSLC_T = TermSLC<std::uint32_t, TypedIdx_T, 3>;
+			using TypedIdxSLC_T = TermSLC<std::uint32_t, TypedIdx_T, 3u>;
 			constexpr bool pattern = std::is_same_v<Type_T, pattern::PnType>;
 
 			const auto [index, type] = ref.split();
@@ -803,12 +803,14 @@ namespace bmath::intern {
 						str += "-";
 					}
 					else if (const auto base = get_pow_neg1(elem)) {
-						str += (first ? "1 / " : " / "); 
+						//str += (first ? "1 / " : " / "); 
+						str += (first ? "1/" : "/"); 
 						str += to_pretty_string(store, *base, infixr(Type::product));
 						first = false;
 					}
 					else {
-						str += (first ? "" : " * ");
+						//str += (first ? "" : " * ");
+						str += (first ? "" : "*");
 						str += to_pretty_string(store, elem, infixr(Type::product));
 						first = false;
 					}
@@ -830,28 +832,31 @@ namespace bmath::intern {
 				bool first = true;
 				for (const auto summand : reverse_elems(vdc::range(store, index))) {
 					if (const auto val = get_negative_real(summand)) {
-						str += (first ? "" : " ");
+						//str += (first ? "" : " ");
 						append_real(*val, str);
 					}
 					else if (auto product = get_negative_product(summand)) {
 						if (product->negative_factor != -1.0) {
-							str += (first ? "" : " ");
+							//str += (first ? "" : " ");
 							append_real(product->negative_factor, str);
-							str += " * ";
+							//str += " * ";
+							str += "*";
 						}
 						else {
-							str +=  (first ? "-" : " -");
+							//str +=  (first ? "-" : " -");
+							str += "-";
 						}
 						std::reverse(product->other_factors.begin(), product->other_factors.end());
 						append_product(product->other_factors);
 					}
 					else {
-						str += (first ? "" : " + ");
+						//str += (first ? "" : " + ");
+						str += (first ? "" : "+");
 						str += to_pretty_string(store, summand, infixr(type));
 					}
 					first = false;
 				}
-				assert(!first && "found sum with only single summand -1 or zero summands");
+				assert(!first && "found sum with zero summands");
 			} break;
 			case Type::product: {
 				append_product(reverse_elems(vdc::range(store, index)));
@@ -861,7 +866,8 @@ namespace bmath::intern {
 				if (function.type == FnType::pow) {
 					need_parentheses = infixr(PrintExtras::pow) <= parent_infixr;
 					str += to_pretty_string(store, function.params[0], infixr(PrintExtras::pow));
-					str += " ^ ";
+					//str += " ^ ";
+					str += "^";
 					str += to_pretty_string(store, function.params[1], infixr(PrintExtras::pow));
 				}
 				else {
@@ -871,7 +877,8 @@ namespace bmath::intern {
 					bool first = true;
 					for (const auto param : fn::range(function)) {
 						if (!std::exchange(first, false)) {
-							str += ", ";
+							//str += ", ";
+							str += ",";
 						}
 						str += to_pretty_string(store, param, infixr(type));
 					}
@@ -886,7 +893,8 @@ namespace bmath::intern {
 				bool first = true;
 				for (const auto param : fn::range(store, generic_function)) {
 					if (!std::exchange(first, false)) {
-						str += ", ";
+						//str += ", ";
+						str += ",";
 					}
 					str += to_pretty_string(store, param, infixr(type));
 				}

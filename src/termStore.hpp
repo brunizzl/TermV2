@@ -1,8 +1,6 @@
 #pragma once
 
 #include <vector>
-#include <bitset>
-#include <bit>
 #include <type_traits>
 #include <array>
 
@@ -19,7 +17,7 @@ namespace bmath::intern {
 		union [[nodiscard]] TableVecElem
 		{
 			static constexpr std::size_t table_dist = sizeof(TermUnion_T) * 8;	//also number of elements each table keeps track of
-			using OccupancyTable = std::bitset<table_dist>; 
+			using OccupancyTable = BitSet<table_dist>; 
 
 			TermUnion_T value;
 			OccupancyTable table;
@@ -41,7 +39,7 @@ namespace bmath::intern {
 
 		using VecElem = typename store_detail::TableVecElem<TermUnion_T>;
 		static constexpr std::size_t table_dist = VecElem::table_dist;
-		using OccupancyTable = std::bitset<table_dist>; //same definition as in VecElem, but redefined for better Intellisense
+		using OccupancyTable = BitSet<table_dist>; //same definition as in VecElem, but redefined for better Intellisense
 
 		std::vector<VecElem, Allocator> vector;
 
@@ -66,19 +64,16 @@ namespace bmath::intern {
 				}
 				else {
 					OccupancyTable& table = this->vector[table_pos].table;
-					for (std::size_t relative_pos = 1u; relative_pos < table_dist; relative_pos++) {	//first bit encodes position of table -> start one later
-						if (!table.test(relative_pos)) {
-							table.set(relative_pos);
-							const std::size_t found_pos = table_pos + relative_pos;
-							if (found_pos >= this->vector.size()) {	//put new element in vector
-								this->vector.emplace_back(new_elem);
-							}
-							else {	//reuse old element in vector
-								new (&this->vector[found_pos]) VecElem(new_elem);
-							}
-							return found_pos;
-						}
+					const std::size_t relative_pos = table.find_first_false();
+					table.set(relative_pos);
+					const std::size_t found_pos = table_pos + relative_pos;
+					if (found_pos >= this->vector.size()) {	//put new element in vector
+						this->vector.emplace_back(new_elem);
 					}
+					else {	//reuse old element in vector
+						new (&this->vector[found_pos]) VecElem(new_elem);
+					}
+					return found_pos;
 				}
 			}
 			//first bit is set, as table itself occupies that slot, second as new element is emplaced afterwards.

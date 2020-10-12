@@ -4,7 +4,6 @@
 #include <array>
 #include <algorithm>
 #include <cstring>
-#include <bit>
 
 #include "termUtility.hpp"
 #include "arithmeticTerm.hpp"
@@ -203,20 +202,11 @@ namespace bmath::intern {
 		{
 			if (func_1.name_size == GenericFunction::NameSize::small &&
 				func_2.name_size == GenericFunction::NameSize::small) 
-			{ //std::string_view does not currently support <=>
-				const int cmp = std::strcmp(func_1.short_name, func_2.short_name);
-				if (cmp < 0) {
-					return std::strong_ordering::less;
-				}
-				if (cmp > 0) {
-					return std::strong_ordering::greater;
-				}
-				else {
-					return std::strong_ordering::equal;
-				}
+			{//change to comparison of std::string_view when they support <=>
+				return compare_arrays(func_1.short_name, func_2.short_name, GenericFunction::short_name_max);				
 			}
-			if (func_1.name_size == GenericFunction::NameSize::longer &&
-				func_2.name_size == GenericFunction::NameSize::longer) 			
+			else if (func_1.name_size == GenericFunction::NameSize::longer &&
+			         func_2.name_size == GenericFunction::NameSize::longer) 			
 			{
 				return string_compare(store_1, store_2, func_1.long_name_idx, func_2.long_name_idx);
 			}
@@ -375,7 +365,7 @@ namespace bmath::intern {
 			case Type::known_function: {
 				KnownFunction& known_function = store.at(index).known_function;
 				std::array<Complex, 3> results_values;
-				std::bitset<3> results_computable = 0;
+				BitSet8 results_computable = 0;
 				for (std::size_t i = 0; i < fn::param_count(known_function.type); i++) {
 					if (const auto param_res = combine_values_unexact(store, known_function.params[i])) {
 						results_values[i] = *param_res;
@@ -422,7 +412,7 @@ namespace bmath::intern {
 		std::optional<Complex> combine_values_exact(Store_T& store, const TypedIdx_T ref)
 		{
 			using Type_T = TypedIdx_T::Enum_T;
-			using TypedIdxSLC_T = TermSLC<std::uint32_t, TypedIdx_T, 3>;
+			using TypedIdxSLC_T = TermSLC<std::uint32_t, TypedIdx_T, 3u>;
 			constexpr bool pattern = std::is_same_v<Type_T, pattern::PnType>;
 
 			const auto [index, type] = ref.split();
@@ -608,9 +598,9 @@ namespace bmath::intern {
 				if (var_1.restr != var_2.restr) {
 					return var_1.restr <=> var_2.restr;
 				}
-				//if (var_1.name != var_2.name) { //c++20 i need you :(
-				//	return var_1.name <=> var_2.name; //reverse to make pretty_string prettier
-				//}
+				if (const auto name_cmp = compare_arrays(var_1.name.data(), var_2.name.data(), 4u); name_cmp != std::strong_ordering::equal) {
+					return name_cmp;
+				}
 				if (var_1.shared_data_idx != var_2.shared_data_idx) {
 					return var_1.shared_data_idx <=> var_2.shared_data_idx; //reverse to make pretty_string prettier
 				}
@@ -625,7 +615,7 @@ namespace bmath::intern {
 		void sort(Store_T& store, const TypedIdx_T ref)
 		{
 			using Type_T = TypedIdx_T::Enum_T;
-			using TypedIdxSLC_T = TermSLC<std::uint32_t, TypedIdx_T, 3>;
+			using TypedIdxSLC_T = TermSLC<std::uint32_t, TypedIdx_T, 3u>;
 			constexpr bool pattern = std::is_same_v<Type_T, pattern::PnType>;
 
 			const auto [index, type] = ref.split();
@@ -718,6 +708,14 @@ namespace bmath {
 		result.reserve(this->store.size() * 2);
 		print::append_to_string(this->store, this->head, result);
 		return result;
+	}
+
+	std::string ArithmeticTerm::to_pretty_string()
+	{
+		this->combine_layers();
+		this->combine_values_exact();
+		this->sort();
+		return print::to_pretty_string(this->store, this->head);
 	}
 
 	std::string ArithmeticTerm::to_pretty_string() const

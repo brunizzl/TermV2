@@ -2,11 +2,13 @@
 
 #include <exception>
 #include <algorithm>
+#include <numeric>
 #include <cassert>
 #include <array>
 #include <vector>
 #include <span>
 #include <type_traits>
+#include <bit>
 
 namespace bmath::intern {
 
@@ -24,13 +26,6 @@ namespace bmath::intern {
 			throw Exception_T{ std::forward<Args>(args)... };
 		}
 	}
-
-	template<const auto x, const auto... xs, typename T>
-	constexpr bool is_one_of(const T y) 
-	{ 
-		if constexpr (!sizeof...(xs)) { return y == x; }
-		else                          { return y == x || is_one_of<xs...>(y); }
-	}	
 
 	//idea stolen from Jason Turner: https://www.youtube.com/watch?v=INn3xa4pMfg
 	template <typename Fst_T, typename Snd_T, std::size_t Size>
@@ -294,7 +289,7 @@ namespace bmath::intern {
 		static constexpr Value COUNT = static_cast<Value>(next_offset); //only relevant for outhermost instance
 	}; //class SumEnum<Enum, TailEnums...>
 
-	template<typename T, auto V> struct Pair; //pair of Type and Value
+	template<typename, auto> struct Pair; //pair of Type and Value
 
 	template<typename Enum, auto Count, typename... TailEnums>
 	class SumEnum<Pair<Enum, Count>, TailEnums...> :public SumEnum<TailEnums...>
@@ -341,5 +336,137 @@ namespace bmath::intern {
 		constexpr bool operator==(const SumEnum&) const = default;      //only relevant for outhermost instance   
 		static constexpr Value COUNT = static_cast<Value>(next_offset); //only relevant for outhermost instance   
 	}; //class SumEnum<Pair<Enum, Count>, TailEnums...>
+
+	//remove if c++20 libraries have catched up
+	template<typename T>
+	constexpr std::strong_ordering compare_arrays(const T* lhs, const T* rhs, std::size_t size)
+	{
+		while (size --> 1u && *lhs == *rhs) {
+			lhs++;
+			rhs++;
+		}
+		return *lhs <=> *rhs;
+	}
+
+	namespace bitset_detail {
+
+		template<typename UInt_T>
+		class BitSet_
+		{
+			static_assert(std::is_unsigned_v<UInt_T>);
+			static constexpr std::size_t size = sizeof(UInt_T) * 8u;
+
+		public:
+			UInt_T data;
+
+			constexpr BitSet_() :data(0u) {}
+			constexpr BitSet_(const UInt_T new_data) :data(new_data) {}
+			constexpr operator UInt_T() const noexcept { return this->data; }
+
+			constexpr void   set(const std::size_t pos) noexcept { this->data |=  (UInt_T(1) << pos); }
+			constexpr void reset(const std::size_t pos) noexcept { this->data &= ~(UInt_T(1) << pos); }
+			constexpr void   set(const std::size_t pos, const bool val) noexcept { val ? this->set(pos) : this->reset(pos); }
+
+			constexpr bool  test(const std::size_t pos) const noexcept { return this->data & (UInt_T(1) << pos); }
+			constexpr bool  all() const noexcept { return !(~this->data); }
+			constexpr bool  any() const noexcept { return this->data; }
+			constexpr bool none() const noexcept { return !this->data; }
+
+			constexpr void flip(const std::size_t pos) { this->set(pos, !this->test(pos)); }
+
+			constexpr std::size_t count() const noexcept
+			{
+				//return std::popcount(this->data);
+				std::size_t result = 0u;
+				for (std::size_t i = 0u; i < size; i++) {
+					result += this->test(i);
+				}
+				return result;
+			}
+
+			constexpr std::size_t find_first_true() const noexcept
+			{
+				//return std::countr_zero(this->data);
+				for (std::size_t i = 0u; i < size; i++) {
+					if (this->test(i)) { return i; }
+				}
+				return size;
+			}
+
+			constexpr std::size_t find_first_false() const noexcept
+			{
+				//return std::countr_one(this->data);
+				for (std::size_t i = 0u; i < size; i++) {
+					if (!this->test(i)) { return i; }
+				}
+				return size;
+			}
+		}; //class BitSet_
+
+	} //namespace bitset_detail
+
+	using BitSet8  = bitset_detail::BitSet_<std::uint8_t>;
+	using BitSet16 = bitset_detail::BitSet_<std::uint16_t>;
+	using BitSet32 = bitset_detail::BitSet_<std::uint32_t>;
+	using BitSet64 = bitset_detail::BitSet_<std::uint64_t>;
+
+	template<std::size_t Bits, std::enable_if_t<Bits % 64u == 0u, int> = 0>
+	class BitSet
+	{
+		static constexpr std::size_t array_size = Bits / 64u;
+
+		template<typename Pred>
+		constexpr bool test_all(Pred pred) const noexcept {return std::all_of(this->data, this->data + array_size, pred);}
+
+	public:
+		BitSet64 data[array_size];
+
+		constexpr std::size_t size() const noexcept { return Bits; }
+
+		constexpr BitSet() :data() {}
+		constexpr BitSet(const std::uint64_t new_data) : data{ new_data } {}
+
+		constexpr void   set(const std::size_t pos) noexcept { this->data[pos / 64u].set(pos % 64u); }
+		constexpr void reset(const std::size_t pos) noexcept { this->data[pos / 64u].reset(pos % 64u); }
+		constexpr void   set(const std::size_t pos, const bool val) noexcept { this->data[pos / 64u].set(pos % 64u, val); }
+
+		constexpr bool  test(const std::size_t pos) const noexcept { return this->data[pos / 64u].test(pos % 64u); }
+		constexpr bool  all() const noexcept { return this->test_all([](const BitSet64 x) { return x == -1ull; }); }
+		constexpr bool  any() const noexcept { return !this->none(); }
+		constexpr bool none() const noexcept { return this->test_all([](const BitSet64 x) { return x == 0u; }); }
+
+		constexpr void flip(const std::size_t pos) { this->data[pos / 64u].flip(pos % 64u); }
+
+		constexpr std::size_t count() const noexcept
+		{
+			std::size_t result = 0u;
+			for (std::size_t i = 0u; i < array_size; i++) {
+				result += this->data[i].count();
+			}
+			return result;
+		}
+
+		constexpr std::size_t find_first_true() const noexcept
+		{
+			for (std::size_t i = 0u; i < array_size; i++) {
+				const std::size_t bit_in_i = this->data[i].find_first_true();
+				if (bit_in_i != 64u) { 
+					return i * 64u + bit_in_i; 
+				}
+			}
+			return Bits;
+		}
+
+		constexpr std::size_t find_first_false() const noexcept
+		{
+			for (std::size_t i = 0u; i < array_size; i++) {
+				const std::size_t bit_in_i = this->data[i].find_first_false();
+				if (bit_in_i != 64u) { 
+					return i * 64u + bit_in_i; 
+				}
+			}
+			return Bits;
+		}
+	}; //class BitSet
 
 } //namespace bmath::intern

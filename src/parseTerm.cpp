@@ -11,6 +11,13 @@ namespace bmath::intern {
 	/////////////////////////////////////////////////////////////////////local definitions//////////////////////////////////////////////////////////////////////////////////
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+	template<const auto x, const auto... xs, typename T>
+	constexpr bool is_one_of(const T y) 
+	{ 
+		if constexpr (!sizeof...(xs)) { return y == x; }
+		else                          { return y == x || is_one_of<xs...>(y); }
+	}	
+
 	constexpr bool is_number_literal(const Token t) { return is_one_of<token::number, token::imag_unit>(t); }
 	constexpr bool is_literal(const Token t) { return is_one_of<token::character, token::number, token::imag_unit>(t); }
 	constexpr bool is_operator(const Token t) { return is_one_of<token::sum, token::product, token::hat>(t); }
@@ -141,7 +148,7 @@ namespace bmath::intern {
 			throw_if<ParseFailure>(nr_brace != 0, name.length() - 1, "poor grouping, not all braces where closed");
 		}
 
-		if (name.front() == '-') {
+		if (name.starts_with('-')) {
 			tokenized.front() = token::unary_minus;
 		} 
 		//optimize token choice by not looking at single Token / char, but at two at once
@@ -159,7 +166,7 @@ namespace bmath::intern {
 
 			throw_if<ParseFailure>(is_operator(prev_tn) && is_operator(curr_tn), curr_idx, "illegal operator sequence");
 
-			//change 'i' occuring at start of names names to token::character
+			//change 'i' occuring at start of characters belonging to variables / function names to token::character
 			if (prev_tn == token::imag_unit && curr_tn == token::character) {
 				tokenized[prev_idx] = token::character;
 			}
@@ -178,7 +185,7 @@ namespace bmath::intern {
 				tokenized[curr_idx] = token::number;
 			}
 			//change unary minus to token::unary_minus
-			else if (is_one_of<token::open_grouping, token::equals>(last_nonspace_tn) && curr_ch == '-') {
+			else if (is_one_of<token::open_grouping, token::equals, token::comma>(last_nonspace_tn) && curr_ch == '-') {
 				tokenized[curr_idx] = token::unary_minus;
 			}
 			// if it is, change token::unary_minus to part of number

@@ -88,10 +88,6 @@ namespace bmath::intern {
 
 	namespace print {
 
-		void append_complex(const std::complex<double> val, std::string& dest, int parent_operator_precedence);
-
-		void append_real(double val, std::string& dest);
-
 		template<typename Store_T, typename TypedIdx_T>
 		void append_to_string(const Store_T& store, const TypedIdx_T ref, std::string& str, const int parent_infixr = 0);
 

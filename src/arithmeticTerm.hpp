@@ -316,7 +316,8 @@ namespace bmath {
 
 		std::string show_memory_layout() const;
 		std::string to_string() const;
-		std::string to_pretty_string() const;
+		std::string to_pretty_string(); //will tidy up term first
+		std::string to_pretty_string() const; //assumes sorted term
 	};	//class ArithmeticTerm
 
 }	//namespace bmath

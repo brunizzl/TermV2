@@ -323,22 +323,13 @@ namespace bmath::intern {
 	std::strong_ordering string_compare(const TermStore<TermUnion_T1>& store_1, 
 		const TermStore<TermUnion_T2>& store_2, std::uint32_t idx_1, std::uint32_t idx_2)
 	{
-		const auto comp_array = [](const char* const lhs, const char* const rhs) -> std::strong_ordering {
-			for (std::size_t i = 0; i < TermString128::array_size; i++) { //string_view not yet supports <=>
-				if (lhs[i] != rhs[i]) {
-					static_assert(('a' <=> 'a') == std::strong_ordering::equal); //dont wanna mix with std::strong_ordering::equivalent
-					return lhs[i] <=> rhs[i];
-				}
-			}
-			return std::strong_ordering::equal;
-		};
-
 		auto current_1 = TermString128::ptr_at(store_1, idx_1);
 		auto current_2 = TermString128::ptr_at(store_2, idx_2);
 		while (current_1->next_idx != TermString128::null_index &&
 		       current_2->next_idx != TermString128::null_index) 
 		{
-			const auto cmp = comp_array(current_1->values, current_2->values);
+			static_assert(('a' <=> 'a') == std::strong_ordering::equal); //dont wanna mix with std::strong_ordering::equivalent
+			const auto cmp = compare_arrays(current_1->values, current_2->values, TermString128::array_size);
 			if (cmp != std::strong_ordering::equal) {
 				return cmp;
 			}
@@ -350,7 +341,7 @@ namespace bmath::intern {
 		if (current_1->next_idx == TermString128::null_index &&
 			current_2->next_idx == TermString128::null_index) 
 		{
-			return comp_array(current_1->values, current_2->values);
+			return compare_arrays(current_1->values, current_2->values, TermString128::array_size);
 		}
 		else {
 			return current_1->next_idx == TermString128::null_index ?
