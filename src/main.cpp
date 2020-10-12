@@ -102,6 +102,8 @@ int main()
 	}
 	{
 		std::vector<std::string> term_names = {
+			"2-a*b",
+			"sin(-a*b)",
 			" -(b'+c)*2*i-5*(a+3 e 2 weinachtsmannVomNordpolUnterWasserWeilKlimawandel)",
 			"1/5*herbert(20e-10, 3 a, 6 anneliese(fred, marko * 4))",
 			"sin(1) + 3 + sin(3) + fred + 1 + sin(7) - hans + jens + herbert + 7 + anneliese + fred + sin(3) + marco + 3 + bernd",
@@ -114,7 +116,6 @@ int main()
 			"auto^herbert*3+auto^(-32*a)-4",
 			"3*(sin(a+b+c)^2+cos(a+b+c)^2+4)+i",
 			"(3^(x^2))^(x)",
-			"sin(-a*b)",
 			"sin(x)*b+3*b",
 			"a*d+a*b*c",
 			"a/(a b)",
@@ -135,11 +136,11 @@ int main()
 				//std::cout << "speicher nach bau:\n" << term.show_memory_layout() << "\n\n";
 
 				term.combine_layers();
-				term.sort();
 				term.combine_values_exact();
+				term.sort();
 
 				std::cout << "nach vereinfachen in huebsch: \n" << term.to_pretty_string() << "\n\n";
-				std::cout << "speicher nach vereinfachen:\n" << term.show_memory_layout() << "\n\n\n";
+				//std::cout << "speicher nach vereinfachen:\n" << term.show_memory_layout() << "\n\n\n";
 			}
 			catch (ParseFailure failure) {
 				std::cout << failure.what << '\n';

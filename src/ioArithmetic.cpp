@@ -740,7 +740,12 @@ namespace bmath::intern {
 
 		std::string to_pretty_string(const Store& store, const TypedIdx ref, const int parent_infixr)
 		{
-			const auto get_negative_real = [](const Store& store, const TypedIdx ref) ->std::optional<double> {
+			std::string str;
+
+			const auto [index, type] = ref.split();
+			bool need_parentheses = infixr(type) <= parent_infixr;
+
+			const auto get_negative_real = [&store](const TypedIdx ref) ->std::optional<double> {
 				const auto [index, type] = ref.split();
 				if (type == Type::complex) {
 					const Complex& complex = store.at(index).complex;
@@ -752,12 +757,12 @@ namespace bmath::intern {
 			}; //get_negative_real
 
 			 //returns base, if ref is actually <base>^(-1)
-			const auto get_pow_neg1 = [get_negative_real](const Store & store, const TypedIdx ref) -> std::optional<TypedIdx> {
+			const auto get_pow_neg1 = [get_negative_real, &store](const TypedIdx ref) -> std::optional<TypedIdx> {
 				const auto [index, type] = ref.split();
 				if (type == Type::known_function) {
 					const KnownFunction& function = store.at(index).known_function;
 					if (function.type == FnType::pow) {
-						if (const auto expo = get_negative_real(store, function.params[1])) {
+						if (const auto expo = get_negative_real(function.params[1])) {
 							if (expo == -1.0) {
 								return { function.params[0] };
 							}
@@ -768,7 +773,7 @@ namespace bmath::intern {
 			}; //get_pow_neg1
 
 			struct GetNegativeProductResult { double negative_factor; std::vector<TypedIdx> other_factors; };
-			const auto get_negative_product = [get_negative_real](const Store& store, const TypedIdx ref) -> std::optional<GetNegativeProductResult> {
+			const auto get_negative_product = [get_negative_real, &store](const TypedIdx ref) -> std::optional<GetNegativeProductResult> {
 				const auto [index, type] = ref.split();
 				if (type == Type::product) {
 					std::vector<TypedIdx> other_factors;
@@ -776,7 +781,7 @@ namespace bmath::intern {
 					bool found_negative_factor = false;
 					for (const auto factor : vdc::range(store, index)) {
 						if (!found_negative_factor) {
-							if (const auto negative_val = get_negative_real(store, factor)) {
+							if (const auto negative_val = get_negative_real(factor)) {
 								negative_factor = *negative_val;
 								found_negative_factor = true;
 								continue;
@@ -791,6 +796,26 @@ namespace bmath::intern {
 				return {};
 			}; //get_negative_product
 
+			const auto append_product = [get_negative_real, get_pow_neg1, &store, &str](const std::vector<TypedIdx>& vec) {
+				bool first = true;
+				for (const auto elem : vec) {
+					if (auto val = get_negative_real(elem); val && first && *val == -1.0) {
+						str += "-";
+					}
+					else if (const auto base = get_pow_neg1(elem)) {
+						str += (first ? "1 / " : " / "); 
+						str += to_pretty_string(store, *base, infixr(Type::product));
+						first = false;
+					}
+					else {
+						str += (first ? "" : " * ");
+						str += to_pretty_string(store, elem, infixr(Type::product));
+						first = false;
+					}
+				}
+				assert(!first && "found product with only single factor -1 or zero factors");
+			}; //append_product
+			
 			const auto reverse_elems = [](auto range) {
 				std::vector<TypedIdx> result;
 				for (const auto elem : range) {
@@ -800,61 +825,43 @@ namespace bmath::intern {
 				return result;
 			};
 
-			const auto [index, type] = ref.split();
-			bool need_parentheses = infixr(type) <= parent_infixr;
-			std::string str;
-
 			switch (type) {
 			case Type::sum: {
 				bool first = true;
 				for (const auto summand : reverse_elems(vdc::range(store, index))) {
-					if (const auto product = get_negative_product(store, summand)) {
-						append_real(product->negative_factor, str);
-						str.push_back('*');
-						for (const auto factor : product->other_factors) {
-							str += to_pretty_string(store, factor, infixr(Type::product));
-						}
-					}
-					else if (const auto val = get_negative_real(store, summand)) {
+					if (const auto val = get_negative_real(summand)) {
+						str += (first ? "" : " ");
 						append_real(*val, str);
 					}
-					else {
-						if (!first) {
-							str.push_back('+');
+					else if (auto product = get_negative_product(summand)) {
+						if (product->negative_factor != -1.0) {
+							str += (first ? "" : " ");
+							append_real(product->negative_factor, str);
+							str += " * ";
 						}
+						else {
+							str +=  (first ? "-" : " -");
+						}
+						std::reverse(product->other_factors.begin(), product->other_factors.end());
+						append_product(product->other_factors);
+					}
+					else {
+						str += (first ? "" : " + ");
 						str += to_pretty_string(store, summand, infixr(type));
 					}
 					first = false;
 				}
+				assert(!first && "found sum with only single summand -1 or zero summands");
 			} break;
 			case Type::product: {
-				bool first = true;
-				for (const auto elem : reverse_elems(vdc::range(store, index))) {
-					if (auto val = get_negative_real(store, elem)) {
-						if (*val == -1.0 && first && Product::slow_size(store, index) > 1) {
-							str.push_back('-');
-							continue;
-						}
-					}
-					if (const auto pow = get_pow_neg1(store, elem)) {
-						str.append(first ? "1/" : "/");
-						str += to_pretty_string(store, *pow, infixr(Type::product));
-					}
-					else {
-						if (!first) {
-							str.push_back('*');
-						}
-						str += to_pretty_string(store, elem, infixr(type));
-					}
-					first = false;
-				}
+				append_product(reverse_elems(vdc::range(store, index)));
 			} break;
 			case Type::known_function: {
 				const KnownFunction& function = store.at(index).known_function;
 				if (function.type == FnType::pow) {
 					need_parentheses = infixr(PrintExtras::pow) <= parent_infixr;
 					str += to_pretty_string(store, function.params[0], infixr(PrintExtras::pow));
-					str.push_back('^');
+					str += " ^ ";
 					str += to_pretty_string(store, function.params[1], infixr(PrintExtras::pow));
 				}
 				else {
@@ -864,7 +871,7 @@ namespace bmath::intern {
 					bool first = true;
 					for (const auto param : fn::range(function)) {
 						if (!std::exchange(first, false)) {
-							str.push_back(',');
+							str += ", ";
 						}
 						str += to_pretty_string(store, param, infixr(type));
 					}
@@ -879,7 +886,7 @@ namespace bmath::intern {
 				bool first = true;
 				for (const auto param : fn::range(store, generic_function)) {
 					if (!std::exchange(first, false)) {
-						str.push_back(',');
+						str += ", ";
 					}
 					str += to_pretty_string(store, param, infixr(type));
 				}

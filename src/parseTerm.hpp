@@ -63,45 +63,6 @@ namespace bmath::intern {
 		constexpr explicit TokenView(std::string_view&& other) :std::string_view(other) {}
 	};
 
-	namespace parse_detail {
-
-		template<bool Const>
-		struct ParseIterator
-		{
-			using Token_T = std::conditional_t<Const, const Token, Token>;
-			using Char_T = std::conditional_t<Const, const char, char>;
-
-			using value_type      = std::pair<Token_T, Char_T>;
-			using difference_type = std::ptrdiff_t;	//no random access
-			using pointer         = std::pair<Token_T*, Char_T*>;
-			using reference       = std::pair<Token_T&, Char_T&>;
-			using iterator_category = std::random_access_iterator_tag;
-
-			using DerefResult = std::conditional_t<Const, std::pair<Token, char>, reference>;
-
-			Token_T* tokens;
-			Char_T* chars;
-
-			constexpr ParseIterator(Token_T* const new_tokens, Char_T* const new_chars) noexcept :tokens(new_tokens), chars(new_chars) {}
-			constexpr ParseIterator(const ParseIterator&) noexcept = default;
-			constexpr ParseIterator& operator=(const ParseIterator&) noexcept = default;
-			constexpr ParseIterator& operator++() noexcept { this->tokens++; this->chars++; return *this; }
-			constexpr ParseIterator& operator--() noexcept { this->tokens--; this->chars--; return *this; }
-			constexpr ParseIterator operator++(int) noexcept { auto res = *this; this->operator++(); return res; }
-			constexpr ParseIterator operator--(int) noexcept { auto res = *this; this->operator--(); return res; }
-			constexpr ParseIterator operator+(const difference_type dx) noexcept { return { this->tokens + dx, this->chars + dx }; }
-			constexpr ParseIterator operator-(const difference_type dx) noexcept { return { this->tokens - dx, this->chars - dx }; }
-			constexpr difference_type operator-(const ParseIterator& snd) noexcept { return this->tokens - snd.tokens; }
-			constexpr DerefResult operator*() const noexcept { return std::make_pair(*this->tokens, *this->chars); }
-			constexpr bool operator==(const ParseIterator& other) const noexcept = default;
-			constexpr auto operator<=>(const ParseIterator& other) const noexcept = default;
-		};
-
-		using Iter = ParseIterator<false>;
-		using ConstIter = ParseIterator<true>;
-
-	} //namespace parse_detail
-
 	struct ParseString
 	{
 		TokenString tokens;
@@ -116,13 +77,6 @@ namespace bmath::intern {
 		void remove_space() noexcept;
 
 		std::size_t size() const noexcept { assert(tokens.size() == name.size()); return tokens.size(); }
-
-		constexpr parse_detail::Iter begin() noexcept { return { this->tokens.data(), this->name.data() }; }
-		constexpr parse_detail::ConstIter begin() const noexcept { return { this->tokens.data(), this->name.data() }; }
-		constexpr parse_detail::Iter end() noexcept 
-		{ return { this->tokens.data() + this->tokens.size(), this->name.data() + this->tokens.size() }; }
-		constexpr parse_detail::ConstIter end() const noexcept 
-		{ return { this->tokens.data() + this->tokens.size(), this->name.data() + this->tokens.size() }; }
 	};
 
 	//as parsing always needs both a string_view to the actual input and a TokenView to the tokenized input, 
@@ -181,10 +135,6 @@ namespace bmath::intern {
 			assert(start <= end);
 			return { this->chars + start, end > this->size() ? this->size() - start : end - start }; 
 		}
-
-		constexpr parse_detail::ConstIter begin() const noexcept { return { this->tokens.data(), this->chars }; }
-		constexpr parse_detail::ConstIter end() const noexcept 
-		{ return { this->tokens.data() + this->tokens.size(), this->chars + this->tokens.size() }; }
 	};
 
 	TokenString tokenize(const std::string_view name);
