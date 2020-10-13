@@ -405,7 +405,7 @@ namespace bmath::intern {
 
 	} //namespace bitset_detail
 
-	using BitSet8  = bitset_detail::BitSet_<std::uint8_t>;
+	using BitSet8  = bitset_detail::BitSet_<std::uint8_t >;
 	using BitSet16 = bitset_detail::BitSet_<std::uint16_t>;
 	using BitSet32 = bitset_detail::BitSet_<std::uint32_t>;
 	using BitSet64 = bitset_detail::BitSet_<std::uint64_t>;

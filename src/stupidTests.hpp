@@ -163,25 +163,6 @@ namespace bmath::intern::test {
 		std::cout << "rhs speicher:\n" << pattern.rhs_memory_layout() << "\n\n";
 	} //pattern_term
 
-	void bit_set64()
-	{
-		const std::uint64_t init = 0xf0f0f0f0f0f0f0f0;
-		BitSet64 set = init;
-		std::cout << "values in BitSet64:\n";
-		for (std::size_t i = 0; i < 64u; i++) {
-			std::cout << (set.test(i) ? '|' : '.');
-		}
-		std::cout << "\n";
-		std::cout << "first not set: " << set.find_first_false() << "\n";
-		std::cout << "first set:     " << set.find_first_true() << "\n";
-		std::cout << "count:         " << set.count() << "\n";
-		std::cout << std::boolalpha;
-		std::cout << "all:   " << set.all() << "\n";
-		std::cout << "any:   " << set.any() << "\n";
-		std::cout << "none:  " << set.none() << "\n";
-		std::cout << std::noboolalpha;
-	}
-
 	void bit_set()
 	{
 		const std::uint64_t init = ~0;
