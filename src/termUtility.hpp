@@ -62,6 +62,8 @@ namespace bmath::intern {
 		return itr != end(data) ? itr->first : null_value;
 	}
 
+
+
 	template<typename Value_T, std::size_t BufferSize>
 	class StupidBufferVector
 	{
@@ -193,35 +195,7 @@ namespace bmath::intern {
 
 	}; //class ShortVector
 
-	template<typename Value>
-	std::ostream& operator<<(std::ostream& str, const std::vector<Value>& vec)
-	{
-		const char* spacer = "{ ";
-		for (const auto& elem : vec) {
-			str << std::exchange(spacer, ", ") << elem;
-		}
-		return str << " }";
-	}
 
-	template<typename Value_T, std::size_t BufferSize>
-	std::ostream& operator<<(std::ostream& str, const StupidBufferVector<Value_T, BufferSize>& vec)
-	{
-		const char* spacer = "{ ";
-		for (const auto& elem : vec) {
-			str << std::exchange(spacer, ", ") << elem;
-		}
-		return str << " }";
-	}
-
-	template<typename Value_T, std::size_t MaxSize>
-	std::ostream& operator<<(std::ostream& str, const ShortVector<Value_T, MaxSize>& vec)
-	{
-		const char* spacer = "{ ";
-		for (const auto& elem : vec) {
-			str << std::exchange(spacer, ", ") << elem;
-		}
-		return str << " }";
-	}
 
 	template<typename... Enums>
 	class SumEnum;
@@ -236,11 +210,11 @@ namespace bmath::intern {
 	public:
 		constexpr SumEnum(Value e) :value(e) {}
 		constexpr operator Value() const { return this->value; }
-		explicit constexpr SumEnum(unsigned e) :value(static_cast<Value>(e)) {}
+		explicit constexpr SumEnum(unsigned u) :value(static_cast<Value>(u)) {}
 		explicit constexpr operator unsigned() const { return static_cast<unsigned>(this->value); }
 
 		template<typename E> constexpr bool is() const 
-		{ static_assert(false, "function is<>: requested type not oart of this SumEnum"); return false; }
+		{ static_assert(false, "method is<E>: requested type E not part of SumEnum"); return false; }
 	}; //class SumEnum<>
 
 	template<typename Enum, typename... TailEnums>
@@ -285,57 +259,22 @@ namespace bmath::intern {
 			return unsigned(this->value) >= this_offset && unsigned(this->value) < next_offset; 
 		}
 
-		constexpr bool operator==(const SumEnum&) const = default;      //only relevant for outhermost instance
-		static constexpr Value COUNT = static_cast<Value>(next_offset); //only relevant for outhermost instance
+		constexpr bool operator==(const SumEnum&) const = default;      //only relevant for outhermost instanciation
+		static constexpr Value COUNT = static_cast<Value>(next_offset); //only relevant for outhermost instanciation
 	}; //class SumEnum<Enum, TailEnums...>
 
-	template<typename, auto> struct Pair; //pair of Type and Value
-
-	template<typename Enum, auto Count, typename... TailEnums>
-	class SumEnum<Pair<Enum, Count>, TailEnums...> :public SumEnum<TailEnums...>
+	template<typename E, E Count>
+	struct WrapEnum 
 	{
-		static_assert(!std::is_integral_v<Enum>, "only expect actual enums or other SumEnums as template parameters");
+		E value;
+		constexpr WrapEnum(E e) noexcept :value(e) {}
+		explicit constexpr WrapEnum(unsigned u) :value(static_cast<E>(u)) {}
+		constexpr operator E() const noexcept { return this->value; }
+		explicit constexpr operator unsigned() const noexcept { return static_cast<unsigned>(this->value); }
+		static constexpr unsigned COUNT = static_cast<unsigned>(Count);
+	}; //struct WrapEnum 
 
-		using Base = SumEnum<TailEnums...>;
-		static constexpr unsigned this_offset = Base::next_offset;
 
-	protected:
-		using Value = typename Base::Value;
-		static constexpr unsigned next_offset = unsigned(Count) + this_offset + 1u;
-
-	public:
-		using Base::Base;
-		constexpr SumEnum(Enum e) :Base(static_cast<Value>(unsigned(e) + this_offset)) {}
-
-		template<typename E, std::enable_if_t<std::is_convertible_v<E, Enum> && !std::is_same_v<E, Enum>, int> = 0>
-		constexpr SumEnum(E e) : Base(unsigned(Enum(e)) + this_offset) {} //Enum itself is SumEnum<...> and can be build from E
-
-		explicit constexpr operator Enum() const { return static_cast<Enum>(unsigned(this->value) - this_offset); }
-
-		template<typename E, std::enable_if_t<std::is_convertible_v<E, Base> && !std::is_same_v<E, Enum>, int> = 0> 
-		constexpr bool is() const //default case: search in parent types
-		{
-			static_assert(!std::is_integral_v<E>);
-			return static_cast<const Base>(*this).is<E>(); 
-		}
-
-		template<typename E, std::enable_if_t<!std::is_convertible_v<E, Base> && !std::is_same_v<E, Enum>, int> = 0> 
-		constexpr bool is() const //Enum itself is SumEnum<...> and can be build from E -> hand over to Enum
-		{
-			static_assert(!std::is_integral_v<E>);
-			return this->operator Enum().is<E>(); 
-		}
-
-		template<typename E, std::enable_if_t<std::is_same_v<E, Enum>, int> = 0> 
-		constexpr bool is() const //E is same as Enum -> just check if this is between offsets
-		{ 
-			static_assert(!std::is_integral_v<E>);
-			return unsigned(this->value) >= this_offset && unsigned(this->value) < next_offset; 
-		}
-
-		constexpr bool operator==(const SumEnum&) const = default;      //only relevant for outhermost instance   
-		static constexpr Value COUNT = static_cast<Value>(next_offset); //only relevant for outhermost instance   
-	}; //class SumEnum<Pair<Enum, Count>, TailEnums...>
 
 	//remove if c++20 libraries have catched up
 	template<typename T>
@@ -347,6 +286,9 @@ namespace bmath::intern {
 		}
 		return *lhs <=> *rhs;
 	}
+
+
+
 
 	namespace bitset_detail {
 

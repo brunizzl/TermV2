@@ -137,7 +137,7 @@ namespace bmath::intern {
 
 		//note: of Type, only sum, product, complex or variable may be used, as there is (currently)
 		//no need to differentiate between known_function and unknown_function.
-		using Restriction = SumEnum<Pair<Form, Form::UNKNOWN>, Type>;
+		using Restriction = SumEnum<WrapEnum<Form, Form::UNKNOWN>, Type>;
 
 		template<typename Store_T, typename TypedIdx_T>
 		bool meets_restriction(const Store_T& store, const TypedIdx_T ref, const Restriction restr);
