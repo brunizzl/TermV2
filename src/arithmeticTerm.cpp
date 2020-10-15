@@ -5,6 +5,8 @@
 #include <algorithm>
 #include <cstring>
 
+#include <cfenv>
+
 #include "termUtility.hpp"
 #include "arithmeticTerm.hpp"
 #include "termColony.hpp"
@@ -79,29 +81,99 @@ namespace bmath::intern {
 
 		Complex eval(FnType type, const std::array<Complex, 3>& params)
 		{
-			switch (type) {
-			case FnType::asinh: return std::asinh(params[0]);
-			case FnType::acosh: return std::acosh(params[0]);
-			case FnType::atanh: return std::atanh(params[0]);
-			case FnType::asin : return std::asin (params[0]);
-			case FnType::acos : return std::acos (params[0]);
-			case FnType::atan : return std::atan (params[0]);
-			case FnType::sinh : return std::sinh (params[0]);
-			case FnType::cosh : return std::cosh (params[0]);
-			case FnType::tanh : return std::tanh (params[0]);
-			case FnType::sqrt : return std::sqrt (params[0]);
-			case FnType::pow  : return std::pow  (params[0], params[1]);
-			case FnType::log  : return std::log  (params[1]) / std::log(params[0]); //https://en.wikipedia.org/wiki/Complex_logarithm#Generalizations
-			case FnType::exp  : return std::exp  (params[0]);
-			case FnType::sin  : return std::sin  (params[0]);
-			case FnType::cos  : return std::cos  (params[0]);
-			case FnType::tan  : return std::tan  (params[0]);
-			case FnType::abs  : return std::abs  (params[0]);
-			case FnType::arg  : return std::arg  (params[0]);
-			case FnType::ln   : return std::log  (params[0]);
-			case FnType::re   : return std::real (params[0]);
-			case FnType::im   : return std::imag (params[0]);
-			default: assert(false);
+			if (param_count(type) == 1u) {
+				if (params[0].imag() == 0.0) {
+					const double real_param = params[0].real();
+					switch (type) {
+					case FnType::asinh: return std::asinh(real_param);
+					case FnType::acosh: return (         real_param  >= 1.0 ? std::acosh(real_param) : std::acosh(params[0]));
+					case FnType::atanh: return (std::abs(real_param) <= 1.0 ? std::atanh(real_param) : std::atanh(params[0]));
+					case FnType::asin : return (std::abs(real_param) <= 1.0 ?  std::asin(real_param) :  std::asin(params[0]));
+					case FnType::acos : return (std::abs(real_param) <= 1.0 ?  std::acos(real_param) :  std::acos(params[0]));
+					case FnType::sqrt : return (         real_param  >= 0.0 ?  std::sqrt(real_param) :  std::sqrt(params[0]));
+					case FnType::atan : return std::atan (real_param);
+					case FnType::sinh : return std::sinh (real_param);
+					case FnType::cosh : return std::cosh (real_param);
+					case FnType::tanh : return std::tanh (real_param);
+					case FnType::exp  : return std::exp  (real_param);
+					case FnType::sin  : return std::sin  (real_param);
+					case FnType::cos  : return std::cos  (real_param);
+					case FnType::tan  : return std::tan  (real_param);
+					case FnType::abs  : return std::abs  (real_param);
+					case FnType::arg  : return std::arg  (real_param);
+					case FnType::ln   : return std::log  (real_param);
+					case FnType::re   : return real_param;
+					case FnType::im   : return 0.0;
+					default: assert(false);
+						return Complex(0.0, 0.0);
+					}
+				}
+				else {
+					switch (type) {
+					case FnType::asinh: return std::asinh(params[0]);
+					case FnType::acosh: return std::acosh(params[0]);
+					case FnType::atanh: return std::atanh(params[0]);
+					case FnType::asin : return std::asin (params[0]);
+					case FnType::acos : return std::acos (params[0]);
+					case FnType::sqrt : return std::sqrt (params[0]);
+					case FnType::atan : return std::atan (params[0]);
+					case FnType::sinh : return std::sinh (params[0]);
+					case FnType::cosh : return std::cosh (params[0]);
+					case FnType::tanh : return std::tanh (params[0]);
+					case FnType::exp  : return std::exp  (params[0]);
+					case FnType::sin  : return std::sin  (params[0]);
+					case FnType::cos  : return std::cos  (params[0]);
+					case FnType::tan  : return std::tan  (params[0]);
+					case FnType::abs  : return std::abs  (params[0]);
+					case FnType::arg  : return std::arg  (params[0]);
+					case FnType::ln   : return std::log  (params[0]);
+					case FnType::re   : return std::real (params[0]);
+					case FnType::im   : return std::imag (params[0]);
+					default: assert(false);
+						return Complex(0.0, 0.0);
+					}
+				}
+			}
+			else if (param_count(type) == 2u) {
+				if (params[0].imag() == 0.0 && params[1].imag() == 0.0) {
+					const double real_0 = params[0].real();
+					const double real_1 = params[1].real();
+					switch (type) {
+					case FnType::pow  : return (real_1 == -1.0 ? 1.0 / real_0 : std::pow(real_0, real_1));
+					case FnType::log  : return std::log(real_1) / std::log(real_0);
+					default: assert(false);
+						return Complex(0.0, 0.0);
+					}
+				}
+				else if (params[0].imag() == 0.0) {
+					const double real_0 = params[0].real();
+					switch (type) {
+					case FnType::pow  : return std::pow(real_0, params[1]);
+					case FnType::log  : return std::log(params[1]) / std::log(real_0); //https://en.wikipedia.org/wiki/Complex_logarithm#Generalizations
+					default: assert(false);
+						return Complex(0.0, 0.0);
+					}
+				}
+				else if (params[1].imag() == 0.0) {
+					const double real_1 = params[1].real();
+					switch (type) {
+					case FnType::pow  : return (real_1 == -1.0 ? 1.0 / params[0] : std::pow(params[0], real_1));
+					case FnType::log  : return std::log(real_1) / std::log(params[0]); //https://en.wikipedia.org/wiki/Complex_logarithm#Generalizations
+					default: assert(false);
+						return Complex(0.0, 0.0);
+					}
+				}
+				else {
+					switch (type) {
+					case FnType::pow  : return std::pow(params[0], params[1]);
+					case FnType::log  : return std::log(params[1]) / std::log(params[0]); //https://en.wikipedia.org/wiki/Complex_logarithm#Generalizations
+					default: assert(false);
+						return Complex(0.0, 0.0);
+					}
+				}
+			}
+			else {
+				assert(false);
 				return Complex(0.0, 0.0);
 			}
 		} //eval
@@ -130,25 +202,35 @@ namespace bmath::intern {
 			}
 			else {
 				const bool is_value = type == Type::complex;
-				const auto [re, im] = is_value ? store.at(index).complex : Complex(0.0, 0.0);
-
-				bool accept = true;
-				switch (Form(restr)) {
-				case Form::natural: accept &= re >= 0.0;                 [[fallthrough]];
-				case Form::integer: accept &= re - long long(re) == 0.0; [[fallthrough]];
-				case Form::real:    accept &= im == 0.0;
-					return accept && is_value;
-				case Form::negative:      return re <   0.0 && im == 0.0;
-				case Form::positive:      return re >   0.0 && im == 0.0;
-				case Form::not_negative:  return re >=  0.0 && im == 0.0 && is_value;
-				case Form::not_positive:  return re <=  0.0 && im == 0.0 && is_value;
-				case Form::not_minus_one: return re != -1.0 || im != 0.0;
-				default:
-					assert(false);
-					return false;
-				}
+				const Complex nr = is_value ? store.at(index).complex : Complex(0.0, 0.0);
+				return is_value && nr_has_form(nr, Form(restr));
 			}
 		} //meets_restriction
+
+		bool nr_has_form(const Complex& nr, const Form form)
+		{
+			constexpr double max_save_int = 9007199254740991; //== 2^53 - 1, largest integer explicitly stored in double
+
+			const double re = nr.real();
+			const double im = nr.imag();
+
+			bool accept = true;
+			switch (form) {
+			case Form::natural: accept &= re >= 0.0;                      [[fallthrough]];
+			case Form::integer: accept &= re - std::uint64_t(re) == 0.0; 
+			                    accept &= (std::abs(re) <= max_save_int); [[fallthrough]];
+			case Form::real:    accept &= im == 0.0;
+				return accept;
+			case Form::negative:      return re <   0.0 && im == 0.0;
+			case Form::positive:      return re >   0.0 && im == 0.0;
+			case Form::not_negative:  return re >=  0.0 && im == 0.0;
+			case Form::not_positive:  return re <=  0.0 && im == 0.0;
+			case Form::not_minus_one: return re != -1.0 || im != 0.0;
+			default:
+				assert(false);
+				return false;
+			}
+		} //nr_has_form
 
 		PnTerm::PnTerm(std::string& name) 
 			:shared_match_data({ SharedMatchData{}, {}, {}, {}, {}, {}, })
@@ -234,21 +316,21 @@ namespace bmath::intern {
 				[[fallthrough]];
 			case Type_T(Type::product): {
 				for (const auto factor : vdc::range(store, index)) {
-					free(store, factor);
+					tree::free(store, factor);
 				}
 				TypedIdxSLC_T::free_slc(store, index);
 			} break;
 			case Type_T(Type::known_function): {
 				const BasicKnownFunction<TypedIdx_T>& known_function = store.at(index).known_function;
 				for (const auto param : fn::range(known_function)) {
-					free(store, param);
+					tree::free(store, param);
 				}
 				store.free(index);
 			} break;
 			case Type_T(Type::generic_function): {
 				const GenericFunction& generic_function = store.at(index).generic_function;
 				for (const auto param : fn::range(store, generic_function)) {
-					free(store, param);
+					tree::free(store, param);
 				}
 				TypedIdxSLC_T::free_slc(store, generic_function.params_idx);
 				if (generic_function.name_size == GenericFunction::NameSize::longer) {
@@ -260,6 +342,7 @@ namespace bmath::intern {
 				TermString128::free_slc(store, index);
 			} break;
 			case Type_T(Type::complex): {
+				store.free(index);
 			} break;
 			case Type_T(pattern::_match_variable): if constexpr (pattern) {
 				store.free(index);
@@ -288,20 +371,20 @@ namespace bmath::intern {
 						current_append_node = TypedIdxSLC_T::append(store, current_append_node, elem_idx);
 					}
 					else {
-						combine_layers(store, elem);
+						tree::combine_layers(store, elem);
 					}
 				}
 			} break;
 			case Type_T(Type::known_function): {
 				const BasicKnownFunction<TypedIdx_T>& known_function = store.at(index).known_function;
 				for (const auto param : fn::range(known_function)) {
-					combine_layers(store, param);
+					tree::combine_layers(store, param);
 				}
 			} break;
 			case Type_T(Type::generic_function): {
 				const GenericFunction& generic_function = store.at(index).generic_function;
 				for (const auto param : fn::range(store, generic_function)) {
-					combine_layers(store, param);
+					tree::combine_layers(store, param);
 				}
 			} break;
 			case Type_T(Type::variable):
@@ -314,7 +397,7 @@ namespace bmath::intern {
 			}
 		} //combine_layers
 
-		std::optional<Complex> combine_values_unexact(Store& store, const TypedIdx ref)
+		std::optional<Complex> combine_values_inexact(Store& store, const TypedIdx ref)
 		{
 			const auto [index, type] = ref.split();
 			switch (type) {
@@ -322,7 +405,7 @@ namespace bmath::intern {
 				Complex result_val = 0.0;
 				bool only_values = true;
 				for (auto& summand : vdc::range(store, index)) {
-					if (const auto summand_val = combine_values_unexact(store, summand)) {
+					if (const auto summand_val = tree::combine_values_inexact(store, summand)) {
 						result_val += *summand_val;
 						summand = Sum::null_value;
 					}
@@ -344,7 +427,7 @@ namespace bmath::intern {
 				Complex result_val = 1.0;
 				bool only_values = true;
 				for (auto& factor : vdc::range(store, index)) {
-					if (const auto factor_val = combine_values_unexact(store, factor)) {
+					if (const auto factor_val = tree::combine_values_inexact(store, factor)) {
 						result_val *= *factor_val;
 						factor = Product::null_value;
 					}
@@ -367,7 +450,7 @@ namespace bmath::intern {
 				std::array<Complex, 3> results_values;
 				BitSet8 results_computable = 0;
 				for (std::size_t i = 0; i < fn::param_count(known_function.type); i++) {
-					if (const auto param_res = combine_values_unexact(store, known_function.params[i])) {
+					if (const auto param_res = tree::combine_values_inexact(store, known_function.params[i])) {
 						results_values[i] = *param_res;
 						results_computable.set(i);
 					}
@@ -389,7 +472,7 @@ namespace bmath::intern {
 			case Type::generic_function: {
 				GenericFunction& function = store.at(index).generic_function;
 				for (auto& elem : fn::range(store, function)) {
-					if (const auto param_res = combine_values_unexact(store, elem)) {
+					if (const auto param_res = tree::combine_values_inexact(store, elem)) {
 						elem = TypedIdx(store.insert(*param_res), Type::complex);
 					}
 				}
@@ -406,7 +489,7 @@ namespace bmath::intern {
 			default: assert(false); //if this assert hits, the switch above needs more cases.
 				return {};
 			}
-		} //combine_values_unexact
+		} //combine_values_inexact
 
 		template<typename Store_T, typename TypedIdx_T>
 		std::optional<Complex> combine_values_exact(Store_T& store, const TypedIdx_T ref)
@@ -421,7 +504,7 @@ namespace bmath::intern {
 				Complex result_val = 0.0;
 				bool only_values = true;
 				for (auto& summand : vdc::range(store, index)) {
-					if (const auto summand_val = combine_values_exact(store, summand)) {
+					if (const auto summand_val = tree::combine_values_exact(store, summand)) {
 						result_val += *summand_val;
 						summand = TypedIdxSLC_T::null_value;
 					}
@@ -443,7 +526,7 @@ namespace bmath::intern {
 				Complex result_val = 1.0;
 				bool only_values = true;
 				for (auto& factor : vdc::range(store, index)) {
-					if (const auto factor_val = combine_values_exact(store, factor)) {
+					if (const auto factor_val = tree::combine_values_exact(store, factor)) {
 						result_val *= *factor_val;
 						factor = TypedIdxSLC_T::null_value;
 					}
@@ -464,7 +547,7 @@ namespace bmath::intern {
 			case Type_T(Type::known_function): {
 				BasicKnownFunction<TypedIdx_T>& function = store.at(index).known_function;
 				for (auto& elem : fn::range(function)) {
-					if (const auto param_res = combine_values_exact(store, elem)) {
+					if (const auto param_res = tree::combine_values_exact(store, elem)) {
 						elem = TypedIdx_T(store.insert(*param_res), Type::complex);
 					}
 				}
@@ -473,7 +556,7 @@ namespace bmath::intern {
 			case Type_T(Type::generic_function): {
 				GenericFunction& function = store.at(index).generic_function;
 				for (auto& elem : fn::range(store, function)) {
-					if (const auto param_res = combine_values_exact(store, elem)) {
+					if (const auto param_res = tree::combine_values_exact(store, elem)) {
 						elem = TypedIdx_T(store.insert(*param_res), Type::complex);
 					}
 				}
@@ -492,6 +575,115 @@ namespace bmath::intern {
 				return {};
 			}
 		} //combine_values_exact
+
+		template<typename Store_T, typename TypedIdx_T>
+		Complex combine_values_exact2(Store_T& store, const TypedIdx_T ref)
+		{
+			using Type_T = TypedIdx_T::Enum_T;
+			using TypedIdxSLC_T = TermSLC<std::uint32_t, TypedIdx_T, 3u>;
+			constexpr bool pattern = std::is_same_v<Type_T, pattern::PnType>;
+
+			constexpr Complex err_res = Complex(std::numeric_limits<double>::quiet_NaN(), 0.0);
+
+			const auto is_valid = [](const Complex c) { return !std::isnan(c.real()); };
+
+			const auto compute_exact = [is_valid]<typename Operation>(Operation operate) -> std::optional<Complex> {
+				std::feclearexcept(FE_ALL_EXCEPT);
+				const Complex result = operate();
+				if (!std::fetestexcept(FE_ALL_EXCEPT) && is_valid(result)) {
+					return { result };
+				}
+				else {
+					return {};
+				}
+			};
+
+			const auto [index, type] = ref.split();
+			switch (type) {
+			case Type_T(Type::sum): {
+				Complex result_val = 0.0;
+				bool only_exact = true;
+				for (auto& summand : vdc::range(store, index)) {
+					const Complex summand_val = tree::combine_values_exact2(store, summand);
+					if (const auto res = compute_exact([&] {return result_val + summand_val; })) {
+						result_val = *res;
+						tree::free(store, summand);
+						summand = TypedIdxSLC_T::null_value;
+					}
+					else {
+						only_exact = false;
+					}
+				}
+				if (only_exact) {
+					return result_val;
+				}
+				else if (result_val != 0.0) {
+					const auto new_summand = TypedIdx_T(store.insert(result_val), Type::complex);
+					TypedIdxSLC_T::insert_new(store, index, new_summand);
+				}
+				return err_res;
+			} break;
+			case Type_T(Type::product): {
+				Complex result_val = 1.0;
+				bool only_exact = true;
+				for (auto& factor : vdc::range(store, index)) {
+					const Complex factor_val = tree::combine_values_exact2(store, factor);
+					if (const auto res = compute_exact([&] {return result_val * factor_val; })) {
+						result_val = *res;
+						tree::free(store, factor);
+						factor = TypedIdxSLC_T::null_value;
+					}
+					else {
+						only_exact = false;
+					}
+				}
+				if (only_exact) {
+					return result_val;
+				}
+				else if (result_val != 1.0) {
+					const auto new_summand = TypedIdx_T(store.insert(result_val), Type::complex);
+					TypedIdxSLC_T::insert_new(store, index, new_summand);
+				}
+				return err_res;
+			} break;
+			case Type_T(Type::known_function): {
+				BasicKnownFunction<TypedIdx_T>& function = store.at(index).known_function;
+				std::array<Complex, 3> res_vals;
+				bool only_exact = true;
+				for (std::size_t i = 0; i < fn::param_count(function.type); i++) {
+					res_vals[i] = tree::combine_values_exact2(store, function.params[i]);
+					if (!is_valid(res_vals[i])) {
+						only_exact = false;
+					}
+				}
+				if (only_exact) {
+					if (const auto res = compute_exact([&] { return fn::eval(function.type, res_vals); })) {
+						return *res;
+					}
+				}
+				return err_res;
+			} break;
+			case Type_T(Type::generic_function): {
+				GenericFunction& function = store.at(index).generic_function;
+				for (auto& elem : fn::range(store, function)) {
+					const auto param_res = tree::combine_values_exact2(store, elem);
+					if (is_valid(param_res)) {
+						tree::free(store, elem);
+						elem = TypedIdx_T(store.insert(param_res), Type::complex);
+					}
+				}
+				return err_res;
+			} break;
+			case Type_T(Type::variable): 
+				return err_res;
+			case Type_T(Type::complex): 
+				return store.at(index).complex;
+			case Type_T(pattern::_match_variable): 
+				return err_res;
+			default: assert(false); //if this assert hits, the switch above needs more cases.
+				return err_res;
+			}
+		} //combine_values_exact2
 
 		template<typename Store_T1, typename Store_T2, typename TypedIdx_T1, typename TypedIdx_T2>
 		std::strong_ordering compare(const Store_T1& store_1, const Store_T2& store_2, const TypedIdx_T1 ref_1, const TypedIdx_T2 ref_2)
@@ -678,9 +870,9 @@ namespace bmath {
 		tree::combine_layers(this->store, this->head);
 	}
 
-	void ArithmeticTerm::combine_values_unexact() noexcept
+	void ArithmeticTerm::combine_values_inexact() noexcept
 	{
-		if (const auto val = tree::combine_values_unexact(this->store, this->head)) {
+		if (const auto val = tree::combine_values_inexact(this->store, this->head)) {
 			this->head = TypedIdx(this->store.insert(*val), Type::complex);
 		}	
 	}
@@ -690,6 +882,17 @@ namespace bmath {
 		if (const auto val = tree::combine_values_exact(this->store, this->head)) {
 			this->head = TypedIdx(this->store.insert(*val), Type::complex);
 		}	
+	}
+
+	std::optional<Complex> ArithmeticTerm::combine_values_exact2() noexcept
+	{
+		const Complex val = tree::combine_values_exact2(this->store, this->head);
+		if (!std::isnan(val.real())) {
+			tree::free(this->store, this->head);
+			this->head = TypedIdx(this->store.insert(val), Type::complex);
+			return { val };
+		}
+		return {};
 	}
 
 	void ArithmeticTerm::sort() noexcept

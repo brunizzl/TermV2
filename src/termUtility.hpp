@@ -266,12 +266,14 @@ namespace bmath::intern {
 	template<typename E, E Count>
 	struct WrapEnum 
 	{
+		static_assert(std::is_enum_v<E>);
+
 		E value;
 		constexpr WrapEnum(E e) noexcept :value(e) {}
 		explicit constexpr WrapEnum(unsigned u) :value(static_cast<E>(u)) {}
 		constexpr operator E() const noexcept { return this->value; }
 		explicit constexpr operator unsigned() const noexcept { return static_cast<unsigned>(this->value); }
-		static constexpr unsigned COUNT = static_cast<unsigned>(Count);
+		static constexpr E COUNT = Count;
 	}; //struct WrapEnum 
 
 

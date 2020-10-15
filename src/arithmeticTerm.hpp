@@ -35,11 +35,11 @@ namespace bmath::intern {
 		atanh,	//params[0] := argument
 		asin,	//params[0] := argument
 		acos,	//params[0] := argument
+		sqrt,	//params[0] := argument
 		atan,	//params[0] := argument
 		sinh,	//params[0] := argument
 		cosh,	//params[0] := argument
 		tanh,	//params[0] := argument
-		sqrt,	//params[0] := argument
 		pow,    //params[0] := base      params[1] := expo    
 		log,	//params[0] := base      params[1] := argument
 		exp,	//params[0] := argument
@@ -141,6 +141,8 @@ namespace bmath::intern {
 
 		template<typename Store_T, typename TypedIdx_T>
 		bool meets_restriction(const Store_T& store, const TypedIdx_T ref, const Restriction restr);
+
+		bool nr_has_form(const Complex& nr, const Form form);
 
 		//in a valid pattern, all MatchVariables of same name share the same restr and the same shared_data_idx.
 		struct MatchVariable
@@ -279,11 +281,16 @@ namespace bmath::intern {
 		//floating point/ the computation is unexact
 		//the evaluated subtree also deletes itself, meaning the caller needs to reinsert the value,
 		//  if a value was returned
-		[[nodiscard]] std::optional<Complex> combine_values_unexact(Store& store, const TypedIdx ref);
+		[[nodiscard]] std::optional<Complex> combine_values_inexact(Store& store, const TypedIdx ref);
 
-		//same as combine_values_unexact, but is quite conservative in what computation is allowed to do.
+		//same as combine_values_inexact, but is quite conservative in what computation is allowed to do.
 		template<typename Store_T, typename TypedIdx_T>
 		[[nodiscard]] std::optional<Complex> combine_values_exact(Store_T& store, const TypedIdx_T ref);
+
+		//if evaluation of subtree was inexact / impossilble, returns Complex(NAN, undefined), else returns result.
+		//the subtree starting at ref still remains.
+		template<typename Store_T, typename TypedIdx_T>
+		[[nodiscard]] Complex combine_values_exact2(Store_T& store, const TypedIdx_T ref);
 
 		//compares two subterms of perhaps different stores, assumes both to have their variadic parts sorted
 		template<typename Store_T1, typename Store_T2, typename TypedIdx_T1, typename TypedIdx_T2>
@@ -310,8 +317,9 @@ namespace bmath {
 		ArithmeticTerm() = default;
 
 		void combine_layers() noexcept;
-		void combine_values_unexact() noexcept;
+		void combine_values_inexact() noexcept;
 		void combine_values_exact() noexcept;
+		std::optional<std::complex<double>> combine_values_exact2() noexcept;
 		void sort() noexcept;
 
 		std::string show_memory_layout() const;

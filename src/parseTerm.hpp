@@ -31,7 +31,7 @@ namespace bmath::intern {
 		constexpr Token character = 'c';
 		//'n' representing any char composing a number literal: "0123456789."
 		//'n' might also represent "+-eE" if used to specify numbers 
-		//  as by engeneering notation: "<base><'e' or 'E'><optional '+' or '-'><exponent>"
+		//  as by engeneering notation: "<base>'e'<optional '+' or '-'><exponent>"
 		constexpr Token number = 'n';
 		constexpr Token open_grouping = '('; //representing "([{"
 		constexpr Token clse_grouping = ')'; //representing ")]}"

@@ -179,8 +179,8 @@ namespace bmath::intern {
 				tokenized[curr_idx] = token::character;
 			}
 			//change token representing any of "e+-" occuring in numbers to token::number
-			else if (prev_tn == token::number && is_one_of<'e', 'E'>(curr_ch) ||
-			         prev_tn == token::number && is_one_of<'e', 'E'>(prev_ch) && curr_tn == token::sum) 
+			else if (prev_tn == token::number && curr_ch == 'e' ||
+			         prev_tn == token::number && prev_ch == 'e' && curr_tn == token::sum) 
 			{
 				tokenized[curr_idx] = token::number;
 			}

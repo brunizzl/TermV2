@@ -2,7 +2,10 @@
 #include "stupidTests.hpp"
 using namespace bmath::intern;
 
+#include <cfenv>
+
 int main()
 {
-	test::arithmetic_term();
+	test::combine_exact();
+	std::cin.get();
 }

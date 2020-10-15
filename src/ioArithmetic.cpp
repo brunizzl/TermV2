@@ -220,10 +220,10 @@ namespace bmath::intern {
 		Result exactly_computable(const ParseView view) noexcept
 		{
 			if (view.tokens.find_first_of(token::character) == TokenView::npos) {
-				if (view.to_string_view().find_first_of("/-.i") == std::string_view::npos) {
+				if (view.to_string_view().find_first_of("/-.ie") == std::string_view::npos) { //with prohibiting e, it it harder to easily surpass 2^53-1 (largest save integer stored as double)
 					return Result::natural; //found no minus or i -> natural number is result
 				}
-				if (view.to_string_view().find_first_of("/^.eE")  == std::string_view::npos) { //eE is forbidden as it otherwise enables non-integer numbers (e.g. "1e-20") 
+				if (view.to_string_view().find_first_of("/^.e")  == std::string_view::npos) { //e is forbidden as it otherwise enables non-integer numbers (e.g. "1e-20") 
 					return Result::complex; //found no power -> complex with { a + bi | a, b in Z } is result
 				}
 			}
@@ -667,7 +667,7 @@ namespace bmath::intern {
 					if (!std::exchange(first, false)) {
 						str.push_back('+');
 					}
-					append_to_string(store, summand, str, own_infixr);
+					print::append_to_string(store, summand, str, own_infixr);
 				}
 			} break;
 			case Type_T(Type::product): {
@@ -676,7 +676,7 @@ namespace bmath::intern {
 					if (!std::exchange(first, false)) {
 						str.push_back('*');
 					}
-					append_to_string(store, factor, str, own_infixr);
+					print::append_to_string(store, factor, str, own_infixr);
 				}
 			} break;
 			case Type_T(Type::known_function): {
@@ -689,7 +689,7 @@ namespace bmath::intern {
 					if (!std::exchange(first, false)) {
 						str.push_back(',');
 					}
-					append_to_string(store, param, str, own_infixr);
+					print::append_to_string(store, param, str, own_infixr);
 				}
 			} break;
 			case Type_T(Type::generic_function): {
@@ -702,7 +702,7 @@ namespace bmath::intern {
 					if (!std::exchange(first, false)) {
 						str.push_back(',');
 					}
-					append_to_string(store, param, str, own_infixr);
+					print::append_to_string(store, param, str, own_infixr);
 				}
 			} break;
 			case Type_T(Type::variable): {
@@ -738,7 +738,7 @@ namespace bmath::intern {
 		template void append_to_string<Store, TypedIdx>(const Store& store, const TypedIdx ref, std::string& str, const int parent_infixr);
 		template void append_to_string<pattern::PnStore, pattern::PnTypedIdx>(const pattern::PnStore& store, const pattern::PnTypedIdx ref, std::string& str, const int parent_infixr);
 
-		std::string to_pretty_string(const Store& store, const TypedIdx ref, const int parent_infixr)
+		std::string print::to_pretty_string(const Store& store, const TypedIdx ref, const int parent_infixr)
 		{
 			std::string str;
 
@@ -805,13 +805,13 @@ namespace bmath::intern {
 					else if (const auto base = get_pow_neg1(elem)) {
 						//str += (first ? "1 / " : " / "); 
 						str += (first ? "1/" : "/"); 
-						str += to_pretty_string(store, *base, infixr(Type::product));
+						str += print::to_pretty_string(store, *base, infixr(Type::product));
 						first = false;
 					}
 					else {
 						//str += (first ? "" : " * ");
 						str += (first ? "" : "*");
-						str += to_pretty_string(store, elem, infixr(Type::product));
+						str += print::to_pretty_string(store, elem, infixr(Type::product));
 						first = false;
 					}
 				}
@@ -852,7 +852,7 @@ namespace bmath::intern {
 					else {
 						//str += (first ? "" : " + ");
 						str += (first ? "" : "+");
-						str += to_pretty_string(store, summand, infixr(type));
+						str += print::to_pretty_string(store, summand, infixr(type));
 					}
 					first = false;
 				}
@@ -865,10 +865,10 @@ namespace bmath::intern {
 				const KnownFunction& function = store.at(index).known_function;
 				if (function.type == FnType::pow) {
 					need_parentheses = infixr(PrintExtras::pow) <= parent_infixr;
-					str += to_pretty_string(store, function.params[0], infixr(PrintExtras::pow));
+					str += print::to_pretty_string(store, function.params[0], infixr(PrintExtras::pow));
 					//str += " ^ ";
 					str += "^";
-					str += to_pretty_string(store, function.params[1], infixr(PrintExtras::pow));
+					str += print::to_pretty_string(store, function.params[1], infixr(PrintExtras::pow));
 				}
 				else {
 					need_parentheses = false;
@@ -880,7 +880,7 @@ namespace bmath::intern {
 							//str += ", ";
 							str += ",";
 						}
-						str += to_pretty_string(store, param, infixr(type));
+						str += print::to_pretty_string(store, param, infixr(type));
 					}
 					str.push_back(')');
 				}
@@ -896,7 +896,7 @@ namespace bmath::intern {
 						//str += ", ";
 						str += ",";
 					}
-					str += to_pretty_string(store, param, infixr(type));
+					str += print::to_pretty_string(store, param, infixr(type));
 				}
 				str.push_back(')');
 			} break;
@@ -962,7 +962,7 @@ namespace bmath::intern {
 						current_str.append(", ");
 					}
 					current_str.append(std::to_string(elem.get_index()));
-					to_memory_layout(store, elem, content);
+					print::to_memory_layout(store, elem, content);
 				}
 				current_str.push_back('}');
 				show_typedidx_col_nodes(index, false);
@@ -975,7 +975,7 @@ namespace bmath::intern {
 						current_str.append(", ");
 					}
 					current_str.append(std::to_string(elem.get_index()));
-					to_memory_layout(store, elem, content);
+					print::to_memory_layout(store, elem, content);
 				}
 				current_str.push_back('}');
 				show_typedidx_col_nodes(index, false);
@@ -989,7 +989,7 @@ namespace bmath::intern {
 						current_str.append(", ");
 					}
 					current_str.append(std::to_string(param.get_index()));
-					to_memory_layout(store, param, content);
+					print::to_memory_layout(store, param, content);
 				}
 				current_str.push_back('}');
 			} break;
@@ -1002,7 +1002,7 @@ namespace bmath::intern {
 						current_str.append(", ");
 					}
 					current_str.append(std::to_string(param.get_index()));
-					to_memory_layout(store, param, content);
+					print::to_memory_layout(store, param, content);
 				}
 				current_str.push_back('}');
 				show_typedidx_col_nodes(generic_function.params_idx, true);

@@ -185,4 +185,24 @@ namespace bmath::intern::test {
 		std::cout << std::noboolalpha;
 	}
 
+	void combine_exact()
+	{
+		std::vector<std::string> names = { {"1/2"}, {"1/5"}, {"1 + 1e+200"} };
+		for (auto& name : names) {
+			auto term = ArithmeticTerm(name);
+			std::cout << "\"" << name << "\" -> " << term.to_string() << " -> ";
+			term.combine_values_exact2();
+			std::cout << term.to_string() << " -> ";
+			term.combine_values_inexact();
+			std::cout << term.to_string() << "\n";
+
+			//auto term = ArithmeticTerm(name);
+			//std::cout << "\"" << name << "\" -> \n\n" << term.show_memory_layout() << "\n\n -> \n";
+			//term.combine_values_exact2();
+			//std::cout << term.show_memory_layout() << "\n\n -> \n";
+			//term.combine_values_inexact();
+			//std::cout << term.show_memory_layout() << "\n\n\n\n";
+		}
+	}
+
 } //namespace bmath::intern::test
