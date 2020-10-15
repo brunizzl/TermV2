@@ -53,6 +53,29 @@ namespace bmath::intern {
 	//returns head
 	[[nodiscard]] TypedIdx build(Store& store, ParseView view);
 
+
+	template<typename TypedIdx_T, typename Store_T>
+	[[nodiscard]] TypedIdx_T build_value(Store_T& store, const std::complex<double> complex)
+	{
+		return TypedIdx_T(store.insert(complex), Type::complex);
+	}
+
+	template<typename Store_T, typename TypedIdx_T>
+	[[nodiscard]] TypedIdx_T build_negated(Store_T& store, const TypedIdx_T to_negate)
+	{
+		using TypedIdxSLC_T = TermSLC<std::uint32_t, TypedIdx_T, 3>;
+		const TypedIdx_T minus_1 = build_value<TypedIdx_T>(store, -1.0);
+		return TypedIdx_T(store.insert(TypedIdxSLC_T({ minus_1, to_negate })), Type::product);
+	}
+
+	template<typename Store_T, typename TypedIdx_T>
+	[[nodiscard]] TypedIdx_T build_inverted(Store_T& store, const TypedIdx_T to_invert)
+	{
+		const TypedIdx_T minus_1 = build_value<TypedIdx_T>(store, -1.0);
+		return TypedIdx_T(store.insert(BasicKnownFunction<TypedIdx_T>
+			{ FnType::pow, to_invert, minus_1, TypedIdx_T() }), Type::known_function);
+	}
+
 	namespace pattern {
 
 		struct PatternParts
@@ -66,22 +89,38 @@ namespace bmath::intern {
 		//or, if no MatchVariables occur, of restr "<lhs> = <rhs>"
 		PatternParts split(const ParseView input);
 
-		//lookup if new MatchVariable with name "name" is parsed, to get the Restriction and shared_data_idx
+		//data belonging to one MultiMatchVariable relevant while constructing pattern
 		struct NameLookup 
 		{
 			std::string_view name;
 			Restriction restr;
+			StupidBufferVector<PnTypedIdx, 2u> lhs_instances;
+			StupidBufferVector<PnTypedIdx, 2u> rhs_instances;
+
+			constexpr NameLookup(std::string_view new_name, Restriction new_restr)
+				:name(new_name), restr(new_restr) {}
 		};
 
-		std::vector<NameLookup> parse_declarations(ParseView declarations);
+		//only exists during construction of pattern
+		struct NameLookupTable :public std::vector<NameLookup>
+		{
+			bool build_lhs = true; //false -> build rhs
+
+			using Base = std::vector<NameLookup>;
+			using Base::Base;
+
+			PnTypedIdx insert_instance(PnStore& store, ParseView input);
+		};
+
+		NameLookupTable parse_declarations(ParseView declarations);
 
 		struct PatternBuildFunction
 		{
-			//the index of name in name_map is also shared_data_idx of MatchVariable
-			const std::vector<NameLookup>& name_map;
+			//the index of name in table is also shared_data_idx of MultiMatchVariable
+			NameLookupTable& table;
 
 			//equivalent to build() for pattern
-			PnTypedIdx operator()(PnStore& store, ParseView input) const;
+			PnTypedIdx operator()(PnStore& store, ParseView input);
 		};
 
 	} //namespace pattern

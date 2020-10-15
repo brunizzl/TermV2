@@ -6,6 +6,8 @@ using namespace bmath::intern;
 
 int main()
 {
-	test::combine_exact();
-	std::cin.get();
+	//test::combine_exact();
+	//test::arithmetic_term();
+	test::pattern_term();
+	test::stupid_solve_for();
 }

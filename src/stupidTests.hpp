@@ -123,6 +123,7 @@ namespace bmath::intern::test {
 			"a * (7 ^ 14 + 9)",
 			"2.2 + 4",
 			"1e-5",
+			"c+d+b+a+f+(a*c*b)+(a*d*b)+(a*f*b*(a+c+b)*(a+d+b))",
 		};
 		for (auto& term_name : term_names) {
 			std::cout << "-------------------------------------------------------------------------------------\n";
@@ -133,14 +134,14 @@ namespace bmath::intern::test {
 				bmath::ArithmeticTerm term(term_name);
 
 				std::cout << "nach bau: \n" << term.to_string() << "\n\n";
-				std::cout << "speicher nach bau:\n" << term.show_memory_layout() << "\n\n";
+				//std::cout << "speicher nach bau:\n" << term.show_memory_layout() << "\n\n";
 
 				term.combine_layers();
 				term.combine_values_exact();
 				term.sort();
 
 				std::cout << "nach vereinfachen in huebsch: \n" << term.to_pretty_string() << "\n\n";
-				std::cout << "speicher nach vereinfachen:\n" << term.show_memory_layout() << "\n\n\n";
+				//std::cout << "speicher nach vereinfachen:\n" << term.show_memory_layout() << "\n\n\n";
 			}
 			catch (ParseFailure failure) {
 				std::cout << failure.what << '\n';
@@ -153,7 +154,7 @@ namespace bmath::intern::test {
 	void pattern_term() {
 		std::cout << "-------------------------------------------------------------------------------------\n";
 		using namespace bmath::intern::pattern;
-		std::string s = "a , b | a^2 + 2 a b + b^2 = (a + b)^2";
+		std::string s = "a, b | a^2 + 2 a b + b^2 = (a + b)^2";
 		//std::string s = "as :sum,    | -as  =     sum{ -a  | a <- as }";
 		//std::string s = "as :product | 1/as = product{ 1/a | a <- as }";
 		//std::string s = "cos('pi') = -1";
@@ -191,17 +192,54 @@ namespace bmath::intern::test {
 		for (auto& name : names) {
 			auto term = ArithmeticTerm(name);
 			std::cout << "\"" << name << "\" -> " << term.to_string() << " -> ";
-			term.combine_values_exact2();
+			term.combine_values_exact();
 			std::cout << term.to_string() << " -> ";
 			term.combine_values_inexact();
 			std::cout << term.to_string() << "\n";
 
 			//auto term = ArithmeticTerm(name);
 			//std::cout << "\"" << name << "\" -> \n\n" << term.show_memory_layout() << "\n\n -> \n";
-			//term.combine_values_exact2();
+			//term.combine_values_exact();
 			//std::cout << term.show_memory_layout() << "\n\n -> \n";
 			//term.combine_values_inexact();
 			//std::cout << term.show_memory_layout() << "\n\n\n\n";
+		}
+	}
+
+	void stupid_solve_for()
+	{
+		std::vector<std::pair<std::string, std::string>> vec = { 
+			{"1-a", "c"}, 
+			{"1+a", "c"}, 
+			{"exp(a)", "c"}, 
+			{"a*4-2", "5"}, 
+			{"a^4*5", "c"} };
+		for (auto& [lhs_str, rhs_str] : vec) {
+			ParseString lhs_parse = lhs_str;
+			ParseString rhs_parse = rhs_str;
+			Store store;
+			tree::Equation<TypedIdx> eq = { build(store, lhs_parse), build(store, rhs_parse) };
+
+			std::string equation_str;
+			print::append_to_string(store, eq.lhs_head, equation_str);
+			equation_str += " = ";
+			print::append_to_string(store, eq.rhs_head, equation_str);
+			std::cout << equation_str << "\n";
+
+			const auto a_idx = tree::search_variable(store, eq.lhs_head, "a");
+			tree::stupid_solve_for(store, eq, a_idx);
+			tree::combine_layers(store, eq.rhs_head);
+			const Complex new_rhs = tree::combine_values_exact(store, eq.rhs_head);
+			if (tree::is_valid(new_rhs)) {
+				tree::free(store, eq.rhs_head);
+				eq.rhs_head = TypedIdx(store.insert(new_rhs), Type::complex);
+			}
+
+			equation_str.clear();
+			print::append_to_string(store, eq.lhs_head, equation_str);
+			equation_str += " = ";
+			print::append_to_string(store, eq.rhs_head, equation_str);
+			std::cout << equation_str << "\n\n";
 		}
 	}
 

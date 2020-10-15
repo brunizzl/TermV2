@@ -326,7 +326,7 @@ namespace bmath::intern {
 		auto current_1 = TermString128::ptr_at(store_1, idx_1);
 		auto current_2 = TermString128::ptr_at(store_2, idx_2);
 		while (current_1->next_idx != TermString128::null_index &&
-		       current_2->next_idx != TermString128::null_index) 
+			current_2->next_idx != TermString128::null_index) 
 		{
 			static_assert(('a' <=> 'a') == std::strong_ordering::equal); //dont wanna mix with std::strong_ordering::equivalent
 			const auto cmp = compare_arrays(current_1->values, current_2->values, TermString128::array_size);
@@ -345,6 +345,32 @@ namespace bmath::intern {
 		}
 		else {
 			return current_1->next_idx == TermString128::null_index ?
+				std::strong_ordering::less : 
+				std::strong_ordering::greater;
+		}
+	}
+
+	template<typename TermUnion_T>
+	std::strong_ordering string_compare(const TermStore<TermUnion_T>& store,
+		std::uint32_t idx, std::string_view view)
+	{
+		auto current = TermString128::ptr_at(store, idx);
+		while (view.size() > TermString128::array_size && current->next_idx != TermString128::null_index) {
+			const auto cmp = compare_arrays(current->values, view.data(), TermString128::array_size);
+			if (cmp != std::strong_ordering::equal) {
+				return cmp;
+			}
+			else {
+				current = TermString128::ptr_at(store, current->next_idx);
+				view.remove_prefix(TermString128::array_size);
+			}
+		}
+		if (view.size() <= TermString128::array_size && current->next_idx == TermString128::null_index) {
+			const std::size_t shorter_length = std::min(TermString128::array_size, view.size());
+			return compare_arrays(current->values, view.data(), shorter_length);
+		}
+		else {
+			return view.size() <= TermString128::array_size ?
 				std::strong_ordering::less : 
 				std::strong_ordering::greater;
 		}

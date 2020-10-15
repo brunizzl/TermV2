@@ -4,6 +4,7 @@
 #include <span>
 #include <optional>
 #include <compare>
+#include <string_view>
 
 #include "typedIndex.hpp"
 #include "termStore.hpp"
@@ -12,7 +13,8 @@
 
 namespace bmath::intern {
 
-	enum class Type :unsigned {
+	enum class Type 
+	{
 		sum,
 		product,
 		known_function,
@@ -28,18 +30,18 @@ namespace bmath::intern {
 	using Sum            = TypedIdxSLC;
 	using Product        = TypedIdxSLC;
 
-	enum class FnType : std::uint32_t
+	enum class FnType :std::uint32_t
 	{
 		asinh,	//params[0] := argument
 		acosh,	//params[0] := argument
 		atanh,	//params[0] := argument
 		asin,	//params[0] := argument
 		acos,	//params[0] := argument
-		sqrt,	//params[0] := argument
 		atan,	//params[0] := argument
 		sinh,	//params[0] := argument
 		cosh,	//params[0] := argument
 		tanh,	//params[0] := argument
+		sqrt,	//params[0] := argument
 		pow,    //params[0] := base      params[1] := expo    
 		log,	//params[0] := base      params[1] := argument
 		exp,	//params[0] := argument
@@ -107,9 +109,18 @@ namespace bmath::intern {
 
 	namespace pattern {
 
-		enum class PnSpecial { match_variable, COUNT };
+		enum class PnSpecial 
+		{ 
+			multi_match, 
+			value_match,
+			value_proxy, //doesn'd index in store, but in complex number array of pattern
+			COUNT 
+		};
+
 		using PnType = SumEnum<PnSpecial, Type>;
-		static constexpr unsigned _match_variable = unsigned(PnType(PnSpecial::match_variable));
+		static constexpr unsigned _multi_match = unsigned(PnType(PnSpecial::multi_match));
+		static constexpr unsigned _value_match = unsigned(PnType(PnSpecial::value_match));
+		static constexpr unsigned _value_proxy = unsigned(PnType(PnSpecial::value_proxy));
 
 		using PnTypedIdx = BasicTypedIdx<PnType>;
 		using PnTypedIdxSLC = TermSLC<std::uint32_t, PnTypedIdx, 3>;
@@ -118,10 +129,9 @@ namespace bmath::intern {
 		using PnProduct = PnTypedIdxSLC;
 		using PnKnownFunction = BasicKnownFunction<PnTypedIdx>;
 
-		//used to restrict match_variable to only match terms complying with restr
+		//specifies more constraints on a value
 		enum class Form
 		{
-			function,
 			natural,   //{1, 2, 3, ...}
 			natural_0, //{0, 1, 2, ...}
 			integer,
@@ -130,26 +140,35 @@ namespace bmath::intern {
 			positive,     //implies real     	
 			not_negative, //implies real  
 			not_positive, //implies real 
-			not_minus_one,   
+			not_minus_one,  
+			COUNT
+		};
+
+		enum class Restr //the rest
+		{
+			function, //packs both known and generic together
 			any,    
-			UNKNOWN	//has to be last element
+			unknown, //used only as error value
+			COUNT
 		};
 
 		//note: of Type, only sum, product, complex or variable may be used, as there is (currently)
 		//no need to differentiate between known_function and unknown_function.
-		using Restriction = SumEnum<WrapEnum<Form, Form::UNKNOWN>, Type>;
+		using Restriction = SumEnum<Restr, Form, Type>;
 
 		template<typename Store_T, typename TypedIdx_T>
 		bool meets_restriction(const Store_T& store, const TypedIdx_T ref, const Restriction restr);
 
+		//only conciders the forms relevant for an actual number
 		bool nr_has_form(const Complex& nr, const Form form);
 
-		//in a valid pattern, all MatchVariables of same name share the same restr and the same shared_data_idx.
-		struct MatchVariable
+		//in a valid pattern, all MultiMatchVariables of same name share the same restr and the same shared_data_idx.
+		//it is allowed to have multiple instances of the same MultiMatchVariable per side.
+		struct MultiMatchVariable
 		{
 			TypedIdx match_idx; //remembers what is is matched with (if so)
 			std::uint32_t shared_data_idx; //points not in pattern tree, but extra vector called shared_match_data.
-			Restriction restr = Form::any;
+			Restriction restr = Restr::any;
 			std::array<char, 4u> name; //just convinience for debugging, not actually needed, thus this crappy
 		};
 
@@ -160,14 +179,14 @@ namespace bmath::intern {
 			Complex complex;
 			PnTypedIdxSLC index_slc; //representing GenericFunction's extra parameters, Sum or Product 
 			TermString128 string;	//PnVariable is a string and GenericFunction may allocate additional string nodes
-			MatchVariable match_variable;
+			MultiMatchVariable multi_match;
 
-			PnTypesUnion(const PnKnownFunction& val) :known_function(val)   {}
-			PnTypesUnion(const GenericFunction& val) :generic_function(val) {}
-			PnTypesUnion(const Complex&         val) :complex(val)          {}
-			PnTypesUnion(const PnTypedIdxSLC&   val) :index_slc(val)        {}
-			PnTypesUnion(const TermString128&   val) :string(val)           {} 
-			PnTypesUnion(const MatchVariable&   val) :match_variable(val)   {} 
+			PnTypesUnion(const PnKnownFunction&    val) :known_function(val)   {}
+			PnTypesUnion(const GenericFunction&    val) :generic_function(val) {}
+			PnTypesUnion(const Complex&            val) :complex(val)          {}
+			PnTypesUnion(const PnTypedIdxSLC&      val) :index_slc(val)        {}
+			PnTypesUnion(const TermString128&      val) :string(val)           {} 
+			PnTypesUnion(const MultiMatchVariable& val) :multi_match(val)      {} 
 		};
 		static_assert(sizeof(PnTypesUnion) * 8 == 128);
 
@@ -283,14 +302,13 @@ namespace bmath::intern {
 		//  if a value was returned
 		[[nodiscard]] std::optional<Complex> combine_values_inexact(Store& store, const TypedIdx ref);
 
-		//same as combine_values_inexact, but is quite conservative in what computation is allowed to do.
+		//if evaluation of subtree was inexact / impossible, returns Complex(NAN, undefined), else returns result.
+		//the subtree starting at ref still remains. if deletion is desired, this has to be done by the caller.
 		template<typename Store_T, typename TypedIdx_T>
-		[[nodiscard]] std::optional<Complex> combine_values_exact(Store_T& store, const TypedIdx_T ref);
+		[[nodiscard]] Complex combine_values_exact(Store_T& store, const TypedIdx_T ref);
 
-		//if evaluation of subtree was inexact / impossilble, returns Complex(NAN, undefined), else returns result.
-		//the subtree starting at ref still remains.
-		template<typename Store_T, typename TypedIdx_T>
-		[[nodiscard]] Complex combine_values_exact2(Store_T& store, const TypedIdx_T ref);
+		//helper for combine_values_exact
+		inline bool is_valid(const Complex c) { return !std::isnan(c.real()); };
 
 		//compares two subterms of perhaps different stores, assumes both to have their variadic parts sorted
 		template<typename Store_T1, typename Store_T2, typename TypedIdx_T1, typename TypedIdx_T2>
@@ -300,6 +318,31 @@ namespace bmath::intern {
 		//sorts variadic parts by compare
 		template<typename Store_T, typename TypedIdx_T>
 		void sort(Store_T& store, const TypedIdx_T ref);
+
+		template<typename TypedIdx_T>
+		struct Equation
+		{
+			TypedIdx_T lhs_head;
+			TypedIdx_T rhs_head;
+		};
+
+		//reorders lhs and rhs until to_isolate is lhs_head, 
+		//(possible other subtrees identical to to_isolate are not considered, thus the name prefix)
+		template<typename Store_T, typename TypedIdx_T>
+		void stupid_solve_for(Store_T& store, Equation<TypedIdx_T>& equation, const TypedIdx_T to_isolate);
+
+		//returns true iff subtree starting at ref contains to_contain
+		template<typename Store_T, typename TypedIdx_T>
+		bool contains(const Store_T& store, const TypedIdx_T ref, const TypedIdx_T to_contain);
+
+		//if only a few types need actual attention and the rest only does the recursive call anyway,
+		//this function handles the recursive calls
+		enum class Order { pre, post };
+		template<Order order, typename Store_T, typename TypedIdx_T, typename Apply>
+		void for_each(Store_T& store, const TypedIdx_T ref, Apply apply);
+
+		//returns TypedIdx() if unsuccsessfull
+		TypedIdx search_variable(const Store& store, const TypedIdx head, std::string_view name);
 
 	} //namespace tree
 
@@ -319,7 +362,6 @@ namespace bmath {
 		void combine_layers() noexcept;
 		void combine_values_inexact() noexcept;
 		void combine_values_exact() noexcept;
-		std::optional<std::complex<double>> combine_values_exact2() noexcept;
 		void sort() noexcept;
 
 		std::string show_memory_layout() const;

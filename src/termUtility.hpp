@@ -95,9 +95,19 @@ namespace bmath::intern {
 		}
 
 		StupidBufferVector(const StupidBufferVector&) = delete;
-		StupidBufferVector(StupidBufferVector&&) = delete;
 		StupidBufferVector& operator=(const StupidBufferVector&) = delete;
 		StupidBufferVector& operator=(StupidBufferVector&&) = delete;
+
+		StupidBufferVector(StupidBufferVector&& snd) :size_(std::exchange(snd.size_, 0u)), data_(local_data)
+		{
+			if (size_ > BufferSize) {
+				this->data_ = std::exchange(snd.data_, nullptr);
+				this->capacity = std::exchange(snd.capacity, 0u);
+			}
+			else {
+				std::copy(snd.data_, snd.data_ + this->size_, this->data_);
+			}
+		}
 
 		constexpr void push_back(Value_T elem)
 		{

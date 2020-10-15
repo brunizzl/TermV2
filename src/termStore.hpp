@@ -48,7 +48,7 @@ namespace bmath::intern {
 		{
 			throw_if(this->vector.size() < idx + 1u, "TermStore supposed to access/free unowned slot");
 			const OccupancyTable& table = this->vector[idx / table_dist].table;
-			throw_if(!table[idx % table_dist], "TermStore supposed to access/free already freed slot");
+			throw_if(!table.test(idx % table_dist), "TermStore supposed to access/free already freed slot");
 		}
 
 	public:
@@ -262,6 +262,6 @@ namespace bmath::intern {
 	};	//class TermStore_FreeList
 
 	template<typename TermUnion_T>
-	//using TermStore = TermStore_Table<TermUnion_T>;
-	using TermStore = TermStore_FreeList<TermUnion_T>;
+	using TermStore = TermStore_Table<TermUnion_T>;
+	//using TermStore = TermStore_FreeList<TermUnion_T>;
 }

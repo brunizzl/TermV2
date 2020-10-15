@@ -100,12 +100,6 @@ namespace bmath::intern {
 	template<typename TypedIdx_T, typename TermStore_T, typename BuildAny>
 	[[nodiscard]] TypedIdx_T build_function(TermStore_T& store, ParseView input, const std::size_t open_par, BuildAny build_any);
 
-	template<typename TypedIdx_T, typename TermStore_T>
-	[[nodiscard]] TypedIdx_T build_value(TermStore_T& store, const std::complex<double> complex)
-	{
-		return TypedIdx_T(store.insert(complex), Type::complex);
-	}
-
 	namespace pattern {
 
 		constexpr auto form_name_table = std::to_array<std::pair<Restriction, std::string_view>>({
@@ -113,9 +107,9 @@ namespace bmath::intern {
 			{ Type::product      , "product"       },
 			{ Type::variable     , "variable"      },
 			{ Type::complex      , "complex"       },
-			{ Form::function     , "fn"            },
+			{ Restr::function    , "fn"            },
 			{ Form::natural      , "nat"           },
-			{ Form::natural_0     , "nat0"          },
+			{ Form::natural_0    , "nat0"          },
 			{ Form::integer      , "int"           },
 			{ Form::real         , "real"          },
 			{ Form::not_minus_one, "not_minus_one" },
@@ -123,11 +117,11 @@ namespace bmath::intern {
 			{ Form::not_negative , "not_negative"  },
 			{ Form::positive     , "positive"      },
 			{ Form::not_positive , "not_positive"  },
-			{ Form::any          , "any"           },
+			{ Restr::any         , "any"           },
 		});
 
 		constexpr std::string_view form_name(const Restriction r) noexcept { return find_snd(form_name_table, r); }
-		constexpr Restriction form_type(const std::string_view s) noexcept { return search_fst(form_name_table, s, Restriction(Form::UNKNOWN)); }
+		constexpr Restriction form_type(const std::string_view s) noexcept { return search_fst(form_name_table, s, Restriction(Restr::unknown)); }
 
 	} //namespace pattern
 
@@ -138,7 +132,7 @@ namespace bmath::intern {
 
 		constexpr PrintType to_print_type(pattern::PnType t) { return PrintType(unsigned(t)); }
 		static_assert(unsigned(pattern::PnType(Type::sum)) == unsigned(PrintType(Type::sum)), "to_print_type invalid");
-		static_assert(unsigned(pattern::PnType(pattern::PnSpecial::match_variable)) == unsigned(PrintType(pattern::PnSpecial::match_variable)), "to_print_type invalid");
+		static_assert(unsigned(pattern::PnType(pattern::PnSpecial::multi_match)) == unsigned(PrintType(pattern::PnSpecial::multi_match)), "to_print_type invalid");
 
 		//operator precedence (used to decide if parentheses are nessecary in out string)
 		constexpr auto infixr_table = std::to_array<std::pair<PrintType, int>>({
@@ -149,7 +143,7 @@ namespace bmath::intern {
 			{ PrintExtras::pow,                   5 },
 			{ Type::variable,                     6 },
 			{ Type::complex,                      6 },//may be printed as sum/product itself, then (maybe) has to add parentheses on its own
-			{ pattern::PnSpecial::match_variable, 6 },
+			{ pattern::PnSpecial::multi_match, 6 },
 			});
 		constexpr int infixr(PrintType type) { return find_snd(infixr_table, type); }
 
@@ -376,31 +370,19 @@ namespace bmath::intern {
 		}
 		switch (head.type) {
 		case Head::Type::sum: {
-			return build_variadic<vdc::SumTraits, TypedIdx>(store, input, head.where, 
-				[](Store& store, TypedIdx to_invert) {
-					const TypedIdx minus_1 = build_value<TypedIdx>(store, -1.0);
-					return TypedIdx(store.insert(Product({ minus_1, to_invert })), Type::product);
-				},
-				build);
+			return build_variadic<vdc::SumTraits, TypedIdx>(store, input, head.where, build_negated<Store, TypedIdx>, build);
 		} break;
 		case Head::Type::negate: {
 			input.remove_prefix(1u);  //remove minus sign
 			const TypedIdx to_negate = build(store, input);
-			const TypedIdx minus_1 = build_value<TypedIdx>(store, -1.0);
-			return TypedIdx(store.insert(Product({ to_negate, minus_1 })), Type::product);
+			return build_negated(store, to_negate);
 		} break;
 		case Head::Type::product: {
-			return build_variadic<vdc::ProductTraits, TypedIdx>(store, input, head.where, 
-				[](Store& store, TypedIdx to_invert) {
-					const TypedIdx minus_1 = build_value<TypedIdx>(store, -1.0);
-					return TypedIdx(store.insert(
-						KnownFunction{ FnType::pow, to_invert, minus_1, TypedIdx() }), Type::known_function);
-				},
-				build);
+			return build_variadic<vdc::ProductTraits, TypedIdx>(store, input, head.where, build_inverted<Store, TypedIdx>, build);
 		} break;
 		case Head::Type::power: {
 			const auto base_view = input.steal_prefix(head.where);
-			input.remove_prefix(1u);
+			input.remove_prefix(1u); //remove hat
 			const TypedIdx base = build(store, base_view);
 			const TypedIdx expo = build(store, input);
 			return TypedIdx(store.insert(KnownFunction{ FnType::pow, base, expo, TypedIdx() }), Type::known_function);
@@ -427,7 +409,7 @@ namespace bmath::intern {
 	} //build
 
 	template<typename VariadicTraits, typename TypedIdx_T, typename TermStore_T, typename BuildInverse, typename BuildAny>
-	TypedIdx_T build_variadic(TermStore_T& store, ParseView input, std::size_t op_idx, const BuildInverse build_inverse, const BuildAny build_any)
+	TypedIdx_T build_variadic(TermStore_T& store, ParseView input, std::size_t op_idx, BuildInverse build_inverse, BuildAny build_any)
 	{
 		using Result_T = VariadicTraits::Object_T;
 
@@ -455,7 +437,7 @@ namespace bmath::intern {
 	} //build_variadic
 
 	template<typename TypedIdx_T, typename TermStore_T, typename BuildAny>
-	[[nodiscard]] TypedIdx_T build_function(TermStore_T& store, ParseView input, const std::size_t open_par, const BuildAny build_any)
+	[[nodiscard]] TypedIdx_T build_function(TermStore_T& store, ParseView input, const std::size_t open_par, BuildAny build_any)
 	{
 		using TypedIdxSLC_T = TermSLC<std::uint32_t, TypedIdx_T, 3u>;
 
@@ -529,37 +511,9 @@ namespace bmath::intern {
 			}
 		}
 
-		std::vector<NameLookup> parse_declarations(ParseView declarations)
+		PnTypedIdx NameLookupTable::insert_instance(PnStore& store, ParseView input)
 		{
-			const auto parse_declaration = [](ParseView var_view) -> NameLookup {
-				const std::size_t colon = find_first_of_skip_pars(var_view.tokens, token::colon);
-				if (colon != TokenView::npos) {
-					const Restriction restr = form_type(var_view.to_string_view(colon + 1u));
-					throw_if<ParseFailure>(restr == Form::UNKNOWN, var_view.offset + colon + 1u, "unknown restriction");
-					return { var_view.to_string_view(0, colon), restr };
-				}
-				else {
-					return { var_view.to_string_view(), Form::any };
-				}
-			};
-
-			std::vector<NameLookup> result;
-			result.reserve(count_skip_pars(declarations.tokens, token::comma) + 1u);
-			{
-				const std::size_t comma = find_first_of_skip_pars(declarations.tokens, token::comma);
-				result.push_back(parse_declaration(declarations.steal_prefix(comma)));
-			}
-			while (declarations.size()) {
-				declarations.remove_prefix(1); //erase comma
-				const std::size_t comma = find_first_of_skip_pars(declarations.tokens, token::comma);
-				result.push_back(parse_declaration(declarations.steal_prefix(comma)));
-			}
-			return result;
-		}
-
-		PnTypedIdx PatternBuildFunction::operator()(PnStore& store, ParseView input) const
-		{
-			const auto match_var_name = [](std::string_view name) -> std::array<char, 4u> {
+			const auto crop = [](std::string_view name) -> std::array<char, 4u> { //this is very stupid, however i dont care.
 				if (name.size() >= 3u) {
 					return { name[0u], name[1u], name[2u], '\0' };
 				}
@@ -573,6 +527,46 @@ namespace bmath::intern {
 				return {};
 			};
 
+			const auto name = input.to_string_view();
+			const auto iter = std::find_if(this->begin(), this->end(), [name](const auto& x) { return x.name == name; });
+			throw_if<ParseFailure>(iter == this->end(), input.offset, "variable was not declared");
+
+			const MultiMatchVariable var = { TypedIdx(), std::uint32_t(iter - this->begin()), iter->restr, crop(name) };
+			const auto var_idx = PnTypedIdx(store.insert(var), PnSpecial::multi_match);
+			(this->build_lhs ? iter->lhs_instances : iter->rhs_instances).push_back(var_idx);
+			return var_idx;
+		} //NameLookupTable::insert_instance
+
+		NameLookupTable parse_declarations(ParseView declarations)
+		{
+			const auto parse_declaration = [](ParseView var_view) -> NameLookup {
+				const std::size_t colon = find_first_of_skip_pars(var_view.tokens, token::colon);
+				if (colon != TokenView::npos) {
+					const Restriction restr = form_type(var_view.to_string_view(colon + 1u));
+					throw_if<ParseFailure>(restr == Restr::unknown, var_view.offset + colon + 1u, "unknown restriction");
+					return { var_view.to_string_view(0, colon), restr };
+				}
+				else {
+					return { var_view.to_string_view(), Restr::any };
+				}
+			};
+
+			NameLookupTable result;
+			result.reserve(count_skip_pars(declarations.tokens, token::comma) + 1u);
+			{
+				const std::size_t comma = find_first_of_skip_pars(declarations.tokens, token::comma);
+				result.push_back(parse_declaration(declarations.steal_prefix(comma)));
+			}
+			while (declarations.size()) {
+				declarations.remove_prefix(1); //erase comma
+				const std::size_t comma = find_first_of_skip_pars(declarations.tokens, token::comma);
+				result.push_back(parse_declaration(declarations.steal_prefix(comma)));
+			}
+			return result;
+		} //parse_declarations
+
+		PnTypedIdx PatternBuildFunction::operator()(PnStore& store, ParseView input)
+		{
 			throw_if<ParseFailure>(input.size() == 0u, input.offset, "recieved empty substring");
 			Head head = find_head_type(input);
 			while (head.type == Head::Type::group) {
@@ -582,31 +576,19 @@ namespace bmath::intern {
 			}
 			switch (head.type) {
 			case Head::Type::sum: {
-				return build_variadic<vdc::PnSumTraits, PnTypedIdx>(store, input, head.where, 
-					[](PnStore& store, PnTypedIdx to_invert) {
-						const PnTypedIdx minus_1 = build_value<PnTypedIdx>(store, -1.0);
-						return PnTypedIdx(store.insert(PnProduct({ minus_1, to_invert })), Type::product);
-					},
-					*this);
+				return build_variadic<vdc::PnSumTraits, PnTypedIdx>(store, input, head.where, build_negated<PnStore, PnTypedIdx>, *this);
 			} break;
 			case Head::Type::negate: {
 				input.remove_prefix(1u);  //remove minus sign
 				const PnTypedIdx to_negate = this->operator()(store, input);
-				const PnTypedIdx minus_1 = build_value<PnTypedIdx>(store, -1.0);
-				return PnTypedIdx(store.insert(PnProduct({ to_negate, minus_1 })), Type::product);
+				return build_negated(store, to_negate);
 			} break;
 			case Head::Type::product: {
-				return build_variadic<vdc::PnProductTraits, PnTypedIdx>(store, input, head.where, 
-					[](PnStore& store, PnTypedIdx to_invert) {
-						const PnTypedIdx minus_1 = build_value<PnTypedIdx>(store, -1.0);
-						return PnTypedIdx(store.insert(
-							PnKnownFunction{ FnType::pow, to_invert, minus_1, PnTypedIdx() }), Type::known_function);
-					},
-					*this);
+				return build_variadic<vdc::PnProductTraits, PnTypedIdx>(store, input, head.where, build_inverted<PnStore, PnTypedIdx>, *this);
 			} break;
 			case Head::Type::power: {
 				const auto base_view = input.steal_prefix(head.where);
-				input.remove_prefix(1u);
+				input.remove_prefix(1u); //remove hat
 				const PnTypedIdx base = this->operator()(store, base_view);
 				const PnTypedIdx expo = this->operator()(store, input);
 				return PnTypedIdx(store.insert(PnKnownFunction{ FnType::pow, base, expo, PnTypedIdx() }), Type::known_function);
@@ -629,19 +611,14 @@ namespace bmath::intern {
 					return PnTypedIdx(insert_string(store, input.to_string_view(1u, input.size() - 1u)), Type::variable);
 				}
 				else {
-					const auto name_it = std::find_if(this->name_map.begin(), this->name_map.end(),
-						[search_name = input.to_string_view()](const auto& x) { return x.name == search_name; });
-					throw_if<ParseFailure>(name_it == this->name_map.end(), input.offset, "variable was not declared");
-					const auto name = match_var_name(input.to_string_view());
-					const MatchVariable var = { TypedIdx(), std::uint32_t(name_it - this->name_map.begin()), name_it->restr, name };
-					return PnTypedIdx(store.insert(var), PnSpecial::match_variable);
+					return this->table.insert_instance(store, input);
 				}
 			} break;
 			default: 
 				assert(false); 
 				return PnTypedIdx();
 			}
-		}
+		} //PatternBuildFunction::operator()
 
 	} //namespace pattern
 
@@ -720,10 +697,10 @@ namespace bmath::intern {
 				const Complex& complex = store.at(index).complex;
 				append_complex(complex, str, parent_infixr);
 			} break;
-			case Type_T(pattern::_match_variable): if constexpr (pattern) {
-				const pattern::MatchVariable& var = store.at(index).match_variable;
+			case Type_T(pattern::_multi_match): if constexpr (pattern) {
+				const pattern::MultiMatchVariable& var = store.at(index).multi_match;
 				str.append(var.name.data());
-				if (var.restr != pattern::Form::any) {
+				if (var.restr != pattern::Restr::any) {
 					str.push_back(':');
 					str.append(form_name(var.restr));
 				}
@@ -1018,7 +995,7 @@ namespace bmath::intern {
 				const Complex& complex = store.at(index).complex;
 				current_str.append("value     : ");
 			} break;
-			case Type_T(pattern::_match_variable): if constexpr (pattern) {
+			case Type_T(pattern::_multi_match): if constexpr (pattern) {
 				current_str.append("match_var : ");
 			} break;
 			default: assert(false); //if this assert hits, the switch above needs more cases.

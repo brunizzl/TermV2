@@ -16,16 +16,15 @@ namespace bmath::intern {
 
 	//stores both an index and an enum value in the same variable 
 	//with the lower bits representing the enum, the upper bits representing the (shifted) index
-	template<typename TypesEnum, auto MaxEnumValue = TypesEnum::COUNT, typename UnderlyingType = std::uint32_t>
+	template<typename TypesEnum, typename UnderlyingType = std::uint32_t>
 	class [[nodiscard]] BasicTypedIdx
 	{
-		static_assert(std::is_convertible_v<TypesEnum, decltype(MaxEnumValue)>);
 		static_assert(std::is_unsigned_v<UnderlyingType>);
 
 		static constexpr UnderlyingType nr_enum_bits()
 		{
 			UnderlyingType power = 0;
-			while ((1 << power) <= static_cast<UnderlyingType>(MaxEnumValue)) {	//cant use pow in constexpr :(
+			while ((1 << power) <= static_cast<UnderlyingType>(TypesEnum::COUNT)) {	//cant use pow in constexpr :(
 				power++;
 			}
 			return power;
@@ -49,22 +48,20 @@ namespace bmath::intern {
 		using Enum_T = TypesEnum;
 		static constexpr std::size_t max_index = index_mask >> index_offset;
 
-		explicit constexpr BasicTypedIdx() :data(static_cast<UnderlyingType>(MaxEnumValue)) {}
+		explicit constexpr BasicTypedIdx() :data(static_cast<UnderlyingType>(TypesEnum::COUNT)) {}
 
 		constexpr BasicTypedIdx(std::size_t index, TypesEnum type)
 			: data(static_cast<UnderlyingType>(index << index_offset) | static_cast<UnderlyingType>(type))
 		{
 			throw_if(index > max_index, "TypedIdx has recieved index bigger than max_index");
-			throw_if(type > MaxEnumValue, "TypedIdx has recieved enum value bigger than MaxEnumValue");
+			throw_if(type > TypesEnum::COUNT, "TypedIdx has recieved enum value bigger than MaxEnumValue");
 		}
 
 		[[nodiscard]] constexpr auto get_index() const noexcept { return data >> index_offset; }
 		[[nodiscard]] constexpr auto get_type() const noexcept { return static_cast<TypesEnum>(data & enum_mask); }
 
 		[[nodiscard]] constexpr auto split() const noexcept
-		{
-			return SplitResult<UnderlyingType, TypesEnum>{ this->get_index(), this->get_type() };
-		}
+		{ return SplitResult<UnderlyingType, TypesEnum>{ this->get_index(), this->get_type() }; }
 
 		constexpr auto operator<=>(const BasicTypedIdx&) const = default;
 		constexpr bool operator==(const BasicTypedIdx&) const = default;
