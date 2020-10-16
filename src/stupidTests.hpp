@@ -13,7 +13,7 @@
 
 namespace bmath::intern::test {
 
-	namespace sume_enum_detail {
+	namespace sum_enum_detail {
 
 		enum class A1 { a, b, c, COUNT };
 		enum class A2 { a, b, c, COUNT };
@@ -53,11 +53,11 @@ namespace bmath::intern::test {
 			std::cout << (hit ? "\n" : "upsi!\n");
 		}
 
-	} //namespace sume_enum_detail
+	} //namespace sum_enum_detail
 
 	void sum_enum()
 	{
-		using namespace sume_enum_detail;
+		using namespace sum_enum_detail;
 		f1(A1::a);
 		f1(A1::b);
 		f1(A1::c);
@@ -134,14 +134,14 @@ namespace bmath::intern::test {
 				bmath::ArithmeticTerm term(term_name);
 
 				std::cout << "nach bau: \n" << term.to_string() << "\n\n";
-				//std::cout << "speicher nach bau:\n" << term.show_memory_layout() << "\n\n";
+				//std::cout << "speicher nach bau:\n" << term.to_memory_layout() << "\n\n";
 
 				term.combine_layers();
 				term.combine_values_exact();
 				term.sort();
 
 				std::cout << "nach vereinfachen in huebsch: \n" << term.to_pretty_string() << "\n\n";
-				//std::cout << "speicher nach vereinfachen:\n" << term.show_memory_layout() << "\n\n\n";
+				//std::cout << "speicher nach vereinfachen:\n" << term.to_memory_layout() << "\n\n\n";
 			}
 			catch (ParseFailure failure) {
 				std::cout << failure.what << '\n';
@@ -154,10 +154,9 @@ namespace bmath::intern::test {
 	void pattern_term() {
 		std::cout << "-------------------------------------------------------------------------------------\n";
 		using namespace bmath::intern::pattern;
-		std::string s = "a, b | a^2 + 2 a b + b^2 = (a + b)^2";
-		//std::string s = "as :sum,    | -as  =     sum{ -a  | a <- as }";
-		//std::string s = "as :product | 1/as = product{ 1/a | a <- as }";
+		//std::string s = "a, b | a^2 + 2 a b + b^2 = (a + b)^2";
 		//std::string s = "cos('pi') = -1";
+		std::string s = "a:real, b, c:complex | (a b)^c = a^c b^c";
 		const PnTerm pattern(s);
 		std::cout << "pattern: " << pattern.to_string() << "\n\n";
 		std::cout << "lhs speicher:\n" << pattern.lhs_memory_layout() << "\n\n";
@@ -198,11 +197,11 @@ namespace bmath::intern::test {
 			std::cout << term.to_string() << "\n";
 
 			//auto term = ArithmeticTerm(name);
-			//std::cout << "\"" << name << "\" -> \n\n" << term.show_memory_layout() << "\n\n -> \n";
+			//std::cout << "\"" << name << "\" -> \n\n" << term.to_memory_layout() << "\n\n -> \n";
 			//term.combine_values_exact();
-			//std::cout << term.show_memory_layout() << "\n\n -> \n";
+			//std::cout << term.to_memory_layout() << "\n\n -> \n";
 			//term.combine_values_inexact();
-			//std::cout << term.show_memory_layout() << "\n\n\n\n";
+			//std::cout << term.to_memory_layout() << "\n\n\n\n";
 		}
 	}
 

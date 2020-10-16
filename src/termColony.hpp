@@ -30,7 +30,7 @@ namespace bmath::intern {
 		Index_T next_idx;	//index of next SLC block in TermStore
 		Value_T values[ArraySize];
 
-		TermSLC(Value_T fst_elem = null_value) :next_idx(null_index)
+		constexpr TermSLC(Value_T fst_elem = null_value) :next_idx(null_index)
 		{
 			this->values[0] = fst_elem;
 			for (std::size_t i = 1; i < ArraySize; i++) {
@@ -40,20 +40,20 @@ namespace bmath::intern {
 
 		//can only fill up to single block
 		template<typename Container>
-		TermSLC(Container new_values, Index_T next_block) :next_idx(next_block)
+		constexpr TermSLC(Container new_values, Index_T next_block) :next_idx(next_block)
 		{
 			assert(new_values.size() <= ArraySize);
-			std::memcpy(this->values, new_values.data(), new_values.size() * sizeof(Value_T));
+			std::copy(new_values.begin(), new_values.end(), this->values);
 			for (std::size_t i = new_values.size(); i < ArraySize; i++) {
 				values[i] = null_value;
 			}
 		}
 
 		//can only fill up to single block
-		TermSLC(std::initializer_list<Value_T> new_values) :next_idx(null_index)
+		constexpr TermSLC(std::initializer_list<Value_T> new_values) :next_idx(null_index)
         {
 			assert(new_values.size() <= ArraySize);
-			std::memcpy(this->values, new_values.begin(), new_values.size() * sizeof(Value_T));
+			std::copy(new_values.begin(), new_values.end(), this->values);
 			for (std::size_t i = new_values.size(); i < ArraySize; i++) {
 				values[i] = null_value;
 			}
@@ -61,12 +61,12 @@ namespace bmath::intern {
 
 		//convinience for that ugly reinterpret_cast thingy
 		template<typename TermUnion_T>
-		static TermSLC* ptr_at(TermStore<TermUnion_T>& store, std::size_t idx) 
-		{ return reinterpret_cast<TermSLC*>(&store.at(idx)); }
+		constexpr static TermSLC* ptr_at(TermStore<TermUnion_T>& store, std::size_t idx) 
+		{ return &store.at(idx).to<TermSLC>(); }
 
 		template<typename TermUnion_T>
-		static const TermSLC* ptr_at(const TermStore<TermUnion_T>& store, std::size_t idx) 
-		{ return reinterpret_cast<const TermSLC*>(&store.at(idx)); }
+		constexpr static const TermSLC* ptr_at(const TermStore<TermUnion_T>& store, std::size_t idx) 
+		{ return &store.at(idx).to<TermSLC>(); }
 
 		//also allows SLC::null_index to be passed in
 		template<typename TermUnion_T>
@@ -107,8 +107,7 @@ namespace bmath::intern {
 		//returns position of previously last node
 		//this allows easy appending of n slcs of length O(1) in O(n), instead of O(n^2)
 		template<typename TermUnion_T>
-		static [[nodiscard]] std::size_t append(TermStore<TermUnion_T>& store, 
-			Index_T this_idx, const Index_T append_idx)
+		[[nodiscard]] static std::size_t append(TermStore<TermUnion_T>& store, Index_T this_idx, const Index_T append_idx)
 		{
 			//static_assert(!std::is_same_v<UnionToSLC::Result, TermString128>, "append is not meant for strings");
 			auto* this_ptr = ptr_at(store, this_idx);

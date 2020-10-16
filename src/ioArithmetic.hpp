@@ -89,25 +89,37 @@ namespace bmath::intern {
 		//or, if no MatchVariables occur, of restr "<lhs> = <rhs>"
 		PatternParts split(const ParseView input);
 
-		//data belonging to one MultiMatchVariable relevant while constructing pattern
-		struct NameLookup 
+		using ParseRestriction = SumEnum<Restriction, Form>;
+		//data belonging to one TreeMatchVariable relevant while constructing pattern
+		struct MultiNameLookup 
 		{
 			std::string_view name;
 			Restriction restr;
-			StupidBufferVector<PnTypedIdx, 2u> lhs_instances;
-			StupidBufferVector<PnTypedIdx, 2u> rhs_instances;
+			StupidBufferVector<PnTypedIdx, 3u> lhs_instances;
+			StupidBufferVector<PnTypedIdx, 3u> rhs_instances;
 
-			constexpr NameLookup(std::string_view new_name, Restriction new_restr)
+			constexpr MultiNameLookup(std::string_view new_name, Restriction new_restr)
 				:name(new_name), restr(new_restr) {}
+		};
+		
+		//data belonging to one ValueMatchVariable relevant while constructing pattern
+		struct ValueNameLookup 
+		{
+			std::string_view name;
+			Form form;
+			StupidBufferVector<PnTypedIdx, 3u> lhs_instances;
+			StupidBufferVector<PnTypedIdx, 3u> rhs_instances;
+
+			constexpr ValueNameLookup(std::string_view new_name, Form new_form)
+				:name(new_name), form(new_form) {}
 		};
 
 		//only exists during construction of pattern
-		struct NameLookupTable :public std::vector<NameLookup>
+		struct NameLookupTable
 		{
+			std::vector<MultiNameLookup> tree_table;
+			std::vector<ValueNameLookup> value_table;
 			bool build_lhs = true; //false -> build rhs
-
-			using Base = std::vector<NameLookup>;
-			using Base::Base;
 
 			PnTypedIdx insert_instance(PnStore& store, ParseView input);
 		};
@@ -116,7 +128,7 @@ namespace bmath::intern {
 
 		struct PatternBuildFunction
 		{
-			//the index of name in table is also shared_data_idx of MultiMatchVariable
+			//the index of name in table is also shared_data_idx of TreeMatchVariable
 			NameLookupTable& table;
 
 			//equivalent to build() for pattern
@@ -134,7 +146,7 @@ namespace bmath::intern {
 		std::string to_pretty_string(const Store& store, const TypedIdx ref, const int parent_infixr = 0);
 
 		template<typename Store_T, typename TypedIdx_T>
-		std::string show_memory_layout(const Store_T& store, const TypedIdx_T head);
+		std::string to_memory_layout(const Store_T& store, const TypedIdx_T head);
 
 	} //namespace print
 

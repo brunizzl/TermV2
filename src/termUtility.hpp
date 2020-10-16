@@ -27,13 +27,13 @@ namespace bmath::intern {
 		}
 	}
 
-	//idea stolen from Jason Turner: https://www.youtube.com/watch?v=INn3xa4pMfg
 	template <typename Fst_T, typename Snd_T, std::size_t Size>
 	[[nodiscard]] constexpr Snd_T find_snd(
 		const std::array<std::pair<Fst_T, Snd_T>, Size>& data, const Fst_T key) noexcept
 	{
 		const auto itr = std::find_if(begin(data), end(data), [&key](const auto &v) { return v.first == key; });
-		assert(itr != end(data));
+		const bool valid = itr != end(data);
+		assert(valid);
 		return itr->second;
 	}
 
@@ -50,7 +50,8 @@ namespace bmath::intern {
 		const std::array<std::pair<Fst_T, Snd_T>, Size>& data, const Snd_T key) noexcept
 	{
 		const auto itr = std::find_if(begin(data), end(data), [&key](const auto &v) { return v.second == key; });
-		assert(itr != end(data));
+		const bool valid = itr != end(data);
+		assert(valid);
 		return itr->first;
 	}
 
@@ -85,7 +86,16 @@ namespace bmath::intern {
 		constexpr const Value_T* data() const noexcept { return this->data_; }
 		constexpr Value_T* data() noexcept { return this->data_; }
 
-		constexpr StupidBufferVector() :size_(0u), data_(local_data) {}
+		constexpr StupidBufferVector() :size_(0u), data_(local_data), capacity(0u) {}
+
+		constexpr StupidBufferVector(std::initializer_list<Value_T> init) : size_(init.size()), data(local_data)
+		{
+			if (init.size() > BufferSize) {
+				this->data_ = new Value_T[init.size()];
+				this->capacity = init.size();
+			}
+			std::copy(init.begin(), init.end(), this->data_);
+		}
 
 		~StupidBufferVector()
 		{
@@ -98,9 +108,9 @@ namespace bmath::intern {
 		StupidBufferVector& operator=(const StupidBufferVector&) = delete;
 		StupidBufferVector& operator=(StupidBufferVector&&) = delete;
 
-		StupidBufferVector(StupidBufferVector&& snd) :size_(std::exchange(snd.size_, 0u)), data_(local_data)
+		StupidBufferVector(StupidBufferVector&& snd) noexcept :size_(std::exchange(snd.size_, 0u)), data_(local_data)
 		{
-			if (size_ > BufferSize) {
+			if (snd.data_ != snd.local_data) {
 				this->data_ = std::exchange(snd.data_, nullptr);
 				this->capacity = std::exchange(snd.capacity, 0u);
 			}
@@ -156,10 +166,9 @@ namespace bmath::intern {
 	{
 		static_assert(std::is_trivially_copyable_v<Value_T>);     //big part of the "Stupid" in the name
 		static_assert(std::is_trivially_destructible_v<Value_T>); //big part of the "Stupid" in the name
-		static_assert(std::is_default_constructible_v<Value_T>);  //big part of the "Stupid" in the name
 
 		std::size_t size_ = 0u;
-		Value_T data_[MaxSize];
+		Value_T data_[MaxSize] = {};
 
 	public:
 		constexpr std::size_t size() const noexcept { return this->size_; }
@@ -202,6 +211,9 @@ namespace bmath::intern {
 
 		constexpr std::span<const Value_T> range() const noexcept { return { this->data_, this->size_ }; }
 		constexpr std::span<Value_T> range() noexcept { return { this->data_, this->size_ }; }
+
+		constexpr friend auto operator<=>(const ShortVector&, const ShortVector&) = default;
+		constexpr friend bool operator==(const ShortVector&, const ShortVector&) = default;
 
 	}; //class ShortVector
 
@@ -269,7 +281,8 @@ namespace bmath::intern {
 			return unsigned(this->value) >= this_offset && unsigned(this->value) < next_offset; 
 		}
 
-		constexpr bool operator==(const SumEnum&) const = default;      //only relevant for outhermost instanciation
+		constexpr friend std::strong_ordering operator<=>(const SumEnum&, const SumEnum&) = default;
+		constexpr friend bool operator==(const SumEnum&, const SumEnum&) = default;
 		static constexpr Value COUNT = static_cast<Value>(next_offset); //only relevant for outhermost instanciation
 	}; //class SumEnum<Enum, TailEnums...>
 

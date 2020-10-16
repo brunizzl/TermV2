@@ -49,7 +49,7 @@
 		case Type_T(Type::complex): {
 			assert(false);
 		} break;
-		case Type_T(pattern::_multi_match): if constexpr (pattern) {
+		case Type_T(pattern::_tree_match): if constexpr (pattern) {
 			assert(false);
 		} break;
 		default: assert(false); //if this assert hits, the switch above needs more cases.
@@ -65,13 +65,15 @@ namespace bmath::intern {
 
 	//more unique (meaning harder to match) is smaller
 	constexpr auto uniqueness_table = std::to_array<std::pair<pattern::PnType, int>>({
-		{ Type::generic_function            , 00 }, //order of parameters is given -> most unique
-		{ Type::known_function              , 16 }, //order of parameters is given -> most unique
-		{ Type::product                     , 32 }, //order of operands my vary -> second most unique
-		{ Type::sum                         , 48 }, //order of operands my vary -> second most unique
-		{ Type::variable                    , 64 }, //can only match pattern variable directly -> least unique
-		{ Type::complex                     , 80 }, //can only match pattern variable directly -> least unique
-		{ pattern::PnSpecial::multi_match, 96 }, //always place at end, not really part of uniqueness, but still.
+		{ Type::generic_function          , 00 }, //order of parameters is given -> most unique
+		{ Type::known_function            , 10 }, //order of parameters is given -> most unique
+		{ Type::product                   , 20 }, //order of operands my vary -> second most unique
+		{ Type::sum                       , 30 }, //order of operands my vary -> second most unique
+		{ pattern::PnVariable::value_match, 50 }, //a bit more unique than complex
+		{ pattern::PnVariable::value_proxy, 60 }, //a bit more unique than complex
+		{ Type::variable                  , 40 }, //quite not unique
+		{ Type::complex                   , 70 }, //quite not unique
+		{ pattern::PnVariable::tree_match , 80 }, //can match anything (in princible) -> least unique
 	});
 	constexpr int uniqueness(pattern::PnType type) noexcept { return find_snd(uniqueness_table, type); }
 
@@ -185,28 +187,27 @@ namespace bmath::intern {
 
 	namespace pattern {
 		
-		template<typename Store_T, typename TypedIdx_T>
-		bool meets_restriction(const Store_T & store, const TypedIdx_T ref, const Restriction restr)
+		template<typename TypedIdx_T>
+		bool meets_restriction(const TypedIdx_T ref, const Restriction restr)
 		{
-			const auto [index, type] = ref.split();
-
-			if (restr == Form::any) {
+			if (restr == Restr::any) {
 				return true;
 			}
 			else if (restr.is<Type>()) {
+				const Type type = ref.get_type();
 				return restr == type;
 			}
-			else if (restr == Form::function) {
+			else if (restr == Restr::function) {
+				const Type type = ref.get_type();
 				return type == Type::known_function || type == Type::generic_function;
 			}
 			else {
-				const bool is_value = type == Type::complex;
-				const Complex nr = is_value ? store.at(index).complex : Complex(0.0, 0.0);
-				return is_value && nr_has_form(nr, Form(restr));
+				assert(false);
+				return false;
 			}
 		} //meets_restriction
 
-		bool nr_has_form(const Complex& nr, const Form form)
+		bool has_form(const Complex& nr, const Form form)
 		{
 			constexpr double max_save_int = 9007199254740991; //== 2^53 - 1, largest integer explicitly stored in double
 
@@ -230,17 +231,17 @@ namespace bmath::intern {
 				assert(false);
 				return false;
 			}
-		} //nr_has_form
+		} //has_form
 
 		PnTerm::PnTerm(std::string& name) 
-			:shared_match_data({ SharedMatchData{}, {}, {}, {}, {}, {}, })
 		{
 			auto parse_string = ParseString(name);
 			parse_string.allow_implicit_product();
 			parse_string.remove_space();
 			const auto parts = split(parse_string);
-			auto table = parse_declarations(parts.declarations);
-			throw_if<ParseFailure>(table.size() > max_var_count, 0u, "too many variables declared");
+			NameLookupTable table = parse_declarations(parts.declarations);
+			throw_if(table.tree_table.size() > MatchData::max_tree_match_count, "too many tree match variables declared");
+			throw_if(table.value_table.size() > MatchData::max_value_match_count, "too many value match variables declared");
 			PatternBuildFunction build_function = { table };
 			this->lhs_head = build_function(this->lhs_store, parts.lhs);
 			table.build_lhs = false;
@@ -270,12 +271,12 @@ namespace bmath::intern {
 
 		std::string PnTerm::lhs_memory_layout() const
 		{
-			return print::show_memory_layout(this->lhs_store, this->lhs_head);
+			return print::to_memory_layout(this->lhs_store, this->lhs_head);
 		}
 
 		std::string PnTerm::rhs_memory_layout() const
 		{
-			return print::show_memory_layout(this->rhs_store, this->rhs_head);
+			return print::to_memory_layout(this->rhs_store, this->rhs_head);
 		}
 
 	} //namespace pattern
@@ -347,7 +348,7 @@ namespace bmath::intern {
 			case Type_T(Type::complex): {
 				store.free(index);
 			} break;
-			case Type_T(pattern::_multi_match): if constexpr (pattern) {
+			case Type_T(pattern::_tree_match): if constexpr (pattern) {
 				store.free(index);
 			} break;
 			default: assert(false); //if this assert hits, the switch above needs more cases.
@@ -394,7 +395,9 @@ namespace bmath::intern {
 				break;
 			case Type_T(Type::complex):
 				break;
-			case Type_T(pattern::_multi_match):
+			case Type_T(pattern::_tree_match):
+				break;
+			case Type_T(pattern::_value_match):
 				break;
 			default: assert(false); //if this assert hits, the switch above needs more cases.
 			}
@@ -594,7 +597,9 @@ namespace bmath::intern {
 				return err_res;
 			case Type_T(Type::complex): 
 				return store.at(index).complex;
-			case Type_T(pattern::_multi_match): 
+			case Type_T(pattern::_tree_match): 
+				return err_res;
+			case Type_T(pattern::_value_match): 
 				return err_res;
 			default: assert(false); //if this assert hits, the switch above needs more cases.
 				return err_res;
@@ -700,9 +705,9 @@ namespace bmath::intern {
 				}
 				return std::strong_ordering::equal;
 			} break;
-			case Type_T(pattern::_multi_match): if constexpr (pattern) {
-				const pattern::MultiMatchVariable& var_1 = store_1.at(index_1).multi_match;
-				const pattern::MultiMatchVariable& var_2 = store_2.at(index_2).multi_match;
+			case Type_T(pattern::_tree_match): if constexpr (pattern) {
+				const pattern::TreeMatchVariable& var_1 = store_1.at(index_1).tree_match;
+				const pattern::TreeMatchVariable& var_2 = store_2.at(index_2).tree_match;
 				if (var_1.restr != var_2.restr) {
 					return var_1.restr <=> var_2.restr;
 				}
@@ -712,6 +717,20 @@ namespace bmath::intern {
 				if (var_1.shared_data_idx != var_2.shared_data_idx) {
 					return var_1.shared_data_idx <=> var_2.shared_data_idx; //reverse to make pretty_string prettier
 				}
+				return std::strong_ordering::equal;
+			} break;
+			case Type_T(pattern::_value_match): if constexpr (pattern) {
+				//const pattern::ValueMatchVariable& var_1 = store_1.at(index_1).value_match;
+				//const pattern::ValueMatchVariable& var_2 = store_2.at(index_2).value_match;
+				//if (var_1.restr != var_2.restr) {
+				//	return var_1.restr <=> var_2.restr;
+				//}
+				//if (const auto name_cmp = compare_arrays(var_1.name.data(), var_2.name.data(), 4u); name_cmp != std::strong_ordering::equal) {
+				//	return name_cmp;
+				//}
+				//if (var_1.shared_data_idx != var_2.shared_data_idx) {
+				//	return var_1.shared_data_idx <=> var_2.shared_data_idx; //reverse to make pretty_string prettier
+				//}
 				return std::strong_ordering::equal;
 			} break;
 			default: assert(false); //if this assert hits, the switch above needs more cases.
@@ -755,7 +774,9 @@ namespace bmath::intern {
 				break;
 			case Type_T(Type::complex):
 				break;
-			case Type_T(pattern::_multi_match): 
+			case Type_T(pattern::_tree_match): 
+				break;
+			case Type_T(pattern::_value_match): 
 				break;
 			default: assert(false); //if this assert hits, the switch above needs more cases.
 			}
@@ -854,7 +875,7 @@ namespace bmath::intern {
 					assert(false); break;
 				case Type_T(Type::complex): 
 					assert(false); break;
-				case Type_T(pattern::_multi_match): 
+				case Type_T(pattern::_tree_match): 
 					assert(false); break;
 				default: assert(false); //if this assert hits, the switch above needs more cases.
 				}
@@ -906,7 +927,7 @@ namespace bmath::intern {
 					return false;
 				case Type_T(Type::complex): 
 					return false;
-				case Type_T(pattern::_multi_match): 
+				case Type_T(pattern::_tree_match): 
 					return false;
 				default: assert(false); //if this assert hits, the switch above needs more cases.
 					return false;
@@ -946,7 +967,7 @@ namespace bmath::intern {
 				break;
 			case Type_T(Type::complex): 
 				break;
-			case Type_T(pattern::_multi_match): 
+			case Type_T(pattern::_tree_match): 
 				break;
 			default: assert(false); //if this assert hits, the switch above needs more cases.
 			}
@@ -1011,10 +1032,10 @@ namespace bmath {
 		tree::sort(this->store, this->head);
 	}
 
-	std::string bmath::ArithmeticTerm::show_memory_layout() const
+	std::string bmath::ArithmeticTerm::to_memory_layout() const
 	{
-		return print::show_memory_layout(this->store, this->head);
-	} //show_memory_layout
+		return print::to_memory_layout(this->store, this->head);
+	} //to_memory_layout
 
 	std::string ArithmeticTerm::to_string() const
 	{

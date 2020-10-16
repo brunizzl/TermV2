@@ -20,6 +20,7 @@ namespace bmath::intern {
 	class [[nodiscard]] BasicTypedIdx
 	{
 		static_assert(std::is_unsigned_v<UnderlyingType>);
+		static_assert(sizeof(UnderlyingType) >= sizeof(TypesEnum));
 
 		static constexpr UnderlyingType nr_enum_bits()
 		{
@@ -30,15 +31,7 @@ namespace bmath::intern {
 			return power;
 		}
 
-		union
-		{
-			UnderlyingType data;
-			struct
-			{
-				unsigned long type : nr_enum_bits();
-				unsigned long index : sizeof(UnderlyingType) * 8 - nr_enum_bits();
-			};
-		};
+		UnderlyingType data;
 
 		static constexpr UnderlyingType index_offset = nr_enum_bits();
 		static constexpr UnderlyingType enum_mask = (1 << index_offset) - 1;
@@ -63,8 +56,8 @@ namespace bmath::intern {
 		[[nodiscard]] constexpr auto split() const noexcept
 		{ return SplitResult<UnderlyingType, TypesEnum>{ this->get_index(), this->get_type() }; }
 
-		constexpr auto operator<=>(const BasicTypedIdx&) const = default;
-		constexpr bool operator==(const BasicTypedIdx&) const = default;
+		constexpr friend std::strong_ordering operator<=>(const BasicTypedIdx&, const BasicTypedIdx&) = default;
+		constexpr friend bool operator==(const BasicTypedIdx&, const BasicTypedIdx&) = default;
 	};	//class BasicTypedIdx
 
 } //namespace bmath::intern

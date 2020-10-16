@@ -264,4 +264,28 @@ namespace bmath::intern {
 	template<typename TermUnion_T>
 	using TermStore = TermStore_Table<TermUnion_T>;
 	//using TermStore = TermStore_FreeList<TermUnion_T>;
+
+
+
+	template<typename TermUnion_T, std::size_t BufferSize>
+	class MonotonicBufferStore :public ShortVector<TermUnion_T, BufferSize>
+	{
+		using Base = ShortVector<TermUnion_T, BufferSize>;
+
+	public:
+		using Base::Base;
+
+		constexpr std::size_t insert(TermUnion_T new_elem)
+		{
+			const std::size_t pos = this->size();
+			this->push_pack(new_elem);
+			return pos;
+		}
+
+		constexpr [[nodiscard]] TermUnion_T& at(std::size_t idx) noexcept { return this->operator[](idx); }
+		constexpr [[nodiscard]] const TermUnion_T& at(std::size_t idx) const noexcept { return this->operator[](idx); }
+
+		constexpr friend std::strong_ordering operator<=>(const MonotonicBufferStore&, const MonotonicBufferStore&) = default;
+		constexpr friend bool operator==(const MonotonicBufferStore&, const MonotonicBufferStore&) = default;
+	}; //class MonotonicBufferStore
 }

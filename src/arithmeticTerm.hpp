@@ -102,6 +102,21 @@ namespace bmath::intern {
 		TypesUnion(const Complex&         val) :complex(val)          {}
 		TypesUnion(const TypedIdxSLC&     val) :index_slc(val)        {}
 		TypesUnion(const TermString128&   val) :string(val)           {} 
+
+		constexpr auto operator<=>(const TypesUnion&) const = default;
+
+		template<typename T> constexpr const T& to() const noexcept;
+		template<> constexpr const KnownFunction  &to<KnownFunction  >() const noexcept { return this->known_function; }
+		template<> constexpr const GenericFunction&to<GenericFunction>() const noexcept { return this->generic_function; }
+		template<> constexpr const Complex        &to<Complex        >() const noexcept { return this->complex; }
+		template<> constexpr const TypedIdxSLC    &to<TypedIdxSLC    >() const noexcept { return this->index_slc; }
+		template<> constexpr const TermString128  &to<TermString128  >() const noexcept { return this->string; }
+		template<typename T> constexpr T& to() noexcept;
+		template<> constexpr KnownFunction  &to<KnownFunction  >() noexcept { return this->known_function; }
+		template<> constexpr GenericFunction&to<GenericFunction>() noexcept { return this->generic_function; }
+		template<> constexpr Complex        &to<Complex        >() noexcept { return this->complex; }
+		template<> constexpr TypedIdxSLC    &to<TypedIdxSLC    >() noexcept { return this->index_slc; }
+		template<> constexpr TermString128  &to<TermString128  >() noexcept { return this->string; }
 	};
 
 	static_assert(sizeof(TypesUnion) * 8 == 128);
@@ -109,18 +124,18 @@ namespace bmath::intern {
 
 	namespace pattern {
 
-		enum class PnSpecial 
+		enum class PnVariable 
 		{ 
-			multi_match, 
+			tree_match, 
 			value_match,
-			value_proxy, //doesn'd index in store, but in complex number array of pattern
+			value_proxy, //doesn'd index in store of PnTerm, but in shared_value_match_data of PnTerm
 			COUNT 
 		};
 
-		using PnType = SumEnum<PnSpecial, Type>;
-		static constexpr unsigned _multi_match = unsigned(PnType(PnSpecial::multi_match));
-		static constexpr unsigned _value_match = unsigned(PnType(PnSpecial::value_match));
-		static constexpr unsigned _value_proxy = unsigned(PnType(PnSpecial::value_proxy));
+		using PnType = SumEnum<PnVariable, Type>;
+		static constexpr unsigned _tree_match  = unsigned(PnType(PnVariable::tree_match));
+		static constexpr unsigned _value_match = unsigned(PnType(PnVariable::value_match));
+		static constexpr unsigned _value_proxy = unsigned(PnType(PnVariable::value_proxy));
 
 		using PnTypedIdx = BasicTypedIdx<PnType>;
 		using PnTypedIdxSLC = TermSLC<std::uint32_t, PnTypedIdx, 3>;
@@ -128,6 +143,30 @@ namespace bmath::intern {
 		using PnSum = PnTypedIdxSLC;
 		using PnProduct = PnTypedIdxSLC;
 		using PnKnownFunction = BasicKnownFunction<PnTypedIdx>;
+
+		enum class Restr //the rest
+		{
+			function, //packs both known and generic together
+			any,    
+			unknown, //used only as error value
+			COUNT
+		};
+
+		//note: of Type, only sum, product, complex or variable may be used, as there is (currently)
+		//no need to differentiate between known_function and unknown_function.
+		using Restriction = SumEnum<Restr, Type>; 
+
+		template<typename TypedIdx_T>
+		bool meets_restriction(const TypedIdx_T ref, const Restriction restr);
+
+		//in a valid pattern, all TreeMatchVariables of same name share the same restr and the same shared_data_idx.
+		//it is allowed to have multiple instances of the same TreeMatchVariable per side.
+		struct TreeMatchVariable
+		{
+			std::uint32_t shared_data_idx; //points not in pattern tree, but extra vector called shared_tree_match_data.
+			Restriction restr = Restr::any;
+			std::array<char, 4u> name; //just convinience for debugging, not actually needed, thus this small and crappy
+		};
 
 		//specifies more constraints on a value
 		enum class Form
@@ -144,32 +183,17 @@ namespace bmath::intern {
 			COUNT
 		};
 
-		enum class Restr //the rest
-		{
-			function, //packs both known and generic together
-			any,    
-			unknown, //used only as error value
-			COUNT
-		};
-
-		//note: of Type, only sum, product, complex or variable may be used, as there is (currently)
-		//no need to differentiate between known_function and unknown_function.
-		using Restriction = SumEnum<Restr, Form, Type>;
-
-		template<typename Store_T, typename TypedIdx_T>
-		bool meets_restriction(const Store_T& store, const TypedIdx_T ref, const Restriction restr);
-
 		//only conciders the forms relevant for an actual number
-		bool nr_has_form(const Complex& nr, const Form form);
+		bool has_form(const Complex& nr, const Form form);
 
-		//in a valid pattern, all MultiMatchVariables of same name share the same restr and the same shared_data_idx.
-		//it is allowed to have multiple instances of the same MultiMatchVariable per side.
-		struct MultiMatchVariable
+		//in a valid pattern, all ValueMatchVariables of same name share the same form and the same shared_data_idx.
+		//it is allowed to have multiple instances of the same ValueMatchVariable per side.
+		struct ValueMatchVariable
 		{
-			TypedIdx match_idx; //remembers what is is matched with (if so)
-			std::uint32_t shared_data_idx; //points not in pattern tree, but extra vector called shared_match_data.
-			Restriction restr = Restr::any;
-			std::array<char, 4u> name; //just convinience for debugging, not actually needed, thus this crappy
+			PnTypedIdx match_idx;
+			PnTypedIdx copy_idx;
+			Form form = Form::real;
+			std::array<char, 4u> name; //just convinience for debugging, not actually needed, thus this small and crappy
 		};
 
 		union PnTypesUnion
@@ -179,31 +203,66 @@ namespace bmath::intern {
 			Complex complex;
 			PnTypedIdxSLC index_slc; //representing GenericFunction's extra parameters, Sum or Product 
 			TermString128 string;	//PnVariable is a string and GenericFunction may allocate additional string nodes
-			MultiMatchVariable multi_match;
+			TreeMatchVariable tree_match;
+			ValueMatchVariable value_match;
 
 			PnTypesUnion(const PnKnownFunction&    val) :known_function(val)   {}
 			PnTypesUnion(const GenericFunction&    val) :generic_function(val) {}
 			PnTypesUnion(const Complex&            val) :complex(val)          {}
 			PnTypesUnion(const PnTypedIdxSLC&      val) :index_slc(val)        {}
 			PnTypesUnion(const TermString128&      val) :string(val)           {} 
-			PnTypesUnion(const MultiMatchVariable& val) :multi_match(val)      {} 
+			PnTypesUnion(const TreeMatchVariable&  val) :tree_match(val)       {} 
+			PnTypesUnion(const ValueMatchVariable& val) :value_match(val)      {} 
+
+			constexpr auto operator<=>(const PnTypesUnion&) const = default;
+
+			template<typename T> constexpr const T& to() const noexcept;
+			template<> constexpr const PnKnownFunction   &to<PnKnownFunction   >() const noexcept { return this->known_function; }
+			template<> constexpr const GenericFunction   &to<GenericFunction   >() const noexcept { return this->generic_function; }
+			template<> constexpr const Complex           &to<Complex           >() const noexcept { return this->complex; }
+			template<> constexpr const PnTypedIdxSLC     &to<PnTypedIdxSLC     >() const noexcept { return this->index_slc; }
+			template<> constexpr const TermString128     &to<TermString128     >() const noexcept { return this->string; }
+			template<> constexpr const TreeMatchVariable &to<TreeMatchVariable >() const noexcept { return this->tree_match; }
+			template<> constexpr const ValueMatchVariable&to<ValueMatchVariable>() const noexcept { return this->value_match; }
+			template<typename T> constexpr T& to() noexcept;
+			template<> constexpr PnKnownFunction   &to<PnKnownFunction   >() noexcept { return this->known_function; }
+			template<> constexpr GenericFunction   &to<GenericFunction   >() noexcept { return this->generic_function; }
+			template<> constexpr Complex           &to<Complex           >() noexcept { return this->complex; }
+			template<> constexpr PnTypedIdxSLC     &to<PnTypedIdxSLC     >() noexcept { return this->index_slc; }
+			template<> constexpr TermString128     &to<TermString128     >() noexcept { return this->string; }
+			template<> constexpr TreeMatchVariable &to<TreeMatchVariable >() noexcept { return this->tree_match; }
+			template<> constexpr ValueMatchVariable&to<ValueMatchVariable>() noexcept { return this->value_match; }
 		};
 		static_assert(sizeof(PnTypesUnion) * 8 == 128);
 
 		using PnStore = TermStore<PnTypesUnion>;
 
-		//all MatchVariables of same name in pattern (e.g. "a" in pattern "a*b+a" share the same SharedMatchData to know 
+		//all MatchVariables of same name in pattern (e.g. "a" in pattern "a*b+a" share the same SharedTreeDatum to know 
 		//whitch actually matched, and if the name "a" is already matched, even if the current instance is not.
-		struct SharedMatchData
+		struct SharedTreeDatum
 		{
-			TypedIdx match_idx = TypedIdx(); //default initialized to type == Type::COUNT and index == 0
+			TypedIdx match_idx = TypedIdx{}; //indexes in ArithmeticTerm to simplify
+			PnTypedIdx responsible = PnTypedIdx{}; //the instance of TreeMatchVariable that was setting match_idx
+		};
+
+		struct SharedValueDatum
+		{
+			double value = {};
+			PnTypedIdx responsible = PnTypedIdx{}; //the instance of ValueMatchVariable that was setting value
+		};
+
+		//to allow a constant PnTerm to be matched against, all match info is stored here
+		struct MatchData
+		{
+			static constexpr std::size_t max_value_match_count = 4u; //maximal number of unrelated ValueMatchVariables allowed per pattern
+			static constexpr std::size_t max_tree_match_count = 8u;	 //maximal number of unrelated TreeMatchVariables allowed per pattern
+
+			std::array<SharedValueDatum, max_value_match_count> value_match_data;
+			std::array<SharedTreeDatum, max_tree_match_count> tree_match_data;
 		};
 
 		struct PnTerm
 		{
-			static constexpr std::size_t max_var_count = 6u;
-
-			std::array<SharedMatchData, max_var_count> shared_match_data;
 			PnTypedIdx lhs_head;
 			PnTypedIdx rhs_head;
 			PnStore lhs_store;
@@ -364,7 +423,7 @@ namespace bmath {
 		void combine_values_exact() noexcept;
 		void sort() noexcept;
 
-		std::string show_memory_layout() const;
+		std::string to_memory_layout() const;
 		std::string to_string() const;
 		std::string to_pretty_string(); //will tidy up term first
 		std::string to_pretty_string() const; //assumes sorted term
