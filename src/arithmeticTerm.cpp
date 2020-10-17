@@ -819,6 +819,81 @@ namespace bmath::intern {
 			}
 		} //sort
 
+		template<typename TypedIdx_dstT, typename Store_srcT, typename Store_dstT, typename TypedIdx_srcT>
+		TypedIdx_dstT copy(const Store_srcT& src_store, Store_dstT& dst_store, const TypedIdx_srcT src_ref)
+		{
+			using Type_srcT = TypedIdx_srcT::Enum_T;
+			using TypedIdxSLC_dstT = TermSLC<std::uint32_t, TypedIdx_dstT, 3>;
+			constexpr bool src_pattern = std::is_same_v<Type_srcT, pattern::PnType>;
+
+			const auto [src_index, src_type] = src_ref.split();
+			switch (src_type) {
+			case Type_srcT(Type::sum): 
+				[[fallthrough]];
+			case Type_srcT(Type::product): {
+				const std::size_t dst_index = dst_store.insert(TypedIdxSLC_dstT());
+				std::size_t last_node_idx = dst_index;
+				for (const auto src_elem : vdc::range(src_store, src_index)) {
+					const TypedIdx_dstT dst_elem = tree::copy<TypedIdx_dstT>(src_store, dst_store, src_elem);
+					last_node_idx = TypedIdxSLC_dstT::insert_new(dst_store, last_node_idx, dst_elem);
+				}
+				return TypedIdx_dstT(dst_index, src_type);
+			} break;
+			case Type_srcT(Type::known_function): {
+				const BasicKnownFunction<TypedIdx_srcT> src_function = src_store.at(src_index).known_function; //no reference, as src and dst could be same store -> may reallocate
+				auto dst_function = BasicKnownFunction<TypedIdx_dstT>{ src_function.type };
+				for (std::size_t i = 0u; i < fn::param_count(src_function.type); i++) {
+					dst_function.params[i] = tree::copy<TypedIdx_dstT>(src_store, dst_store, src_function.params[i]);
+				}
+				return TypedIdx_dstT(dst_store.insert(dst_function), src_type);
+			} break;
+			case Type_srcT(Type::generic_function): {
+				const GenericFunction src_function = src_store.at(src_index).generic_function; //no reference, as src and dst could be same store -> may reallocate
+				GenericFunction dst_function;
+				std::size_t last_node_idx = dst_store.insert(TypedIdxSLC_dstT());
+				dst_function.params_idx = static_cast<std::uint32_t>(last_node_idx);
+				for (const auto src_param : fn::range(src_store, src_function)) {
+					const TypedIdx_dstT dst_param = tree::copy<TypedIdx_dstT>(src_store, dst_store, src_param);
+					last_node_idx = TypedIdxSLC_dstT::insert_new(dst_store, last_node_idx, dst_param);
+				}
+				std::string src_name; //in most cases the small string optimisation works, else dont care
+				read(src_store, src_index, src_name);
+				if (src_name.size() <= GenericFunction::short_name_max) [[likely]] {
+					std::copy(src_name.begin(), src_name.end(), dst_function.short_name);
+					dst_function.name_size = GenericFunction::NameSize::small;
+				}
+				else {
+					dst_function.long_name_idx = insert_string(dst_store, src_name);
+					dst_function.name_size = GenericFunction::NameSize::longer;
+				}
+				return TypedIdx_dstT(dst_store.insert(dst_function), src_type);
+			} break;
+			case Type_srcT(Type::variable): {
+				std::string src_name; //in most cases the small string optimisation works, else dont care
+				read(src_store, src_index, src_name);
+				const std::size_t dst_index = insert_string(dst_store, src_name);
+				return TypedIdx_dstT(dst_index, src_type);
+			} break;
+			case Type_srcT(Type::complex): {
+				const std::size_t dst_index = dst_store.insert(src_store.at(src_index));
+				return TypedIdx_dstT(dst_index, src_type);
+			} break;
+			case Type_srcT(pattern::_tree_match): if constexpr (src_pattern) {
+				const std::size_t dst_index = dst_store.insert(src_store.at(src_index));
+				return TypedIdx_dstT(dst_index, src_type);
+			} assert(false); return TypedIdx_dstT();
+			case Type_srcT(pattern::_value_match):
+				assert(false); return TypedIdx_dstT();
+			case Type_srcT(pattern::_value_proxy):
+				assert(false); return TypedIdx_dstT();
+			default: assert(false); //if this assert hits, the switch above needs more cases.
+				return TypedIdx_dstT();
+			}
+		} //copy
+		template TypedIdx copy<TypedIdx, Store, Store, TypedIdx>(const Store& src_store, Store& dst_store, const TypedIdx src_ref);
+		template pattern::PnTypedIdx copy<pattern::PnTypedIdx, pattern::PnStore, pattern::PnStore, pattern::PnTypedIdx>
+			(const pattern::PnStore& src_store, pattern::PnStore& dst_store, const pattern::PnTypedIdx src_ref);
+
 		template<typename Store_T, typename TypedIdx_T>
 		void stupid_solve_for(Store_T& store, Equation<TypedIdx_T>& equation, const TypedIdx_T to_isolate)
 		{
@@ -1111,6 +1186,11 @@ namespace bmath {
 	std::string ArithmeticTerm::to_pretty_string() const
 	{
 		return print::to_pretty_string(this->store, this->head);
+	}
+
+	std::pair<intern::Store*, intern::TypedIdx> ArithmeticTerm::data() noexcept
+	{
+		return std::make_pair(&this->store, this->head);
 	}
 
 } //namespace bmath

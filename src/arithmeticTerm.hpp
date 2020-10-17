@@ -380,6 +380,10 @@ namespace bmath::intern {
 		template<typename Store_T, typename TypedIdx_T>
 		void sort(Store_T& store, const TypedIdx_T ref);
 
+		//copies subtree starting at src_ref into dst_store and returns its head
+		template<typename TypedIdx_dstT, typename Store_srcT, typename Store_dstT, typename TypedIdx_srcT>
+		[[nodiscard]] TypedIdx_dstT copy(const Store_srcT& src_store, Store_dstT& dst_store, const TypedIdx_srcT src_ref);
+
 		template<typename TypedIdx_T>
 		struct Equation
 		{
@@ -429,6 +433,8 @@ namespace bmath {
 		std::string to_string() const;
 		std::string to_pretty_string(); //will tidy up term first
 		std::string to_pretty_string() const; //assumes sorted term
+
+		std::pair<intern::Store*, intern::TypedIdx> data() noexcept;
 	};	//class ArithmeticTerm
 
 }	//namespace bmath

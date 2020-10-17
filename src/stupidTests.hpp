@@ -242,4 +242,20 @@ namespace bmath::intern::test {
 		}
 	}
 
+	void copy()
+	{
+		std::string term_name = "1+2-a*(4+6)^2";
+		ArithmeticTerm term_1(term_name);
+		std::cout << "term_1: " << term_1.to_string() << "\n";
+
+		auto [store, head_1] = term_1.data();
+		auto head_2 = tree::copy<TypedIdx>(*store, *store, head_1);
+
+		std::string term_2_str;
+		print::append_to_string(*store, head_2, term_2_str);
+		std::cout << "term_2: " << term_2_str << "\n";
+		std::cout << term_1.to_memory_layout() << "\n";
+		std::cout << print::to_memory_layout(*store, head_2) << "\n";
+	}
+
 } //namespace bmath::intern::test

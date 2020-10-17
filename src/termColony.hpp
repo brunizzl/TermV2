@@ -319,7 +319,7 @@ namespace bmath::intern {
 	} //read
 
 	template<typename TermUnion_T1, typename TermUnion_T2>
-	std::strong_ordering string_compare(const TermStore<TermUnion_T1>& store_1, 
+	[[nodiscard]] std::strong_ordering string_compare(const TermStore<TermUnion_T1>& store_1, 
 		const TermStore<TermUnion_T2>& store_2, std::uint32_t idx_1, std::uint32_t idx_2)
 	{
 		auto current_1 = TermString128::ptr_at(store_1, idx_1);
@@ -350,7 +350,7 @@ namespace bmath::intern {
 	}
 
 	template<typename TermUnion_T>
-	std::strong_ordering string_compare(const TermStore<TermUnion_T>& store,
+	[[nodiscard]] std::strong_ordering string_compare(const TermStore<TermUnion_T>& store,
 		std::uint32_t idx, std::string_view view)
 	{
 		auto current = TermString128::ptr_at(store, idx);
