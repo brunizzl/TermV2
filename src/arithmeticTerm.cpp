@@ -773,51 +773,34 @@ namespace bmath::intern {
 		template<typename Store_T, typename TypedIdx_T>
 		void sort(Store_T& store, const TypedIdx_T ref)
 		{
-			using Type_T = TypedIdx_T::Enum_T;
 			using TypedIdxSLC_T = TermSLC<std::uint32_t, TypedIdx_T, 3u>;
-			constexpr bool pattern = std::is_same_v<Type_T, pattern::PnType>;
+			using namespace fold;
 
-			const auto [index, type] = ref.split();
-			switch (type) {
-			case Type_T(Type::sum):
-				[[fallthrough]];
-			case Type_T(Type::product): {
-				for (const auto elem : vdc::range(store, index)) {
-					tree::sort(store, elem);
-				}
-				TypedIdxSLC_T::sort(store, index,
-					[&store](const TypedIdx_T lhs, const TypedIdx_T rhs) {
-						return compare(store, store, lhs, rhs) == std::strong_ordering::less;
-					});
-			} break;
-			case Type_T(Type::known_function): {
-				const BasicKnownFunction<TypedIdx_T>& known_function = store.at(index).known_function;
-				for (const auto param : fn::range(known_function)) {
-					tree::sort(store, param);
-				}
-			} break;
-			case Type_T(Type::generic_function): {
-				const GenericFunction& generic_function = store.at(index).generic_function;
-				for (const auto param : fn::range(store, generic_function)) {
-					tree::sort(store, param);
-				}
-			} break;
-			case Type_T(Type::variable):
-				break;
-			case Type_T(Type::complex):
-				break;
-			case Type_T(pattern::_tree_match): 
-				break;
-			case Type_T(pattern::_value_match): if constexpr (pattern) {
-				pattern::ValueMatchVariable& var = store.at(index).value_match;
-				tree::sort(store, var.match_idx);
-				tree::sort(store, var.copy_idx);
-			} break;
-			case Type_T(pattern::_value_proxy):
-				break;
-			default: assert(false); //if this assert hits, the switch above needs more cases.
-			}
+			fold::fold<Order::postorder, Void>(store, ref,
+				[](Store_T& store, const TypedIdx_T ref, Void acc) {
+					const auto [index, type] = ref.split();
+					if (type == Type::sum || type == Type::product) {
+						TypedIdxSLC_T::sort(store, index,
+							[&store](const TypedIdx_T lhs, const TypedIdx_T rhs) {
+								return compare(store, store, lhs, rhs) == std::strong_ordering::less;
+							});
+					}
+					return Void{};
+				});
 		} //sort
+
+		template<typename Store_T, typename TypedIdx_T>
+		std::size_t count(Store_T& store, const TypedIdx_T ref)
+		{
+			using namespace fold;
+			using Res = NoStop<std::size_t>;
+
+			return *fold::fold<Order::preorder, Res>(store, ref,
+				[](const Store& store, const TypedIdx ref, Res acc) {
+					return Res { *acc + 1u };
+				});
+		} //count
+		template std::size_t count<Store, TypedIdx>(Store& store, const TypedIdx ref);
 
 		template<typename TypedIdx_dstT, typename Store_srcT, typename Store_dstT, typename TypedIdx_srcT>
 		TypedIdx_dstT copy(const Store_srcT& src_store, Store_dstT& dst_store, const TypedIdx_srcT src_ref)
@@ -1003,24 +986,40 @@ namespace bmath::intern {
 		template<typename Store_T, typename TypedIdx_T>
 		bool contains(const Store_T& store, const TypedIdx_T ref, const TypedIdx_T to_contain)
 		{
-			return tree::fold<Order::pre>(store, ref, 
-				[to_contain](const Store_T& store, const TypedIdx_T typed_idx, FoldRes<void> init) {
-					return FoldRes<void> { typed_idx == to_contain };
-				}, 
-				FoldRes<void>{ false });
+			using namespace fold;
+			return fold::fold<Order::preorder, Bool>(store, ref, 
+				[to_contain](const Store_T& store, const TypedIdx_T typed_idx, Bool init) {
+					return Bool { typed_idx == to_contain };
+				});
 		} //contains
 
+		TypedIdx search_variable(const Store& store, const TypedIdx head, std::string_view name)
+		{
+			using namespace fold;
+			using Res = FoldRes<TypedIdx>;
+
+			return *fold::fold(store, head,
+				[name](const Store& store, const TypedIdx ref, Res acc) {
+					const auto [index, type] = ref.split();
+					return (type == Type::variable && string_compare(store, index, name) == std::strong_ordering::equal) ?
+						Res{ ref, true } :
+						Res{ ref, false };
+				}, Res{ TypedIdx(), false });
+		} //search_variable
+
+	} //namespace tree
+
+	namespace fold {
+
 		template<Order order, typename Res_T, typename Store_T, typename TypedIdx_T, typename Apply>
-		FoldRes<Res_T> fold(Store_T& store, const TypedIdx_T ref, Apply apply, FoldRes<Res_T> init)
+		Res_T fold(Store_T& store, const TypedIdx_T ref, Apply apply, Res_T acc)
 		{
 			using Type_T = TypedIdx_T::Enum_T;
 			constexpr bool pattern = std::is_same_v<Type_T, pattern::PnType>;
 
-			if constexpr (order == Order::pre) { 
-				init = apply(store, ref, init); 
-				if constexpr (!std::is_same_v<Res_T, NoStopType>) if (init.return_early) {
-						return init;
-				}
+			if constexpr (order == Order::preorder) { 
+				acc = apply(store, ref, acc); 
+				if constexpr (Res_T::allow_shortcut) { if (acc.done) { return acc; } }
 			}
 
 			const auto [index, type] = ref.split();
@@ -1029,28 +1028,22 @@ namespace bmath::intern {
 				[[fallthrough]];
 			case Type_T(Type::product): {
 				for (const auto elem : vdc::range(store, index)) {
-					init = tree::fold<order>(store, elem, apply, init);
-					if constexpr (!std::is_same_v<Res_T, NoStopType>) if (init.return_early) {
-						return init;
-					}
+					acc = fold::fold<order>(store, elem, apply, acc);
+					if constexpr (Res_T::allow_shortcut) { if (acc.done) { return acc; } }
 				}
 			} break;
 			case Type_T(Type::known_function): {
 				const BasicKnownFunction<TypedIdx_T> known_function = store.at(index).known_function; //no reference, as apply might mutate store
 				for (const auto param : fn::range(known_function)) {
-					init = tree::fold<order>(store, param, apply, init);
-					if constexpr (!std::is_same_v<Res_T, NoStopType>) if (init.return_early) {
-						return init;
-					}
+					acc = fold::fold<order>(store, param, apply, acc);
+					if constexpr (Res_T::allow_shortcut) { if (acc.done) { return acc; } }
 				}
 			} break;
 			case Type_T(Type::generic_function): {
 				const GenericFunction generic_function = store.at(index).generic_function;  //no reference, as apply might mutate store
 				for (const auto param : fn::range(store, generic_function)) {
-					init = tree::fold<order>(store, param, apply, init);
-					if constexpr (!std::is_same_v<Res_T, NoStopType>) if (init.return_early) {
-						return init;
-					}
+					acc = fold::fold<order>(store, param, apply, acc);
+					if constexpr (Res_T::allow_shortcut) { if (acc.done) { return acc; } }
 				}
 			} break;
 			case Type_T(Type::variable): 
@@ -1061,39 +1054,25 @@ namespace bmath::intern {
 				break;
 			case Type_T(pattern::_value_match): if constexpr (pattern) {
 				pattern::ValueMatchVariable& var = store.at(index).value_match;
-				init = tree::fold<order>(store, var.match_idx, apply, init);
-				if constexpr (!std::is_same_v<Res_T, NoStopType>) if (init.return_early) {
-					return init;
-				}
-				init = tree::fold<order>(store, var.copy_idx, apply, init);
-				if constexpr (!std::is_same_v<Res_T, NoStopType>) if (init.return_early) {
-					return init;
-				}
+				acc = fold::fold<order>(store, var.match_idx, apply, acc);
+				if constexpr (Res_T::allow_shortcut) { if (acc.done) { return acc; } }
+				acc = fold::fold<order>(store, var.copy_idx, apply, acc);
+				if constexpr (Res_T::allow_shortcut) { if (acc.done) { return acc; } }
 			} break;
 			case Type_T(pattern::_value_proxy):
 				break;
 			default: assert(false); //if this assert hits, the switch above needs more cases.
 			}
-			if constexpr (order == Order::post) { 
-				return apply(store, ref, init); 
+
+			if constexpr (order == Order::postorder) { 
+				return apply(store, ref, acc); 
 			}
 			else {
-				return init;
+				return acc;
 			}
 		} //fold
 
-		TypedIdx search_variable(const Store& store, const TypedIdx head, std::string_view name)
-		{
-			return *tree::fold<Order::post>(store, head,
-				[name](const Store& store, const TypedIdx ref, FoldRes<TypedIdx> init) {
-					const auto [index, type] = ref.split();
-					return (type == Type::variable && string_compare(store, index, name) == std::strong_ordering::equal) ?
-					FoldRes<TypedIdx>{ ref, true } :
-					FoldRes<TypedIdx>{ ref, false };
-				}, FoldRes<TypedIdx> { TypedIdx(), false });
-		} //search_variable
-
-	} //namespace tree
+	} //namespace fold
 
 } //namespace bmath::intern
 

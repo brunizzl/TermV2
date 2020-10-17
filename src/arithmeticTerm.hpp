@@ -394,6 +394,10 @@ namespace bmath::intern {
 		template<typename Store_T, typename TypedIdx_T>
 		void sort(Store_T& store, const TypedIdx_T ref);
 
+		//counts number of nodes occupied by subtree
+		template<typename Store_T, typename TypedIdx_T>
+		std::size_t count(Store_T& store, const TypedIdx_T ref);
+
 		//copies subtree starting at src_ref into dst_store and returns its head
 		template<typename TypedIdx_dstT, typename Store_srcT, typename Store_dstT, typename TypedIdx_srcT>
 		[[nodiscard]] TypedIdx_dstT copy(const Store_srcT& src_store, Store_dstT& dst_store, const TypedIdx_srcT src_ref);
@@ -414,31 +418,6 @@ namespace bmath::intern {
 		template<typename Store_T, typename TypedIdx_T>
 		bool contains(const Store_T& store, const TypedIdx_T ref, const TypedIdx_T to_contain);
 
-		template<typename Res_T>
-		struct FoldRes
-		{
-			Res_T value;
-			bool return_early = false;
-			constexpr Res_T operator*() const noexcept { return this->value; }
-		};
-
-		template<>
-		struct FoldRes<void>
-		{
-			bool return_early = false;
-			constexpr operator bool() const noexcept { return this->return_early; }
-			constexpr FoldRes(bool init) :return_early(init) {}
-		};
-
-		struct NoStopType {};
-		template<> struct FoldRes<NoStopType> {};
-		using NoStop = FoldRes<NoStopType>;
-
-		enum class Order { pre, post };
-		//calls apply with every node, parameters are (store, typed_idx, acc), apply is assumed to return Res_T
-		template<Order order, typename Res_T, typename Store_T, typename TypedIdx_T, typename Apply>
-		FoldRes<Res_T> fold(Store_T& store, const TypedIdx_T ref, Apply apply, FoldRes<Res_T> init = {});
-
 		//returns TypedIdx() if unsuccsessfull
 		TypedIdx search_variable(const Store& store, const TypedIdx head, std::string_view name);
 
@@ -448,6 +427,60 @@ namespace bmath::intern {
 		void build_value_match(pattern::PnStore& store, pattern::PnTypedIdx head, pattern::PnTypedIdx value_match);
 
 	} //namespace tree
+
+	namespace fold {
+
+		template<typename Wrapped_T>
+		struct FoldRes
+		{
+			static constexpr bool allow_shortcut = true;
+
+			Wrapped_T value;
+			bool done = false;
+
+			constexpr Wrapped_T operator*() const noexcept { return this->value; }
+		};
+
+		template<>
+		struct FoldRes<void>
+		{
+			static constexpr bool allow_shortcut = true;
+
+			bool done = false;
+
+			constexpr operator bool() const noexcept { return this->done; }
+			constexpr FoldRes(bool init) :done(init) {}
+			constexpr FoldRes() = default;
+		};
+		using Bool = FoldRes<void>;
+
+		template<typename Wrapped_T>
+		struct NoStopType;
+
+		template<typename Wrapped_T> 
+		struct FoldRes<NoStopType<Wrapped_T>> 
+		{
+			static constexpr bool allow_shortcut = false;
+
+			Wrapped_T value;
+
+			constexpr Wrapped_T operator*() const noexcept { return this->value; }
+		};
+		template<typename Wrapped_T>
+		using NoStop = FoldRes<NoStopType<Wrapped_T>>;
+
+		template<> struct FoldRes<NoStopType<void>> { static constexpr bool allow_shortcut = false; };
+		using Void = FoldRes<NoStopType<void>>;
+
+
+		enum class Order { preorder, postorder };
+
+		//calls apply with every node, parameters are (store, typed_idx, acc), apply is assumed to return Res_T
+		//assumes Res_T to be instanciation of FoldRes<>
+		template<Order order = Order::preorder, typename Res_T, typename Store_T, typename TypedIdx_T, typename Apply>
+		Res_T fold(Store_T& store, const TypedIdx_T ref, Apply apply, Res_T init = {});
+
+	} //namespace fold
 
 }	//namespace bmath::intern
 
