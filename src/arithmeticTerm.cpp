@@ -1003,133 +1003,54 @@ namespace bmath::intern {
 		template<typename Store_T, typename TypedIdx_T>
 		bool contains(const Store_T& store, const TypedIdx_T ref, const TypedIdx_T to_contain)
 		{
-			using Type_T = TypedIdx_T::Enum_T;
-			constexpr bool pattern = std::is_same_v<Type_T, pattern::PnType>;
-
-			if (ref == to_contain) {
-				return true;
-			} 
-			else {
-				const auto [index, type] = ref.split();
-				switch (type) {
-				case Type_T(Type::sum): 
-					[[fallthrough]];
-				case Type_T(Type::product): {
-					for (const auto elem : vdc::range(store, index)) {
-						if (tree::contains(store, elem, to_contain)) {
-							return true;
-						}
-					}
-					return false;
-				} break;
-				case Type_T(Type::known_function): {
-					const BasicKnownFunction<TypedIdx_T>& known_function = store.at(index).known_function;
-					for (const auto param : fn::range(known_function)) {
-						if (tree::contains(store, param, to_contain)) {
-							return true;
-						}
-					}
-					return false;
-				} break;
-				case Type_T(Type::generic_function): {
-					const GenericFunction& generic_function = store.at(index).generic_function;
-					for (const auto param : fn::range(store, generic_function)) {
-						if (tree::contains(store, param, to_contain)) {
-							return true;
-						}
-					}
-					return false;
-				} break;
-				case Type_T(Type::variable): 
-					return false;
-				case Type_T(Type::complex): 
-					return false;
-				case Type_T(pattern::_tree_match): 
-					return false;
-				case Type_T(pattern::_value_match): if constexpr (pattern) {
-					pattern::ValueMatchVariable& var = store.at(index).value_match;
-					return tree::contains(store, var.match_idx) || tree::contains(store, var.copy_idx);
-				} assert(false); return false;
-				case Type_T(pattern::_value_proxy):
-					return false;
-				default: assert(false); //if this assert hits, the switch above needs more cases.
-					return false;
-				}
-			}			
+			return tree::fold<Order::pre>(store, ref, 
+				[to_contain](const Store_T& store, const TypedIdx_T typed_idx, FoldRes<void> init) {
+					return FoldRes<void> { typed_idx == to_contain };
+				}, 
+				FoldRes<void>{ false });
 		} //contains
 
-		template<Order order, typename Store_T, typename TypedIdx_T, typename Apply>
-		void for_each(Store_T& store, const TypedIdx_T ref, Apply apply)
+		template<Order order, typename Res_T, typename Store_T, typename TypedIdx_T, typename Apply>
+		FoldRes<Res_T> fold(Store_T& store, const TypedIdx_T ref, Apply apply, FoldRes<Res_T> init)
 		{
 			using Type_T = TypedIdx_T::Enum_T;
 			constexpr bool pattern = std::is_same_v<Type_T, pattern::PnType>;
 
-			const auto [index, type] = ref.split();
-			if constexpr (order == Order::pre) { apply(store, index, type); }
-			switch (type) {
-			case Type_T(Type::sum): 
-				[[fallthrough]];
-			case Type_T(Type::product): {
-				for (const auto elem : vdc::range(store, index)) {
-					tree::for_each<order>(store, elem, apply);
+			if constexpr (order == Order::pre) { 
+				init = apply(store, ref, init); 
+				if constexpr (!std::is_same_v<Res_T, NoStopType>) if (init.return_early) {
+						return init;
 				}
-			} break;
-			case Type_T(Type::known_function): {
-				const BasicKnownFunction<TypedIdx_T> known_function = store.at(index).known_function; //no reference, as apply might mutate store
-				for (const auto param : fn::range(known_function)) {
-					tree::for_each<order>(store, param, apply);
-				}
-			} break;
-			case Type_T(Type::generic_function): {
-				const GenericFunction generic_function = store.at(index).generic_function;  //no reference, as apply might mutate store
-				for (const auto param : fn::range(store, generic_function)) {
-					tree::for_each<order>(store, param, apply);
-				}
-			} break;
-			case Type_T(Type::variable): 
-				break;
-			case Type_T(Type::complex): 
-				break;
-			case Type_T(pattern::_tree_match): 
-				break;
-			case Type_T(pattern::_value_match): if constexpr (pattern) {
-				pattern::ValueMatchVariable& var = store.at(index).value_match;
-				tree::for_each<order>(store, var.match_idx, apply);
-				tree::for_each<order>(store, var.copy_idx, apply);
-			} break;
-			case Type_T(pattern::_value_proxy):
-				break;
-			default: assert(false); //if this assert hits, the switch above needs more cases.
 			}
-			if constexpr (order == Order::post) { apply(store, index, type); }
-		} //for_each
-
-		template<Order order, typename Store_T, typename TypedIdx_T, typename Apply, typename Res_T>
-		Res_T fold(Store_T& store, const TypedIdx_T ref, Apply apply, Res_T init)
-		{
-			using Type_T = TypedIdx_T::Enum_T;
-			constexpr bool pattern = std::is_same_v<Type_T, pattern::PnType>;
 
 			const auto [index, type] = ref.split();
-			if constexpr (order == Order::pre) { init = apply(store, index, type, init); }
 			switch (type) {
 			case Type_T(Type::sum): 
 				[[fallthrough]];
 			case Type_T(Type::product): {
 				for (const auto elem : vdc::range(store, index)) {
 					init = tree::fold<order>(store, elem, apply, init);
+					if constexpr (!std::is_same_v<Res_T, NoStopType>) if (init.return_early) {
+						return init;
+					}
 				}
 			} break;
 			case Type_T(Type::known_function): {
 				const BasicKnownFunction<TypedIdx_T> known_function = store.at(index).known_function; //no reference, as apply might mutate store
 				for (const auto param : fn::range(known_function)) {
 					init = tree::fold<order>(store, param, apply, init);
+					if constexpr (!std::is_same_v<Res_T, NoStopType>) if (init.return_early) {
+						return init;
+					}
 				}
 			} break;
 			case Type_T(Type::generic_function): {
 				const GenericFunction generic_function = store.at(index).generic_function;  //no reference, as apply might mutate store
 				for (const auto param : fn::range(store, generic_function)) {
 					init = tree::fold<order>(store, param, apply, init);
+					if constexpr (!std::is_same_v<Res_T, NoStopType>) if (init.return_early) {
+						return init;
+					}
 				}
 			} break;
 			case Type_T(Type::variable): 
@@ -1141,26 +1062,35 @@ namespace bmath::intern {
 			case Type_T(pattern::_value_match): if constexpr (pattern) {
 				pattern::ValueMatchVariable& var = store.at(index).value_match;
 				init = tree::fold<order>(store, var.match_idx, apply, init);
+				if constexpr (!std::is_same_v<Res_T, NoStopType>) if (init.return_early) {
+					return init;
+				}
 				init = tree::fold<order>(store, var.copy_idx, apply, init);
+				if constexpr (!std::is_same_v<Res_T, NoStopType>) if (init.return_early) {
+					return init;
+				}
 			} break;
 			case Type_T(pattern::_value_proxy):
 				break;
 			default: assert(false); //if this assert hits, the switch above needs more cases.
 			}
-			if constexpr (order == Order::post) { init = apply(store, index, type, init); }
-			return init;
+			if constexpr (order == Order::post) { 
+				return apply(store, ref, init); 
+			}
+			else {
+				return init;
+			}
 		} //fold
 
 		TypedIdx search_variable(const Store& store, const TypedIdx head, std::string_view name)
 		{
-			auto result = TypedIdx();
-			tree::for_each<Order::post>(store, head, 
-				[&result, name](const Store& store, const std::uint32_t index, const Type type) {
-					if (type == Type::variable && string_compare(store, index, name) == std::strong_ordering::equal) {
-						result = TypedIdx(index, type);
-					}
-				});
-			return result;
+			return *tree::fold<Order::post>(store, head,
+				[name](const Store& store, const TypedIdx ref, FoldRes<TypedIdx> init) {
+					const auto [index, type] = ref.split();
+					return (type == Type::variable && string_compare(store, index, name) == std::strong_ordering::equal) ?
+					FoldRes<TypedIdx>{ ref, true } :
+					FoldRes<TypedIdx>{ ref, false };
+				}, FoldRes<TypedIdx> { TypedIdx(), false });
 		} //search_variable
 
 	} //namespace tree

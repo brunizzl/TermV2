@@ -414,16 +414,30 @@ namespace bmath::intern {
 		template<typename Store_T, typename TypedIdx_T>
 		bool contains(const Store_T& store, const TypedIdx_T ref, const TypedIdx_T to_contain);
 
-		enum class Order { pre, post };
-		//if only a few types need actual attention and the rest only does the recursive call anyway,
-		//this function handles the recursive calls
-		//calls apply with every node, parameters are (store, index, type), apply is assumed to return void
-		template<Order order, typename Store_T, typename TypedIdx_T, typename Apply>
-		void for_each(Store_T& store, const TypedIdx_T ref, Apply apply);
+		template<typename Res_T>
+		struct FoldRes
+		{
+			Res_T value;
+			bool return_early = false;
+			constexpr Res_T operator*() const noexcept { return this->value; }
+		};
 
-		//calls apply with every node, parameters are (store, index, type, acc), apply is assumed to return Res_T
-		template<Order order, typename Store_T, typename TypedIdx_T, typename Apply, typename Res_T>
-		Res_T fold(Store_T& store, const TypedIdx_T ref, Apply apply, Res_T init);
+		template<>
+		struct FoldRes<void>
+		{
+			bool return_early = false;
+			constexpr operator bool() const noexcept { return this->return_early; }
+			constexpr FoldRes(bool init) :return_early(init) {}
+		};
+
+		struct NoStopType {};
+		template<> struct FoldRes<NoStopType> {};
+		using NoStop = FoldRes<NoStopType>;
+
+		enum class Order { pre, post };
+		//calls apply with every node, parameters are (store, typed_idx, acc), apply is assumed to return Res_T
+		template<Order order, typename Res_T, typename Store_T, typename TypedIdx_T, typename Apply>
+		FoldRes<Res_T> fold(Store_T& store, const TypedIdx_T ref, Apply apply, FoldRes<Res_T> init = {});
 
 		//returns TypedIdx() if unsuccsessfull
 		TypedIdx search_variable(const Store& store, const TypedIdx head, std::string_view name);
