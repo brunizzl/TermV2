@@ -399,8 +399,8 @@ namespace bmath::intern {
 		std::size_t count(Store_T& store, const TypedIdx_T ref);
 
 		//copies subtree starting at src_ref into dst_store and returns its head
-		template<typename TypedIdx_dstT, typename Store_srcT, typename Store_dstT, typename TypedIdx_srcT>
-		[[nodiscard]] TypedIdx_dstT copy(const Store_srcT& src_store, Store_dstT& dst_store, const TypedIdx_srcT src_ref);
+		template<typename DstTypedIdx_T, typename SrcStore_T, typename DstStore_T, typename SrcTypedIdx_T>
+		[[nodiscard]] DstTypedIdx_T copy(const SrcStore_T& src_store, DstStore_T& dst_store, const SrcTypedIdx_T src_ref);
 
 		template<typename TypedIdx_T>
 		struct Equation
@@ -414,71 +414,72 @@ namespace bmath::intern {
 		template<typename Store_T, typename TypedIdx_T>
 		void stupid_solve_for(Store_T& store, Equation<TypedIdx_T>& equation, const TypedIdx_T to_isolate);
 
-		//returns true iff subtree starting at ref contains to_contain
+		//returns true iff subtree starting at ref contains to_contain (or is to_contain itself)
 		template<typename Store_T, typename TypedIdx_T>
 		bool contains(const Store_T& store, const TypedIdx_T ref, const TypedIdx_T to_contain);
 
+		bool contains_variables(const Store& store, const TypedIdx ref);
+		bool contains_variables(const pattern::PnStore& store, const pattern::PnTypedIdx ref);
+
 		//returns TypedIdx() if unsuccsessfull
 		TypedIdx search_variable(const Store& store, const TypedIdx head, std::string_view name);
-
-		//takes a ValueMatchVariable with default initialized match_idx and copy_idx and turns it into form described 
-		//above ValueMatchVariable (e.g. "2*k+1" -> "k" but with match_idx of k beeing set to "(p-1)/2" and copy_idx of k
-		//  beeing set to "2*p+1"
-		void build_value_match(pattern::PnStore& store, pattern::PnTypedIdx head, pattern::PnTypedIdx value_match);
 
 	} //namespace tree
 
 	namespace fold {
 
 		template<typename Wrapped_T>
-		struct FoldRes
+		struct MightCut //might cut fold early, as result is already known then (also known as shortcircuit)
 		{
-			static constexpr bool allow_shortcut = true;
+			static constexpr bool might_cut = true;
 
 			Wrapped_T value;
 			bool done = false;
 
-			constexpr Wrapped_T operator*() const noexcept { return this->value; }
+			constexpr Wrapped_T& operator*() noexcept { return this->value; }
+			constexpr const Wrapped_T& operator*() const noexcept { return this->value; }
 		};
 
 		template<>
-		struct FoldRes<void>
+		struct MightCut<void>
 		{
-			static constexpr bool allow_shortcut = true;
+			static constexpr bool might_cut = true;
 
 			bool done = false;
 
 			constexpr operator bool() const noexcept { return this->done; }
-			constexpr FoldRes(bool init) :done(init) {}
-			constexpr FoldRes() = default;
+			constexpr MightCut(bool init) :done(init) {}
+			constexpr MightCut() = default;
 		};
-		using Bool = FoldRes<void>;
-
-		template<typename Wrapped_T>
-		struct NoStopType;
+		using Bool = MightCut<void>;
 
 		template<typename Wrapped_T> 
-		struct FoldRes<NoStopType<Wrapped_T>> 
+		struct NoCut //will always evaluate every branch of fold 
 		{
-			static constexpr bool allow_shortcut = false;
+			static constexpr bool might_cut = false;
 
 			Wrapped_T value;
 
-			constexpr Wrapped_T operator*() const noexcept { return this->value; }
+			constexpr Wrapped_T& operator*() noexcept { return this->value; }
+			constexpr const Wrapped_T& operator*() const noexcept { return this->value; }
 		};
-		template<typename Wrapped_T>
-		using NoStop = FoldRes<NoStopType<Wrapped_T>>;
 
-		template<> struct FoldRes<NoStopType<void>> { static constexpr bool allow_shortcut = false; };
-		using Void = FoldRes<NoStopType<void>>;
+		template<> struct NoCut<void> 
+		{ 
+			static constexpr bool might_cut = false; 
+		};
+		using Void = NoCut<void>;
 
+		//preorder calls apply on recursive noed bevor doing the recursive calls, postorder after doing all recursive calls
+		//inorder calls apply on recursive node after every recursive call.
+		enum class Order { preorder, postorder, inorder };
 
-		enum class Order { preorder, postorder };
-
-		//calls apply with every node, parameters are (store, typed_idx, acc), apply is assumed to return Res_T
-		//assumes Res_T to be instanciation of FoldRes<>
+		//calls apply with every node, parameters are (typed_idx, acc), apply is assumed to return Res_T
+		//assumes Res_T to have static constexpr bool might_cut defined, 
+		//  if true, assumes Res_T to have nonstatic bool member done indicating when to return early
+		//  if true, enables fold to return a result early without computing every branch
 		template<Order order = Order::preorder, typename Res_T, typename Store_T, typename TypedIdx_T, typename Apply>
-		Res_T fold(Store_T& store, const TypedIdx_T ref, Apply apply, Res_T init = {});
+		Res_T tree_fold(Store_T& store, const TypedIdx_T ref, Apply apply, Res_T init = {});
 
 	} //namespace fold
 

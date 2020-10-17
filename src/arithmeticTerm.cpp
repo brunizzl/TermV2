@@ -736,7 +736,7 @@ namespace bmath::intern {
 				const pattern::TreeMatchVariable& var_1 = store_1.at(index_1).tree_match;
 				const pattern::TreeMatchVariable& var_2 = store_2.at(index_2).tree_match;
 				if (var_1.restr != var_2.restr) {
-					return var_1.restr <=> var_2.restr;
+					return (var_1.restr <=> var_2.restr);
 				}
 				if (const auto name_cmp = compare_arrays(var_1.name.data(), var_2.name.data(), 4u); name_cmp != std::strong_ordering::equal) {
 					return name_cmp;
@@ -776,68 +776,70 @@ namespace bmath::intern {
 			using TypedIdxSLC_T = TermSLC<std::uint32_t, TypedIdx_T, 3u>;
 			using namespace fold;
 
-			fold::fold<Order::postorder, Void>(store, ref,
-				[](Store_T& store, const TypedIdx_T ref, Void acc) {
-					const auto [index, type] = ref.split();
-					if (type == Type::sum || type == Type::product) {
-						TypedIdxSLC_T::sort(store, index,
-							[&store](const TypedIdx_T lhs, const TypedIdx_T rhs) {
-								return compare(store, store, lhs, rhs) == std::strong_ordering::less;
-							});
-					}
-					return Void{};
-				});
+			const auto sort_variadic = [&store](const TypedIdx_T ref, Void) {
+
+				const auto compare_function = [&store](const TypedIdx_T lhs, const TypedIdx_T rhs) {
+					return compare(store, store, lhs, rhs) == std::strong_ordering::less;
+				};
+				const auto [index, type] = ref.split();
+				if (type == Type::sum || type == Type::product) {
+					TypedIdxSLC_T::sort(store, index, compare_function);						
+				}
+				return Void{};
+			};
+
+			fold::tree_fold<Order::postorder, Void>(store, ref, sort_variadic);
 		} //sort
 
 		template<typename Store_T, typename TypedIdx_T>
 		std::size_t count(Store_T& store, const TypedIdx_T ref)
 		{
 			using namespace fold;
-			using Res = NoStop<std::size_t>;
+			using Res = NoCut<std::size_t>;
 
-			return *fold::fold<Order::preorder, Res>(store, ref,
-				[](const Store& store, const TypedIdx ref, Res acc) {
+			return *fold::tree_fold<Order::preorder, Res>(store, ref,
+				[](const TypedIdx, Res acc) {
 					return Res { *acc + 1u };
 				});
 		} //count
 		template std::size_t count<Store, TypedIdx>(Store& store, const TypedIdx ref);
 
-		template<typename TypedIdx_dstT, typename Store_srcT, typename Store_dstT, typename TypedIdx_srcT>
-		TypedIdx_dstT copy(const Store_srcT& src_store, Store_dstT& dst_store, const TypedIdx_srcT src_ref)
+		template<typename DstTypedIdx_T, typename SrcStore_T, typename DstStore_T, typename SrcTypedIdx_T>
+		DstTypedIdx_T copy(const SrcStore_T& src_store, DstStore_T& dst_store, const SrcTypedIdx_T src_ref)
 		{
-			using Type_srcT = TypedIdx_srcT::Enum_T;
-			using TypedIdxSLC_dstT = TermSLC<std::uint32_t, TypedIdx_dstT, 3>;
-			constexpr bool src_pattern = std::is_same_v<Type_srcT, pattern::PnType>;
+			using SrcType_T = SrcTypedIdx_T::Enum_T;
+			using DstTypedIdxSLC_T = TermSLC<std::uint32_t, DstTypedIdx_T, 3>;
+			constexpr bool src_pattern = std::is_same_v<SrcType_T, pattern::PnType>;
 
 			const auto [src_index, src_type] = src_ref.split();
 			switch (src_type) {
-			case Type_srcT(Type::sum): 
+			case SrcType_T(Type::sum): 
 				[[fallthrough]];
-			case Type_srcT(Type::product): {
-				const std::size_t dst_index = dst_store.insert(TypedIdxSLC_dstT());
+			case SrcType_T(Type::product): {
+				const std::size_t dst_index = dst_store.insert(DstTypedIdxSLC_T());
 				std::size_t last_node_idx = dst_index;
 				for (const auto src_elem : vdc::range(src_store, src_index)) {
-					const TypedIdx_dstT dst_elem = tree::copy<TypedIdx_dstT>(src_store, dst_store, src_elem);
-					last_node_idx = TypedIdxSLC_dstT::insert_new(dst_store, last_node_idx, dst_elem);
+					const DstTypedIdx_T dst_elem = tree::copy<DstTypedIdx_T>(src_store, dst_store, src_elem);
+					last_node_idx = DstTypedIdxSLC_T::insert_new(dst_store, last_node_idx, dst_elem);
 				}
-				return TypedIdx_dstT(dst_index, src_type);
+				return DstTypedIdx_T(dst_index, src_type);
 			} break;
-			case Type_srcT(Type::known_function): {
-				const BasicKnownFunction<TypedIdx_srcT> src_function = src_store.at(src_index).known_function; //no reference, as src and dst could be same store -> may reallocate
-				auto dst_function = BasicKnownFunction<TypedIdx_dstT>{ src_function.type };
+			case SrcType_T(Type::known_function): {
+				const BasicKnownFunction<SrcTypedIdx_T> src_function = src_store.at(src_index).known_function; //no reference, as src and dst could be same store -> may reallocate
+				auto dst_function = BasicKnownFunction<DstTypedIdx_T>{ src_function.type };
 				for (std::size_t i = 0u; i < fn::param_count(src_function.type); i++) {
-					dst_function.params[i] = tree::copy<TypedIdx_dstT>(src_store, dst_store, src_function.params[i]);
+					dst_function.params[i] = tree::copy<DstTypedIdx_T>(src_store, dst_store, src_function.params[i]);
 				}
-				return TypedIdx_dstT(dst_store.insert(dst_function), src_type);
+				return DstTypedIdx_T(dst_store.insert(dst_function), src_type);
 			} break;
-			case Type_srcT(Type::generic_function): {
+			case SrcType_T(Type::generic_function): {
 				const GenericFunction src_function = src_store.at(src_index).generic_function; //no reference, as src and dst could be same store -> may reallocate
 				GenericFunction dst_function;
-				std::size_t last_node_idx = dst_store.insert(TypedIdxSLC_dstT());
+				std::size_t last_node_idx = dst_store.insert(DstTypedIdxSLC_T());
 				dst_function.params_idx = static_cast<std::uint32_t>(last_node_idx);
 				for (const auto src_param : fn::range(src_store, src_function)) {
-					const TypedIdx_dstT dst_param = tree::copy<TypedIdx_dstT>(src_store, dst_store, src_param);
-					last_node_idx = TypedIdxSLC_dstT::insert_new(dst_store, last_node_idx, dst_param);
+					const DstTypedIdx_T dst_param = tree::copy<DstTypedIdx_T>(src_store, dst_store, src_param);
+					last_node_idx = DstTypedIdxSLC_T::insert_new(dst_store, last_node_idx, dst_param);
 				}
 				std::string src_name; //in most cases the small string optimisation works, else dont care
 				read(src_store, src_index, src_name);
@@ -849,28 +851,28 @@ namespace bmath::intern {
 					dst_function.long_name_idx = insert_string(dst_store, src_name);
 					dst_function.name_size = GenericFunction::NameSize::longer;
 				}
-				return TypedIdx_dstT(dst_store.insert(dst_function), src_type);
+				return DstTypedIdx_T(dst_store.insert(dst_function), src_type);
 			} break;
-			case Type_srcT(Type::variable): {
+			case SrcType_T(Type::variable): {
 				std::string src_name; //in most cases the small string optimisation works, else dont care
 				read(src_store, src_index, src_name);
 				const std::size_t dst_index = insert_string(dst_store, src_name);
-				return TypedIdx_dstT(dst_index, src_type);
+				return DstTypedIdx_T(dst_index, src_type);
 			} break;
-			case Type_srcT(Type::complex): {
+			case SrcType_T(Type::complex): {
 				const std::size_t dst_index = dst_store.insert(src_store.at(src_index));
-				return TypedIdx_dstT(dst_index, src_type);
+				return DstTypedIdx_T(dst_index, src_type);
 			} break;
-			case Type_srcT(pattern::_tree_match): if constexpr (src_pattern) {
+			case SrcType_T(pattern::_tree_match): if constexpr (src_pattern) {
 				const std::size_t dst_index = dst_store.insert(src_store.at(src_index));
-				return TypedIdx_dstT(dst_index, src_type);
-			} assert(false); return TypedIdx_dstT();
-			case Type_srcT(pattern::_value_match):
-				assert(false); return TypedIdx_dstT();
-			case Type_srcT(pattern::_value_proxy):
-				assert(false); return TypedIdx_dstT();
+				return DstTypedIdx_T(dst_index, src_type);
+			} assert(false); return DstTypedIdx_T();
+			case SrcType_T(pattern::_value_match):
+				assert(false); return DstTypedIdx_T();
+			case SrcType_T(pattern::_value_proxy):
+				assert(false); return DstTypedIdx_T();
 			default: assert(false); //if this assert hits, the switch above needs more cases.
-				return TypedIdx_dstT();
+				return DstTypedIdx_T();
 			}
 		} //copy
 		template TypedIdx copy<TypedIdx, Store, Store, TypedIdx>(const Store& src_store, Store& dst_store, const TypedIdx src_ref);
@@ -987,24 +989,40 @@ namespace bmath::intern {
 		bool contains(const Store_T& store, const TypedIdx_T ref, const TypedIdx_T to_contain)
 		{
 			using namespace fold;
-			return fold::fold<Order::preorder, Bool>(store, ref, 
-				[to_contain](const Store_T& store, const TypedIdx_T typed_idx, Bool init) {
-					return Bool { typed_idx == to_contain };
-				});
+			return fold::tree_fold<Order::preorder, Bool>(store, ref, 
+				[to_contain](const TypedIdx_T typed_idx, Bool) { return Bool { typed_idx == to_contain }; });
 		} //contains
+
+		bool contains_variables(const Store& store, const TypedIdx ref)
+		{
+			using namespace fold;
+			return fold::tree_fold<Order::preorder, Bool>(store, ref, 
+				[](const TypedIdx typed_idx, Bool) { return Bool{ typed_idx.get_type() == Type::variable }; });
+		} //contains_variables
+
+		bool contains_variables(const pattern::PnStore& store, const pattern::PnTypedIdx ref)
+		{
+			using namespace fold;
+			using namespace pattern;
+			const auto test_for_variables = [](const PnTypedIdx typed_idx, Bool) {
+				const PnType type = typed_idx.get_type();
+				return Bool{ type == Type::variable || type.is<PnVariable>() };
+			};
+			return fold::tree_fold<Order::preorder, Bool>(store, ref, test_for_variables);
+		} //contains_variables
 
 		TypedIdx search_variable(const Store& store, const TypedIdx head, std::string_view name)
 		{
-			using namespace fold;
-			using Res = FoldRes<TypedIdx>;
+			using Res = fold::MightCut<TypedIdx>;
 
-			return *fold::fold(store, head,
-				[name](const Store& store, const TypedIdx ref, Res acc) {
-					const auto [index, type] = ref.split();
-					return (type == Type::variable && string_compare(store, index, name) == std::strong_ordering::equal) ?
-						Res{ ref, true } :
-						Res{ ref, false };
-				}, Res{ TypedIdx(), false });
+			const auto test_for_name = [name, &store](const TypedIdx ref, Res) {
+				const auto [index, type] = ref.split();
+				return (type == Type::variable && string_compare(store, index, name) == std::strong_ordering::equal) ?
+					Res{ ref, true } : //directly return -> second parameter to true
+					Res{ TypedIdx(), false };
+			};
+
+			return *fold::tree_fold(store, head, test_for_name, Res{ TypedIdx(), false });
 		} //search_variable
 
 	} //namespace tree
@@ -1012,14 +1030,14 @@ namespace bmath::intern {
 	namespace fold {
 
 		template<Order order, typename Res_T, typename Store_T, typename TypedIdx_T, typename Apply>
-		Res_T fold(Store_T& store, const TypedIdx_T ref, Apply apply, Res_T acc)
+		Res_T tree_fold(Store_T& store, const TypedIdx_T ref, Apply apply, Res_T acc)
 		{
 			using Type_T = TypedIdx_T::Enum_T;
 			constexpr bool pattern = std::is_same_v<Type_T, pattern::PnType>;
 
 			if constexpr (order == Order::preorder) { 
-				acc = apply(store, ref, acc); 
-				if constexpr (Res_T::allow_shortcut) { if (acc.done) { return acc; } }
+				acc = apply(ref, acc); 
+				if constexpr (Res_T::might_cut) { if (acc.done) { return acc; } }
 			}
 
 			const auto [index, type] = ref.split();
@@ -1028,22 +1046,25 @@ namespace bmath::intern {
 				[[fallthrough]];
 			case Type_T(Type::product): {
 				for (const auto elem : vdc::range(store, index)) {
-					acc = fold::fold<order>(store, elem, apply, acc);
-					if constexpr (Res_T::allow_shortcut) { if (acc.done) { return acc; } }
+					acc = fold::tree_fold<order>(store, elem, apply, acc);
+					if constexpr (order == Order::inorder) { acc = apply(ref, acc); }
+					if constexpr (Res_T::might_cut) { if (acc.done) { return acc; } }
 				}
 			} break;
 			case Type_T(Type::known_function): {
 				const BasicKnownFunction<TypedIdx_T> known_function = store.at(index).known_function; //no reference, as apply might mutate store
 				for (const auto param : fn::range(known_function)) {
-					acc = fold::fold<order>(store, param, apply, acc);
-					if constexpr (Res_T::allow_shortcut) { if (acc.done) { return acc; } }
+					acc = fold::tree_fold<order>(store, param, apply, acc);
+					if constexpr (order == Order::inorder) { acc = apply(ref, acc); }
+					if constexpr (Res_T::might_cut) { if (acc.done) { return acc; } }
 				}
 			} break;
 			case Type_T(Type::generic_function): {
 				const GenericFunction generic_function = store.at(index).generic_function;  //no reference, as apply might mutate store
 				for (const auto param : fn::range(store, generic_function)) {
-					acc = fold::fold<order>(store, param, apply, acc);
-					if constexpr (Res_T::allow_shortcut) { if (acc.done) { return acc; } }
+					acc = fold::tree_fold<order>(store, param, apply, acc);
+					if constexpr (order == Order::inorder) { acc = apply(ref, acc); }
+					if constexpr (Res_T::might_cut) { if (acc.done) { return acc; } }
 				}
 			} break;
 			case Type_T(Type::variable): 
@@ -1053,11 +1074,13 @@ namespace bmath::intern {
 			case Type_T(pattern::_tree_match): 
 				break;
 			case Type_T(pattern::_value_match): if constexpr (pattern) {
-				pattern::ValueMatchVariable& var = store.at(index).value_match;
-				acc = fold::fold<order>(store, var.match_idx, apply, acc);
-				if constexpr (Res_T::allow_shortcut) { if (acc.done) { return acc; } }
-				acc = fold::fold<order>(store, var.copy_idx, apply, acc);
-				if constexpr (Res_T::allow_shortcut) { if (acc.done) { return acc; } }
+				const pattern::ValueMatchVariable var = store.at(index).value_match; //no reference, as apply might mutate store
+				acc = fold::tree_fold<order>(store, var.match_idx, apply, acc);
+				if constexpr (order == Order::inorder) { acc = apply(ref, acc); }
+				if constexpr (Res_T::might_cut) { if (acc.done) { return acc; } }
+				acc = fold::tree_fold<order>(store, var.copy_idx, apply, acc);
+				if constexpr (order == Order::inorder) { acc = apply(ref, acc); }
+				if constexpr (Res_T::might_cut) { if (acc.done) { return acc; } }
 			} break;
 			case Type_T(pattern::_value_proxy):
 				break;
@@ -1065,7 +1088,7 @@ namespace bmath::intern {
 			}
 
 			if constexpr (order == Order::postorder) { 
-				return apply(store, ref, acc); 
+				return apply(ref, acc); 
 			}
 			else {
 				return acc;

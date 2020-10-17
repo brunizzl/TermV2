@@ -41,7 +41,7 @@ namespace bmath::intern {
 		using Enum_T = TypesEnum;
 		static constexpr std::size_t max_index = index_mask >> index_offset;
 
-		explicit constexpr BasicTypedIdx() :data(static_cast<UnderlyingType>(TypesEnum::COUNT)) {}
+		explicit constexpr BasicTypedIdx() :data(-1u) {}
 
 		constexpr BasicTypedIdx(std::size_t index, TypesEnum type)
 			: data(static_cast<UnderlyingType>(index << index_offset) | static_cast<UnderlyingType>(type))
