@@ -161,6 +161,7 @@ namespace bmath::intern {
 
 		//in a valid pattern, all TreeMatchVariables of same name share the same restr and the same shared_data_idx.
 		//it is allowed to have multiple instances of the same TreeMatchVariable per side.
+		//this variation of the match variable can match a subtree occuring in a term
 		struct TreeMatchVariable
 		{
 			std::uint32_t shared_data_idx; //points not in pattern tree, but extra vector called shared_tree_match_data.
@@ -188,6 +189,7 @@ namespace bmath::intern {
 
 		//in a valid pattern, all ValueMatchVariables of same name share the same form and the same shared_data_idx.
 		//it is allowed to have multiple instances of the same ValueMatchVariable per side.
+		//this variation of the match variable can match a value of specific form occuring in a term
 		struct ValueMatchVariable
 		{
 			PnTypedIdx match_idx;

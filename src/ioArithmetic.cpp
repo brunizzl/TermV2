@@ -120,7 +120,7 @@ namespace bmath::intern {
 			{ Restr::any         , "any"           },
 		});
 
-		constexpr std::string_view form_name(const ParseRestriction r) noexcept { return find_snd(form_name_table, r); }
+		constexpr std::string_view name_of(const ParseRestriction r) noexcept { return find_snd(form_name_table, r); }
 		constexpr ParseRestriction form_type(const std::string_view s) noexcept { return search_fst(form_name_table, s, ParseRestriction(Restr::unknown)); }
 
 	} //namespace pattern
@@ -143,7 +143,9 @@ namespace bmath::intern {
 			{ PrintExtras::pow,                   5 },
 			{ Type::variable,                     6 },
 			{ Type::complex,                      6 },//may be printed as sum/product itself, then (maybe) has to add parentheses on its own
-			{ pattern::PnVariable::tree_match, 6 },
+			{ pattern::PnVariable::tree_match,    6 },
+			{ pattern::PnVariable::value_match,   6 },
+			{ pattern::PnVariable::value_proxy,   6 },
 			});
 		constexpr int infixr(PrintType type) { return find_snd(infixr_table, type); }
 
@@ -646,7 +648,6 @@ namespace bmath::intern {
 		void append_to_string(const Store_T& store, const TypedIdx_T ref, std::string& str, const int parent_infixr)
 		{
 			using Type_T = TypedIdx_T::Enum_T;
-			using TypedIdxSLC_T = TermSLC<std::uint32_t, TypedIdx_T, 3u>;
 			constexpr bool pattern = std::is_same_v<Type_T, pattern::PnType>;
 
 			const auto [index, type] = ref.split();
@@ -657,20 +658,16 @@ namespace bmath::intern {
 
 			switch (type) {
 			case Type_T(Type::sum): {
-				bool first = true;
+				const char* seperator = "";
 				for (const auto summand : vdc::range(store, index)) {
-					if (!std::exchange(first, false)) {
-						str.push_back('+');
-					}
+					str.append(std::exchange(seperator, "+"));
 					print::append_to_string(store, summand, str, own_infixr);
 				}
 			} break;
 			case Type_T(Type::product): {
-				bool first = true;
+				const char* seperator = "";
 				for (const auto factor : vdc::range(store, index)) {
-					if (!std::exchange(first, false)) {
-						str.push_back('*');
-					}
+					str.append(std::exchange(seperator, "*"));
 					print::append_to_string(store, factor, str, own_infixr);
 				}
 			} break;
@@ -679,24 +676,20 @@ namespace bmath::intern {
 				str.pop_back(); //pop '('
 				str.append(fn::name_of(known_function.type));
 				str.push_back('(');
-				bool first = true;
+				const char* seperator = "";
 				for (const auto param : fn::range(known_function)) {
-					if (!std::exchange(first, false)) {
-						str.push_back(',');
-					}
+					str.append(std::exchange(seperator, ", "));
 					print::append_to_string(store, param, str, own_infixr);
 				}
 			} break;
 			case Type_T(Type::generic_function): {
 				const GenericFunction& generic_function = store.at(index).generic_function;
-				str.pop_back(); //pop open paren
+				str.pop_back(); //pop open parenthesis
 				fn::append_name(store, generic_function, str);
 				str.push_back('(');
-				bool first = true;
+				const char* seperator = "";
 				for (const auto param : fn::range(store, generic_function)) {
-					if (!std::exchange(first, false)) {
-						str.push_back(',');
-					}
+					str.append(std::exchange(seperator, ", "));
 					print::append_to_string(store, param, str, own_infixr);
 				}
 			} break;
@@ -717,11 +710,32 @@ namespace bmath::intern {
 			} break;
 			case Type_T(pattern::_tree_match): if constexpr (pattern) {
 				const pattern::TreeMatchVariable& var = store.at(index).tree_match;
+				str.push_back('{');
 				str.append(var.name.data());
 				if (var.restr != pattern::Restr::any) {
 					str.push_back(':');
-					str.append(form_name(var.restr));
+					str.append(name_of(var.restr));
 				}
+				str.append(", [");
+				str.append(std::to_string(var.shared_data_idx));
+				str.append("]}");
+			} break;
+			case Type_T(pattern::_value_match): if constexpr (pattern) {
+				const pattern::ValueMatchVariable& var = store.at(index).value_match;
+				str.push_back('{');
+				str.append(var.name.data());
+				str.push_back(':');
+				str.append(name_of(var.form));
+				str.append(", ");
+				print::append_to_string(store, var.match_idx, str);
+				str.append(", ");
+				print::append_to_string(store, var.copy_idx, str);
+				str.push_back('}');
+			} break;
+			case Type_T(pattern::_value_proxy): if constexpr (pattern) {
+				str.push_back('<');
+				str.append(std::to_string(index));
+				str.push_back('>');
 			} break;
 			default: assert(false); //if this assert hits, the switch above needs more cases.
 			}
@@ -915,7 +929,7 @@ namespace bmath::intern {
 		} //to_pretty_string
 
 		template<typename Store_T, typename TypedIdx_T>
-		void to_memory_layout(const Store_T& store, const TypedIdx_T ref, std::vector<std::string>& content)
+		void append_memory_row(const Store_T& store, const TypedIdx_T ref, std::vector<std::string>& content)
 		{
 			using Type_T = TypedIdx_T::Enum_T;
 			using TypedIdxSLC_T = TermSLC<std::uint32_t, TypedIdx_T, 3>;
@@ -950,54 +964,54 @@ namespace bmath::intern {
 			std::string& current_str = content[index];
 			switch (type) {
 			case Type_T(Type::sum): {
-				current_str.append("sum       : {");
+				current_str.append("sum        : {");
 				bool first = true;
 				for (const auto elem : vdc::range(store, index)) {
 					if (!std::exchange(first, false)) {
 						current_str.append(", ");
 					}
 					current_str.append(std::to_string(elem.get_index()));
-					print::to_memory_layout(store, elem, content);
+					print::append_memory_row(store, elem, content);
 				}
 				current_str.push_back('}');
 				show_typedidx_col_nodes(index, false);
 			} break;
 			case Type_T(Type::product): {
-				current_str.append("product   : {");
+				current_str.append("product    : {");
 				bool first = true;
 				for (const auto elem : vdc::range(store, index)) {
 					if (!std::exchange(first, false)) {
 						current_str.append(", ");
 					}
 					current_str.append(std::to_string(elem.get_index()));
-					print::to_memory_layout(store, elem, content);
+					print::append_memory_row(store, elem, content);
 				}
 				current_str.push_back('}');
 				show_typedidx_col_nodes(index, false);
 			} break;
 			case Type_T(Type::known_function): {
 				const BasicKnownFunction<TypedIdx_T>& known_function = store.at(index).known_function;
-				current_str.append("function  : {");
+				current_str.append("function   : {");
 				bool first = true;
 				for (const auto param : fn::range(known_function)) {
 					if (!std::exchange(first, false)) {
 						current_str.append(", ");
 					}
 					current_str.append(std::to_string(param.get_index()));
-					print::to_memory_layout(store, param, content);
+					print::append_memory_row(store, param, content);
 				}
 				current_str.push_back('}');
 			} break;
 			case Type_T(Type::generic_function): {
 				const GenericFunction& generic_function = store.at(index).generic_function;
-				current_str.append("function? : {");
+				current_str.append("function?  : {");
 				bool first = true;
 				for (const auto param : fn::range(store, generic_function)) {
 					if (!std::exchange(first, false)) {
 						current_str.append(", ");
 					}
 					current_str.append(std::to_string(param.get_index()));
-					print::to_memory_layout(store, param, content);
+					print::append_memory_row(store, param, content);
 				}
 				current_str.push_back('}');
 				show_typedidx_col_nodes(generic_function.params_idx, true);
@@ -1006,23 +1020,28 @@ namespace bmath::intern {
 				}
 			} break;
 			case Type_T(Type::variable): {
-				current_str.append("variable  : ");
+				current_str.append("variable   : ");
 				show_string_nodes(index, false);
 			} break;
 			case Type_T(Type::complex): {
 				const Complex& complex = store.at(index).complex;
-				current_str.append("value     : ");
+				current_str.append("value      : ");
 			} break;
 			case Type_T(pattern::_tree_match): if constexpr (pattern) {
-				current_str.append("match_var : ");
+				current_str.append("tree_match : ");
 			} break;
+			case Type_T(pattern::_value_match): if constexpr (pattern) {
+				current_str.append("value_match: ");
+			} break;
+			case Type_T(pattern::_value_proxy): 
+				return;
 			default: assert(false); //if this assert hits, the switch above needs more cases.
 			}
 
 			//append name of subterm to line
 			current_str.append(std::max(0, 35 - (int)current_str.size()), ' ');
 			append_to_string(store, ref, current_str, 0);
-		} //to_memory_layout
+		} //append_memory_row
 
 		template<typename Store_T, typename TypedIdx_T>
 		std::string to_memory_layout(const Store_T& store, const TypedIdx_T head)
@@ -1037,7 +1056,7 @@ namespace bmath::intern {
 				elements[i].append(std::to_string(i));
 				elements[i].append(" | ");
 			}
-			to_memory_layout(store, head, elements);
+			print::append_memory_row(store, head, elements);
 
 			for (const auto i : store.free_slots()) {
 				elements[i].append("-----free slot-----");

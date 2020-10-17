@@ -8,6 +8,6 @@ int main()
 {
 	//test::combine_exact();
 	test::arithmetic_term();
-	//test::pattern_term();
+	test::pattern_term();
 	//test::stupid_solve_for();
 }

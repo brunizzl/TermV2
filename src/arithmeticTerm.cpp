@@ -52,6 +52,12 @@
 		case Type_T(pattern::_tree_match): if constexpr (pattern) {
 			assert(false);
 		} break;
+		case Type_T(pattern::_value_match): if constexpr (pattern) {
+			assert(false);
+		} break;
+		case Type_T(pattern::_value_proxy):
+			assert(false);
+			break;
 		default: assert(false); //if this assert hits, the switch above needs more cases.
 		}
 	} //prototype
@@ -351,6 +357,14 @@ namespace bmath::intern {
 			case Type_T(pattern::_tree_match): if constexpr (pattern) {
 				store.free(index);
 			} break;
+			case Type_T(pattern::_value_match): if constexpr (pattern) {
+				pattern::ValueMatchVariable& var = store.at(index).value_match;
+				tree::free(store, var.match_idx);
+				tree::free(store, var.copy_idx);
+				store.free(index);
+			} break;
+			case Type_T(pattern::_value_proxy):
+				break;
 			default: assert(false); //if this assert hits, the switch above needs more cases.
 			}
 		} //free
@@ -397,7 +411,12 @@ namespace bmath::intern {
 				break;
 			case Type_T(pattern::_tree_match):
 				break;
-			case Type_T(pattern::_value_match):
+			case Type_T(pattern::_value_match): if constexpr (pattern) {
+				pattern::ValueMatchVariable& var = store.at(index).value_match;
+				tree::combine_layers(store, var.match_idx);
+				tree::combine_layers(store, var.copy_idx);
+			} break;
+			case Type_T(pattern::_value_proxy):
 				break;
 			default: assert(false); //if this assert hits, the switch above needs more cases.
 			}
@@ -585,7 +604,7 @@ namespace bmath::intern {
 			case Type_T(Type::generic_function): {
 				GenericFunction& function = store.at(index).generic_function;
 				for (auto& elem : fn::range(store, function)) {
-					const auto param_res = tree::combine_values_exact(store, elem);
+					const Complex param_res = tree::combine_values_exact(store, elem);
 					if (is_valid(param_res)) {
 						tree::free(store, elem);
 						elem = TypedIdx_T(store.insert(param_res), Type::complex);
@@ -599,7 +618,15 @@ namespace bmath::intern {
 				return store.at(index).complex;
 			case Type_T(pattern::_tree_match): 
 				return err_res;
-			case Type_T(pattern::_value_match): 
+			case Type_T(pattern::_value_match): if constexpr (pattern) {
+				pattern::ValueMatchVariable& var = store.at(index).value_match;
+				const Complex match_res = tree::combine_values_exact(store, var.match_idx);
+				const Complex copy_res = tree::combine_values_exact(store, var.copy_idx);
+				assert(!is_valid(match_res)); //pattern variable can not decay to value
+				assert(!is_valid(copy_res));  //pattern variable can not decay to value
+				return err_res;
+			} assert(false); return err_res;
+			case Type_T(pattern::_value_proxy):
 				return err_res;
 			default: assert(false); //if this assert hits, the switch above needs more cases.
 				return err_res;
@@ -628,7 +655,7 @@ namespace bmath::intern {
 				auto iter_1 = range_1.begin();
 				auto iter_2 = range_2.begin();
 				for (; iter_1 != range_1.end() && iter_2 != range_2.end(); ++iter_1, ++iter_2) {
-					const auto iter_compare = compare(store_1, store_2, *iter_1, *iter_2);
+					const auto iter_compare = tree::compare(store_1, store_2, *iter_1, *iter_2);
 					if (iter_compare != std::strong_ordering::equal) [[likely]] {
 						return iter_compare;
 					}
@@ -653,7 +680,7 @@ namespace bmath::intern {
 				auto iter_1 = range_1.begin();
 				auto iter_2 = range_2.begin();
 				for (; iter_1 != range_1.end(); ++iter_1, ++iter_2) { //iter_1 and iter_2 both go over same number of params
-					const auto iter_compare = compare(store_1, store_2, *iter_1, *iter_2);
+					const auto iter_compare = tree::compare(store_1, store_2, *iter_1, *iter_2);
 					if (iter_compare != std::strong_ordering::equal) [[likely]] {
 						return iter_compare;
 					}
@@ -672,7 +699,7 @@ namespace bmath::intern {
 				auto iter_1 = range_1.begin();
 				auto iter_2 = range_2.begin();
 				for (; iter_1 != range_1.end() && iter_2 != range_2.end(); ++iter_1, ++iter_2) {
-					const auto iter_compare = compare(store_1, store_2, *iter_1, *iter_2);
+					const auto iter_compare = tree::compare(store_1, store_2, *iter_1, *iter_2);
 					if (iter_compare != std::strong_ordering::equal) [[likely]] {
 						return iter_compare;
 					}
@@ -687,7 +714,7 @@ namespace bmath::intern {
 				}
 			} break;
 			case Type_T(Type::variable): {
-				return string_compare(store_1, store_2, index_2, index_1); //reverse order, as to_pretty_string is reversed again
+				return string_compare(store_2, store_1, index_2, index_1); //reverse order, as to_pretty_string is reversed again
 			} break;
 			case Type_T(Type::complex): {
 				const Complex& complex_1 = store_1.at(index_1).complex;
@@ -718,24 +745,29 @@ namespace bmath::intern {
 					return var_1.shared_data_idx <=> var_2.shared_data_idx; //reverse to make pretty_string prettier
 				}
 				return std::strong_ordering::equal;
-			} break;
+			} assert(false); return std::strong_ordering::equal;
 			case Type_T(pattern::_value_match): if constexpr (pattern) {
-				//const pattern::ValueMatchVariable& var_1 = store_1.at(index_1).value_match;
-				//const pattern::ValueMatchVariable& var_2 = store_2.at(index_2).value_match;
-				//if (var_1.restr != var_2.restr) {
-				//	return var_1.restr <=> var_2.restr;
-				//}
-				//if (const auto name_cmp = compare_arrays(var_1.name.data(), var_2.name.data(), 4u); name_cmp != std::strong_ordering::equal) {
-				//	return name_cmp;
-				//}
-				//if (var_1.shared_data_idx != var_2.shared_data_idx) {
-				//	return var_1.shared_data_idx <=> var_2.shared_data_idx; //reverse to make pretty_string prettier
-				//}
+				const pattern::ValueMatchVariable& var_1 = store_1.at(index_1).value_match;
+				const pattern::ValueMatchVariable& var_2 = store_2.at(index_2).value_match;
+				if (var_1.form != var_2.form) {
+					return var_1.form <=> var_2.form;
+				}
+				if (const auto cmp = compare_arrays(var_1.name.data(), var_2.name.data(), 4u); cmp != std::strong_ordering::equal) {
+					return cmp;
+				}
+				if (const auto cmp = tree::compare(store_1, store_2, var_1.match_idx, var_2.match_idx); cmp != std::strong_ordering::equal) {
+					return cmp;
+				}
+				if (const auto cmp = tree::compare(store_1, store_2, var_1.copy_idx, var_2.copy_idx); cmp != std::strong_ordering::equal) {
+					return cmp;
+				}
 				return std::strong_ordering::equal;
-			} break;
+			} assert(false); return std::strong_ordering::equal;
+			case Type_T(pattern::_value_proxy):
+				return index_1 <=> index_2;
 			default: assert(false); //if this assert hits, the switch above needs more cases.
+				return std::strong_ordering::equal;
 			}
-			return std::strong_ordering::equal;
 		} //compare
 		
 		template<typename Store_T, typename TypedIdx_T>
@@ -776,7 +808,12 @@ namespace bmath::intern {
 				break;
 			case Type_T(pattern::_tree_match): 
 				break;
-			case Type_T(pattern::_value_match): 
+			case Type_T(pattern::_value_match): if constexpr (pattern) {
+				pattern::ValueMatchVariable& var = store.at(index).value_match;
+				tree::sort(store, var.match_idx);
+				tree::sort(store, var.copy_idx);
+			} break;
+			case Type_T(pattern::_value_proxy):
 				break;
 			default: assert(false); //if this assert hits, the switch above needs more cases.
 			}
@@ -877,6 +914,10 @@ namespace bmath::intern {
 					assert(false); break;
 				case Type_T(pattern::_tree_match): 
 					assert(false); break;
+				case Type_T(pattern::_value_match): 
+					assert(false); break;
+				case Type_T(pattern::_value_proxy):
+					assert(false); break;
 				default: assert(false); //if this assert hits, the switch above needs more cases.
 				}
 			}
@@ -888,6 +929,7 @@ namespace bmath::intern {
 		bool contains(const Store_T& store, const TypedIdx_T ref, const TypedIdx_T to_contain)
 		{
 			using Type_T = TypedIdx_T::Enum_T;
+			constexpr bool pattern = std::is_same_v<Type_T, pattern::PnType>;
 
 			if (ref == to_contain) {
 				return true;
@@ -929,6 +971,12 @@ namespace bmath::intern {
 					return false;
 				case Type_T(pattern::_tree_match): 
 					return false;
+				case Type_T(pattern::_value_match): if constexpr (pattern) {
+					pattern::ValueMatchVariable& var = store.at(index).value_match;
+					return tree::contains(store, var.match_idx) || tree::contains(store, var.copy_idx);
+				} assert(false); return false;
+				case Type_T(pattern::_value_proxy):
+					return false;
 				default: assert(false); //if this assert hits, the switch above needs more cases.
 					return false;
 				}
@@ -968,6 +1016,13 @@ namespace bmath::intern {
 			case Type_T(Type::complex): 
 				break;
 			case Type_T(pattern::_tree_match): 
+				break;
+			case Type_T(pattern::_value_match): if constexpr (pattern) {
+				pattern::ValueMatchVariable& var = store.at(index).value_match;
+				tree::for_each<order>(store, var.match_idx, apply);
+				tree::for_each<order>(store, var.copy_idx, apply);
+			} break;
+			case Type_T(pattern::_value_proxy):
 				break;
 			default: assert(false); //if this assert hits, the switch above needs more cases.
 			}

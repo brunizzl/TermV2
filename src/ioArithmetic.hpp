@@ -119,7 +119,7 @@ namespace bmath::intern {
 		{
 			std::vector<MultiNameLookup> tree_table;
 			std::vector<ValueNameLookup> value_table;
-			bool build_lhs = true; //false -> build rhs
+			bool build_lhs = true; //if false -> build rhs
 
 			PnTypedIdx insert_instance(PnStore& store, ParseView input);
 		};
