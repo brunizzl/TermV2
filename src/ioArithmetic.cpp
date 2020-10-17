@@ -534,16 +534,16 @@ namespace bmath::intern {
 			if (const auto iter = std::find_if(this->tree_table.begin(), this->tree_table.end(), [name](const auto& x) { return x.name == name; }); 
 				iter != this->tree_table.end()) 
 			{
-				const std::uint32_t shared_data_idx = std::distance(this->tree_table.begin(), iter);
-				const TreeMatchVariable var = { shared_data_idx, iter->restr, crop(name) };
+				const std::uint32_t match_data_idx = std::distance(this->tree_table.begin(), iter);
+				const TreeMatchVariable var = { match_data_idx, iter->restr, crop(name) };
 				var_idx = PnTypedIdx(store.insert(var), PnVariable::tree_match);
 				(this->build_lhs ? iter->lhs_instances : iter->rhs_instances).push_back(var_idx);
 			}
 			if (const auto iter = std::find_if(this->value_table.begin(), this->value_table.end(), [name](const auto& x) { return x.name == name; }); 
 				iter != this->value_table.end()) 
 			{
-				const std::uint32_t shared_data_idx = std::distance(this->value_table.begin(), iter);
-				const ValueMatchVariable var = { PnTypedIdx(shared_data_idx, PnVariable::value_proxy), PnTypedIdx(shared_data_idx, PnVariable::value_proxy), iter->form, crop(name) };
+				const std::uint32_t match_data_idx = std::distance(this->value_table.begin(), iter);
+				const ValueMatchVariable var(match_data_idx, iter->form);
 				var_idx = PnTypedIdx(store.insert(var), PnVariable::value_match);
 				(this->build_lhs ? iter->lhs_instances : iter->rhs_instances).push_back(var_idx);
 			}
@@ -717,13 +717,12 @@ namespace bmath::intern {
 					str.append(name_of(var.restr));
 				}
 				str.append(", [");
-				str.append(std::to_string(var.shared_data_idx));
+				str.append(std::to_string(var.match_data_idx));
 				str.append("]}");
 			} break;
 			case Type_T(pattern::_value_match): if constexpr (pattern) {
 				const pattern::ValueMatchVariable& var = store.at(index).value_match;
 				str.push_back('{');
-				str.append(var.name.data());
 				str.push_back(':');
 				str.append(name_of(var.form));
 				str.append(", ");

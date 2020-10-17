@@ -128,7 +128,7 @@ namespace bmath::intern {
 		{ 
 			tree_match, 
 			value_match,
-			value_proxy, //doesn'd index in store of PnTerm, but in shared_value_match_data of PnTerm
+			value_proxy, //not actual node in tree, just "end" indicator
 			COUNT 
 		};
 
@@ -159,12 +159,12 @@ namespace bmath::intern {
 		template<typename TypedIdx_T>
 		bool meets_restriction(const TypedIdx_T ref, const Restriction restr);
 
-		//in a valid pattern, all TreeMatchVariables of same name share the same restr and the same shared_data_idx.
+		//in a valid pattern, all TreeMatchVariables of same name share the same restr and the same match_data_idx.
 		//it is allowed to have multiple instances of the same TreeMatchVariable per side.
 		//this variation of the match variable can match a subtree occuring in a term
 		struct TreeMatchVariable
 		{
-			std::uint32_t shared_data_idx; //points not in pattern tree, but extra vector called shared_tree_match_data.
+			std::uint32_t match_data_idx; //indexes in MatchData::tree_match_data
 			Restriction restr = Restr::any;
 			std::array<char, 4u> name; //just convinience for debugging, not actually needed, thus this small and crappy
 		};
@@ -187,15 +187,29 @@ namespace bmath::intern {
 		//only conciders the forms relevant for an actual number
 		bool has_form(const Complex& nr, const Form form);
 
-		//in a valid pattern, all ValueMatchVariables of same name share the same form and the same shared_data_idx.
+		//in a valid pattern, all ValueMatchVariables of same name (thrown away after building) 
+		//share the same form and the same MatchData index
 		//it is allowed to have multiple instances of the same ValueMatchVariable per side.
-		//this variation of the match variable can match a value of specific form occuring in a term
+		//this variation of the match variable can match a value of specific form occuring in a term,
+		//  the form of this value may also be specified using arithmetic operations. 
+		//for example "2*k+1" with k beeing a ValueMatchVariable can match "5" and set value of SharedValueDatum to "2".
+		//that is achieved by not actually storing "2*k+1" as such, but as "k", with match_idx of k containing the 
+		//  inverse operation: "(p-1)/2", where "p" is not an actual node, but just a PnVariable::value_proxy 
+		//  to indicate the original position of k.
+		//to still allow to copy "2*k+1", the copy_idx of k contains a copy of the original suroundings of k, but again with a "p"
+		//  in there: "2*p+1". this "p" is required to also store ValueMatchVariable::match_data_idx as it's index.
 		struct ValueMatchVariable
 		{
 			PnTypedIdx match_idx;
 			PnTypedIdx copy_idx;
+			std::uint32_t match_data_idx; //indexes in MatchData::value_match_data
 			Form form = Form::real;
-			std::array<char, 4u> name; //just convinience for debugging, not actually needed, thus this small and crappy
+
+			ValueMatchVariable(std::uint32_t new_match_data_idx, Form new_form)
+				:match_idx(PnTypedIdx(new_match_data_idx, PnVariable::value_proxy)),
+				copy_idx(PnTypedIdx(new_match_data_idx, PnVariable::value_proxy)),
+				match_data_idx(new_match_data_idx), form(new_form)
+			{}
 		};
 
 		union PnTypesUnion
@@ -400,14 +414,24 @@ namespace bmath::intern {
 		template<typename Store_T, typename TypedIdx_T>
 		bool contains(const Store_T& store, const TypedIdx_T ref, const TypedIdx_T to_contain);
 
+		enum class Order { pre, post };
 		//if only a few types need actual attention and the rest only does the recursive call anyway,
 		//this function handles the recursive calls
-		enum class Order { pre, post };
+		//calls apply with every node, parameters are (store, index, type), apply is assumed to return void
 		template<Order order, typename Store_T, typename TypedIdx_T, typename Apply>
 		void for_each(Store_T& store, const TypedIdx_T ref, Apply apply);
 
+		//calls apply with every node, parameters are (store, index, type, acc), apply is assumed to return Res_T
+		template<Order order, typename Store_T, typename TypedIdx_T, typename Apply, typename Res_T>
+		Res_T fold(Store_T& store, const TypedIdx_T ref, Apply apply, Res_T init);
+
 		//returns TypedIdx() if unsuccsessfull
 		TypedIdx search_variable(const Store& store, const TypedIdx head, std::string_view name);
+
+		//takes a ValueMatchVariable with default initialized match_idx and copy_idx and turns it into form described 
+		//above ValueMatchVariable (e.g. "2*k+1" -> "k" but with match_idx of k beeing set to "(p-1)/2" and copy_idx of k
+		//  beeing set to "2*p+1"
+		void build_value_match(pattern::PnStore& store, pattern::PnTypedIdx head, pattern::PnTypedIdx value_match);
 
 	} //namespace tree
 

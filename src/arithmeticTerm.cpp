@@ -741,8 +741,8 @@ namespace bmath::intern {
 				if (const auto name_cmp = compare_arrays(var_1.name.data(), var_2.name.data(), 4u); name_cmp != std::strong_ordering::equal) {
 					return name_cmp;
 				}
-				if (var_1.shared_data_idx != var_2.shared_data_idx) {
-					return var_1.shared_data_idx <=> var_2.shared_data_idx; //reverse to make pretty_string prettier
+				if (var_1.match_data_idx != var_2.match_data_idx) {
+					return var_1.match_data_idx <=> var_2.match_data_idx; //reverse to make pretty_string prettier
 				}
 				return std::strong_ordering::equal;
 			} assert(false); return std::strong_ordering::equal;
@@ -752,8 +752,8 @@ namespace bmath::intern {
 				if (var_1.form != var_2.form) {
 					return var_1.form <=> var_2.form;
 				}
-				if (const auto cmp = compare_arrays(var_1.name.data(), var_2.name.data(), 4u); cmp != std::strong_ordering::equal) {
-					return cmp;
+				if (var_1.match_data_idx != var_2.match_data_idx) {
+					return var_1.match_data_idx <=> var_2.match_data_idx;
 				}
 				if (const auto cmp = tree::compare(store_1, store_2, var_1.match_idx, var_2.match_idx); cmp != std::strong_ordering::equal) {
 					return cmp;
@@ -1075,13 +1075,13 @@ namespace bmath::intern {
 				}
 			} break;
 			case Type_T(Type::known_function): {
-				const BasicKnownFunction<TypedIdx_T>& known_function = store.at(index).known_function;
+				const BasicKnownFunction<TypedIdx_T> known_function = store.at(index).known_function; //no reference, as apply might mutate store
 				for (const auto param : fn::range(known_function)) {
 					tree::for_each<order>(store, param, apply);
 				}
 			} break;
 			case Type_T(Type::generic_function): {
-				const GenericFunction& generic_function = store.at(index).generic_function;
+				const GenericFunction generic_function = store.at(index).generic_function;  //no reference, as apply might mutate store
 				for (const auto param : fn::range(store, generic_function)) {
 					tree::for_each<order>(store, param, apply);
 				}
@@ -1103,6 +1103,53 @@ namespace bmath::intern {
 			}
 			if constexpr (order == Order::post) { apply(store, index, type); }
 		} //for_each
+
+		template<Order order, typename Store_T, typename TypedIdx_T, typename Apply, typename Res_T>
+		Res_T fold(Store_T& store, const TypedIdx_T ref, Apply apply, Res_T init)
+		{
+			using Type_T = TypedIdx_T::Enum_T;
+			constexpr bool pattern = std::is_same_v<Type_T, pattern::PnType>;
+
+			const auto [index, type] = ref.split();
+			if constexpr (order == Order::pre) { init = apply(store, index, type, init); }
+			switch (type) {
+			case Type_T(Type::sum): 
+				[[fallthrough]];
+			case Type_T(Type::product): {
+				for (const auto elem : vdc::range(store, index)) {
+					init = tree::fold<order>(store, elem, apply, init);
+				}
+			} break;
+			case Type_T(Type::known_function): {
+				const BasicKnownFunction<TypedIdx_T> known_function = store.at(index).known_function; //no reference, as apply might mutate store
+				for (const auto param : fn::range(known_function)) {
+					init = tree::fold<order>(store, param, apply, init);
+				}
+			} break;
+			case Type_T(Type::generic_function): {
+				const GenericFunction generic_function = store.at(index).generic_function;  //no reference, as apply might mutate store
+				for (const auto param : fn::range(store, generic_function)) {
+					init = tree::fold<order>(store, param, apply, init);
+				}
+			} break;
+			case Type_T(Type::variable): 
+				break;
+			case Type_T(Type::complex): 
+				break;
+			case Type_T(pattern::_tree_match): 
+				break;
+			case Type_T(pattern::_value_match): if constexpr (pattern) {
+				pattern::ValueMatchVariable& var = store.at(index).value_match;
+				init = tree::fold<order>(store, var.match_idx, apply, init);
+				init = tree::fold<order>(store, var.copy_idx, apply, init);
+			} break;
+			case Type_T(pattern::_value_proxy):
+				break;
+			default: assert(false); //if this assert hits, the switch above needs more cases.
+			}
+			if constexpr (order == Order::post) { init = apply(store, index, type, init); }
+			return init;
+		} //fold
 
 		TypedIdx search_variable(const Store& store, const TypedIdx head, std::string_view name)
 		{

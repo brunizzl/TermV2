@@ -128,7 +128,7 @@ namespace bmath::intern {
 
 		struct PatternBuildFunction
 		{
-			//the index of name in table is also shared_data_idx of TreeMatchVariable
+			//the index of name in table is also match_data_idx of TreeMatchVariable
 			NameLookupTable& table;
 
 			//equivalent to build() for pattern
