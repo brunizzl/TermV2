@@ -442,22 +442,38 @@ namespace bmath::intern {
 		template<typename Wrapped_T>
 		struct MightCut //might cut fold early, as result is already known then (also known as shortcircuit)
 		{
-			Wrapped_T value;
+			Wrapped_T value = Wrapped_T{};
 			bool return_early = false;
 
 			constexpr Wrapped_T& operator*() noexcept { return this->value; }
 			constexpr const Wrapped_T& operator*() const noexcept { return this->value; }
-			constexpr operator bool() const noexcept { return this->return_early; }
 		};
 
 		template<typename Wrapped_T> constexpr MightCut<Wrapped_T> done(const Wrapped_T w) { return { w, true  }; }
 		template<typename Wrapped_T> constexpr MightCut<Wrapped_T> more(const Wrapped_T w) { return { w, false }; }
+		
+		template<>
+		struct MightCut<void>
+		{
+			bool return_early = false;
+
+			constexpr operator bool() const noexcept { return this->return_early; }
+			constexpr MightCut(bool init) :return_early(init) {}
+			constexpr MightCut() = default;
+		};
+		using Bool = MightCut<void>;
+
+		template<typename T, typename = void> struct MightReturnEarly :std::false_type {};
+		template<typename T> struct MightReturnEarly <T, std::void_t<decltype(T{}.return_early)>> :std::true_type {};
+		static_assert(MightReturnEarly<MightCut<TypedIdx>>::value);
+		static_assert(MightReturnEarly<Bool>::value);
+		static_assert(!MightReturnEarly<bool>::value);
 
 		struct Void {};
 
 		//calls apply with every node (postorder), parameters are (index, type), apply is assumed to return Res_T
 		//assumes Res_T to have static constexpr bool might_cut defined, 
-		//Res_T might be convertibke to bool, to indicate if the fold may be stopped early, as the result is already known
+		//Res_T might have nonstatic member return early, to indicate if the fold may be stopped early, as the result is already known
 		template<typename Res_T, typename Store_T, typename TypedIdx_T, typename Apply>
 		Res_T simple_fold(Store_T& store, const TypedIdx_T ref, Apply apply);
 
@@ -466,7 +482,7 @@ namespace bmath::intern {
 		//  (with elem_res beeing the result of the recursive call.) 
 		//  acc is initialized for every recursive node on its own as init.
 		//leaf_apply has parameters (index, type) and returns Res_T.		
-		//Res_T might be convertibke to bool, to indicate if the fold may be stopped early, as the result is already known
+		//Res_T might have nonstatic member return early, to indicate if the fold may be stopped early, as the result is already known
 		template<typename Res_T, typename Store_T, typename TypedIdx_T, typename OpApply, typename LeafApply>
 		Res_T tree_fold(Store_T& store, const TypedIdx_T ref, OpApply op_apply, LeafApply leaf_apply, const Res_T init);
 
