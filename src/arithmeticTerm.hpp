@@ -126,8 +126,8 @@ namespace bmath::intern {
 
 		enum class PnVariable 
 		{ 
-			value_match,
 			tree_match, 
+			value_match,
 			value_proxy, //not actual node in tree, just "end" indicator
 			COUNT 
 		};
@@ -290,10 +290,7 @@ namespace bmath::intern {
 			std::string rhs_memory_layout() const;
 		};
 
-		enum class SubtreeFeature { computable, contains_value_match, no_value_match_but_not_computable, final_result };
-
-		std::pair<SubtreeFeature, PnTypedIdx> find_value_match_subtree(const PnStore& store, 
-			const PnTypedIdx head, const PnTypedIdx value_match);
+		PnTypedIdx find_value_match_subtree(const PnStore& store, const PnTypedIdx head, const PnTypedIdx value_match);
 
 	} //namespace pattern
 
@@ -439,8 +436,9 @@ namespace bmath::intern {
 		struct MightCut //might cut fold early, as result is already known then (also known as shortcircuit)
 		{
 			Wrapped_T value = Wrapped_T{};
-			bool return_early = false;
+			bool cut = false;
 
+			constexpr bool return_early() const noexcept { return this->cut; }
 			constexpr Wrapped_T& operator*() noexcept { return this->value; }
 			constexpr const Wrapped_T& operator*() const noexcept { return this->value; }
 		};
@@ -450,21 +448,28 @@ namespace bmath::intern {
 		template<>
 		struct MightCut<void>
 		{
-			bool return_early = false;
+			bool cut = false;
 
-			constexpr operator bool() const noexcept { return this->return_early; }
-			constexpr MightCut(bool init) :return_early(init) {}
+			constexpr bool return_early() const noexcept { return this->cut; }
+			constexpr operator bool() const noexcept { return this->cut; }
+			constexpr MightCut(bool init) :cut(init) {}
 			constexpr MightCut() = default;
 		};
 		using Bool = MightCut<void>;
 
-		template<typename T, typename = void> struct MightReturnEarly :std::false_type {};
-		template<typename T> struct MightReturnEarly <T, std::void_t<decltype(T{}.return_early)>> :std::true_type {};
+
+		template<typename T, typename = void> 
+		struct MightReturnEarly :std::false_type {};
+
+		template<typename T> 
+		struct MightReturnEarly <T, std::void_t<decltype(std::declval<T>().return_early())>	> :std::true_type {};
+
 		static_assert(MightReturnEarly<MightCut<TypedIdx>>::value);
 		static_assert(MightReturnEarly<Bool>::value);
 		static_assert(!MightReturnEarly<bool>::value);
 
-		struct Void {};
+
+		struct Void {}; //used, if there is nothing to be returned
 
 		//calls apply with every node (postorder), parameters are (index, type), apply is assumed to return Res_T
 		//assumes Res_T to have static constexpr bool might_cut defined, 
@@ -473,18 +478,18 @@ namespace bmath::intern {
 		Res_T simple_fold(Store_T& store, const TypedIdx_T ref, Apply apply);
 
 		template<typename Res_T, typename TypedIdx_T>
-		struct DefaultToRes { constexpr Res_T operator()(Res_T r, TypedIdx_T) const noexcept { return r; } };
+		struct DefaultFinally { constexpr Res_T operator()(Res_T r, TypedIdx_T) const noexcept { return r; } };
 
 		//this fold differentiates between recursive nodes (operations and ValueMatchVariable) and Leafes (values and variables)
 		//op_apply is called directly after each recursive call with parameters (index, type, acc, elem_res) and returns Res_T
 		//  (with elem_res beeing the result of the recursive call.) 
 		//  acc is initialized for every recursive node on its own as init.
 		//leaf_apply has parameters (index, type) and returns Res_T.		
-		//Acc_T might have nonstatic member return_early, to indicate if the fold may be stopped early, as the result is already known
+		//Res_T might have nonstatic method return_early(), to indicate if the fold may be stopped early, as the result is already known
 		template<typename Res_T, typename Store_T, typename TypedIdx_T, typename OpApply, typename LeafApply,
-			typename Acc_T = Res_T, typename ToRes_T = DefaultToRes<Res_T, TypedIdx_T>>
+			typename Finally = DefaultFinally<Res_T, TypedIdx_T>>
 		Res_T tree_fold(Store_T& store, const TypedIdx_T ref, OpApply op_apply, LeafApply leaf_apply, 
-				const Acc_T init, ToRes_T to_res = {});
+				const Res_T init, Finally finally = {});
 
 	} //namespace fold
 

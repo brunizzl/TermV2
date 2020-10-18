@@ -294,9 +294,9 @@ namespace bmath::intern::test {
 		std::cout << print::to_memory_layout(lhs_store, lhs_head) << "\n\n";
 		//std::cout << print::to_memory_layout(rhs_store, rhs_head) << "\n\n";
 
-		const auto [state, result] = find_value_match_subtree(lhs_store, lhs_head, table.value_table[0].lhs_instances[0]);
-		assert(state == SubtreeFeature::final_result);
-		std::cout << "index of lhs k = " << result.get_index() << "\n\n";
+		//const auto [state, result] = find_value_match_subtree(lhs_store, lhs_head, table.value_table[0].lhs_instances[0]);
+		//assert(state == SubtreeFeature::final_result);
+		//std::cout << "index of lhs k = " << result.get_index() << "\n\n";
 	}
 
 } //namespace bmath::intern::test

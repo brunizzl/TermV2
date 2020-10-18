@@ -284,107 +284,95 @@ namespace bmath::intern {
 		{
 			return print::to_memory_layout(this->rhs_store, this->rhs_head);
 		}
-
-		std::pair<SubtreeFeature, PnTypedIdx> find_value_match_subtree(const PnStore& store, const PnTypedIdx head, const PnTypedIdx value_match)
+		
+		PnTypedIdx find_value_match_subtree(const PnStore& store, const PnTypedIdx head, const PnTypedIdx value_match)
 		{
-			SubtreeFeature this_features = SubtreeFeature::computable;
-			PnTypedIdx this_result = PnTypedIdx();
 
-			const auto update_this_state = [&this_features, &this_result, &store, value_match](const PnTypedIdx subtree_head) {
-				const auto [subtree_features, subtree_result] = find_value_match_subtree(store, subtree_head, value_match);
-				switch (subtree_features) {
-				case SubtreeFeature::computable:
-					break;
-				case SubtreeFeature::contains_value_match:
-					if (this_features == SubtreeFeature::computable) {
-						this_features = SubtreeFeature::contains_value_match;
-						this_result = subtree_result;
+			enum class What { computable, contains_value_match, no_value_match_and_not_computable, final_result };
+			struct Res
+			{
+				PnTypedIdx result;
+				What what;
+				constexpr bool return_early() const noexcept { return this->what == What::final_result; }
+			};
+			static_assert(fold::MightReturnEarly<Res>::value);
+
+			const auto op_apply = [](const std::uint32_t, const PnType, const Res acc, const Res elem_res) -> Res {
+				switch (elem_res.what) {
+				case What::computable:
+					return acc;
+				case What::contains_value_match:
+					if (acc.what == What::computable) {
+						return { elem_res.result,  What::contains_value_match };
 					}
-					else if (this_features == SubtreeFeature::no_value_match_but_not_computable) {
-						this_features = SubtreeFeature::final_result;
-						this_result = subtree_result;
+					if (acc.what == What::no_value_match_and_not_computable) {
+						return { elem_res.result, What::final_result };
 					}
-					break;
-				case SubtreeFeature::no_value_match_but_not_computable:
-					if (this_features == SubtreeFeature::computable) {
-						this_features = SubtreeFeature::no_value_match_but_not_computable;
+					return acc;
+				case What::no_value_match_and_not_computable:
+					if (acc.what == What::computable) {
+						return elem_res;
 					}
-					else if (this_features == SubtreeFeature::contains_value_match) {
-						this_features = SubtreeFeature::final_result;
+					if (acc.what == What::contains_value_match) {
+						return { acc.result, What::final_result };
 					}
-					break;
-				case SubtreeFeature::final_result:
-					this_features = SubtreeFeature::final_result;
-					this_result = subtree_result;
+					return acc;
+				case What::final_result:
+					return elem_res;
+				default:
+					assert(false);
+					return acc;
 				}
 			};
 
-			const auto [index, type] = head.split();
-			switch (type) {
-			case PnType(Type::sum): 
-				[[fallthrough]];
-			case PnType(Type::product): {
-				for (const auto elem : vdc::range(store, index)) {
-					update_this_state(elem);
-					if (this_features == SubtreeFeature::final_result) {
-						return std::make_pair(SubtreeFeature::final_result, this_result);
+			const auto leaf_apply = [value_match](const std::uint32_t index, const PnType type) -> Res { 
+				switch (type) {
+				default: assert(false);
+					[[fallthrough]];
+				case PnType(Type::complex):
+					return { PnTypedIdx(), What::computable };
+				case PnType(PnVariable::value_match):
+					if (const auto ref = PnTypedIdx(index, type); ref == value_match) {
+						return { ref, What::contains_value_match };
+					}
+					[[fallthrough]];
+				case PnType(Type::variable):
+					[[fallthrough]];
+				case PnType(PnVariable::value_proxy):
+					[[fallthrough]];
+				case PnType(PnVariable::tree_match):
+					return { PnTypedIdx(), What::no_value_match_and_not_computable };
+				}
+			};
+
+			const auto finally = [&store](const Res acc, PnTypedIdx ref) -> Res {
+				const auto [index, type] = ref.split();
+				switch (type) {
+				default: assert(false);
+					[[fallthrough]];
+				case PnType(Type::sum):
+					[[fallthrough]];
+				case PnType(Type::product):
+					return { ref, acc.what };
+				case PnType(Type::known_function): {
+					const PnKnownFunction& function = store.at(index).known_function;
+					if (is_one_of<FnType::pow, FnType::sqrt>(function.type)) {
+						return { ref, acc.what };
+					}
+				} [[fallthrough]];
+				case PnType(Type::generic_function):
+					if (acc.what == What::contains_value_match) {
+						return { acc.result, What::final_result };
+					}
+					else {
+						return { acc.result, What::no_value_match_and_not_computable };
 					}
 				}
-				return std::make_pair(this_features, head);
-			} break;
-			case PnType(Type::known_function): {
-				const PnKnownFunction& function = store.at(index).known_function;
-				for (const auto param : fn::range(function)) {
-					update_this_state(param);
-					if (this_features == SubtreeFeature::final_result) {
-						return std::make_pair(SubtreeFeature::final_result, this_result);
-					}
-				}
-				if (is_one_of<FnType::pow, FnType::sqrt>(function.type)) { 
-					return std::make_pair(this_features, head); //only types with an inverse and a chance to be computed exactly (and make sense for real numbers) are allowed
-				}
-				else if (this_features == SubtreeFeature::contains_value_match) {
-					return std::make_pair(SubtreeFeature::final_result, this_result);
-				}
-				else {
-					return std::make_pair(SubtreeFeature::no_value_match_but_not_computable, this_result);					
-				}
-			} break;
-			case PnType(Type::generic_function): {
-				const GenericFunction& generic_function = store.at(index).generic_function;
-				for (const auto param : fn::range(store, generic_function)) {
-					update_this_state(param);
-					if (this_features == SubtreeFeature::final_result) {
-						return std::make_pair(SubtreeFeature::final_result, this_result);
-					}
-				}
-				if (this_features == SubtreeFeature::contains_value_match) {
-					return std::make_pair(SubtreeFeature::final_result, this_result);
-				}
-				else {
-					return std::make_pair(SubtreeFeature::no_value_match_but_not_computable, this_result);					
-				}
-			} break;
-			case PnType(Type::variable):
-				return std::make_pair(SubtreeFeature::no_value_match_but_not_computable, head);
-			case PnType(Type::complex): 
-				return std::make_pair(SubtreeFeature::computable, head);
-			case PnType(PnVariable::tree_match): 
-				return std::make_pair(SubtreeFeature::no_value_match_but_not_computable, head);
-			case PnType(PnVariable::value_match): 
-				if (head == value_match) {
-					return std::make_pair(SubtreeFeature::contains_value_match, head);
-				}
-				else {
-					return std::make_pair(SubtreeFeature::no_value_match_but_not_computable, head);
-				}
-			case PnType(PnVariable::value_proxy):
-				assert(false); //value_proxy may only be suberm of value_match, but value_match does no recursive call.
-				return std::make_pair(SubtreeFeature::no_value_match_but_not_computable, head);
-			default: assert(false); //if this assert hits, the switch above needs more cases.
-				return std::make_pair(SubtreeFeature::no_value_match_but_not_computable, head);
-			}
+			};
+
+			return fold::tree_fold<Res>(store, head, op_apply, leaf_apply, { PnTypedIdx(), What::computable }, finally).result;
 		} //find_value_match_subtree
+		
 
 	} //namespace pattern
 
@@ -1201,21 +1189,21 @@ namespace bmath::intern {
 			case Type_T(Type::product): {
 				for (const auto elem : vdc::range(store, index)) {
 					const Res_T elem_res = fold::simple_fold<Res_T>(store, elem, apply);
-					if constexpr (may_return_early) { if (elem_res.return_early) { return elem_res; } }
+					if constexpr (may_return_early) { if (elem_res.return_early()) { return elem_res; } }
 				}
 			} break;
 			case Type_T(Type::known_function): {
 				const BasicKnownFunction<TypedIdx_T> known_function = store.at(index).known_function; //no reference, as apply might mutate store
 				for (const auto param : fn::range(known_function)) {
 					const Res_T elem_res = fold::simple_fold<Res_T>(store, param, apply);
-					if constexpr (may_return_early) { if (elem_res.return_early) { return elem_res; } }
+					if constexpr (may_return_early) { if (elem_res.return_early()) { return elem_res; } }
 				}
 			} break;
 			case Type_T(Type::generic_function): {
 				const GenericFunction generic_function = store.at(index).generic_function;  //no reference, as apply might mutate store
 				for (const auto param : fn::range(store, generic_function)) {
 					const Res_T elem_res = fold::simple_fold<Res_T>(store, param, apply);
-					if constexpr (may_return_early) { if (elem_res.return_early) { return elem_res; } }
+					if constexpr (may_return_early) { if (elem_res.return_early()) { return elem_res; } }
 				}
 			} break;
 			case Type_T(Type::variable): 
@@ -1227,9 +1215,9 @@ namespace bmath::intern {
 			case Type_T(pattern::_value_match): if constexpr (pattern) {
 				const pattern::ValueMatchVariable var = store.at(index).value_match; //no reference, as apply might mutate store
 				const Res_T elem_res_1 = fold::simple_fold<Res_T>(store, var.match_idx, apply);
-				if constexpr (may_return_early) { if (elem_res_1.return_early) { return elem_res_1; } }
+				if constexpr (may_return_early) { if (elem_res_1.return_early()) { return elem_res_1; } }
 				const Res_T elem_res_2 = fold::simple_fold<Res_T>(store, var.copy_idx, apply);
-				if constexpr (may_return_early) { if (elem_res_2.return_early) { return elem_res_2; } }
+				if constexpr (may_return_early) { if (elem_res_2.return_early()) { return elem_res_2; } }
 			} break;
 			case Type_T(pattern::_value_proxy):
 				break;
@@ -1238,8 +1226,8 @@ namespace bmath::intern {
 			return apply(index, type); 
 		} //simple_fold
 
-		template<typename Res_T, typename Store_T, typename TypedIdx_T, typename OpApply, typename LeafApply, typename Acc_T, typename ToRes_T>
-		Res_T tree_fold(Store_T& store, const TypedIdx_T ref, OpApply op_apply, LeafApply leaf_apply, const Acc_T init, ToRes_T to_res)
+		template<typename Res_T, typename Store_T, typename TypedIdx_T, typename OpApply, typename LeafApply, typename Finally>
+		Res_T tree_fold(Store_T& store, const TypedIdx_T ref, OpApply op_apply, LeafApply leaf_apply, const Res_T init, Finally finally)
 		{
 			using Type_T = TypedIdx_T::Enum_T;
 			constexpr bool pattern = std::is_same_v<Type_T, pattern::PnType>;
@@ -1250,44 +1238,34 @@ namespace bmath::intern {
 			case Type_T(Type::sum): 
 				[[fallthrough]];
 			case Type_T(Type::product): {
-				Acc_T acc = init;
+				Res_T acc = init;
 				for (const auto elem : vdc::range(store, index)) {
-					const Res_T elem_res = fold::tree_fold<Res_T>(store, elem, op_apply, leaf_apply, init, to_res);
+					const Res_T elem_res = fold::tree_fold<Res_T>(store, elem, op_apply, leaf_apply, init, finally);
 					acc = op_apply(index, type, acc, elem_res);
-					if constexpr (may_return_early) { if (acc.return_early) { return to_res(acc, ref); } }
+					if constexpr (may_return_early) { if (acc.return_early()) { return acc; } }
 				}
-				return to_res(acc, ref);
+				return finally(acc, ref);
 			} 
 			case Type_T(Type::known_function): {
-				Acc_T acc = init;
+				Res_T acc = init;
 				const BasicKnownFunction<TypedIdx_T> known_function = store.at(index).known_function; //no reference, as apply might mutate store
 				for (const auto param : fn::range(known_function)) {
-					const Res_T param_res = fold::tree_fold<Res_T>(store, param, op_apply, leaf_apply, init, to_res);
+					const Res_T param_res = fold::tree_fold<Res_T>(store, param, op_apply, leaf_apply, init, finally);
 					acc = op_apply(index, type, acc, param_res);
-					if constexpr (may_return_early) { if (acc.return_early) { return to_res(acc, ref); } }
+					if constexpr (may_return_early) { if (acc.return_early()) { return acc; } }
 				}
-				return to_res(acc, ref);
+				return finally(acc, ref);
 			} 
 			case Type_T(Type::generic_function): {
-				Acc_T acc = init;
+				Res_T acc = init;
 				const GenericFunction generic_function = store.at(index).generic_function;  //no reference, as apply might mutate store
 				for (const auto param : fn::range(store, generic_function)) {
-					const Res_T param_res = fold::tree_fold<Res_T>(store, param, op_apply, leaf_apply, init, to_res);
+					const Res_T param_res = fold::tree_fold<Res_T>(store, param, op_apply, leaf_apply, init, finally);
 					acc = op_apply(index, type, acc, param_res);
-					if constexpr (may_return_early) { if (acc.return_early) { return to_res(acc, ref); } }
+					if constexpr (may_return_early) { if (acc.return_early()) { return acc; } }
 				}
-				return to_res(acc, ref);
+				return finally(acc, ref);
 			} 
-			case Type_T(pattern::_value_match): if constexpr (pattern) {
-				Acc_T acc = init;
-				const pattern::ValueMatchVariable var = store.at(index).value_match; //no reference, as apply might mutate store
-				const Res_T elem_res_1 = fold::tree_fold<Res_T>(store, var.match_idx, op_apply, leaf_apply, init, to_res);
-				acc = op_apply(index, type, acc, elem_res_1);
-				if constexpr (may_return_early) { if (acc.return_early) { return to_res(acc, ref); } }
-				const Res_T elem_res_2 = fold::tree_fold<Res_T>(store, var.copy_idx, op_apply, leaf_apply, init, to_res);
-				acc = op_apply(index, type, acc, elem_res_2);
-				return to_res(acc, ref);
-			} [[fallthrough]];
 			default:
 				assert(false); //if this assert hits, the switch above needs more cases. 
 				[[fallthrough]];
@@ -1296,6 +1274,8 @@ namespace bmath::intern {
 			case Type_T(Type::complex): 
 				[[fallthrough]];
 			case Type_T(pattern::_tree_match): 
+				[[fallthrough]];
+			case Type_T(pattern::_value_match): //sees value_match as leaf :o
 				[[fallthrough]];
 			case Type_T(pattern::_value_proxy):
 				return leaf_apply(index, type);
