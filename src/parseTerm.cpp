@@ -11,13 +11,6 @@ namespace bmath::intern {
 	/////////////////////////////////////////////////////////////////////local definitions//////////////////////////////////////////////////////////////////////////////////
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	template<const auto x, const auto... xs, typename T>
-	constexpr bool is_one_of(const T y) 
-	{ 
-		if constexpr (!sizeof...(xs)) { return y == x; }
-		else                          { return y == x || is_one_of<xs...>(y); }
-	}	
-
 	constexpr bool is_number_literal(const Token t) { return is_one_of<token::number, token::imag_unit>(t); }
 	constexpr bool is_literal(const Token t) { return is_one_of<token::character, token::number, token::imag_unit>(t); }
 	constexpr bool is_operator(const Token t) { return is_one_of<token::sum, token::product, token::hat>(t); }

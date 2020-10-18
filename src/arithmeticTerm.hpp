@@ -290,6 +290,11 @@ namespace bmath::intern {
 			std::string rhs_memory_layout() const;
 		};
 
+		enum class SubtreeFeature { computable, contains_value_match, no_value_match_but_not_computable, final_result };
+
+		std::pair<SubtreeFeature, PnTypedIdx> find_value_match_subtree(const PnStore& store, 
+			const PnTypedIdx head, const PnTypedIdx value_match);
+
 	} //namespace pattern
 
 	//utility for both KnownFunction and GenericFunction
@@ -424,6 +429,12 @@ namespace bmath::intern {
 		//returns TypedIdx() if unsuccsessfull
 		TypedIdx search_variable(const Store& store, const TypedIdx head, std::string_view name);
 
+		//the parent node of "from" changes "from" to "to"
+		//no one does freeing or allocation. (meaning from continues to live in store, but now no longer owned by old parent)
+		//returns if change was succsessfull
+		template<typename Store_T, typename TypedIdx_T>
+		bool change_subtree(Store_T& store, const TypedIdx_T ref, const TypedIdx_T from, const TypedIdx_T to);
+
 	} //namespace tree
 
 	namespace fold {
@@ -470,16 +481,25 @@ namespace bmath::intern {
 		};
 		using Void = NoCut<void>;
 
-		//preorder calls apply on recursive noed bevor doing the recursive calls, postorder after doing all recursive calls
-		//inorder calls apply on recursive node after every recursive call.
-		enum class Order { preorder, postorder, inorder };
+		//calls apply with every node (postorder), parameters are (index, type), apply is assumed to return Res_T
+		//assumes Res_T to have static constexpr bool might_cut defined, 		
+		//it only really makes sense to use Bool or Void as Res_T
+		template<typename Res_T, typename Store_T, typename TypedIdx_T, typename Apply>
+		Res_T simple_fold(Store_T& store, const TypedIdx_T ref, Apply apply);
 
-		//calls apply with every node, parameters are (typed_idx, acc), apply is assumed to return Res_T
-		//assumes Res_T to have static constexpr bool might_cut defined, 
-		//  if true, assumes Res_T to have nonstatic bool member done indicating when to return early
-		//  if true, enables fold to return a result early without computing every branch
-		template<Order order = Order::preorder, typename Res_T, typename Store_T, typename TypedIdx_T, typename Apply>
-		Res_T tree_fold(Store_T& store, const TypedIdx_T ref, Apply apply, Res_T init = {});
+		template<typename Res_T, typename TypedIdx_T>
+		struct DefaultLeafApply { Res_T operator()(TypedIdx_T ref) const noexcept { return {}; } };
+
+		//this fold differentiates between recursive nodes (operations and ValueMatchVariable) and Leafes (values and variables)
+		//op_apply is called directly after each recursive call with parameters (index, type, acc, elem_res) and returns Res_T
+		//  (with elem_res beeing the result of the recursive call.) 
+		//  acc is initialized for every recursive node on its own as init.
+		//leaf_apply has parameters (index, type) and also returns Res_T.
+		//Res_T is assumed to have static constexpr bool might_cut defined with if true, 
+		//  assumes Res_T to have nonstatic bool member done indicating when to return early
+		template<typename Res_T, typename Store_T, typename TypedIdx_T, typename OpApply, 
+			typename LeafApply = DefaultLeafApply<Res_T, TypedIdx_T>>
+		Res_T tree_fold(Store_T& store, const TypedIdx_T ref, OpApply op_apply, LeafApply leaf_apply = {}, const Res_T init = {});
 
 	} //namespace fold
 

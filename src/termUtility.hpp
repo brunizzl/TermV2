@@ -27,6 +27,15 @@ namespace bmath::intern {
 		}
 	}
 
+
+	template<const auto x, const auto... xs, typename T>
+	constexpr bool is_one_of(const T y) 
+	{ 
+		static_assert(sizeof(T) <= 8, "this function copies the values, ya dummie!"); //although i assume this to be inlined.
+		if constexpr (!sizeof...(xs)) { return y == x; }
+		else                          { return y == x || is_one_of<xs...>(y); }
+	}	
+
 	template <typename Fst_T, typename Snd_T, std::size_t Size>
 	[[nodiscard]] constexpr Snd_T find_snd(
 		const std::array<std::pair<Fst_T, Snd_T>, Size>& data, const Fst_T key) noexcept

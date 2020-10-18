@@ -258,4 +258,45 @@ namespace bmath::intern::test {
 		std::cout << print::to_memory_layout(*store, head_2) << "\n";
 	}
 
+	void find_value_match_subtree()
+	{
+		using namespace pattern;
+		std::string s = "a :any, k :int | a^(2 k+1) = a a^(2 k)";
+
+		auto parse_string = ParseString(s);
+		parse_string.allow_implicit_product();
+		parse_string.remove_space();
+		const auto parts = split(parse_string);
+		NameLookupTable table = parse_declarations(parts.declarations);
+		throw_if(table.tree_table.size() > MatchData::max_tree_match_count, "too many tree match variables declared");
+		throw_if(table.value_table.size() > MatchData::max_value_match_count, "too many value match variables declared");
+		PatternBuildFunction build_function = { table };
+
+		PnStore lhs_store;
+		PnTypedIdx lhs_head = build_function(lhs_store, parts.lhs);
+		table.build_lhs = false;
+		PnStore rhs_store;
+		PnTypedIdx rhs_head = build_function(rhs_store, parts.rhs);
+
+		tree::combine_layers(lhs_store, lhs_head);
+		tree::combine_layers(rhs_store, rhs_head);
+		if (const Complex lhs_val = tree::combine_values_exact(lhs_store, lhs_head); tree::is_valid(lhs_val)) {
+			tree::free(lhs_store, lhs_head);
+			lhs_head = PnTypedIdx(lhs_store.insert(lhs_val), Type::complex);
+		}
+		if (const Complex rhs_val = tree::combine_values_exact(rhs_store, rhs_head); tree::is_valid(rhs_val)) {
+			tree::free(rhs_store, rhs_head);
+			rhs_head = PnTypedIdx(rhs_store.insert(rhs_val), Type::complex);
+		}
+		tree::sort(lhs_store, lhs_head);
+		tree::sort(rhs_store, rhs_head);
+
+		std::cout << print::to_memory_layout(lhs_store, lhs_head) << "\n\n";
+		//std::cout << print::to_memory_layout(rhs_store, rhs_head) << "\n\n";
+
+		const auto [state, result] = find_value_match_subtree(lhs_store, lhs_head, table.value_table[0].lhs_instances[0]);
+		assert(state == SubtreeFeature::final_result);
+		std::cout << "index of lhs k = " << result.get_index() << "\n\n";
+	}
+
 } //namespace bmath::intern::test
