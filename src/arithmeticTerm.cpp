@@ -892,11 +892,10 @@ namespace bmath::intern {
 		template<typename Store_T, typename TypedIdx_T>
 		std::size_t count(Store_T& store, const TypedIdx_T ref)
 		{
-			using Res = fold::NoCut<std::size_t>;		
-			return *fold::tree_fold<Res>(store, ref,
-				[](const auto, const auto, const Res acc, const Res elem_res) { return Res{ *acc + *elem_res };  },
-				[](const auto, const auto) { return Res{ 1u }; },
-				Res{ 1u });
+			return fold::tree_fold<std::size_t>(store, ref,
+				[](const auto, const auto, const std::size_t acc, const std::size_t elem_res) { return acc + elem_res;  },
+				[](const auto, const auto) { return std::size_t(1u); },
+				std::size_t(1u));
 		} //count
 		template std::size_t count<Store, TypedIdx>(Store& store, const TypedIdx ref);
 
@@ -1084,36 +1083,34 @@ namespace bmath::intern {
 		template<typename Store_T, typename TypedIdx_T>
 		bool contains(const Store_T& store, const TypedIdx_T ref, const TypedIdx_T to_contain)
 		{
-			return fold::simple_fold<fold::Bool>(store, ref, 
-				[to_contain](const std::uint32_t index, const auto type) { return fold::Bool { TypedIdx_T(index, type) == to_contain }; });
+			return fold::simple_fold<bool>(store, ref, 
+				[to_contain](const std::uint32_t index, const auto type) { return TypedIdx_T(index, type) == to_contain; });
 		} //contains
 
 		bool contains_variables(const Store& store, const TypedIdx ref)
 		{
-			return fold::simple_fold<fold::Bool>(store, ref, 
-				[](const auto, const Type type) { return fold::Bool{ type == Type::variable }; });
+			return fold::simple_fold<bool>(store, ref, [](const auto, const Type type) { return type == Type::variable; });
 		} //contains_variables
 
 		bool contains_variables(const pattern::PnStore& store, const pattern::PnTypedIdx ref)
 		{
 			using namespace pattern;
 			const auto test_for_variables = [](const auto, const PnType type) {
-				return fold::Bool{ type == Type::variable || type.is<PnVariable>() };
+				return type == Type::variable || type.is<PnVariable>();
 			};
-			return fold::simple_fold<fold::Bool>(store, ref, test_for_variables);
+			return fold::simple_fold<bool>(store, ref, test_for_variables);
 		} //contains_variables
 
 		TypedIdx search_variable(const Store& store, const TypedIdx head, std::string_view name)
 		{
-			using Res = fold::MightCut<TypedIdx>;
-
-			const auto test_for_name = [name, &store](const std::uint32_t index, const Type type) {
-				return (type == Type::variable && string_compare(store, index, name) == std::strong_ordering::equal) ?
-					Res{ TypedIdx(index, type), true } : //cut tree evaluation here -> second parameter is true
-					Res{ TypedIdx(),           false };
+			using Res = std::optional<TypedIdx>;
+			const auto test_for_name = [name, &store](const std::uint32_t index, const Type type) -> Res {
+				if (type == Type::variable && string_compare(store, index, name) == std::strong_ordering::equal) 					{
+					return TypedIdx(index, type); //name was found -> cut tree evaluation here
+				}
+				return {};
 			};
-
-			return *fold::simple_fold<Res>(store, head, test_for_name);
+			return fold::simple_fold<Res>(store, head, test_for_name).value();
 		} //search_variable
 
 		template<typename Store_T, typename TypedIdx_T>
@@ -1136,6 +1133,7 @@ namespace bmath::intern {
 		{
 			using Type_T = TypedIdx_T::Enum_T;
 			constexpr bool pattern = std::is_same_v<Type_T, pattern::PnType>;
+			constexpr bool may_return_early = std::is_convertible_v<Res_T, bool>;
 
 			const auto [index, type] = ref.split();
 
@@ -1145,21 +1143,21 @@ namespace bmath::intern {
 			case Type_T(Type::product): {
 				for (const auto elem : vdc::range(store, index)) {
 					const Res_T elem_res = fold::simple_fold<Res_T>(store, elem, apply);
-					if constexpr (Res_T::might_cut) { if (elem_res.done) { return elem_res; } }
+					if constexpr (may_return_early) { if (elem_res) { return elem_res; } }
 				}
 			} break;
 			case Type_T(Type::known_function): {
 				const BasicKnownFunction<TypedIdx_T> known_function = store.at(index).known_function; //no reference, as apply might mutate store
 				for (const auto param : fn::range(known_function)) {
 					const Res_T elem_res = fold::simple_fold<Res_T>(store, param, apply);
-					if constexpr (Res_T::might_cut) { if (elem_res.done) { return elem_res; } }
+					if constexpr (may_return_early) { if (elem_res) { return elem_res; } }
 				}
 			} break;
 			case Type_T(Type::generic_function): {
 				const GenericFunction generic_function = store.at(index).generic_function;  //no reference, as apply might mutate store
 				for (const auto param : fn::range(store, generic_function)) {
 					const Res_T elem_res = fold::simple_fold<Res_T>(store, param, apply);
-					if constexpr (Res_T::might_cut) { if (elem_res.done) { return elem_res; } }
+					if constexpr (may_return_early) { if (elem_res) { return elem_res; } }
 				}
 			} break;
 			case Type_T(Type::variable): 
@@ -1171,9 +1169,9 @@ namespace bmath::intern {
 			case Type_T(pattern::_value_match): if constexpr (pattern) {
 				const pattern::ValueMatchVariable var = store.at(index).value_match; //no reference, as apply might mutate store
 				const Res_T elem_res_1 = fold::simple_fold<Res_T>(store, var.match_idx, apply);
-				if constexpr (Res_T::might_cut) { if (elem_res_1.done) { return elem_res_1; } }
+				if constexpr (may_return_early) { if (elem_res_1) { return elem_res_1; } }
 				const Res_T elem_res_2 = fold::simple_fold<Res_T>(store, var.copy_idx, apply);
-				if constexpr (Res_T::might_cut) { if (elem_res_2.done) { return elem_res_2; } }
+				if constexpr (may_return_early) { if (elem_res_2) { return elem_res_2; } }
 			} break;
 			case Type_T(pattern::_value_proxy):
 				break;
@@ -1187,6 +1185,7 @@ namespace bmath::intern {
 		{
 			using Type_T = TypedIdx_T::Enum_T;
 			constexpr bool pattern = std::is_same_v<Type_T, pattern::PnType>;
+			constexpr bool may_return_early = std::is_convertible_v<Res_T, bool>;
 
 			const auto [index, type] = ref.split();
 			switch (type) {
@@ -1197,7 +1196,7 @@ namespace bmath::intern {
 				for (const auto elem : vdc::range(store, index)) {
 					const Res_T elem_res = fold::tree_fold(store, elem, op_apply, leaf_apply, init);
 					acc = op_apply(index, type, acc, elem_res);
-					if constexpr (Res_T::might_cut) { if (acc.done) { return acc; } }
+					if constexpr (may_return_early) { if (acc) { return acc; } }
 				}
 				return acc;
 			} 
@@ -1207,7 +1206,7 @@ namespace bmath::intern {
 				for (const auto param : fn::range(known_function)) {
 					const Res_T param_res = fold::tree_fold(store, param, op_apply, leaf_apply, init);
 					acc = op_apply(index, type, acc, param_res);
-					if constexpr (Res_T::might_cut) { if (acc.done) { return acc; } }
+					if constexpr (may_return_early) { if (acc) { return acc; } }
 				}
 				return acc;
 			} 
@@ -1217,29 +1216,30 @@ namespace bmath::intern {
 				for (const auto param : fn::range(store, generic_function)) {
 					const Res_T param_res = fold::tree_fold(store, param, op_apply, leaf_apply, init);
 					acc = op_apply(index, type, acc, param_res);
-					if constexpr (Res_T::might_cut) { if (acc.done) { return acc; } }
+					if constexpr (may_return_early) { if (acc) { return acc; } }
 				}
 				return acc;
 			} 
-			case Type_T(Type::variable): 
-				return leaf_apply(index, type);
-			case Type_T(Type::complex): 
-				return leaf_apply(index, type);
-			case Type_T(pattern::_tree_match): 
-				return leaf_apply(index, type);
 			case Type_T(pattern::_value_match): if constexpr (pattern) {
 				Res_T acc = init;
 				const pattern::ValueMatchVariable var = store.at(index).value_match; //no reference, as apply might mutate store
-				const Res_T elem_res = fold::tree_fold(store, elem, op_apply, leaf_apply, init);
-				acc = op_apply(index, type, acc, elem_res);
-				if constexpr (Res_T::might_cut) { if (acc.done) { return acc; } }
-				const Res_T elem_res = fold::tree_fold(store, elem, op_apply, leaf_apply, init);
-				return op_apply(index, type, acc, elem_res);
-			} assert(false); return init;
+				const Res_T elem_res_1 = fold::tree_fold(store, var.match_idx, op_apply, leaf_apply, init);
+				acc = op_apply(index, type, acc, elem_res_1);
+				if constexpr (may_return_early) { if (acc) { return acc; } }
+				const Res_T elem_res_2 = fold::tree_fold(store, var.copy_idx, op_apply, leaf_apply, init);
+				return op_apply(index, type, acc, elem_res_2);
+			} [[fallthrough]];
+			default:
+				assert(false); //if this assert hits, the switch above needs more cases. 
+				[[fallthrough]];
+			case Type_T(Type::variable): 
+				[[fallthrough]];
+			case Type_T(Type::complex): 
+				[[fallthrough]];
+			case Type_T(pattern::_tree_match): 
+				[[fallthrough]];
 			case Type_T(pattern::_value_proxy):
 				return leaf_apply(index, type);
-			default: assert(false); //if this assert hits, the switch above needs more cases.
-				return init;
 			}
 		} //tree_fold
 

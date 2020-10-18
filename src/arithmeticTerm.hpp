@@ -383,7 +383,7 @@ namespace bmath::intern {
 		[[nodiscard]] std::optional<Complex> combine_values_inexact(Store& store, const TypedIdx ref);
 
 		//if evaluation of subtree was inexact / impossible, returns Complex(NAN, undefined), else returns result.
-		//the subtree starting at ref still remains. if deletion is desired, this has to be done by the caller.
+		//the subtree starting at ref still remains. if deletion is desired, this has to be return_early by the caller.
 		template<typename Store_T, typename TypedIdx_T>
 		[[nodiscard]] Complex combine_values_exact(Store_T& store, const TypedIdx_T ref);
 
@@ -442,64 +442,33 @@ namespace bmath::intern {
 		template<typename Wrapped_T>
 		struct MightCut //might cut fold early, as result is already known then (also known as shortcircuit)
 		{
-			static constexpr bool might_cut = true;
-
 			Wrapped_T value;
-			bool done = false;
+			bool return_early = false;
 
 			constexpr Wrapped_T& operator*() noexcept { return this->value; }
 			constexpr const Wrapped_T& operator*() const noexcept { return this->value; }
+			constexpr operator bool() const noexcept { return this->return_early; }
 		};
 
-		template<>
-		struct MightCut<void>
-		{
-			static constexpr bool might_cut = true;
+		template<typename Wrapped_T> constexpr MightCut<Wrapped_T> done(const Wrapped_T w) { return { w, true  }; }
+		template<typename Wrapped_T> constexpr MightCut<Wrapped_T> more(const Wrapped_T w) { return { w, false }; }
 
-			bool done = false;
-
-			constexpr operator bool() const noexcept { return this->done; }
-			constexpr MightCut(bool init) :done(init) {}
-			constexpr MightCut() = default;
-		};
-		using Bool = MightCut<void>;
-
-		template<typename Wrapped_T> 
-		struct NoCut //will always evaluate every branch of fold 
-		{
-			static constexpr bool might_cut = false;
-
-			Wrapped_T value;
-
-			constexpr Wrapped_T& operator*() noexcept { return this->value; }
-			constexpr const Wrapped_T& operator*() const noexcept { return this->value; }
-		};
-
-		template<> struct NoCut<void> 
-		{ 
-			static constexpr bool might_cut = false; 
-		};
-		using Void = NoCut<void>;
+		struct Void {};
 
 		//calls apply with every node (postorder), parameters are (index, type), apply is assumed to return Res_T
-		//assumes Res_T to have static constexpr bool might_cut defined, 		
-		//it only really makes sense to use Bool or Void as Res_T
+		//assumes Res_T to have static constexpr bool might_cut defined, 
+		//Res_T might be convertibke to bool, to indicate if the fold may be stopped early, as the result is already known
 		template<typename Res_T, typename Store_T, typename TypedIdx_T, typename Apply>
 		Res_T simple_fold(Store_T& store, const TypedIdx_T ref, Apply apply);
-
-		template<typename Res_T, typename TypedIdx_T>
-		struct DefaultLeafApply { Res_T operator()(TypedIdx_T ref) const noexcept { return {}; } };
 
 		//this fold differentiates between recursive nodes (operations and ValueMatchVariable) and Leafes (values and variables)
 		//op_apply is called directly after each recursive call with parameters (index, type, acc, elem_res) and returns Res_T
 		//  (with elem_res beeing the result of the recursive call.) 
 		//  acc is initialized for every recursive node on its own as init.
-		//leaf_apply has parameters (index, type) and also returns Res_T.
-		//Res_T is assumed to have static constexpr bool might_cut defined with if true, 
-		//  assumes Res_T to have nonstatic bool member done indicating when to return early
-		template<typename Res_T, typename Store_T, typename TypedIdx_T, typename OpApply, 
-			typename LeafApply = DefaultLeafApply<Res_T, TypedIdx_T>>
-		Res_T tree_fold(Store_T& store, const TypedIdx_T ref, OpApply op_apply, LeafApply leaf_apply = {}, const Res_T init = {});
+		//leaf_apply has parameters (index, type) and returns Res_T.		
+		//Res_T might be convertibke to bool, to indicate if the fold may be stopped early, as the result is already known
+		template<typename Res_T, typename Store_T, typename TypedIdx_T, typename OpApply, typename LeafApply>
+		Res_T tree_fold(Store_T& store, const TypedIdx_T ref, OpApply op_apply, LeafApply leaf_apply, const Res_T init);
 
 	} //namespace fold
 
