@@ -1115,12 +1115,71 @@ namespace bmath::intern {
 		template<typename Store_T, typename TypedIdx_T>
 		bool change_subtree(Store_T& store, const TypedIdx_T ref, const TypedIdx_T from, const TypedIdx_T to)
 		{
-			using namespace fold;
-			
-			const auto change_elem = [from, to](const TypedIdx_T elem, Bool) -> Bool {
-				if ()
+			using Type_T = TypedIdx_T::Enum_T;
+			using TypedIdxSLC_T = TermSLC<std::uint32_t, TypedIdx_T, 3>;
+			constexpr bool pattern = std::is_same_v<Type_T, pattern::PnType>;
+
+			const auto [index, type] = ref.split();
+			switch (type) {
+			case Type_T(Type::sum): 
+				[[fallthrough]];
+			case Type_T(Type::product): {
+				for (auto& elem : vdc::range(store, index)) {
+					if (elem == from) {
+						elem = to;
+						return true;
+					}
+					else if (tree::change_subtree(store, elem, from, to)) {
+						return true;
+					}
+				}
+			} break;
+			case Type_T(Type::generic_function): {
+				const GenericFunction& generic_function = store.at(index).generic_function;
+				for (auto& param : fn::range(store, generic_function)) {
+					if (param == from) {
+						param = to;
+						return true;
+					}
+					else if (tree::change_subtree(store, param, from, to)) {
+						return true;
+					}
+				}
+			} break;
+			case Type_T(Type::known_function): {
+				const BasicKnownFunction<TypedIdx_T>& known_function = store.at(index).known_function;
+				for (const auto param : fn::range(known_function)) {
+					if (param == from) {
+						param = to;
+						return true;
+					}
+					else if (tree::change_subtree(store, param, from, to)) {
+						return true;
+					}
+				}
+			} break;
+			case Type_T(Type::variable): 
+				break;
+			case Type_T(Type::complex): 
+				break;
+			case Type_T(pattern::_tree_match): 
+				break;
+			case Type_T(pattern::_value_match): if constexpr (pattern) {
+				pattern::ValueMatchVariable& var = store.at(index).value_match;
+				if (var.match_idx == from) {
+					var.match_idx = to; 
+					return true;
+				}
+				if (var.copy_idx == from) {
+					var.copy_idx = to;
+					return true;
+				}
+			} break;
+			case Type_T(pattern::_value_proxy):
+				break;
+			default: assert(false); //if this assert hits, the switch above needs more cases.
 			}
-			
+			return false;
 		} //change_subtree
 
 	} //namespace tree
@@ -1179,8 +1238,8 @@ namespace bmath::intern {
 			return apply(index, type); 
 		} //simple_fold
 
-		template<typename Res_T, typename Store_T, typename TypedIdx_T, typename OpApply, typename LeafApply>
-		Res_T tree_fold(Store_T& store, const TypedIdx_T ref, OpApply op_apply, LeafApply leaf_apply, const Res_T init)
+		template<typename Res_T, typename Store_T, typename TypedIdx_T, typename OpApply, typename LeafApply, typename Acc_T, typename ToRes_T>
+		Res_T tree_fold(Store_T& store, const TypedIdx_T ref, OpApply op_apply, LeafApply leaf_apply, const Acc_T init, ToRes_T to_res)
 		{
 			using Type_T = TypedIdx_T::Enum_T;
 			constexpr bool pattern = std::is_same_v<Type_T, pattern::PnType>;
@@ -1191,42 +1250,43 @@ namespace bmath::intern {
 			case Type_T(Type::sum): 
 				[[fallthrough]];
 			case Type_T(Type::product): {
-				Res_T acc = init;
+				Acc_T acc = init;
 				for (const auto elem : vdc::range(store, index)) {
-					const Res_T elem_res = fold::tree_fold(store, elem, op_apply, leaf_apply, init);
+					const Res_T elem_res = fold::tree_fold<Res_T>(store, elem, op_apply, leaf_apply, init, to_res);
 					acc = op_apply(index, type, acc, elem_res);
-					if constexpr (may_return_early) { if (acc.return_early) { return acc; } }
+					if constexpr (may_return_early) { if (acc.return_early) { return to_res(acc, ref); } }
 				}
-				return acc;
+				return to_res(acc, ref);
 			} 
 			case Type_T(Type::known_function): {
-				Res_T acc = init;
+				Acc_T acc = init;
 				const BasicKnownFunction<TypedIdx_T> known_function = store.at(index).known_function; //no reference, as apply might mutate store
 				for (const auto param : fn::range(known_function)) {
-					const Res_T param_res = fold::tree_fold(store, param, op_apply, leaf_apply, init);
+					const Res_T param_res = fold::tree_fold<Res_T>(store, param, op_apply, leaf_apply, init, to_res);
 					acc = op_apply(index, type, acc, param_res);
-					if constexpr (may_return_early) { if (acc.return_early) { return acc; } }
+					if constexpr (may_return_early) { if (acc.return_early) { return to_res(acc, ref); } }
 				}
-				return acc;
+				return to_res(acc, ref);
 			} 
 			case Type_T(Type::generic_function): {
-				Res_T acc = init;
+				Acc_T acc = init;
 				const GenericFunction generic_function = store.at(index).generic_function;  //no reference, as apply might mutate store
 				for (const auto param : fn::range(store, generic_function)) {
-					const Res_T param_res = fold::tree_fold(store, param, op_apply, leaf_apply, init);
+					const Res_T param_res = fold::tree_fold<Res_T>(store, param, op_apply, leaf_apply, init, to_res);
 					acc = op_apply(index, type, acc, param_res);
-					if constexpr (may_return_early) { if (acc.return_early) { return acc; } }
+					if constexpr (may_return_early) { if (acc.return_early) { return to_res(acc, ref); } }
 				}
-				return acc;
+				return to_res(acc, ref);
 			} 
 			case Type_T(pattern::_value_match): if constexpr (pattern) {
-				Res_T acc = init;
+				Acc_T acc = init;
 				const pattern::ValueMatchVariable var = store.at(index).value_match; //no reference, as apply might mutate store
-				const Res_T elem_res_1 = fold::tree_fold(store, var.match_idx, op_apply, leaf_apply, init);
+				const Res_T elem_res_1 = fold::tree_fold<Res_T>(store, var.match_idx, op_apply, leaf_apply, init, to_res);
 				acc = op_apply(index, type, acc, elem_res_1);
-				if constexpr (may_return_early) { if (acc.return_early) { return acc; } }
-				const Res_T elem_res_2 = fold::tree_fold(store, var.copy_idx, op_apply, leaf_apply, init);
-				return op_apply(index, type, acc, elem_res_2);
+				if constexpr (may_return_early) { if (acc.return_early) { return to_res(acc, ref); } }
+				const Res_T elem_res_2 = fold::tree_fold<Res_T>(store, var.copy_idx, op_apply, leaf_apply, init, to_res);
+				acc = op_apply(index, type, acc, elem_res_2);
+				return to_res(acc, ref);
 			} [[fallthrough]];
 			default:
 				assert(false); //if this assert hits, the switch above needs more cases. 

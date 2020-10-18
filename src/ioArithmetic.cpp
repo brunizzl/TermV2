@@ -723,7 +723,6 @@ namespace bmath::intern {
 			case Type_T(pattern::_value_match): if constexpr (pattern) {
 				const pattern::ValueMatchVariable& var = store.at(index).value_match;
 				str.push_back('{');
-				str.push_back(':');
 				str.append(name_of(var.form));
 				str.append(", ");
 				print::append_to_string(store, var.match_idx, str);

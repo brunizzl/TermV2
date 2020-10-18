@@ -126,8 +126,8 @@ namespace bmath::intern {
 
 		enum class PnVariable 
 		{ 
-			tree_match, 
 			value_match,
+			tree_match, 
 			value_proxy, //not actual node in tree, just "end" indicator
 			COUNT 
 		};
@@ -408,11 +408,7 @@ namespace bmath::intern {
 		[[nodiscard]] DstTypedIdx_T copy(const SrcStore_T& src_store, DstStore_T& dst_store, const SrcTypedIdx_T src_ref);
 
 		template<typename TypedIdx_T>
-		struct Equation
-		{
-			TypedIdx_T lhs_head;
-			TypedIdx_T rhs_head;
-		};
+		struct Equation { TypedIdx_T lhs_head; TypedIdx_T rhs_head; };
 
 		//reorders lhs and rhs until to_isolate is lhs_head, 
 		//(possible other subtrees identical to to_isolate are not considered, thus the name prefix)
@@ -448,7 +444,6 @@ namespace bmath::intern {
 			constexpr Wrapped_T& operator*() noexcept { return this->value; }
 			constexpr const Wrapped_T& operator*() const noexcept { return this->value; }
 		};
-
 		template<typename Wrapped_T> constexpr MightCut<Wrapped_T> done(const Wrapped_T w) { return { w, true  }; }
 		template<typename Wrapped_T> constexpr MightCut<Wrapped_T> more(const Wrapped_T w) { return { w, false }; }
 		
@@ -473,18 +468,23 @@ namespace bmath::intern {
 
 		//calls apply with every node (postorder), parameters are (index, type), apply is assumed to return Res_T
 		//assumes Res_T to have static constexpr bool might_cut defined, 
-		//Res_T might have nonstatic member return early, to indicate if the fold may be stopped early, as the result is already known
+		//Res_T might have nonstatic member return_early, to indicate if the fold may be stopped early, as the result is already known
 		template<typename Res_T, typename Store_T, typename TypedIdx_T, typename Apply>
 		Res_T simple_fold(Store_T& store, const TypedIdx_T ref, Apply apply);
+
+		template<typename Res_T, typename TypedIdx_T>
+		struct DefaultToRes { constexpr Res_T operator()(Res_T r, TypedIdx_T) const noexcept { return r; } };
 
 		//this fold differentiates between recursive nodes (operations and ValueMatchVariable) and Leafes (values and variables)
 		//op_apply is called directly after each recursive call with parameters (index, type, acc, elem_res) and returns Res_T
 		//  (with elem_res beeing the result of the recursive call.) 
 		//  acc is initialized for every recursive node on its own as init.
 		//leaf_apply has parameters (index, type) and returns Res_T.		
-		//Res_T might have nonstatic member return early, to indicate if the fold may be stopped early, as the result is already known
-		template<typename Res_T, typename Store_T, typename TypedIdx_T, typename OpApply, typename LeafApply>
-		Res_T tree_fold(Store_T& store, const TypedIdx_T ref, OpApply op_apply, LeafApply leaf_apply, const Res_T init);
+		//Acc_T might have nonstatic member return_early, to indicate if the fold may be stopped early, as the result is already known
+		template<typename Res_T, typename Store_T, typename TypedIdx_T, typename OpApply, typename LeafApply,
+			typename Acc_T = Res_T, typename ToRes_T = DefaultToRes<Res_T, TypedIdx_T>>
+		Res_T tree_fold(Store_T& store, const TypedIdx_T ref, OpApply op_apply, LeafApply leaf_apply, 
+				const Acc_T init, ToRes_T to_res = {});
 
 	} //namespace fold
 
