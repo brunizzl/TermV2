@@ -230,10 +230,10 @@ namespace bmath::intern::test {
 			tree::stupid_solve_for(store, eq, a_idx);
 			tree::combine_layers(store, eq.rhs_head);
 			{
-				const Complex new_rhs = tree::combine_values_exact(store, eq.rhs_head);
-				if (tree::is_valid(new_rhs)) {
+				const OptComplex new_rhs = tree::combine_values_exact(store, eq.rhs_head);
+				if (new_rhs) {
 					tree::free(store, eq.rhs_head);
-					eq.rhs_head = TypedIdx(store.insert(new_rhs), Type::complex);
+					eq.rhs_head = TypedIdx(store.insert(*new_rhs), Type::complex);
 				}
 			}
 
@@ -283,13 +283,13 @@ namespace bmath::intern::test {
 
 		tree::combine_layers(lhs_store, lhs_head);
 		tree::combine_layers(rhs_store, rhs_head);
-		if (const Complex lhs_val = tree::combine_values_exact(lhs_store, lhs_head); tree::is_valid(lhs_val)) {
+		if (const OptComplex lhs_val = tree::combine_values_exact(lhs_store, lhs_head)) {
 			tree::free(lhs_store, lhs_head);
-			lhs_head = PnTypedIdx(lhs_store.insert(lhs_val), Type::complex);
+			lhs_head = PnTypedIdx(lhs_store.insert(*lhs_val), Type::complex);
 		}
-		if (const Complex rhs_val = tree::combine_values_exact(rhs_store, rhs_head); tree::is_valid(rhs_val)) {
+		if (const OptComplex rhs_val = tree::combine_values_exact(rhs_store, rhs_head)) {
 			tree::free(rhs_store, rhs_head);
-			rhs_head = PnTypedIdx(rhs_store.insert(rhs_val), Type::complex);
+			rhs_head = PnTypedIdx(rhs_store.insert(*rhs_val), Type::complex);
 		}
 		tree::sort(lhs_store, lhs_head);
 		tree::sort(rhs_store, rhs_head);

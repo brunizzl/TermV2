@@ -752,7 +752,7 @@ namespace bmath::intern {
 			const auto [index, type] = ref.split();
 			bool need_parentheses = infixr(type) <= parent_infixr;
 
-			const auto get_negative_real = [&store](const TypedIdx ref) ->std::optional<double> {
+			const auto get_negative_real = [&store](const TypedIdx ref) ->OptDouble {
 				const auto [index, type] = ref.split();
 				if (type == Type::complex) {
 					const Complex& complex = store.at(index).complex;
@@ -770,7 +770,7 @@ namespace bmath::intern {
 					const KnownFunction& function = store.at(index).known_function;
 					if (function.type == FnType::pow) {
 						if (const auto expo = get_negative_real(function.params[1])) {
-							if (expo == -1.0) {
+							if (*expo == -1.0) {
 								return { function.params[0] };
 							}
 						}

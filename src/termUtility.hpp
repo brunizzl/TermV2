@@ -2,13 +2,13 @@
 
 #include <exception>
 #include <algorithm>
-#include <numeric>
 #include <cassert>
 #include <array>
 #include <vector>
 #include <span>
 #include <type_traits>
 #include <bit>
+#include <complex>
 
 namespace bmath::intern {
 
@@ -444,5 +444,66 @@ namespace bmath::intern {
 			return Bits;
 		}
 	}; //class BitSet
+
+
+	//can be used like std::optional<double>, but with extra double functionality
+	struct OptDouble
+	{
+		static_assert(std::numeric_limits<double>::has_quiet_NaN);
+		static constexpr double no_value = std::numeric_limits<double>::quiet_NaN();
+
+		double val = no_value;
+
+		constexpr OptDouble(const double new_val) :val(new_val) {}
+		constexpr OptDouble() = default;
+
+		bool has_value() const noexcept { return !std::isnan(this->val); }
+		operator bool() const noexcept { return this->has_value(); }
+		double value_or(double snd) const noexcept { return *this ? this->val : snd; }
+
+		constexpr double& operator*() noexcept { return this->val; }
+		constexpr const double& operator*() const noexcept { return this->val; }
+
+		constexpr OptDouble operator+(const OptDouble snd) { return this->val + snd.val; }
+		constexpr OptDouble operator-(const OptDouble snd) { return this->val - snd.val; }
+		constexpr OptDouble operator*(const OptDouble snd) { return this->val * snd.val; }
+		constexpr OptDouble operator/(const OptDouble snd) { return this->val / snd.val; }
+
+		constexpr OptDouble operator+=(const OptDouble snd) { this->val += snd.val; return *this; }
+		constexpr OptDouble operator-=(const OptDouble snd) { this->val -= snd.val; return *this; }
+		constexpr OptDouble operator*=(const OptDouble snd) { this->val *= snd.val; return *this; }
+		constexpr OptDouble operator/=(const OptDouble snd) { this->val /= snd.val; return *this; }
+	}; //struct OptDouble
+
+	//can be used like std::optional<std::complex<double>>, but with extra direct complex functionality
+	struct OptComplex
+	{
+		static_assert(std::numeric_limits<double>::has_quiet_NaN);
+		static constexpr double no_value = std::numeric_limits<double>::quiet_NaN();
+
+		std::complex<double> val = no_value;
+
+		constexpr OptComplex(const std::complex<double>& new_val) :val(new_val) {}
+		constexpr OptComplex() = default;
+
+		bool has_value() const noexcept { return !std::isnan(this->val.real()); }
+		operator bool() const noexcept { return this->has_value(); }
+		std::complex<double> value_or(std::complex<double> snd) const noexcept { return *this ? this->val : snd; }
+
+		constexpr std::complex<double>& operator*() noexcept { return this->val; }
+		constexpr const std::complex<double>& operator*() const noexcept { return this->val; }
+		constexpr std::complex<double>* operator->() noexcept { return &this->val; }
+		constexpr const std::complex<double>* operator->() const noexcept { return &this->val; }
+
+		constexpr OptComplex operator+(const OptComplex& snd) { return this->val + snd.val; }
+		constexpr OptComplex operator-(const OptComplex& snd) { return this->val - snd.val; }
+		constexpr OptComplex operator*(const OptComplex& snd) { return this->val * snd.val; }
+		constexpr OptComplex operator/(const OptComplex& snd) { return this->val / snd.val; }		
+
+		constexpr const OptComplex& operator+=(const OptComplex& snd) { this->val += snd.val; return *this; }
+		constexpr const OptComplex& operator-=(const OptComplex& snd) { this->val -= snd.val; return *this; }
+		constexpr const OptComplex& operator*=(const OptComplex& snd) { this->val *= snd.val; return *this; }
+		constexpr const OptComplex& operator/=(const OptComplex& snd) { this->val /= snd.val; return *this; }
+	};
 
 } //namespace bmath::intern

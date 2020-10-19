@@ -31,8 +31,8 @@
 			assert(false);
 		} break;
 		case Type_T(Type::known_function): {
-			const BasicKnownFunction<TypedIdx_T>& known_function = store.at(index).known_function;
-			for (const auto param : fn::range(known_function)) {
+			const BasicKnownFunction<TypedIdx_T>& function = store.at(index).known_function;
+			for (const auto param : fn::range(function)) {
 			}
 			assert(false);
 		} break;
@@ -86,22 +86,22 @@ namespace bmath::intern {
 	//utility for both KnownFunction and GenericFunction
 	namespace fn {
 
-		Complex eval(FnType type, const std::array<Complex, 3>& params)
+		OptComplex eval(FnType type, const std::array<OptComplex, 3>& params)
 		{
 			if (param_count(type) == 1u) {
-				if (params[0].imag() == 0.0) {
-					const double real_param = params[0].real();
+				if (params[0]->imag() == 0.0) {
+					const double real_param = params[0]->real();
 					switch (type) {
 					case FnType::asinh: return std::asinh(real_param);
-					case FnType::acosh: return (         real_param  >= 1.0 ? std::acosh(real_param) : std::acosh(params[0]));
-					case FnType::atanh: return (std::abs(real_param) <= 1.0 ? std::atanh(real_param) : std::atanh(params[0]));
-					case FnType::asin : return (std::abs(real_param) <= 1.0 ?  std::asin(real_param) :  std::asin(params[0]));
-					case FnType::acos : return (std::abs(real_param) <= 1.0 ?  std::acos(real_param) :  std::acos(params[0]));
+					case FnType::acosh: return (         real_param  >= 1.0 ? std::acosh(real_param) : std::acosh(*params[0]));
+					case FnType::atanh: return (std::abs(real_param) <= 1.0 ? std::atanh(real_param) : std::atanh(*params[0]));
+					case FnType::asin : return (std::abs(real_param) <= 1.0 ?  std::asin(real_param) :  std::asin(*params[0]));
+					case FnType::acos : return (std::abs(real_param) <= 1.0 ?  std::acos(real_param) :  std::acos(*params[0]));
 					case FnType::atan : return std::atan (real_param);
 					case FnType::sinh : return std::sinh (real_param);
 					case FnType::cosh : return std::cosh (real_param);
 					case FnType::tanh : return std::tanh (real_param);
-					case FnType::sqrt : return (         real_param  >= 0.0 ?  std::sqrt(real_param) :  std::sqrt(params[0]));
+					case FnType::sqrt : return (         real_param  >= 0.0 ?  std::sqrt(real_param) :  std::sqrt(*params[0]));
 					case FnType::exp  : return std::exp  (real_param);
 					case FnType::sin  : return std::sin  (real_param);
 					case FnType::cos  : return std::cos  (real_param);
@@ -112,77 +112,69 @@ namespace bmath::intern {
 					case FnType::re   : return real_param;
 					case FnType::im   : return 0.0;
 					default: assert(false);
-						return Complex(0.0, 0.0);
 					}
 				}
 				else {
 					switch (type) {
-					case FnType::asinh: return std::asinh(params[0]);
-					case FnType::acosh: return std::acosh(params[0]);
-					case FnType::atanh: return std::atanh(params[0]);
-					case FnType::asin : return std::asin (params[0]);
-					case FnType::acos : return std::acos (params[0]);
-					case FnType::atan : return std::atan (params[0]);
-					case FnType::sinh : return std::sinh (params[0]);
-					case FnType::cosh : return std::cosh (params[0]);
-					case FnType::tanh : return std::tanh (params[0]);
-					case FnType::sqrt : return std::sqrt (params[0]);
-					case FnType::exp  : return std::exp  (params[0]);
-					case FnType::sin  : return std::sin  (params[0]);
-					case FnType::cos  : return std::cos  (params[0]);
-					case FnType::tan  : return std::tan  (params[0]);
-					case FnType::abs  : return std::abs  (params[0]);
-					case FnType::arg  : return std::arg  (params[0]);
-					case FnType::ln   : return std::log  (params[0]);
-					case FnType::re   : return std::real (params[0]);
-					case FnType::im   : return std::imag (params[0]);
+					case FnType::asinh: return std::asinh(*params[0]);
+					case FnType::acosh: return std::acosh(*params[0]);
+					case FnType::atanh: return std::atanh(*params[0]);
+					case FnType::asin : return std::asin (*params[0]);
+					case FnType::acos : return std::acos (*params[0]);
+					case FnType::atan : return std::atan (*params[0]);
+					case FnType::sinh : return std::sinh (*params[0]);
+					case FnType::cosh : return std::cosh (*params[0]);
+					case FnType::tanh : return std::tanh (*params[0]);
+					case FnType::sqrt : return std::sqrt (*params[0]);
+					case FnType::exp  : return std::exp  (*params[0]);
+					case FnType::sin  : return std::sin  (*params[0]);
+					case FnType::cos  : return std::cos  (*params[0]);
+					case FnType::tan  : return std::tan  (*params[0]);
+					case FnType::abs  : return std::abs  (*params[0]);
+					case FnType::arg  : return std::arg  (*params[0]);
+					case FnType::ln   : return std::log  (*params[0]);
+					case FnType::re   : return std::real (*params[0]);
+					case FnType::im   : return std::imag (*params[0]);
 					default: assert(false);
-						return Complex(0.0, 0.0);
 					}
 				}
 			}
 			else if (param_count(type) == 2u) {
-				if (params[0].imag() == 0.0 && params[1].imag() == 0.0) {
-					const double real_0 = params[0].real();
-					const double real_1 = params[1].real();
+				if (params[0]->imag() == 0.0 && params[1]->imag() == 0.0) {
+					const double real_0 = params[0]->real();
+					const double real_1 = params[1]->real();
 					switch (type) {
 					case FnType::pow  : return ((real_1 == -1.0) ? (1.0 / real_0) : std::pow(real_0, real_1));
 					case FnType::log  : return std::log(real_1) / std::log(real_0);
 					default: assert(false);
-						return Complex(0.0, 0.0);
 					}
 				}
-				else if (params[0].imag() == 0.0) {
-					const double real_0 = params[0].real();
+				else if (params[0]->imag() == 0.0) {
+					const double real_0 = params[0]->real();
 					switch (type) {
-					case FnType::pow  : return std::pow(real_0, params[1]);
-					case FnType::log  : return std::log(params[1]) / std::log(real_0); 
+					case FnType::pow  : return std::pow(real_0, *params[1]);
+					case FnType::log  : return std::log(*params[1]) / std::log(real_0); 
 					default: assert(false);
-						return Complex(0.0, 0.0);
 					}
 				}
-				else if (params[1].imag() == 0.0) {
-					const double real_1 = params[1].real();
+				else if (params[1]->imag() == 0.0) {
+					const double real_1 = params[1]->real();
 					switch (type) {
-					case FnType::pow  : return ((real_1 == -1.0) ? (1.0 / params[0]) : std::pow(params[0], real_1));
-					case FnType::log  : return std::log(real_1) / std::log(params[0]); 
+					case FnType::pow  : return ((real_1 == -1.0) ? (1.0 / *params[0]) : std::pow(*params[0], real_1));
+					case FnType::log  : return std::log(real_1) / std::log(*params[0]); 
 					default: assert(false);
-						return Complex(0.0, 0.0);
 					}
 				}
 				else {
 					switch (type) {
-					case FnType::pow  : return std::pow(params[0], params[1]);
-					case FnType::log  : return std::log(params[1]) / std::log(params[0]); //https://en.wikipedia.org/wiki/Complex_logarithm#Generalizations
+					case FnType::pow  : return std::pow(*params[0], *params[1]);
+					case FnType::log  : return std::log(*params[1]) / std::log(*params[0]); //https://en.wikipedia.org/wiki/Complex_logarithm#Generalizations
 					default: assert(false);
-						return Complex(0.0, 0.0);
 					}
 				}
 			}
-			else {
-				assert(false);
-				return Complex(0.0, 0.0);
-			}
+			assert(false);
+			return {};
 		} //eval
 
 	} //namespace fn
@@ -254,13 +246,13 @@ namespace bmath::intern {
 			this->rhs_head = build_function(this->rhs_store, parts.rhs);
 			tree::combine_layers(this->lhs_store, this->lhs_head);
 			tree::combine_layers(this->rhs_store, this->rhs_head);
-			if (const Complex lhs_val = tree::combine_values_exact(this->lhs_store, this->lhs_head); tree::is_valid(lhs_val)) {
+			if (const OptComplex lhs_val = tree::combine_values_exact(this->lhs_store, this->lhs_head)) {
 				tree::free(this->lhs_store, this->lhs_head);
-				this->lhs_head = PnTypedIdx(this->lhs_store.insert(lhs_val), Type::complex);
+				this->lhs_head = PnTypedIdx(this->lhs_store.insert(*lhs_val), Type::complex);
 			}
-			if (const Complex rhs_val = tree::combine_values_exact(this->rhs_store, this->rhs_head); tree::is_valid(rhs_val)) {
+			if (const OptComplex rhs_val = tree::combine_values_exact(this->rhs_store, this->rhs_head)) {
 				tree::free(this->rhs_store, this->rhs_head);
-				this->rhs_head = PnTypedIdx(this->rhs_store.insert(rhs_val), Type::complex);
+				this->rhs_head = PnTypedIdx(this->rhs_store.insert(*rhs_val), Type::complex);
 			}
 			tree::sort(this->lhs_store, this->lhs_head);
 			tree::sort(this->rhs_store, this->rhs_head);
@@ -512,22 +504,19 @@ namespace bmath::intern {
 		} //combine_layers
 
 		template<typename Store_T, typename TypedIdx_T>
-		Complex combine_values_inexact(Store_T& store, const TypedIdx_T ref)
+		OptComplex combine_values_inexact(Store_T& store, const TypedIdx_T ref)
 		{
 			using Type_T = TypedIdx_T::Enum_T;
 			using TypedIdxSLC_T = TermSLC<std::uint32_t, TypedIdx_T, 3>;
 			constexpr bool pattern = std::is_same_v<Type_T, pattern::PnType>;
 
-			constexpr Complex err_res = Complex(std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::quiet_NaN());
-
 			const auto [index, type] = ref.split();
 			switch (type) {
 			case Type_T(Type::sum): {
-				Complex result_val = 0.0;
+				OptComplex result_val = 0.0;
 				bool only_values = true;
 				for (auto& summand : vdc::range(store, index)) {
-					const Complex summand_val = tree::combine_values_inexact(store, summand);
-					if (is_valid(summand_val)) {
+					if (const OptComplex summand_val = tree::combine_values_inexact(store, summand)) {
 						result_val += summand_val;
 						summand = TypedIdxSLC_T::null_value;
 					}
@@ -540,17 +529,15 @@ namespace bmath::intern {
 					return  result_val;
 				}
 				else if (result_val != 0.0) {
-					const auto new_summand = TypedIdx_T(store.insert(result_val), Type::complex);
+					const auto new_summand = TypedIdx_T(store.insert(*result_val), Type::complex);
 					TypedIdxSLC_T::insert_new(store, index, new_summand);
 				}
-				return err_res;
 			} break;
 			case Type_T(Type::product): {
-				Complex result_val = 1.0;
+				OptComplex result_val = 1.0;
 				bool only_values = true;
 				for (auto& factor : vdc::range(store, index)) {
-					const Complex factor_val = tree::combine_values_inexact(store, factor);
-					if (is_valid(factor_val)) {
+					if (const OptComplex factor_val = tree::combine_values_inexact(store, factor)) {
 						result_val *= factor_val;
 						factor = TypedIdxSLC_T::null_value;
 					}
@@ -563,195 +550,167 @@ namespace bmath::intern {
 					return result_val;
 				}
 				else if (result_val != 1.0) {
-					const auto new_factor = TypedIdx_T(store.insert(result_val), Type::complex);
+					const auto new_factor = TypedIdx_T(store.insert(*result_val), Type::complex);
 					TypedIdxSLC_T::insert_new(store, index, new_factor);
 				}
-				return err_res;
 			} break;
 			case Type_T(Type::known_function): {
-				BasicKnownFunction<TypedIdx_T>& known_function = store.at(index).known_function;
-				std::array<Complex, 3> results_values;
-				BitSet8 results_computable = 0;
-				for (std::size_t i = 0; i < fn::param_count(known_function.type); i++) {
-					const Complex param_res = tree::combine_values_inexact(store, known_function.params[i]);
-					if (is_valid(param_res)) {
-						results_values[i] = param_res;
-						results_computable.set(i);
-					}
+				BasicKnownFunction<TypedIdx_T>& function = store.at(index).known_function;
+				std::array<OptComplex, 3> results_values;
+				bool all_computable = true;
+				for (std::size_t i = 0; i < fn::param_count(function.type); i++) {
+					results_values[i] = tree::combine_values_inexact(store, function.params[i]);
+					all_computable &= (bool) results_values[i];
 				}
-				if (results_computable.count() == fn::param_count(known_function.type)) {
-					const FnType type = known_function.type;
+				if (all_computable) {
 					store.free(index);
-					return fn::eval(type, results_values);
+					return fn::eval(function.type, results_values);
 				}
-				else {
-					for (std::size_t i = 0; i < fn::param_count(known_function.type); i++) {
-						if (results_computable.test(i)) {
-							known_function.params[i] = TypedIdx_T(store.insert(results_values[i]), Type::complex);
-						}
+				for (std::size_t i = 0; i < fn::param_count(function.type); i++) {
+					if (results_values[i]) {
+						function.params[i] = TypedIdx_T(store.insert(*results_values[i]), Type::complex);
 					}
-					return err_res;
 				}
 			} break;
 			case Type_T(Type::generic_function): {
 				GenericFunction& function = store.at(index).generic_function;
 				for (auto& elem : fn::range(store, function)) {
-					const Complex param_res = tree::combine_values_inexact(store, elem);
-					if (is_valid(param_res)) {
-						elem = TypedIdx_T(store.insert(param_res), Type::complex);
+					if (const OptComplex param_res = tree::combine_values_inexact(store, elem)) {
+						elem = TypedIdx_T(store.insert(*param_res), Type::complex);
 					}
 				}
-				return err_res;
 			} break;
-			case Type_T(Type::variable): {
-				return err_res;
-			} break;
+			case Type_T(Type::variable): 
+				break;
 			case Type_T(Type::complex): {
 				const Complex value = store.at(index).complex;
 				store.free(index);
 				return value;
 			} break;
 			case Type_T(pattern::_tree_match): 
-				return err_res;
+				break;
 			case Type_T(pattern::_value_match): if constexpr (pattern) {
 				pattern::ValueMatchVariable& var = store.at(index).value_match;
 				const Complex match_res = tree::combine_values_inexact(store, var.match_idx);
 				const Complex copy_res = tree::combine_values_inexact(store, var.copy_idx);
 				assert(!is_valid(match_res)); //pattern variable can not decay to value
 				assert(!is_valid(copy_res));  //pattern variable can not decay to value
-				return err_res;
-			} assert(false); return err_res;
+				break;
+			} break; 
 			case Type_T(pattern::_value_proxy):
-				return err_res;
+				break;
 			default: assert(false); //if this assert hits, the switch above needs more cases.
-				return err_res;
 			}
+			return {};
 		} //combine_values_inexact
 
 		template<typename Store_T, typename TypedIdx_T>
-		Complex combine_values_exact(Store_T& store, const TypedIdx_T ref)
+		OptComplex combine_values_exact(Store_T& store, const TypedIdx_T ref)
 		{
 			using Type_T = TypedIdx_T::Enum_T;
 			using TypedIdxSLC_T = TermSLC<std::uint32_t, TypedIdx_T, 3u>;
 			constexpr bool pattern = std::is_same_v<Type_T, pattern::PnType>;
-
-			constexpr Complex err_res = Complex(std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::quiet_NaN());
 			
-			const auto compute_exact = [](auto operate) -> std::optional<Complex> {
+			const auto compute_exact = [](auto operate) -> OptComplex {
 				std::feclearexcept(FE_ALL_EXCEPT);
-				const Complex result = operate();
-				if (!std::fetestexcept(FE_ALL_EXCEPT) && is_valid(result)) {
-					return { result };
-				}
-				else {
-					return {};
-				}
+				const OptComplex result = operate();
+				return (!std::fetestexcept(FE_ALL_EXCEPT)) ? result : OptComplex();
 			};
 
 			const auto [index, type] = ref.split();
 			switch (type) {
 			case Type_T(Type::sum): {
-				Complex result_val = 0.0;
+				OptComplex result_val = 0.0;
 				bool only_exact = true;
 				for (auto& summand : vdc::range(store, index)) {
-					const Complex summand_val = tree::combine_values_exact(store, summand);
-					if (const auto res = compute_exact([&] {return result_val + summand_val; })) {
-						result_val = *res;
-						tree::free(store, summand);
-						summand = TypedIdxSLC_T::null_value;
+					if (const OptComplex summand_val = tree::combine_values_exact(store, summand)) {
+						if (const OptComplex res = compute_exact([&] {return result_val + summand_val; })) {
+							result_val = res;
+							tree::free(store, summand);
+							summand = TypedIdxSLC_T::null_value;
+							continue;
+						}
 					}
-					else {
-						only_exact = false;
-					}
+					only_exact = false;
 				}
 				if (only_exact) {
 					return result_val;
 				}
 				else if (result_val != 0.0) {
-					const auto new_summand = TypedIdx_T(store.insert(result_val), Type::complex);
+					const auto new_summand = TypedIdx_T(store.insert(*result_val), Type::complex);
 					TypedIdxSLC_T::insert_new(store, index, new_summand);
 				}
-				return err_res;
 			} break;
 			case Type_T(Type::product): {
-				Complex result_val = 1.0;
+				OptComplex result_val = 1.0;
 				bool only_exact = true;
 				for (auto& factor : vdc::range(store, index)) {
-					const Complex factor_val = tree::combine_values_exact(store, factor);
-					if (const auto res = compute_exact([&] {return result_val * factor_val; })) {
-						result_val = *res;
-						tree::free(store, factor);
-						factor = TypedIdxSLC_T::null_value;
+					if (const OptComplex factor_val = tree::combine_values_exact(store, factor)) {
+						if (const OptComplex res = compute_exact([&] {return result_val * factor_val; })) {
+							result_val = res;
+							tree::free(store, factor);
+							factor = TypedIdxSLC_T::null_value;
+							continue;
+						}
 					}
-					else {
-						only_exact = false;
-					}
+					only_exact = false;
 				}
 				if (only_exact) {
 					return result_val;
 				}
 				else if (result_val != 1.0) {
-					const auto new_summand = TypedIdx_T(store.insert(result_val), Type::complex);
+					const auto new_summand = TypedIdx_T(store.insert(*result_val), Type::complex);
 					TypedIdxSLC_T::insert_new(store, index, new_summand);
 				}
-				return err_res;
 			} break;
 			case Type_T(Type::known_function): {
 				BasicKnownFunction<TypedIdx_T>& function = store.at(index).known_function;
-				std::array<Complex, 3> res_vals;
+				std::array<OptComplex, 3> res_vals;
 				bool only_exact = true;
 				for (std::size_t i = 0; i < fn::param_count(function.type); i++) {
 					res_vals[i] = tree::combine_values_exact(store, function.params[i]);
-					if (!is_valid(res_vals[i])) {
-						only_exact = false;
-					}
+					only_exact &= (bool) res_vals[i];
 				}
 				if (only_exact) {
 					if (const auto res = compute_exact([&] { return fn::eval(function.type, res_vals); })) {
-						return *res;
+						return res;
 					}
 				}
-				else {
-					for (std::size_t i = 0; i < fn::param_count(function.type); i++) {
-						if (is_valid(res_vals[i])) {
-							tree::free(store, function.params[i]);
-							function.params[i] = TypedIdx_T(store.insert(res_vals[i]), Type::complex);
-						}
+				for (std::size_t i = 0; i < fn::param_count(function.type); i++) {
+					if (res_vals[i]) {
+						tree::free(store, function.params[i]);
+						function.params[i] = TypedIdx_T(store.insert(*res_vals[i]), Type::complex);
 					}
-					return err_res;
 				}
-				return err_res;
 			} break;
 			case Type_T(Type::generic_function): {
 				GenericFunction& function = store.at(index).generic_function;
 				for (auto& elem : fn::range(store, function)) {
-					const Complex param_res = tree::combine_values_exact(store, elem);
-					if (is_valid(param_res)) {
+					const OptComplex param_res = tree::combine_values_exact(store, elem);
+					if (param_res) {
 						tree::free(store, elem);
-						elem = TypedIdx_T(store.insert(param_res), Type::complex);
+						elem = TypedIdx_T(store.insert(*param_res), Type::complex);
 					}
 				}
-				return err_res;
 			} break;
 			case Type_T(Type::variable): 
-				return err_res;
+				break;
 			case Type_T(Type::complex): 
 				return store.at(index).complex;
 			case Type_T(pattern::_tree_match): 
-				return err_res;
+				break;
 			case Type_T(pattern::_value_match): if constexpr (pattern) {
 				pattern::ValueMatchVariable& var = store.at(index).value_match;
-				const Complex match_res = tree::combine_values_exact(store, var.match_idx);
-				const Complex copy_res = tree::combine_values_exact(store, var.copy_idx);
-				assert(!is_valid(match_res)); //pattern variable can not decay to value
-				assert(!is_valid(copy_res));  //pattern variable can not decay to value
-				return err_res;
-			} assert(false); return err_res;
+				const OptComplex match_res = tree::combine_values_exact(store, var.match_idx);
+				const OptComplex copy_res = tree::combine_values_exact(store, var.copy_idx);
+				assert(!match_res); //pattern variable can not decay to value
+				assert(!copy_res);  //pattern variable can not decay to value
+			} break;
 			case Type_T(pattern::_value_proxy):
-				return err_res;
+				break;
 			default: assert(false); //if this assert hits, the switch above needs more cases.
-				return err_res;
 			}
+			return {};
 		} //combine_values_exact
 
 		template<typename Store_T1, typename Store_T2, typename TypedIdx_T1, typename TypedIdx_T2>
@@ -1342,18 +1301,16 @@ namespace bmath {
 
 	void ArithmeticTerm::combine_values_inexact() noexcept
 	{
-		const Complex val = tree::combine_values_inexact(this->store, this->head);
-		if (tree::is_valid(val)) {
-			this->head = TypedIdx(this->store.insert(val), Type::complex);
+		if (const OptComplex val = tree::combine_values_inexact(this->store, this->head)) {
+			this->head = TypedIdx(this->store.insert(*val), Type::complex);
 		}	
 	}
 
 	void ArithmeticTerm::combine_values_exact() noexcept
 	{
-		const Complex val = tree::combine_values_exact(this->store, this->head);
-		if (tree::is_valid(val)) {
+		if (const OptComplex val = tree::combine_values_exact(this->store, this->head)) {
 			tree::free(this->store, this->head);
-			this->head = TypedIdx(this->store.insert(val), Type::complex);
+			this->head = TypedIdx(this->store.insert(*val), Type::complex);
 		}
 	}
 

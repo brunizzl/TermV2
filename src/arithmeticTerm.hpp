@@ -378,15 +378,12 @@ namespace bmath::intern {
 		//the evaluated subtree also deletes itself, meaning the caller needs to reinsert the value,
 		//  if a value was returned
 		template<typename Store_T, typename TypedIdx_T>
-		[[nodiscard]] Complex combine_values_inexact(Store_T& store, const TypedIdx_T ref);
+		[[nodiscard]] OptComplex combine_values_inexact(Store_T& store, const TypedIdx_T ref);
 
 		//if evaluation of subtree was inexact / impossible, returns Complex(NAN, undefined), else returns result.
 		//the subtree starting at ref still remains. if deletion is desired, this has to be return_early by the caller.
 		template<typename Store_T, typename TypedIdx_T>
-		[[nodiscard]] Complex combine_values_exact(Store_T& store, const TypedIdx_T ref);
-
-		//helper for combine_values_exact and combine_values_inexact
-		inline bool is_valid(const Complex c) { return !std::isnan(c.real()); };
+		[[nodiscard]] OptComplex combine_values_exact(Store_T& store, const TypedIdx_T ref);
 
 		//compares two subterms of perhaps different stores, assumes both to have their variadic parts sorted
 		template<typename Store_T1, typename Store_T2, typename TypedIdx_T1, typename TypedIdx_T2>
