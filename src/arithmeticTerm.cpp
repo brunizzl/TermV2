@@ -146,7 +146,7 @@ namespace bmath::intern {
 					const double real_0 = params[0].real();
 					const double real_1 = params[1].real();
 					switch (type) {
-					case FnType::pow  : return (real_1 == -1.0 ? 1.0 / real_0 : std::pow(real_0, real_1));
+					case FnType::pow  : return ((real_1 == -1.0) ? (1.0 / real_0) : std::pow(real_0, real_1));
 					case FnType::log  : return std::log(real_1) / std::log(real_0);
 					default: assert(false);
 						return Complex(0.0, 0.0);
@@ -164,7 +164,7 @@ namespace bmath::intern {
 				else if (params[1].imag() == 0.0) {
 					const double real_1 = params[1].real();
 					switch (type) {
-					case FnType::pow  : return (real_1 == -1.0 ? 1.0 / params[0] : std::pow(params[0], real_1));
+					case FnType::pow  : return ((real_1 == -1.0) ? (1.0 / params[0]) : std::pow(params[0], real_1));
 					case FnType::log  : return std::log(real_1) / std::log(params[0]); 
 					default: assert(false);
 						return Complex(0.0, 0.0);
@@ -511,97 +511,120 @@ namespace bmath::intern {
 			}
 		} //combine_layers
 
-		std::optional<Complex> combine_values_inexact(Store& store, const TypedIdx ref)
+		template<typename Store_T, typename TypedIdx_T>
+		Complex combine_values_inexact(Store_T& store, const TypedIdx_T ref)
 		{
+			using Type_T = TypedIdx_T::Enum_T;
+			using TypedIdxSLC_T = TermSLC<std::uint32_t, TypedIdx_T, 3>;
+			constexpr bool pattern = std::is_same_v<Type_T, pattern::PnType>;
+
+			constexpr Complex err_res = Complex(std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::quiet_NaN());
+
 			const auto [index, type] = ref.split();
 			switch (type) {
-			case Type::sum: {
+			case Type_T(Type::sum): {
 				Complex result_val = 0.0;
 				bool only_values = true;
 				for (auto& summand : vdc::range(store, index)) {
-					if (const auto summand_val = tree::combine_values_inexact(store, summand)) {
-						result_val += *summand_val;
-						summand = Sum::null_value;
+					const Complex summand_val = tree::combine_values_inexact(store, summand);
+					if (is_valid(summand_val)) {
+						result_val += summand_val;
+						summand = TypedIdxSLC_T::null_value;
 					}
 					else {
 						only_values = false;
 					}
 				}
 				if (only_values) {
-					Sum::free_slc(store, index); //all summands have already (implicitly) been freed in the loop above
-					return { result_val };
+					TypedIdxSLC_T::free_slc(store, index); //all summands have already (implicitly) been freed in the loop above
+					return  result_val;
 				}
 				else if (result_val != 0.0) {
-					const auto new_summand = TypedIdx(store.insert(result_val), Type::complex);
-					Sum::insert_new(store, index, new_summand);
+					const auto new_summand = TypedIdx_T(store.insert(result_val), Type::complex);
+					TypedIdxSLC_T::insert_new(store, index, new_summand);
 				}
-				return {};
+				return err_res;
 			} break;
-			case Type::product: {
+			case Type_T(Type::product): {
 				Complex result_val = 1.0;
 				bool only_values = true;
 				for (auto& factor : vdc::range(store, index)) {
-					if (const auto factor_val = tree::combine_values_inexact(store, factor)) {
-						result_val *= *factor_val;
-						factor = Product::null_value;
+					const Complex factor_val = tree::combine_values_inexact(store, factor);
+					if (is_valid(factor_val)) {
+						result_val *= factor_val;
+						factor = TypedIdxSLC_T::null_value;
 					}
 					else {
 						only_values = false;
 					}
 				}
 				if (only_values) {
-					Product::free_slc(store, index); //all factors have already been freed in the loop above
-					return { result_val };
+					TypedIdxSLC_T::free_slc(store, index); //all factors have already been freed in the loop above
+					return result_val;
 				}
 				else if (result_val != 1.0) {
-					const auto new_factor = TypedIdx(store.insert(result_val), Type::complex);
-					Product::insert_new(store, index, new_factor);
+					const auto new_factor = TypedIdx_T(store.insert(result_val), Type::complex);
+					TypedIdxSLC_T::insert_new(store, index, new_factor);
 				}
-				return {};
+				return err_res;
 			} break;
-			case Type::known_function: {
-				KnownFunction& known_function = store.at(index).known_function;
+			case Type_T(Type::known_function): {
+				BasicKnownFunction<TypedIdx_T>& known_function = store.at(index).known_function;
 				std::array<Complex, 3> results_values;
 				BitSet8 results_computable = 0;
 				for (std::size_t i = 0; i < fn::param_count(known_function.type); i++) {
-					if (const auto param_res = tree::combine_values_inexact(store, known_function.params[i])) {
-						results_values[i] = *param_res;
+					const Complex param_res = tree::combine_values_inexact(store, known_function.params[i]);
+					if (is_valid(param_res)) {
+						results_values[i] = param_res;
 						results_computable.set(i);
 					}
 				}
 				if (results_computable.count() == fn::param_count(known_function.type)) {
 					const FnType type = known_function.type;
 					store.free(index);
-					return { fn::eval(type, results_values) };
+					return fn::eval(type, results_values);
 				}
 				else {
 					for (std::size_t i = 0; i < fn::param_count(known_function.type); i++) {
 						if (results_computable.test(i)) {
-							known_function.params[i] = TypedIdx(store.insert(results_values[i]), Type::complex);
+							known_function.params[i] = TypedIdx_T(store.insert(results_values[i]), Type::complex);
 						}
 					}
-					return {};
+					return err_res;
 				}
 			} break;
-			case Type::generic_function: {
+			case Type_T(Type::generic_function): {
 				GenericFunction& function = store.at(index).generic_function;
 				for (auto& elem : fn::range(store, function)) {
-					if (const auto param_res = tree::combine_values_inexact(store, elem)) {
-						elem = TypedIdx(store.insert(*param_res), Type::complex);
+					const Complex param_res = tree::combine_values_inexact(store, elem);
+					if (is_valid(param_res)) {
+						elem = TypedIdx_T(store.insert(param_res), Type::complex);
 					}
 				}
-				return {};
+				return err_res;
 			} break;
-			case Type::variable: {
-				return {};
+			case Type_T(Type::variable): {
+				return err_res;
 			} break;
-			case Type::complex: {
+			case Type_T(Type::complex): {
 				const Complex value = store.at(index).complex;
 				store.free(index);
-				return { value };
+				return value;
 			} break;
+			case Type_T(pattern::_tree_match): 
+				return err_res;
+			case Type_T(pattern::_value_match): if constexpr (pattern) {
+				pattern::ValueMatchVariable& var = store.at(index).value_match;
+				const Complex match_res = tree::combine_values_inexact(store, var.match_idx);
+				const Complex copy_res = tree::combine_values_inexact(store, var.copy_idx);
+				assert(!is_valid(match_res)); //pattern variable can not decay to value
+				assert(!is_valid(copy_res));  //pattern variable can not decay to value
+				return err_res;
+			} assert(false); return err_res;
+			case Type_T(pattern::_value_proxy):
+				return err_res;
 			default: assert(false); //if this assert hits, the switch above needs more cases.
-				return {};
+				return err_res;
 			}
 		} //combine_values_inexact
 
@@ -612,9 +635,9 @@ namespace bmath::intern {
 			using TypedIdxSLC_T = TermSLC<std::uint32_t, TypedIdx_T, 3u>;
 			constexpr bool pattern = std::is_same_v<Type_T, pattern::PnType>;
 
-			constexpr Complex err_res = Complex(std::numeric_limits<double>::quiet_NaN(), 0.0);
+			constexpr Complex err_res = Complex(std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::quiet_NaN());
 			
-			const auto compute_exact = []<typename Operation>(Operation operate) -> std::optional<Complex> {
+			const auto compute_exact = [](auto operate) -> std::optional<Complex> {
 				std::feclearexcept(FE_ALL_EXCEPT);
 				const Complex result = operate();
 				if (!std::fetestexcept(FE_ALL_EXCEPT) && is_valid(result)) {
@@ -687,6 +710,15 @@ namespace bmath::intern {
 					if (const auto res = compute_exact([&] { return fn::eval(function.type, res_vals); })) {
 						return *res;
 					}
+				}
+				else {
+					for (std::size_t i = 0; i < fn::param_count(function.type); i++) {
+						if (is_valid(res_vals[i])) {
+							tree::free(store, function.params[i]);
+							function.params[i] = TypedIdx_T(store.insert(res_vals[i]), Type::complex);
+						}
+					}
+					return err_res;
 				}
 				return err_res;
 			} break;
@@ -1112,7 +1144,7 @@ namespace bmath::intern {
 			case Type_T(Type::sum): 
 				[[fallthrough]];
 			case Type_T(Type::product): {
-				for (auto& elem : vdc::range(store, index)) {
+				for (TypedIdx_T& elem : vdc::range(store, index)) {
 					if (elem == from) {
 						elem = to;
 						return true;
@@ -1123,8 +1155,8 @@ namespace bmath::intern {
 				}
 			} break;
 			case Type_T(Type::generic_function): {
-				const GenericFunction& generic_function = store.at(index).generic_function;
-				for (auto& param : fn::range(store, generic_function)) {
+				GenericFunction& generic_function = store.at(index).generic_function;
+				for (TypedIdx_T& param : fn::range(store, generic_function)) {
 					if (param == from) {
 						param = to;
 						return true;
@@ -1135,8 +1167,8 @@ namespace bmath::intern {
 				}
 			} break;
 			case Type_T(Type::known_function): {
-				const BasicKnownFunction<TypedIdx_T>& known_function = store.at(index).known_function;
-				for (const auto param : fn::range(known_function)) {
+				BasicKnownFunction<TypedIdx_T>& known_function = store.at(index).known_function;
+				for (TypedIdx_T& param : fn::range(known_function)) {
 					if (param == from) {
 						param = to;
 						return true;
@@ -1168,7 +1200,8 @@ namespace bmath::intern {
 			default: assert(false); //if this assert hits, the switch above needs more cases.
 			}
 			return false;
-		} //change_subtree
+		} //change_subtree		
+		template bool change_subtree<Store, TypedIdx>(Store& store, const TypedIdx ref, const TypedIdx from, const TypedIdx to);
 
 	} //namespace tree
 
@@ -1309,8 +1342,9 @@ namespace bmath {
 
 	void ArithmeticTerm::combine_values_inexact() noexcept
 	{
-		if (const auto val = tree::combine_values_inexact(this->store, this->head)) {
-			this->head = TypedIdx(this->store.insert(*val), Type::complex);
+		const Complex val = tree::combine_values_inexact(this->store, this->head);
+		if (tree::is_valid(val)) {
+			this->head = TypedIdx(this->store.insert(val), Type::complex);
 		}	
 	}
 

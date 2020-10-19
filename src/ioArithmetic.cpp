@@ -779,11 +779,11 @@ namespace bmath::intern {
 				return {};
 			}; //get_pow_neg1
 
-			struct GetNegativeProductResult { double negative_factor; std::vector<TypedIdx> other_factors; };
+			struct GetNegativeProductResult { double negative_factor; StupidBufferVector<TypedIdx, 8> other_factors; };
 			const auto get_negative_product = [get_negative_real, &store](const TypedIdx ref) -> std::optional<GetNegativeProductResult> {
 				const auto [index, type] = ref.split();
 				if (type == Type::product) {
-					std::vector<TypedIdx> other_factors;
+					StupidBufferVector<TypedIdx, 8> other_factors;
 					double negative_factor;
 					bool found_negative_factor = false;
 					for (const auto factor : vdc::range(store, index)) {
@@ -797,13 +797,13 @@ namespace bmath::intern {
 						other_factors.push_back(factor);
 					}
 					if (found_negative_factor) {
-						return { { negative_factor, other_factors} };
+						return { { negative_factor, std::move(other_factors)} };
 					}
 				}
 				return {};
 			}; //get_negative_product
 
-			const auto append_product = [get_negative_real, get_pow_neg1, &store, &str](const std::vector<TypedIdx>& vec) {
+			const auto append_product = [get_negative_real, get_pow_neg1, &store, &str](const auto& vec) {
 				bool first = true;
 				for (const auto elem : vec) {
 					if (auto val = get_negative_real(elem); val && first && *val == -1.0) {
@@ -826,7 +826,7 @@ namespace bmath::intern {
 			}; //append_product
 			
 			const auto reverse_elems = [](auto range) {
-				std::vector<TypedIdx> result;
+				StupidBufferVector<TypedIdx, 16> result;
 				for (const auto elem : range) {
 					result.push_back(elem);
 				}

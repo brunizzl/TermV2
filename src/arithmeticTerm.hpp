@@ -377,14 +377,15 @@ namespace bmath::intern {
 		//floating point/ the computation is unexact
 		//the evaluated subtree also deletes itself, meaning the caller needs to reinsert the value,
 		//  if a value was returned
-		[[nodiscard]] std::optional<Complex> combine_values_inexact(Store& store, const TypedIdx ref);
+		template<typename Store_T, typename TypedIdx_T>
+		[[nodiscard]] Complex combine_values_inexact(Store_T& store, const TypedIdx_T ref);
 
 		//if evaluation of subtree was inexact / impossible, returns Complex(NAN, undefined), else returns result.
 		//the subtree starting at ref still remains. if deletion is desired, this has to be return_early by the caller.
 		template<typename Store_T, typename TypedIdx_T>
 		[[nodiscard]] Complex combine_values_exact(Store_T& store, const TypedIdx_T ref);
 
-		//helper for combine_values_exact
+		//helper for combine_values_exact and combine_values_inexact
 		inline bool is_valid(const Complex c) { return !std::isnan(c.real()); };
 
 		//compares two subterms of perhaps different stores, assumes both to have their variadic parts sorted
@@ -480,7 +481,7 @@ namespace bmath::intern {
 		template<typename Res_T, typename TypedIdx_T>
 		struct DefaultFinally { constexpr Res_T operator()(Res_T r, TypedIdx_T) const noexcept { return r; } };
 
-		//this fold differentiates between recursive nodes (operations and ValueMatchVariable) and Leafes (values and variables)
+		//this fold differentiates between recursive nodes (operations) and Leafes (values and variables (also ValueMatchVariable!))
 		//op_apply is called directly after each recursive call with parameters (index, type, acc, elem_res) and returns Res_T
 		//  (with elem_res beeing the result of the recursive call.) 
 		//  acc is initialized for every recursive node on its own as init.

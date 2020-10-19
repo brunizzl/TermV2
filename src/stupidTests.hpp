@@ -124,6 +124,7 @@ namespace bmath::intern::test {
 			"2.2 + 4",
 			"1e-5",
 			"c+d+b+a+f+(a*c*b)+(a*d*b)+(a*f*b*(a+c+b)*(a+d+b))",
+			"10/5",
 		};
 		for (auto& term_name : term_names) {
 			std::cout << "-------------------------------------------------------------------------------------\n";
@@ -228,10 +229,12 @@ namespace bmath::intern::test {
 			const auto a_idx = tree::search_variable(store, eq.lhs_head, "a");
 			tree::stupid_solve_for(store, eq, a_idx);
 			tree::combine_layers(store, eq.rhs_head);
-			const Complex new_rhs = tree::combine_values_exact(store, eq.rhs_head);
-			if (tree::is_valid(new_rhs)) {
-				tree::free(store, eq.rhs_head);
-				eq.rhs_head = TypedIdx(store.insert(new_rhs), Type::complex);
+			{
+				const Complex new_rhs = tree::combine_values_exact(store, eq.rhs_head);
+				if (tree::is_valid(new_rhs)) {
+					tree::free(store, eq.rhs_head);
+					eq.rhs_head = TypedIdx(store.insert(new_rhs), Type::complex);
+				}
 			}
 
 			equation_str.clear();
@@ -294,9 +297,22 @@ namespace bmath::intern::test {
 		std::cout << print::to_memory_layout(lhs_store, lhs_head) << "\n\n";
 		//std::cout << print::to_memory_layout(rhs_store, rhs_head) << "\n\n";
 
-		//const auto [state, result] = find_value_match_subtree(lhs_store, lhs_head, table.value_table[0].lhs_instances[0]);
-		//assert(state == SubtreeFeature::final_result);
-		//std::cout << "index of lhs k = " << result.get_index() << "\n\n";
+		const auto result = find_value_match_subtree(lhs_store, lhs_head, table.value_table[0].lhs_instances[0]);
+		std::cout << "index of lhs k = " << result.get_index() << "\n\n";
+	}
+
+	void change_subtree()
+	{
+		std::string name = "a+2*b^c";
+		ArithmeticTerm term(name);
+		auto [store, head] = term.data();
+		std::cout << term.to_string() << " -> ";
+
+		TypedIdx a_idx = tree::search_variable(*store, head, "a");
+		TypedIdx c_idx = tree::search_variable(*store, head, "c");
+		tree::change_subtree(*store, head, c_idx, a_idx);
+		tree::change_subtree(*store, head, a_idx, c_idx);
+		std::cout << term.to_string() << "\n";
 	}
 
 } //namespace bmath::intern::test
