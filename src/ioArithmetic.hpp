@@ -44,7 +44,7 @@ namespace bmath::intern {
 	} //namespace compute
 
 	//returns position of first non-arithmetic token in view
-	std::size_t find_first_not_arithmetic(const TokenView view);
+	std::size_t find_first_not_arithmetic(const TokenView view) noexcept;
 
 	//decides what type the outhermost element has
 	//offset is used to determine error position relative to begin of whole term
@@ -55,13 +55,13 @@ namespace bmath::intern {
 
 
 	template<typename TypedIdx_T, typename Store_T>
-	[[nodiscard]] TypedIdx_T build_value(Store_T& store, const std::complex<double> complex)
+	[[nodiscard]] TypedIdx_T build_value(Store_T& store, const std::complex<double> complex) noexcept
 	{
 		return TypedIdx_T(store.insert(complex), Type::complex);
 	}
 
 	template<typename Store_T, typename TypedIdx_T>
-	[[nodiscard]] TypedIdx_T build_negated(Store_T& store, const TypedIdx_T to_negate)
+	[[nodiscard]] TypedIdx_T build_negated(Store_T& store, const TypedIdx_T to_negate) noexcept
 	{
 		using TypedIdxSLC_T = TermSLC<std::uint32_t, TypedIdx_T, 3>;
 		const TypedIdx_T minus_1 = build_value<TypedIdx_T>(store, -1.0);
@@ -69,7 +69,7 @@ namespace bmath::intern {
 	}
 
 	template<typename Store_T, typename TypedIdx_T>
-	[[nodiscard]] TypedIdx_T build_inverted(Store_T& store, const TypedIdx_T to_invert)
+	[[nodiscard]] TypedIdx_T build_inverted(Store_T& store, const TypedIdx_T to_invert) noexcept
 	{
 		const TypedIdx_T minus_1 = build_value<TypedIdx_T>(store, -1.0);
 		return TypedIdx_T(store.insert(BasicKnownFunction<TypedIdx_T>
@@ -78,39 +78,39 @@ namespace bmath::intern {
 
 	namespace pattern {
 
-		struct PatternParts
+		struct [[nodiscard]] PatternParts
 		{
 			ParseView declarations;
 			ParseView lhs;
 			ParseView rhs;
 		};
 
-		//input is assumed to be of restr "<declarations> | <lhs> = <rhs>"
+		//input is assumed to be of form "<declarations> | <lhs> = <rhs>"
 		//or, if no MatchVariables occur, of restr "<lhs> = <rhs>"
 		PatternParts split(const ParseView input);
 
 		using ParseRestriction = SumEnum<Restriction, Form>;
 		//data belonging to one TreeMatchVariable relevant while constructing pattern
-		struct MultiNameLookup 
+		struct [[nodiscard]] MultiNameLookup 
 		{
 			std::string_view name;
 			Restriction restr;
 			StupidBufferVector<PnTypedIdx, 3u> lhs_instances;
 			StupidBufferVector<PnTypedIdx, 3u> rhs_instances;
 
-			constexpr MultiNameLookup(std::string_view new_name, Restriction new_restr)
+			constexpr MultiNameLookup(std::string_view new_name, Restriction new_restr) noexcept
 				:name(new_name), restr(new_restr) {}
 		};
 		
 		//data belonging to one ValueMatchVariable relevant while constructing pattern
-		struct ValueNameLookup 
+		struct [[nodiscard]] ValueNameLookup 
 		{
 			std::string_view name;
 			Form form;
 			StupidBufferVector<PnTypedIdx, 3u> lhs_instances;
 			StupidBufferVector<PnTypedIdx, 3u> rhs_instances;
 
-			constexpr ValueNameLookup(std::string_view new_name, Form new_form)
+			constexpr ValueNameLookup(std::string_view new_name, Form new_form) noexcept
 				:name(new_name), form(new_form) {}
 		};
 
@@ -121,7 +121,7 @@ namespace bmath::intern {
 			std::vector<ValueNameLookup> value_table;
 			bool build_lhs = true; //if false -> build rhs
 
-			PnTypedIdx insert_instance(PnStore& store, ParseView input);
+			PnTypedIdx insert_instance(PnStore& store, const ParseView input);
 		};
 
 		NameLookupTable parse_declarations(ParseView declarations);

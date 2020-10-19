@@ -19,7 +19,7 @@ namespace bmath::intern {
 	/////////////////////////////////////////////////////////////////////exported in header/////////////////////////////////////////////////////////////////////////////////
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	ParseString::ParseString(std::string& new_name) :name(new_name)
+	ParseString::ParseString(std::string& new_name) noexcept :name(new_name)
 	{
 		//all groups of whitespaces are shortened /changed to only a single space
 		const auto standardize_whitespace = [](std::string& str) {
@@ -190,7 +190,7 @@ namespace bmath::intern {
 		return tokenized;
 	} //tokenize
 
-	std::size_t find_open_par(std::size_t clsd_par, const TokenView name)
+	std::size_t find_open_par(std::size_t clsd_par, const TokenView name) noexcept
 	{
 		std::size_t open_par = name.find_last_of(token::open_grouping, clsd_par - 1u);
 		clsd_par = name.find_last_of(token::clse_grouping, clsd_par - 1u);
@@ -201,7 +201,7 @@ namespace bmath::intern {
 		return open_par;
 	} //find_open_par
 
-	std::size_t find_closed_par(std::size_t open_par, const TokenView name)
+	std::size_t find_closed_par(std::size_t open_par, const TokenView name) noexcept
 	{
 		std::size_t clsd_par = name.find_first_of(token::clse_grouping, open_par + 1u);
 		open_par = name.find_first_of(token::open_grouping, open_par + 1u);
@@ -212,7 +212,7 @@ namespace bmath::intern {
 		return clsd_par;
 	} //find_closed_par
 
-	std::size_t find_first_of_skip_pars(const TokenView name, const Token token)
+	std::size_t find_first_of_skip_pars(const TokenView name, const Token token) noexcept
 	{
 		std::size_t open_par = name.find_first_of(token::open_grouping);
 		std::size_t after_clsd_par = 0u;
@@ -227,7 +227,7 @@ namespace bmath::intern {
 		return name.find_first_of(token, after_clsd_par);
 	} //find_first_of_skip_pars
 
-	std::size_t count_skip_pars(const TokenView name, const Token token)
+	std::size_t count_skip_pars(const TokenView name, const Token token) noexcept
 	{
 		std::size_t count = 0u;
 		std::size_t open_par = name.find_first_of(token::open_grouping);

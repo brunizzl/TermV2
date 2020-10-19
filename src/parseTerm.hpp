@@ -8,7 +8,7 @@
 
 namespace bmath {
 
-	struct ParseFailure
+	struct [[nodiscard]] ParseFailure
 	{
 		std::size_t where;	//index of invalid token /character
 		const char* what;
@@ -49,26 +49,26 @@ namespace bmath::intern {
 		constexpr Token imag_unit = 'i';
 	}
 
-	struct TokenString :std::string
+	struct [[nodiscard]] TokenString :std::string
 	{
 		using std::string::basic_string;
-		explicit TokenString(const std::string& other) :std::string(other) {}
-		explicit TokenString(std::string&& other) :std::string(other) {}
+		explicit TokenString(const std::string& other) noexcept :std::string(other) {}
+		explicit TokenString(std::string&& other) noexcept :std::string(other) {}
 	};
 
-	struct TokenView :std::string_view
+	struct [[nodiscard]] TokenView :std::string_view
 	{
 		using std::string_view::basic_string_view;
-		constexpr explicit TokenView(const std::string_view& other) :std::string_view(other) {}
-		constexpr explicit TokenView(std::string_view&& other) :std::string_view(other) {}
+		constexpr explicit TokenView(const std::string_view& other) noexcept :std::string_view(other) {}
+		constexpr explicit TokenView(std::string_view&& other) noexcept :std::string_view(other) {}
 	};
 
-	struct ParseString
+	struct [[nodiscard]] ParseString
 	{
 		TokenString tokens;
 		std::string& name;
 
-		ParseString(std::string& new_name);
+		ParseString(std::string& new_name) noexcept;
 
 		//changes spaces out to multiplication operator if appropriate
 		void allow_implicit_product() noexcept;
@@ -76,25 +76,25 @@ namespace bmath::intern {
 		//will not remove '\n' and the like, only ' ' -> assumes standardize_whitespace already run
 		void remove_space() noexcept;
 
-		std::size_t size() const noexcept { assert(tokens.size() == name.size()); return tokens.size(); }
+		std::size_t size() const noexcept { assert(this->tokens.size() == this->name.size()); return this->tokens.size(); }
 	};
 
 	//as parsing always needs both a string_view to the actual input and a TokenView to the tokenized input, 
 	//  this struct packs both together (and also the offset from the beginning)
-	struct ParseView
+	struct [[nodiscard]] ParseView
 	{
 		TokenView tokens;
 		const char* chars;
 		std::size_t offset; //distance to actual beginning of string(s)
 
-		ParseView(const ParseString& str) 
+		ParseView(const ParseString& str) noexcept 
 			:tokens(str.tokens), chars(str.name.data()), offset(0)
 		{
 			throw_if(str.name.size() != str.tokens.size(), 
 				"expected both views to represent same data -> have same length");
 		}
 
-		constexpr ParseView(const TokenView& new_tokens, const char* new_chars, std::size_t offset_) 
+		constexpr ParseView(const TokenView& new_tokens, const char* new_chars, std::size_t offset_) noexcept
 			:tokens(new_tokens), chars(new_chars), offset(offset_) {}
 
 		//never produces undefinded behavior, unlike unlike std::string_view's version >:(
@@ -140,15 +140,15 @@ namespace bmath::intern {
 	TokenString tokenize(const std::string_view name);
 
 	//searches from clsd_par to front, as term is constructed from the right.
-	std::size_t find_open_par(const std::size_t clsd_par, const TokenView name);
+	std::size_t find_open_par(std::size_t clsd_par, const TokenView name) noexcept;
 
 	//searches from open_par to back
-	std::size_t find_closed_par(const std::size_t open_par, const TokenView name);
+	std::size_t find_closed_par(std::size_t open_par, const TokenView name) noexcept;
 
 	//search all of name not enclosed by parentheses for token
-	std::size_t find_first_of_skip_pars(const TokenView name, const Token token);
+	std::size_t find_first_of_skip_pars(const TokenView name, const Token token) noexcept;
 
 	//counts occurences of token in all of name not enclosed by parentheses
-	std::size_t count_skip_pars(const TokenView name, const Token token);
+	std::size_t count_skip_pars(const TokenView name, const Token token) noexcept;
 
 } //namespace bmath::intern

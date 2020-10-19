@@ -29,7 +29,7 @@ namespace bmath::intern {
 
 
 	template<const auto x, const auto... xs, typename T>
-	constexpr bool is_one_of(const T y) 
+	constexpr bool is_one_of(const T y) noexcept
 	{ 
 		static_assert(sizeof(T) <= 8, "this function copies the values, ya dummie!"); //although i assume this to be inlined.
 		if constexpr (!sizeof...(xs)) { return y == x; }
@@ -75,7 +75,7 @@ namespace bmath::intern {
 
 
 	template<typename Value_T, std::size_t BufferSize>
-	class StupidBufferVector
+	class [[nodiscard]] StupidBufferVector
 	{
 		static_assert(BufferSize > 0u);
 		static_assert(std::is_trivially_copyable_v<Value_T>);     //big part of the "Stupid" in the name
@@ -95,9 +95,9 @@ namespace bmath::intern {
 		constexpr const Value_T* data() const noexcept { return this->data_; }
 		constexpr Value_T* data() noexcept { return this->data_; }
 
-		constexpr StupidBufferVector() :size_(0u), data_(local_data), capacity(0u) {}
+		constexpr StupidBufferVector() noexcept :size_(0u), data_(local_data), capacity(0u) {}
 
-		constexpr StupidBufferVector(std::initializer_list<Value_T> init) : size_(init.size()), data(local_data)
+		constexpr StupidBufferVector(const std::initializer_list<Value_T> init) noexcept : size_(init.size()), data(local_data)
 		{
 			if (init.size() > BufferSize) {
 				this->data_ = new Value_T[init.size()];
@@ -106,7 +106,7 @@ namespace bmath::intern {
 			std::copy(init.begin(), init.end(), this->data_);
 		}
 
-		~StupidBufferVector()
+		~StupidBufferVector() noexcept
 		{
 			if (this->size_ > BufferSize) [[unlikely]] {
 				delete[] this->data_;
@@ -128,7 +128,7 @@ namespace bmath::intern {
 			}
 		}
 
-		constexpr void push_back(Value_T elem)
+		constexpr void push_back(const Value_T elem) noexcept
 		{
 			if (this->size_ == BufferSize) [[unlikely]] {
 				Value_T * new_data = new Value_T[BufferSize * 2];
@@ -171,7 +171,7 @@ namespace bmath::intern {
 	}; //class StupidBufferVector
 
 	template<typename Value_T, std::size_t MaxSize>
-	class ShortVector
+	class [[nodiscard]] ShortVector
 	{
 		static_assert(std::is_trivially_copyable_v<Value_T>);     //big part of the "Stupid" in the name
 		static_assert(std::is_trivially_destructible_v<Value_T>); //big part of the "Stupid" in the name
@@ -184,29 +184,29 @@ namespace bmath::intern {
 		constexpr const Value_T* data() const noexcept { return this->data_; }
 		constexpr Value_T* data() noexcept { return this->data_; }
 
-		constexpr ShortVector() = default;
+		constexpr ShortVector() noexcept = default;
 
-		constexpr ShortVector(std::initializer_list<Value_T> init) :size_(init.size())
+		constexpr ShortVector(const std::initializer_list<Value_T> init) :size_(init.size()) noexcept
 		{
 			static_assert(std::is_trivially_copyable_v<Value_T>);
 			assert(init.size() <= MaxSize && "initializer length exeeds static vector limit");
 			std::copy(init.begin(), init.end(), this->data_);
 		}
 
-		constexpr void push_pack(Value_T elem)
+		constexpr void push_pack(const Value_T elem) noexcept
 		{
 			assert(this->size_ < MaxSize && "tried pushing on full vector");
 			this->data_[this->size_++] = std::move(elem);
 		}
 
-		constexpr Value_T pop_back() 
+		constexpr Value_T pop_back() noexcept
 		{ 
 			assert(this->size_ > 0u && "tried popping on empty vector");
 			return std::move(this->data_[--this->size_]); 
 		}
 
-		constexpr const Value_T& operator[](std::size_t where) const noexcept { return this->data_[where]; }
-		constexpr Value_T& operator[](std::size_t where) noexcept { return this->data_[where]; }
+		constexpr const Value_T& operator[](const std::size_t where) const noexcept { return this->data_[where]; }
+		constexpr Value_T& operator[](const std::size_t where) noexcept { return this->data_[where]; }
 
 		constexpr const Value_T& front() const noexcept {  return this->data_[0]; }
 		constexpr const Value_T& back() const noexcept {  return this->data_[this->size_ - 1u]; }
@@ -229,27 +229,27 @@ namespace bmath::intern {
 
 
 	template<typename... Enums>
-	class SumEnum;
+	class [[nodiscard]] SumEnum;
 
 	template<>
-	class SumEnum<>
+	class [[nodiscard]] SumEnum<>
 	{
 	protected:
 		enum class Value :unsigned {} value; //only data held by SumEnum
 		static constexpr unsigned next_offset = 0u;
 
 	public:
-		constexpr SumEnum(Value e) :value(e) {}
-		constexpr operator Value() const { return this->value; }
-		explicit constexpr SumEnum(unsigned u) :value(static_cast<Value>(u)) {}
-		explicit constexpr operator unsigned() const { return static_cast<unsigned>(this->value); }
+		constexpr SumEnum(const Value e) noexcept :value(e) {}
+		constexpr operator Value() const noexcept { return this->value; }
+		explicit constexpr SumEnum(const unsigned u) noexcept :value(static_cast<Value>(u)) {}
+		explicit constexpr operator unsigned() const noexcept { return static_cast<unsigned>(this->value); }
 
-		template<typename E> constexpr bool is() const 
+		template<typename E> constexpr bool is() const noexcept
 		{ static_assert(false, "method is<E>: requested type E not part of SumEnum"); return false; }
 	}; //class SumEnum<>
 
 	template<typename Enum, typename... TailEnums>
-	class SumEnum<Enum, TailEnums...> :public SumEnum<TailEnums...>
+	class [[nodiscard]] SumEnum<Enum, TailEnums...> :public SumEnum<TailEnums...>
 	{
 		static_assert(!std::is_integral_v<Enum>, "only expect actual enums or other SumEnums as template parameters");
 
@@ -262,29 +262,29 @@ namespace bmath::intern {
 
 	public:
 		using Base::Base;
-		constexpr SumEnum(Enum e) :Base(static_cast<Value>(unsigned(e) + this_offset)) {}
+		constexpr SumEnum(const Enum e) noexcept :Base(static_cast<Value>(unsigned(e) + this_offset)) {}
 
 		template<typename E, std::enable_if_t<std::is_convertible_v<E, Enum> && !std::is_same_v<E, Enum>, int> = 0>
-		constexpr SumEnum(E e) : Base(unsigned(Enum(e)) + this_offset) {} //Enum itself is SumEnum<...> and can be build from E
+		constexpr SumEnum(const E e) noexcept : Base(unsigned(Enum(e)) + this_offset) {} //Enum itself is SumEnum<...> and can be build from E
 
-		explicit constexpr operator Enum() const { return static_cast<Enum>(unsigned(this->value) - this_offset); }
+		explicit constexpr operator Enum() const noexcept { return static_cast<Enum>(unsigned(this->value) - this_offset); }
 
 		template<typename E, std::enable_if_t<std::is_convertible_v<E, Base> && !std::is_same_v<E, Enum>, int> = 0> 
-		constexpr bool is() const //default case: search in parent types
+		constexpr bool is() const noexcept //default case: search in parent types
 		{
 			static_assert(!std::is_integral_v<E>);
 			return static_cast<const Base>(*this).is<E>(); 
 		}
 
 		template<typename E, std::enable_if_t<!std::is_convertible_v<E, Base> && !std::is_same_v<E, Enum>, int> = 0> 
-		constexpr bool is() const //Enum itself is SumEnum<...> and can be build from E -> hand over to Enum
+		constexpr bool is() const noexcept //Enum itself is SumEnum<...> and can be build from E -> hand over to Enum
 		{
 			static_assert(!std::is_integral_v<E>);
 			return this->operator Enum().is<E>(); 
 		}
 
 		template<typename E, std::enable_if_t<std::is_same_v<E, Enum>, int> = 0> 
-		constexpr bool is() const //E is same as Enum -> just check if this is between offsets
+		constexpr bool is() const noexcept //E is same as Enum -> just check if this is between offsets
 		{ 
 			static_assert(!std::is_integral_v<E>);
 			return unsigned(this->value) >= this_offset && unsigned(this->value) < next_offset; 
@@ -296,13 +296,13 @@ namespace bmath::intern {
 	}; //class SumEnum<Enum, TailEnums...>
 
 	template<typename E, E Count>
-	struct WrapEnum 
+	struct [[nodiscard]] WrapEnum 
 	{
 		static_assert(std::is_enum_v<E>);
 
 		E value;
-		constexpr WrapEnum(E e) noexcept :value(e) {}
-		explicit constexpr WrapEnum(unsigned u) :value(static_cast<E>(u)) {}
+		constexpr WrapEnum(const E e) noexcept :value(e) {}
+		explicit constexpr WrapEnum(const unsigned u) noexcept :value(static_cast<E>(u)) {}
 		constexpr operator E() const noexcept { return this->value; }
 		explicit constexpr operator unsigned() const noexcept { return static_cast<unsigned>(this->value); }
 		static constexpr E COUNT = Count;
@@ -324,70 +324,67 @@ namespace bmath::intern {
 
 
 
-	namespace bitset_detail {
 
-		template<typename UInt_T>
-		class BitSet_
+	template<typename UInt_T>
+	class [[nodiscard]] IntBitSet
+	{
+		static_assert(std::is_unsigned_v<UInt_T>);
+		static constexpr std::size_t size = sizeof(UInt_T) * 8u;
+
+	public:
+		UInt_T data;
+
+		constexpr IntBitSet() noexcept :data(0u) {}
+		constexpr IntBitSet(const UInt_T new_data) noexcept :data(new_data) {}
+		constexpr operator UInt_T() const noexcept { return this->data; }
+
+		constexpr void   set(const std::size_t pos) noexcept { this->data |=  (UInt_T(1) << pos); }
+		constexpr void reset(const std::size_t pos) noexcept { this->data &= ~(UInt_T(1) << pos); }
+		constexpr void   set(const std::size_t pos, const bool val) noexcept { val ? this->set(pos) : this->reset(pos); }
+
+		constexpr bool  test(const std::size_t pos) const noexcept { return this->data & (UInt_T(1) << pos); }
+		constexpr bool  all() const noexcept { return !(~this->data); }
+		constexpr bool  any() const noexcept { return this->data; }
+		constexpr bool none() const noexcept { return !this->data; }
+
+		constexpr void flip(const std::size_t pos) { this->set(pos, !this->test(pos)); }
+
+		constexpr std::size_t count() const noexcept
 		{
-			static_assert(std::is_unsigned_v<UInt_T>);
-			static constexpr std::size_t size = sizeof(UInt_T) * 8u;
-
-		public:
-			UInt_T data;
-
-			constexpr BitSet_() :data(0u) {}
-			constexpr BitSet_(const UInt_T new_data) :data(new_data) {}
-			constexpr operator UInt_T() const noexcept { return this->data; }
-
-			constexpr void   set(const std::size_t pos) noexcept { this->data |=  (UInt_T(1) << pos); }
-			constexpr void reset(const std::size_t pos) noexcept { this->data &= ~(UInt_T(1) << pos); }
-			constexpr void   set(const std::size_t pos, const bool val) noexcept { val ? this->set(pos) : this->reset(pos); }
-
-			constexpr bool  test(const std::size_t pos) const noexcept { return this->data & (UInt_T(1) << pos); }
-			constexpr bool  all() const noexcept { return !(~this->data); }
-			constexpr bool  any() const noexcept { return this->data; }
-			constexpr bool none() const noexcept { return !this->data; }
-
-			constexpr void flip(const std::size_t pos) { this->set(pos, !this->test(pos)); }
-
-			constexpr std::size_t count() const noexcept
-			{
-				//return std::popcount(this->data);
-				std::size_t result = 0u;
-				for (std::size_t i = 0u; i < size; i++) {
-					result += this->test(i);
-				}
-				return result;
+			//return std::popcount(this->data);
+			std::size_t result = 0u;
+			for (std::size_t i = 0u; i < size; i++) {
+				result += this->test(i);
 			}
+			return result;
+		}
 
-			constexpr std::size_t find_first_true() const noexcept
-			{
-				//return std::countr_zero(this->data);
-				for (std::size_t i = 0u; i < size; i++) {
-					if (this->test(i)) { return i; }
-				}
-				return size;
+		constexpr std::size_t find_first_true() const noexcept
+		{
+			//return std::countr_zero(this->data);
+			for (std::size_t i = 0u; i < size; i++) {
+				if (this->test(i)) { return i; }
 			}
+			return size;
+		}
 
-			constexpr std::size_t find_first_false() const noexcept
-			{
-				//return std::countr_one(this->data);
-				for (std::size_t i = 0u; i < size; i++) {
-					if (!this->test(i)) { return i; }
-				}
-				return size;
+		constexpr std::size_t find_first_false() const noexcept
+		{
+			//return std::countr_one(this->data);
+			for (std::size_t i = 0u; i < size; i++) {
+				if (!this->test(i)) { return i; }
 			}
-		}; //class BitSet_
+			return size;
+		}
+	}; //class IntBitSet
 
-	} //namespace bitset_detail
-
-	using BitSet8  = bitset_detail::BitSet_<std::uint8_t >;
-	using BitSet16 = bitset_detail::BitSet_<std::uint16_t>;
-	using BitSet32 = bitset_detail::BitSet_<std::uint32_t>;
-	using BitSet64 = bitset_detail::BitSet_<std::uint64_t>;
+	using BitSet8  = IntBitSet<std::uint8_t >;
+	using BitSet16 = IntBitSet<std::uint16_t>;
+	using BitSet32 = IntBitSet<std::uint32_t>;
+	using BitSet64 = IntBitSet<std::uint64_t>;
 
 	template<std::size_t Bits, std::enable_if_t<Bits % 64u == 0u, int> = 0>
-	class BitSet
+	class [[nodiscard]] BitSet
 	{
 		static constexpr std::size_t array_size = Bits / 64u;
 
@@ -399,17 +396,17 @@ namespace bmath::intern {
 
 		constexpr std::size_t size() const noexcept { return Bits; }
 
-		constexpr BitSet() :data() {}
-		constexpr BitSet(const std::uint64_t new_data) : data{ new_data } {}
+		constexpr BitSet() noexcept :data() {}
+		constexpr BitSet(const std::uint64_t new_data) noexcept : data{ new_data } {}
 
 		constexpr void   set(const std::size_t pos) noexcept { this->data[pos / 64u].set(pos % 64u); }
 		constexpr void reset(const std::size_t pos) noexcept { this->data[pos / 64u].reset(pos % 64u); }
 		constexpr void   set(const std::size_t pos, const bool val) noexcept { this->data[pos / 64u].set(pos % 64u, val); }
 
 		constexpr bool  test(const std::size_t pos) const noexcept { return this->data[pos / 64u].test(pos % 64u); }
-		constexpr bool  all() const noexcept { return this->test_all([](const BitSet64 x) { return x == -1ull; }); }
+		constexpr bool  all() const noexcept { return this->test_all([](const BitSet64 x) { return x.all(); }); }
 		constexpr bool  any() const noexcept { return !this->none(); }
-		constexpr bool none() const noexcept { return this->test_all([](const BitSet64 x) { return x == 0u; }); }
+		constexpr bool none() const noexcept { return this->test_all([](const BitSet64 x) { return x.none(); }); }
 
 		constexpr void flip(const std::size_t pos) { this->data[pos / 64u].flip(pos % 64u); }
 
@@ -454,8 +451,8 @@ namespace bmath::intern {
 
 		double val = no_value;
 
-		constexpr OptDouble(const double new_val) :val(new_val) {}
-		constexpr OptDouble() = default;
+		constexpr OptDouble(const double new_val) noexcept :val(new_val) {}
+		constexpr OptDouble() noexcept = default;
 
 		bool has_value() const noexcept { return !std::isnan(this->val); }
 		operator bool() const noexcept { return this->has_value(); }
@@ -464,15 +461,15 @@ namespace bmath::intern {
 		constexpr double& operator*() noexcept { return this->val; }
 		constexpr const double& operator*() const noexcept { return this->val; }
 
-		constexpr OptDouble operator+(const OptDouble snd) { return this->val + snd.val; }
-		constexpr OptDouble operator-(const OptDouble snd) { return this->val - snd.val; }
-		constexpr OptDouble operator*(const OptDouble snd) { return this->val * snd.val; }
-		constexpr OptDouble operator/(const OptDouble snd) { return this->val / snd.val; }
+		constexpr OptDouble operator+(const OptDouble snd) const noexcept { return this->val + snd.val; }
+		constexpr OptDouble operator-(const OptDouble snd) const noexcept { return this->val - snd.val; }
+		constexpr OptDouble operator*(const OptDouble snd) const noexcept { return this->val * snd.val; }
+		constexpr OptDouble operator/(const OptDouble snd) const noexcept { return this->val / snd.val; }
 
-		constexpr OptDouble operator+=(const OptDouble snd) { this->val += snd.val; return *this; }
-		constexpr OptDouble operator-=(const OptDouble snd) { this->val -= snd.val; return *this; }
-		constexpr OptDouble operator*=(const OptDouble snd) { this->val *= snd.val; return *this; }
-		constexpr OptDouble operator/=(const OptDouble snd) { this->val /= snd.val; return *this; }
+		constexpr OptDouble operator+=(const OptDouble snd) noexcept { this->val += snd.val; return *this; }
+		constexpr OptDouble operator-=(const OptDouble snd) noexcept { this->val -= snd.val; return *this; }
+		constexpr OptDouble operator*=(const OptDouble snd) noexcept { this->val *= snd.val; return *this; }
+		constexpr OptDouble operator/=(const OptDouble snd) noexcept { this->val /= snd.val; return *this; }
 	}; //struct OptDouble
 
 	//can be used like std::optional<std::complex<double>>, but with extra direct complex functionality
@@ -483,8 +480,8 @@ namespace bmath::intern {
 
 		std::complex<double> val = no_value;
 
-		constexpr OptComplex(const std::complex<double>& new_val) :val(new_val) {}
-		constexpr OptComplex() = default;
+		constexpr OptComplex(const std::complex<double>& new_val) noexcept :val(new_val) {}
+		constexpr OptComplex() noexcept = default;
 
 		bool has_value() const noexcept { return !std::isnan(this->val.real()); }
 		operator bool() const noexcept { return this->has_value(); }
@@ -495,15 +492,15 @@ namespace bmath::intern {
 		constexpr std::complex<double>* operator->() noexcept { return &this->val; }
 		constexpr const std::complex<double>* operator->() const noexcept { return &this->val; }
 
-		constexpr OptComplex operator+(const OptComplex& snd) { return this->val + snd.val; }
-		constexpr OptComplex operator-(const OptComplex& snd) { return this->val - snd.val; }
-		constexpr OptComplex operator*(const OptComplex& snd) { return this->val * snd.val; }
-		constexpr OptComplex operator/(const OptComplex& snd) { return this->val / snd.val; }		
+		constexpr OptComplex operator+(const OptComplex& snd) const noexcept { return this->val + snd.val; }
+		constexpr OptComplex operator-(const OptComplex& snd) const noexcept { return this->val - snd.val; }
+		constexpr OptComplex operator*(const OptComplex& snd) const noexcept { return this->val * snd.val; }
+		constexpr OptComplex operator/(const OptComplex& snd) const noexcept { return this->val / snd.val; }		
 
-		constexpr const OptComplex& operator+=(const OptComplex& snd) { this->val += snd.val; return *this; }
-		constexpr const OptComplex& operator-=(const OptComplex& snd) { this->val -= snd.val; return *this; }
-		constexpr const OptComplex& operator*=(const OptComplex& snd) { this->val *= snd.val; return *this; }
-		constexpr const OptComplex& operator/=(const OptComplex& snd) { this->val /= snd.val; return *this; }
+		constexpr const OptComplex& operator+=(const OptComplex& snd) noexcept { this->val += snd.val; return *this; }
+		constexpr const OptComplex& operator-=(const OptComplex& snd) noexcept { this->val -= snd.val; return *this; }
+		constexpr const OptComplex& operator*=(const OptComplex& snd) noexcept { this->val *= snd.val; return *this; }
+		constexpr const OptComplex& operator/=(const OptComplex& snd) noexcept { this->val /= snd.val; return *this; }
 	};
 
 } //namespace bmath::intern

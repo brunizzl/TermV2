@@ -8,7 +8,7 @@
 namespace bmath::intern {
 
 	template<typename UnderlyingType, typename TypesEnum>
-	struct SplitResult
+	struct [[nodiscard]] SplitResult
 	{
 		UnderlyingType index;
 		TypesEnum type;
@@ -41,9 +41,9 @@ namespace bmath::intern {
 		using Enum_T = TypesEnum;
 		static constexpr std::size_t max_index = index_mask >> index_offset;
 
-		explicit constexpr BasicTypedIdx() :data(-1u) {}
+		explicit constexpr BasicTypedIdx() noexcept :data(-1u) {}
 
-		constexpr BasicTypedIdx(std::size_t index, TypesEnum type)
+		constexpr BasicTypedIdx(const std::size_t index, const TypesEnum type)
 			: data(static_cast<UnderlyingType>(index << index_offset) | static_cast<UnderlyingType>(type))
 		{
 			throw_if(index > max_index, "TypedIdx has recieved index bigger than max_index");

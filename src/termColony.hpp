@@ -17,7 +17,7 @@ namespace bmath::intern {
 	//not only a single Value_T (as an ordinary list would). TermSLC directly represents the node, there is no extra head or management.
 	//TermSLC is build to reside inside a TermStore, thus it works with TypedIdx_T to access later nodes, not with pointers.
 	template <typename Index_T, typename Value_T, std::size_t ArraySize>
-	struct TermSLC
+	struct [[nodiscard]] TermSLC
 	{
 		static_assert(std::is_unsigned_v<Index_T>);
 		static_assert(std::is_trivially_destructible_v<Value_T>);
@@ -30,7 +30,7 @@ namespace bmath::intern {
 		Index_T next_idx;	//index of next SLC block in TermStore
 		Value_T values[ArraySize];
 
-		constexpr TermSLC(Value_T fst_elem = null_value) :next_idx(null_index)
+		constexpr TermSLC(const Value_T fst_elem = null_value) noexcept :next_idx(null_index)
 		{
 			this->values[0] = fst_elem;
 			for (std::size_t i = 1; i < ArraySize; i++) {
@@ -39,8 +39,7 @@ namespace bmath::intern {
 		}
 
 		//can only fill up to single block
-		template<typename Container>
-		constexpr TermSLC(Container new_values, Index_T next_block) :next_idx(next_block)
+		constexpr TermSLC(const std::span<const Value_T> new_values, const Index_T next_block) :next_idx(next_block)
 		{
 			assert(new_values.size() <= ArraySize);
 			std::copy(new_values.begin(), new_values.end(), this->values);
@@ -141,9 +140,6 @@ namespace bmath::intern {
 
 				using SLC_T = std::conditional_t<is_const, const TermSLC, TermSLC>;
 
-				//convinience for that ugly reinterpret_cast thingy
-				SLC_T* store_at(std::size_t idx) { return reinterpret_cast<SLC_T*>(&this->store.at(idx)); }
-
 				TermStore_T& store;
 				Index_T current_idx;			// == 0, if whole object represents end()
 				std::uint32_t array_idx;		// == SLC::array_size, if whole object represents end()
@@ -169,7 +165,7 @@ namespace bmath::intern {
 				IncrementEffect unchecked_increment()
 				{
 					if (++this->array_idx == SLC_T::array_size) [[unlikely]] {
-						auto& current = *this->store_at(current_idx);
+						auto& current = *ptr_at(this->store, current_idx);
 						if (current.next_idx == SLC_T::null_index) [[unlikely]] {
 							this->current_idx = 0; //mark this as end
 							return IncrementEffect::end;
@@ -187,7 +183,7 @@ namespace bmath::intern {
 				{
 					IncrementEffect what = this->unchecked_increment();
 					while (what != IncrementEffect::end) {
-						auto& current = *this->store_at(this->current_idx);
+						auto& current = *ptr_at(this->store, this->current_idx);
 						if (current.values[this->array_idx] != SLC_T::null_value) {
 							return *this;
 						}
@@ -205,7 +201,7 @@ namespace bmath::intern {
 
 				[[nodiscard]] auto& operator*() 
 				{ 
-					auto* const current = this->store_at(this->current_idx);
+					auto* const current = ptr_at(this->store, this->current_idx);
 					return current->values[array_idx]; 
 				}
 
@@ -238,7 +234,7 @@ namespace bmath::intern {
 		}; //struct Range
 
 		template<typename TermUnion_T, typename Compare>
-		static void sort(TermStore<TermUnion_T>& store, const Index_T slc_idx, Compare compare)
+		static void sort(TermStore<TermUnion_T>& store, const Index_T slc_idx, Compare compare) noexcept
 		{
 			StupidBufferVector<Value_T, 16> all_values;
 			auto range = Range<TermStore<TermUnion_T>>(store, slc_idx);
@@ -253,7 +249,7 @@ namespace bmath::intern {
 				iter.unchecked_increment(); //also expose empty slots
 			}
 
-			//clean up possible rest space (if previous SLC had gaps)
+			//clean up possible rest space (if SLC had gaps bevore sorting)
 			if (iter != range.end()) {
 				const auto current = ptr_at(store, iter.current_idx);
 				while (iter.array_idx < array_size) {
@@ -269,7 +265,7 @@ namespace bmath::intern {
 		static std::size_t slow_size(const TermStore<TermUnion_T>& store, const Index_T slc_idx)
 		{
 			std::size_t result = 0;
-			for (const auto _ : Range<const TermStore<TermUnion_T>>(store, slc_idx)) {
+			for (auto&& : Range<const TermStore<TermUnion_T>>(store, slc_idx)) {
 				result++;
 			}
 			return result;
@@ -288,14 +284,16 @@ namespace bmath::intern {
 		{
 			const std::size_t last_substr_length = str.length() % TermString128::array_size;
 			if (last_substr_length > 0) {
-				const std::string_view last_view = str.substr(str.length() - last_substr_length);
+				const std::size_t last_substr_begin = str.length() - last_substr_length;
+				const std::span<const char> last_view(str.data() + last_substr_begin, last_substr_length);
 				prev_inserted_at = store.insert(TermString128(last_view, prev_inserted_at));
 				str.remove_suffix(last_substr_length);
 			}
 		}
 		assert((str.length() % TermString128::array_size == 0) && "last shorter bit should have been cut off already");
 		while (str.length()) {
-			const std::string_view last_view = str.substr(str.length() - TermString128::array_size);
+			const char *const last_view_begin = str.data() + str.length() - TermString128::array_size;
+			const std::span<const char> last_view(last_view_begin, TermString128::array_size);
 			prev_inserted_at = store.insert(TermString128(last_view, prev_inserted_at));
 			str.remove_suffix(TermString128::array_size);
 		}
@@ -303,7 +301,7 @@ namespace bmath::intern {
 	} //insert_string
 
 	template<typename TermUnion_T>
-	void read(const TermStore<TermUnion_T>& store, std::size_t source_idx, std::string& dest)
+	void read(const TermStore<TermUnion_T>& store, const std::size_t source_idx, std::string& dest)
 	{
 		auto current = TermString128::ptr_at(store, source_idx);
 		while (current->next_idx != TermString128::null_index) {
@@ -320,7 +318,7 @@ namespace bmath::intern {
 
 	template<typename TermUnion_T1, typename TermUnion_T2>
 	[[nodiscard]] std::strong_ordering string_compare(const TermStore<TermUnion_T1>& store_1, 
-		const TermStore<TermUnion_T2>& store_2, std::uint32_t idx_1, std::uint32_t idx_2)
+		const TermStore<TermUnion_T2>& store_2, const std::uint32_t idx_1, const std::uint32_t idx_2)
 	{
 		auto current_1 = TermString128::ptr_at(store_1, idx_1);
 		auto current_2 = TermString128::ptr_at(store_2, idx_2);
@@ -351,7 +349,7 @@ namespace bmath::intern {
 
 	template<typename TermUnion_T>
 	[[nodiscard]] std::strong_ordering string_compare(const TermStore<TermUnion_T>& store,
-		std::uint32_t idx, std::string_view view)
+		const std::uint32_t idx, std::string_view view)
 	{
 		auto current = TermString128::ptr_at(store, idx);
 		while (view.size() > TermString128::array_size && current->next_idx != TermString128::null_index) {

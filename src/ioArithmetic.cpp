@@ -314,7 +314,7 @@ namespace bmath::intern {
 
 	} //namespace compute
 
-	std::size_t find_first_not_arithmetic(const TokenView view)
+	std::size_t find_first_not_arithmetic(const TokenView view) noexcept
 	{
 		using namespace token;
 		//'\0' only as end symbol for allowed_tokens, not as part of aritmetic symbols
@@ -513,7 +513,7 @@ namespace bmath::intern {
 			}
 		}
 
-		PnTypedIdx NameLookupTable::insert_instance(PnStore& store, ParseView input)
+		PnTypedIdx NameLookupTable::insert_instance(PnStore& store, const ParseView input)
 		{
 			const auto crop = [](std::string_view name) -> std::array<char, 4u> { //this is very stupid, however i dont care.
 				if (name.size() >= 3u) {
