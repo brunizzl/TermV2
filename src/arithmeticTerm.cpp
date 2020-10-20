@@ -528,7 +528,7 @@ namespace bmath::intern {
 					TypedIdxSLC_T::free_slc(store, index); //all summands have already (implicitly) been freed in the loop above
 					return  result_val;
 				}
-				else if (result_val != 0.0) {
+				else if (*result_val != 0.0) {
 					const auto new_summand = TypedIdx_T(store.insert(*result_val), Type::complex);
 					TypedIdxSLC_T::insert_new(store, index, new_summand);
 				}
@@ -549,7 +549,7 @@ namespace bmath::intern {
 					TypedIdxSLC_T::free_slc(store, index); //all factors have already been freed in the loop above
 					return result_val;
 				}
-				else if (result_val != 1.0) {
+				else if (*result_val != 1.0) {
 					const auto new_factor = TypedIdx_T(store.insert(*result_val), Type::complex);
 					TypedIdxSLC_T::insert_new(store, index, new_factor);
 				}
@@ -636,7 +636,7 @@ namespace bmath::intern {
 				if (only_exact) {
 					return result_val;
 				}
-				else if (result_val != 0.0) {
+				else if (*result_val != 0.0) {
 					const auto new_summand = TypedIdx_T(store.insert(*result_val), Type::complex);
 					TypedIdxSLC_T::insert_new(store, index, new_summand);
 				}
@@ -658,7 +658,7 @@ namespace bmath::intern {
 				if (only_exact) {
 					return result_val;
 				}
-				else if (result_val != 1.0) {
+				else if (*result_val != 1.0) {
 					const auto new_summand = TypedIdx_T(store.insert(*result_val), Type::complex);
 					TypedIdxSLC_T::insert_new(store, index, new_summand);
 				}

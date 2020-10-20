@@ -14,7 +14,8 @@ namespace bmath::intern {
 			negate,	     //where specifies position of found operator
 			product,     //where specifies position of found operator
 			power,       //where specifies position of found operator
-			value,       //where is unspecidied
+			real_value,  //where is unspecified
+			imag_value,  //where is unspecified
 			variable,    //where is unspecified
 			group,       //where is unspecified
 			function,    //where specifies position of opening parenthesis
@@ -37,9 +38,8 @@ namespace bmath::intern {
 		//only expects operations '+', '*', '^' on numbers in N
 		double eval_natural(ParseView view);
 
-		//expects view.tokens to eighter consisting of only token::number, 
-		//  or have single non-number-token at end beeing token::imag_unit
-		std::complex<double> parse_value(ParseView view);
+		//expects number in engineering notation
+		double parse_real(const ParseView view);
 
 	} //namespace compute
 

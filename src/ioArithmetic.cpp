@@ -236,26 +236,30 @@ namespace bmath::intern {
 				if (view.size() == 1u && view.tokens.starts_with(token::imag_unit)) { 
 					return std::complex<double>(0.0, 1.0); 
 				}				
-				if (const auto sum_pos = find_first_of_skip_pars(view.tokens, token::sum); sum_pos != TokenView::npos) {
+				if (const std::size_t sum_pos = find_first_of_skip_pars(view.tokens, token::sum); sum_pos != TokenView::npos) {
 					const auto [lhs, rhs] = split(view, sum_pos);
 					switch (view.chars[sum_pos]) {
 					case '+': return eval_complex(lhs) + eval_complex(rhs);
 					case '-': return eval_complex(lhs) - eval_complex(rhs);
 					}
 				}				
-				if (const auto product_pos = find_first_of_skip_pars(view.tokens, token::product); product_pos != TokenView::npos) {
+				if (const std::size_t product_pos = find_first_of_skip_pars(view.tokens, token::product); product_pos != TokenView::npos) {
 					const auto [lhs, rhs] = split(view, product_pos);
 					return eval_complex(lhs) * eval_complex(rhs);
 				}
 				if (view.tokens.starts_with(token::unary_minus)) {
 					view.remove_prefix(1u);
 					return - eval_complex(view);
-				}				
-				if (const auto not_number_pos = view.tokens.find_first_not_of(token::number); 
-					not_number_pos == TokenView::npos ||
-					not_number_pos + 1u == view.size() && view.tokens.ends_with(token::imag_unit)) 
+				}
 				{
-					return parse_value(view);
+					const std::size_t not_number_pos = view.tokens.find_first_not_of(token::number);
+					if (not_number_pos == TokenView::npos) {
+						return parse_real(view);
+					}
+					else if (not_number_pos + 1u == view.size() && view.tokens.ends_with(token::imag_unit)) {
+						view.remove_suffix(1u);
+						return std::complex<double>(0.0, parse_real(view));
+					}
 				}
 				throw_if<ParseFailure>(!view.tokens.starts_with(token::open_grouping), view.offset, "expected '(' or the like");
 				throw_if<ParseFailure>(!view.tokens.ends_with(token::clse_grouping), view.offset + view.size(), "expected ')' or the like");
@@ -285,11 +289,7 @@ namespace bmath::intern {
 					return std::pow(eval_natural(lhs), eval_natural(rhs));
 				}
 				if (view.tokens.find_first_not_of(token::number) == TokenView::npos) {
-					double val;
-					const auto [ptr, error] = std::from_chars(view.chars, view.chars + view.size(), val);
-					throw_if<ParseFailure>(error == std::errc::invalid_argument, view.offset, "value syntax is illformed");
-					throw_if<ParseFailure>(ptr != view.chars + view.size(), std::size_t(view.offset + ptr - view.chars + 1), "value syntax is illformed");
-					return val;
+					return parse_real(view);
 				}
 				throw_if<ParseFailure>(!view.tokens.starts_with(token::open_grouping), view.offset, "expected '(' or the like");
 				throw_if<ParseFailure>(!view.tokens.ends_with(token::clse_grouping), view.offset + view.size(), "expected ')' or the like");
@@ -299,18 +299,14 @@ namespace bmath::intern {
 			throw ParseFailure{ view.offset, "run out of characters" };
 		} //eval_natural
 
-		std::complex<double> parse_value(ParseView view)
+		double parse_real(const ParseView view)
 		{
-			const bool imag = view.tokens.ends_with(token::imag_unit);
-			if (imag) {
-				view.remove_suffix(1u);
-			}
 			double value;
 			const auto [ptr, error] = std::from_chars(view.chars, view.chars + view.size(), value);
-			throw_if<ParseFailure>(error == std::errc::invalid_argument, view.offset, "value syntax is illformed");
+			throw_if<ParseFailure>(error != std::errc(), view.offset, "value syntax is illformed or value out of bounds");
 			throw_if<ParseFailure>(ptr != view.chars + view.size(), std::size_t(view.offset + ptr - view.chars + 1u), "value syntax is illformed");
-			return std::complex<double>(imag ? 0.0 : value, imag ? value : 0.0);
-		} //parse_value
+			return value;
+		} //parse_real
 
 	} //namespace compute
 
@@ -341,12 +337,15 @@ namespace bmath::intern {
 		if (const std::size_t pow_pos = find_first_of_skip_pars(view.tokens, token::hat); pow_pos != TokenView::npos) {
 			return Head{ pow_pos, Head::Type::power };
 		}
-		if (const auto not_number_pos = view.tokens.find_first_not_of(token::number); 
-			not_number_pos == TokenView::npos ||
-			not_number_pos + 1u == view.size() && view.tokens.ends_with(token::imag_unit))  {
-			return Head{ 0u, Head::Type::value };
+		{
+			const std::size_t not_number_pos = view.tokens.find_first_not_of(token::number);
+			if (not_number_pos == TokenView::npos) {
+				return Head{ 0u, Head::Type::real_value };
+			}
+			else if (not_number_pos + 1u == view.size() && view.tokens.ends_with(token::imag_unit)) {
+				return Head{ 0u, Head::Type::imag_value };
+			}
 		}
-
 		const std::size_t first_not_character = view.tokens.find_first_not_of(token::character);
 		if (first_not_character == TokenView::npos) {
 			return Head{ 0u, Head::Type::variable };
@@ -395,8 +394,12 @@ namespace bmath::intern {
 		case Head::Type::natural_computable: { 
 			return build_value<TypedIdx>(store, compute::eval_natural(input));
 		} break;
-		case Head::Type::value: {
-			return build_value<TypedIdx>(store, compute::parse_value(input));
+		case Head::Type::real_value: {
+			return build_value<TypedIdx>(store, compute::parse_real(input));
+		} break;
+		case Head::Type::imag_value: {
+			input.remove_suffix(1u); //remove token::imag_unit
+			return build_value<TypedIdx>(store, Complex(0.0, compute::parse_real(input)));
 		} break;
 		case Head::Type::function: {
 			return build_function<TypedIdx>(store, input, head.where, build);
@@ -619,8 +622,12 @@ namespace bmath::intern {
 			case Head::Type::natural_computable: { 
 				return build_value<PnTypedIdx>(store, compute::eval_natural(input));
 			} break;
-			case Head::Type::value: {
-				return build_value<PnTypedIdx>(store, compute::parse_value(input));
+			case Head::Type::real_value: {
+				return build_value<PnTypedIdx>(store, compute::parse_real(input));
+			} break;
+			case Head::Type::imag_value: {
+				input.remove_suffix(1u); //remove token::imag_unit
+				return build_value<PnTypedIdx>(store, Complex(0.0, compute::parse_real(input)));
 			} break;
 			case Head::Type::function: {
 				return build_function<PnTypedIdx>(store, input, head.where, *this);

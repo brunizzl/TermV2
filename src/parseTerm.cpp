@@ -12,7 +12,6 @@ namespace bmath::intern {
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	constexpr bool is_number_literal(const Token t) { return is_one_of<token::number, token::imag_unit>(t); }
-	constexpr bool is_literal(const Token t) { return is_one_of<token::character, token::number, token::imag_unit>(t); }
 	constexpr bool is_operator(const Token t) { return is_one_of<token::sum, token::product, token::hat>(t); }
 	
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -47,7 +46,10 @@ namespace bmath::intern {
 			const Token prev = this->tokens[prev_idx];
 			const Token curr = this->tokens[prev_idx + 1];
 			const Token next = this->tokens[prev_idx + 2];
-			if (is_literal(prev) && curr == token::space && is_literal(next)) {
+			if (is_one_of<token::character, token::number, token::imag_unit, token::clse_grouping>(prev) && 
+				is_one_of<token::character, token::number, token::imag_unit, token::open_grouping>(next) && 
+				curr == token::space) 
+			{
 				this->tokens[curr_idx] = token::product;
 				this->name[curr_idx] = '*';
 			}
@@ -134,7 +136,7 @@ namespace bmath::intern {
 					tokenized[i] = token::clse_grouping;
 					continue;
 				}
-				throw ParseFailure{ i, "unexpected character" };	//programm only reaches here if current is not valid.
+				throw ParseFailure{ i, "unexpected character" };
 			}
 			throw_if<ParseFailure>(nr_paren != 0, name.length() - 1, "poor grouping, not all parenteses where closed");
 			throw_if<ParseFailure>(nr_brack != 0, name.length() - 1, "poor grouping, not all brackets where closed");

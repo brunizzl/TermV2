@@ -19,9 +19,8 @@ namespace bmath {
 namespace bmath::intern {
 
 	using Token = char;
-	//TokenString is intended to be used along the string to be parsed to associate every char with what it represents 
+	//TokenString is intended to be used along the string to be parsed to associate every char with what it represents.
 	//A TokenString may only hold a combination of the following chars:
-	//names for characters standing for not (only) themselves:
 	namespace token {
 		//'c' representing any character in a closer sense: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_"
 		//'c' might also represent (non-leading) digits if occuring in a name: "0123456789" (note: no '.' allowed)
@@ -30,8 +29,8 @@ namespace bmath::intern {
 		//    2. if variable -/ function name has '\'' somewhere in between or at end, it is interpreted as normal character.
 		constexpr Token character = 'c';
 		//'n' representing any char composing a number literal: "0123456789."
-		//'n' might also represent "+-eE" if used to specify numbers 
-		//  as by engeneering notation: "<base>'e'<optional '+' or '-'><exponent>"
+		//'n' might also represent "+-e" if used to specify numbers 
+		//  as by engineering notation: "<base>'e'<optional '+' or '-'><exponent>"
 		constexpr Token number = 'n';
 		constexpr Token open_grouping = '('; //representing "([{"
 		constexpr Token clse_grouping = ')'; //representing ")]}"
@@ -39,7 +38,6 @@ namespace bmath::intern {
 		constexpr Token sum = 'A';     //representing '+' and '-' as binary operators
 		constexpr Token product = 'M'; //representing '*' and '/' as binary operators
 
-									   //tokens representing themselfs as chars:
 		constexpr Token comma = ',';
 		constexpr Token hat = '^';
 		constexpr Token equals = '='; //only used as single char, not to compare
@@ -70,7 +68,7 @@ namespace bmath::intern {
 
 		ParseString(std::string& new_name) noexcept;
 
-		//changes spaces out to multiplication operator if appropriate
+		//converts spaces to multiplication operator if appropriate
 		void allow_implicit_product() noexcept;
 
 		//will not remove '\n' and the like, only ' ' -> assumes standardize_whitespace already run
@@ -90,8 +88,7 @@ namespace bmath::intern {
 		ParseView(const ParseString& str) noexcept 
 			:tokens(str.tokens), chars(str.name.data()), offset(0)
 		{
-			throw_if(str.name.size() != str.tokens.size(), 
-				"expected both views to represent same data -> have same length");
+			assert(str.name.size() == str.tokens.size() && "expected both views to represent same data -> have same length");
 		}
 
 		constexpr ParseView(const TokenView& new_tokens, const char* new_chars, std::size_t offset_) noexcept

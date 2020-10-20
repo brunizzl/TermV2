@@ -32,8 +32,8 @@ namespace bmath::intern {
 	constexpr bool is_one_of(const T y) noexcept
 	{ 
 		static_assert(sizeof(T) <= 8, "this function copies the values, ya dummie!"); //although i assume this to be inlined.
-		if constexpr (!sizeof...(xs)) { return y == x; }
-		else                          { return y == x || is_one_of<xs...>(y); }
+		if constexpr (!sizeof...(xs)) { return x == y; }
+		else                          { return x == y || is_one_of<xs...>(y); }
 	}	
 
 	template <typename Fst_T, typename Snd_T, std::size_t Size>
@@ -74,7 +74,7 @@ namespace bmath::intern {
 
 
 
-	template<typename Value_T, std::size_t BufferSize>
+	template<typename Value_T, std::size_t BufferSize, std::size_t FirstHeapSize = BufferSize * 2>
 	class [[nodiscard]] StupidBufferVector
 	{
 		static_assert(BufferSize > 0u);
@@ -95,7 +95,7 @@ namespace bmath::intern {
 		constexpr const Value_T* data() const noexcept { return this->data_; }
 		constexpr Value_T* data() noexcept { return this->data_; }
 
-		constexpr StupidBufferVector() noexcept :size_(0u), data_(local_data), capacity(0u) {}
+		constexpr StupidBufferVector() noexcept :size_(0u), data_(local_data) {}
 
 		constexpr StupidBufferVector(const std::initializer_list<Value_T> init) noexcept : size_(init.size()), data(local_data)
 		{
@@ -131,10 +131,10 @@ namespace bmath::intern {
 		constexpr void push_back(const Value_T elem) noexcept
 		{
 			if (this->size_ == BufferSize) [[unlikely]] {
-				Value_T * new_data = new Value_T[BufferSize * 2];
+				Value_T *const new_data = new Value_T[FirstHeapSize];
 				std::copy(this->data_, this->data_ + BufferSize, new_data);
 				this->data_ = new_data;
-				this->capacity = BufferSize * 2;
+				this->capacity = FirstHeapSize;
 			}
 			else if (this->size_ > BufferSize && this->size_ == this->capacity) [[unlikely]] {
 				Value_T * new_data = new Value_T[this->capacity * 2];
@@ -189,7 +189,7 @@ namespace bmath::intern {
 		constexpr ShortVector(const std::initializer_list<Value_T> init) :size_(init.size()) noexcept
 		{
 			static_assert(std::is_trivially_copyable_v<Value_T>);
-			assert(init.size() <= MaxSize && "initializer length exeeds static vector limit");
+			assert(init.size() <= MaxSize && "initializer length exeeds MaxSize");
 			std::copy(init.begin(), init.end(), this->data_);
 		}
 
@@ -245,13 +245,13 @@ namespace bmath::intern {
 		explicit constexpr operator unsigned() const noexcept { return static_cast<unsigned>(this->value); }
 
 		template<typename E> constexpr bool is() const noexcept
-		{ static_assert(false, "method is<E>: requested type E not part of SumEnum"); return false; }
+		{ static_assert(false, "method is<E>(): requested type E not part of SumEnum"); return false; }
 	}; //class SumEnum<>
 
 	template<typename Enum, typename... TailEnums>
 	class [[nodiscard]] SumEnum<Enum, TailEnums...> :public SumEnum<TailEnums...>
 	{
-		static_assert(!std::is_integral_v<Enum>, "only expect actual enums or other SumEnums as template parameters");
+		static_assert(!std::is_integral_v<Enum>, "only expect actual enum or SumEnum /WrapEnum in template parameters");
 
 		using Base = SumEnum<TailEnums...>;
 		static constexpr unsigned this_offset = Base::next_offset;
@@ -264,27 +264,27 @@ namespace bmath::intern {
 		using Base::Base;
 		constexpr SumEnum(const Enum e) noexcept :Base(static_cast<Value>(unsigned(e) + this_offset)) {}
 
-		template<typename E, std::enable_if_t<std::is_convertible_v<E, Enum> && !std::is_same_v<E, Enum>, int> = 0>
+		template<typename E, std::enable_if_t<std::is_convertible_v<E, Enum> && !std::is_same_v<E, Enum>, void*> = nullptr>
 		constexpr SumEnum(const E e) noexcept : Base(unsigned(Enum(e)) + this_offset) {} //Enum itself is SumEnum<...> and can be build from E
 
 		explicit constexpr operator Enum() const noexcept { return static_cast<Enum>(unsigned(this->value) - this_offset); }
 
-		template<typename E, std::enable_if_t<std::is_convertible_v<E, Base> && !std::is_same_v<E, Enum>, int> = 0> 
+		template<typename E, std::enable_if_t<std::is_convertible_v<E, Base> && !std::is_same_v<E, Enum>, void*> = nullptr> 
 		constexpr bool is() const noexcept //default case: search in parent types
 		{
 			static_assert(!std::is_integral_v<E>);
 			return static_cast<const Base>(*this).is<E>(); 
 		}
 
-		template<typename E, std::enable_if_t<!std::is_convertible_v<E, Base> && !std::is_same_v<E, Enum>, int> = 0> 
+		template<typename E, std::enable_if_t<!std::is_convertible_v<E, Base> && !std::is_same_v<E, Enum>, void*> = nullptr> 
 		constexpr bool is() const noexcept //Enum itself is SumEnum<...> and can be build from E -> hand over to Enum
 		{
 			static_assert(!std::is_integral_v<E>);
 			return this->operator Enum().is<E>(); 
 		}
 
-		template<typename E, std::enable_if_t<std::is_same_v<E, Enum>, int> = 0> 
-		constexpr bool is() const noexcept //E is same as Enum -> just check if this is between offsets
+		template<typename E, std::enable_if_t<std::is_same_v<E, Enum>, void*> = nullptr> 
+		constexpr bool is() const noexcept //E is same as Enum -> just check if value is between offsets
 		{ 
 			static_assert(!std::is_integral_v<E>);
 			return unsigned(this->value) >= this_offset && unsigned(this->value) < next_offset; 
@@ -296,7 +296,7 @@ namespace bmath::intern {
 	}; //class SumEnum<Enum, TailEnums...>
 
 	template<typename E, E Count>
-	struct [[nodiscard]] WrapEnum 
+	struct [[nodiscard]] WrapEnum //allows to use SumEnum with enums not having their last member named COUNT
 	{
 		static_assert(std::is_enum_v<E>);
 
@@ -383,13 +383,13 @@ namespace bmath::intern {
 	using BitSet32 = IntBitSet<std::uint32_t>;
 	using BitSet64 = IntBitSet<std::uint64_t>;
 
-	template<std::size_t Bits, std::enable_if_t<Bits % 64u == 0u, int> = 0>
+	template<std::size_t Bits, std::enable_if_t<Bits % 64u == 0u, void*> = nullptr>
 	class [[nodiscard]] BitSet
 	{
 		static constexpr std::size_t array_size = Bits / 64u;
 
 		template<typename Pred>
-		constexpr bool test_all(Pred pred) const noexcept {return std::all_of(this->data, this->data + array_size, pred);}
+		constexpr bool test_all(Pred pred) const noexcept { return std::all_of(this->data, this->data + array_size, pred); }
 
 	public:
 		BitSet64 data[array_size];
@@ -455,7 +455,7 @@ namespace bmath::intern {
 		constexpr OptDouble() noexcept = default;
 
 		bool has_value() const noexcept { return !std::isnan(this->val); }
-		operator bool() const noexcept { return this->has_value(); }
+		explicit operator bool() const noexcept { return this->has_value(); }
 		double value_or(double snd) const noexcept { return *this ? this->val : snd; }
 
 		constexpr double& operator*() noexcept { return this->val; }
@@ -470,6 +470,9 @@ namespace bmath::intern {
 		constexpr OptDouble operator-=(const OptDouble snd) noexcept { this->val -= snd.val; return *this; }
 		constexpr OptDouble operator*=(const OptDouble snd) noexcept { this->val *= snd.val; return *this; }
 		constexpr OptDouble operator/=(const OptDouble snd) noexcept { this->val /= snd.val; return *this; }
+
+		constexpr bool operator==(const double snd) const noexcept { return this->val == snd; }
+		constexpr bool operator!=(const double snd) const noexcept { return !(*this == snd); }
 	}; //struct OptDouble
 
 	//can be used like std::optional<std::complex<double>>, but with extra direct complex functionality
@@ -484,7 +487,7 @@ namespace bmath::intern {
 		constexpr OptComplex() noexcept = default;
 
 		bool has_value() const noexcept { return !std::isnan(this->val.real()); }
-		operator bool() const noexcept { return this->has_value(); }
+		explicit operator bool() const noexcept { return this->has_value(); }
 		std::complex<double> value_or(std::complex<double> snd) const noexcept { return *this ? this->val : snd; }
 
 		constexpr std::complex<double>& operator*() noexcept { return this->val; }
