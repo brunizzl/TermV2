@@ -79,15 +79,14 @@ namespace bmath::intern {
 	{
 		static_assert(BufferSize > 0u);
 		static_assert(FirstHeapSize > BufferSize);
-		static_assert(std::is_trivially_copyable_v<Value_T>);     //big part of the "Stupid" in the name
-		static_assert(std::is_trivially_destructible_v<Value_T>); //big part of the "Stupid" in the name
-		static_assert(std::is_default_constructible_v<Value_T>);  //big part of the "Stupid" in the name
+		static_assert(std::is_trivially_copyable_v<Value_T>);     //thus the "Stupid" in the name
+		static_assert(std::is_trivially_destructible_v<Value_T>); //thus the "Stupid" in the name
 
-		std::size_t size_;
-		Value_T* data_;
+		std::size_t size_ = 0u;
+		Value_T* data_ = local_data;
 		union
 		{
-			std::size_t capacity = 0u;
+			std::size_t capacity;
 			Value_T local_data[BufferSize];
 		};
 
@@ -96,11 +95,11 @@ namespace bmath::intern {
 		constexpr const Value_T* data() const noexcept { return this->data_; }
 		constexpr Value_T* data() noexcept { return this->data_; }
 
-		constexpr StupidBufferVector() noexcept :size_(0u), data_(local_data) {}
+		constexpr StupidBufferVector() noexcept {}
 
-		constexpr StupidBufferVector(const std::initializer_list<Value_T> init) noexcept : size_(init.size()), data(local_data)
+		constexpr StupidBufferVector(const std::initializer_list<Value_T> init) noexcept : size_(init.size())
 		{
-			if (init.size() > BufferSize) {
+			if (init.size() > BufferSize) [[unlikely]] {
 				this->data_ = new Value_T[init.size()];
 				this->capacity = init.size();
 			}
@@ -109,8 +108,8 @@ namespace bmath::intern {
 
 		~StupidBufferVector() noexcept
 		{
-			if (this->size_ > BufferSize) [[unlikely]] {
-				delete[] this->data_;
+			if (this->size_ > BufferSize) {
+				delete[] this->data_; //only works for frivially destructible Value_T
 			}
 		}
 
@@ -129,11 +128,6 @@ namespace bmath::intern {
 			}
 		}
 
-		constexpr Value_T& push_back(const Value_T& elem) noexcept
-		{
-			return this->emplace_back(elem);
-		}
-
 		template<typename... Args>
 		constexpr Value_T& emplace_back(Args&&... args) noexcept
 		{
@@ -146,7 +140,7 @@ namespace bmath::intern {
 			else if (this->size_ > BufferSize && this->size_ == this->capacity) [[unlikely]] {
 				Value_T * new_data = new Value_T[this->capacity * 2];
 				std::copy(this->data_, this->data_ + this->capacity, new_data);
-				delete[] this->data_;
+				delete[] this->data_; //only works for frivially destructible Value_T
 				this->data_ = new_data;
 				this->capacity *= 2;
 			}
@@ -156,10 +150,15 @@ namespace bmath::intern {
 			return  *addr;
 		}
 
-		constexpr Value_T pop_back() noexcept
+		constexpr Value_T& push_back(const Value_T& elem) noexcept
+		{
+			return this->emplace_back(elem);
+		}
+
+		constexpr void pop_back() noexcept
 		{ 
 			assert(this->size_ > 0u && "tried popping on empty vector");
-			return std::move(this->data_[--this->size_]); 
+			this->size_--; //only works for frivially destructible Value_T
 		}
 
 		constexpr const Value_T& operator[](std::size_t where) const noexcept { return this->data_[where]; }
@@ -183,33 +182,24 @@ namespace bmath::intern {
 	template<typename Value_T, std::size_t MaxSize>
 	class [[nodiscard]] ShortVector
 	{
-		static_assert(std::is_trivially_copyable_v<Value_T>);     //big part of the "Stupid" in the name
-		static_assert(std::is_trivially_destructible_v<Value_T>); //big part of the "Stupid" in the name
-
 		std::size_t size_ = 0u;
-		Value_T data_[MaxSize] = {};
+		Value_T data_[MaxSize];
 
 	public:
 		constexpr std::size_t size() const noexcept { return this->size_; }
 		constexpr const Value_T* data() const noexcept { return this->data_; }
 		constexpr Value_T* data() noexcept { return this->data_; }
 
-		constexpr ShortVector() noexcept = default;
+		constexpr ShortVector() noexcept {}
 
-		constexpr ShortVector(const std::initializer_list<Value_T> init) :size_(init.size()) noexcept
+		constexpr ShortVector(const std::initializer_list<Value_T> init) noexcept :size_(init.size())
 		{
-			static_assert(std::is_trivially_copyable_v<Value_T>);
 			assert(init.size() <= MaxSize && "initializer length exeeds MaxSize");
 			std::copy(init.begin(), init.end(), this->data_);
 		}
 
-		constexpr Value_T& push_pack(const Value_T& elem) noexcept
-		{
-			return this->emplace_pack(elem);
-		}
-
 		template<typename... Args>
-		constexpr Value_T& emplace_pack(Args&&... args) noexcept
+		constexpr Value_T& emplace_back(Args&&... args) noexcept
 		{
 			assert(this->size_ < MaxSize && "tried pushing on full vector");
 			Value_T* const addr = &this->data_[this->size_++];
@@ -217,10 +207,15 @@ namespace bmath::intern {
 			return *addr;
 		}
 
-		constexpr Value_T pop_back() noexcept
+		constexpr Value_T& push_back(const Value_T& elem) noexcept
+		{
+			return this->emplace_back(elem);
+		}
+
+		constexpr void pop_back() noexcept
 		{ 
 			assert(this->size_ > 0u && "tried popping on empty vector");
-			return std::move(this->data_[--this->size_]); 
+			this->data_[--this->size_].~Value_T();
 		}
 
 		constexpr const Value_T& operator[](const std::size_t where) const noexcept { return this->data_[where]; }
