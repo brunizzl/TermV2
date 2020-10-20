@@ -71,7 +71,7 @@ namespace bmath::intern {
 		//converts spaces to multiplication operator if appropriate
 		void allow_implicit_product() noexcept;
 
-		//will not remove '\n' and the like, only ' ' -> assumes standardize_whitespace already run
+		//will not remove '\n' and the like, only ' ' -> assumes standardize_whitespace already run (done in constructor)
 		void remove_space() noexcept;
 
 		std::size_t size() const noexcept { assert(this->tokens.size() == this->name.size()); return this->tokens.size(); }

@@ -257,7 +257,7 @@ namespace bmath::intern {
 		//whitch actually matched, and if the name "a" is already matched, even if the current instance is not.
 		struct SharedTreeDatum
 		{
-			TypedIdx match_idx = TypedIdx{}; //indexes in ArithmeticTerm to simplify
+			TypedIdx match_idx = TypedIdx{}; //indexes in Term to simplify
 			PnTypedIdx responsible = PnTypedIdx{}; //the instance of TreeMatchVariable that was setting match_idx
 		};
 
@@ -495,14 +495,14 @@ namespace bmath::intern {
 
 namespace bmath {
 
-	class ArithmeticTerm
+	class Term
 	{
 		intern::Store store;
 		intern::TypedIdx head;
 
 	public:
-		ArithmeticTerm(std::string& name);
-		ArithmeticTerm() = default;
+		Term(std::string& name);
+		Term() = default;
 
 		void combine_layers() noexcept;
 		void combine_values_inexact() noexcept;
@@ -515,7 +515,7 @@ namespace bmath {
 		std::string to_pretty_string() const; //assumes sorted term
 
 		std::pair<intern::Store*, intern::TypedIdx> data() noexcept;
-	};	//class ArithmeticTerm
+	};	//class Term
 
 }	//namespace bmath
 

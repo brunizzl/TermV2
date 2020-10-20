@@ -125,6 +125,7 @@ namespace bmath::intern::test {
 			"c+d+b+a+f+(a*c*b)+(a*d*b)+(a*f*b*(a+c+b)*(a+d+b))",
 			"10/5",
 			"a (7 ^ 14 + 9)",
+			"i",
 		};
 		for (auto& term_name : term_names) {
 			std::cout << "-------------------------------------------------------------------------------------\n";
@@ -132,7 +133,7 @@ namespace bmath::intern::test {
 			try {
 				std::cout << "baue aus string: \"" << term_name << "\"\n\n";
 
-				bmath::ArithmeticTerm term(term_name);
+				bmath::Term term(term_name);
 
 				std::cout << "nach bau: \n" << term.to_string() << "\n\n";
 				//std::cout << "speicher nach bau:\n" << term.to_memory_layout() << "\n\n";
@@ -190,14 +191,14 @@ namespace bmath::intern::test {
 	{
 		std::vector<std::string> names = { {"1/2"}, {"1/5"}, {"1 + 1e+200"} };
 		for (auto& name : names) {
-			auto term = ArithmeticTerm(name);
+			auto term = Term(name);
 			std::cout << "\"" << name << "\" -> " << term.to_string() << " -> ";
 			term.combine_values_exact();
 			std::cout << term.to_string() << " -> ";
 			term.combine_values_inexact();
 			std::cout << term.to_string() << "\n";
 
-			//auto term = ArithmeticTerm(name);
+			//auto term = Term(name);
 			//std::cout << "\"" << name << "\" -> \n\n" << term.to_memory_layout() << "\n\n -> \n";
 			//term.combine_values_exact();
 			//std::cout << term.to_memory_layout() << "\n\n -> \n";
@@ -248,7 +249,7 @@ namespace bmath::intern::test {
 	void copy()
 	{
 		std::string term_name = "1+2-a*(4+6)^2";
-		ArithmeticTerm term_1(term_name);
+		Term term_1(term_name);
 		std::cout << "term_1: " << term_1.to_string() << "\n";
 
 		auto [store, head_1] = term_1.data();
@@ -304,7 +305,7 @@ namespace bmath::intern::test {
 	void change_subtree()
 	{
 		std::string name = "a+2*b^c";
-		ArithmeticTerm term(name);
+		Term term(name);
 		auto [store, head] = term.data();
 		std::cout << term.to_string() << " -> ";
 

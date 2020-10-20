@@ -39,7 +39,7 @@ namespace bmath::intern {
 		double eval_natural(ParseView view);
 
 		//expects number in engineering notation
-		double parse_real(const ParseView view);
+		double parse_value(const ParseView view);
 
 	} //namespace compute
 

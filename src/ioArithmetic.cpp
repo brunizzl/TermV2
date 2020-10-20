@@ -151,8 +151,10 @@ namespace bmath::intern {
 
 		void append_complex(const std::complex<double> val, std::string& dest, int parent_operator_precedence)
 		{
+			std::stringstream buffer;
+
 			enum class Flag { showpos, noshowpos };
-			const auto add_im_to_stream = [](std::stringstream& buffer, const double im, Flag flag) {
+			const auto add_im_to_stream = [&buffer](const double im, Flag flag) {
 				if (im == -1.0) {
 					buffer << '-';
 				}
@@ -168,12 +170,11 @@ namespace bmath::intern {
 			};
 
 			bool parentheses = false;
-			std::stringstream buffer;
 
 			if (val.real() != 0.0 && val.imag() != 0.0) {
 				parentheses = parent_operator_precedence > infixr(Type::sum);
 				buffer << val.real();
-				add_im_to_stream(buffer, val.imag(), Flag::showpos);		
+				add_im_to_stream(val.imag(), Flag::showpos);		
 			}
 			else if (val.real() != 0.0 && val.imag() == 0.0) {
 				parentheses = val.real() < 0.0 && parent_operator_precedence > infixr(Type::sum);	//leading '-'
@@ -182,7 +183,7 @@ namespace bmath::intern {
 			else if (val.real() == 0.0 && val.imag() != 0.0) {
 				parentheses = val.imag() < 0.0 && parent_operator_precedence > infixr(Type::sum);	//leading '-'	
 				parentheses |= parent_operator_precedence > infixr(Type::product);	//*i
-				add_im_to_stream(buffer, val.imag(), Flag::noshowpos);
+				add_im_to_stream(val.imag(), Flag::noshowpos);
 			}
 			else {
 				buffer << '0';
@@ -254,11 +255,11 @@ namespace bmath::intern {
 				{
 					const std::size_t not_number_pos = view.tokens.find_first_not_of(token::number);
 					if (not_number_pos == TokenView::npos) {
-						return parse_real(view);
+						return parse_value(view);
 					}
 					else if (not_number_pos + 1u == view.size() && view.tokens.ends_with(token::imag_unit)) {
 						view.remove_suffix(1u);
-						return std::complex<double>(0.0, parse_real(view));
+						return std::complex<double>(0.0, parse_value(view));
 					}
 				}
 				throw_if<ParseFailure>(!view.tokens.starts_with(token::open_grouping), view.offset, "expected '(' or the like");
@@ -289,7 +290,7 @@ namespace bmath::intern {
 					return std::pow(eval_natural(lhs), eval_natural(rhs));
 				}
 				if (view.tokens.find_first_not_of(token::number) == TokenView::npos) {
-					return parse_real(view);
+					return parse_value(view);
 				}
 				throw_if<ParseFailure>(!view.tokens.starts_with(token::open_grouping), view.offset, "expected '(' or the like");
 				throw_if<ParseFailure>(!view.tokens.ends_with(token::clse_grouping), view.offset + view.size(), "expected ')' or the like");
@@ -299,14 +300,14 @@ namespace bmath::intern {
 			throw ParseFailure{ view.offset, "run out of characters" };
 		} //eval_natural
 
-		double parse_real(const ParseView view)
+		double parse_value(const ParseView view)
 		{
 			double value;
 			const auto [ptr, error] = std::from_chars(view.chars, view.chars + view.size(), value);
 			throw_if<ParseFailure>(error != std::errc(), view.offset, "value syntax is illformed or value out of bounds");
 			throw_if<ParseFailure>(ptr != view.chars + view.size(), std::size_t(view.offset + ptr - view.chars + 1u), "value syntax is illformed");
 			return value;
-		} //parse_real
+		} //parse_value
 
 	} //namespace compute
 
@@ -395,11 +396,11 @@ namespace bmath::intern {
 			return build_value<TypedIdx>(store, compute::eval_natural(input));
 		} break;
 		case Head::Type::real_value: {
-			return build_value<TypedIdx>(store, compute::parse_real(input));
+			return build_value<TypedIdx>(store, compute::parse_value(input));
 		} break;
 		case Head::Type::imag_value: {
 			input.remove_suffix(1u); //remove token::imag_unit
-			return build_value<TypedIdx>(store, Complex(0.0, compute::parse_real(input)));
+			return build_value<TypedIdx>(store, Complex(0.0, compute::parse_value(input)));
 		} break;
 		case Head::Type::function: {
 			return build_function<TypedIdx>(store, input, head.where, build);
@@ -623,11 +624,11 @@ namespace bmath::intern {
 				return build_value<PnTypedIdx>(store, compute::eval_natural(input));
 			} break;
 			case Head::Type::real_value: {
-				return build_value<PnTypedIdx>(store, compute::parse_real(input));
+				return build_value<PnTypedIdx>(store, compute::parse_value(input));
 			} break;
 			case Head::Type::imag_value: {
 				input.remove_suffix(1u); //remove token::imag_unit
-				return build_value<PnTypedIdx>(store, Complex(0.0, compute::parse_real(input)));
+				return build_value<PnTypedIdx>(store, Complex(0.0, compute::parse_value(input)));
 			} break;
 			case Head::Type::function: {
 				return build_function<PnTypedIdx>(store, input, head.where, *this);

@@ -23,15 +23,15 @@ namespace bmath::intern {
 			OccupancyTable table;
 			static_assert(sizeof(TermUnion_T) == sizeof(OccupancyTable), "union VecElem assumes equal member size");
 
-			TableVecElem(TermUnion_T new_value)   noexcept :value(new_value) {}
-			TableVecElem(unsigned long init)      noexcept :table(init)      {}
-			TableVecElem(const TableVecElem& snd) noexcept :table(snd.table) {} //bitwise copy of snd
+			TableVecElem(const TermUnion_T& new_value) noexcept :value(new_value) {}
+			TableVecElem(unsigned long init)           noexcept :table(init)      {}
+			TableVecElem(const TableVecElem& snd)      noexcept :table(snd.table) {} //bitwise copy of snd
 		}; //union TableVecElem
 
 	} //namespace store_detail
 
 	//possibly preferred version for debugging
-	template <typename TermUnion_T, typename Allocator = std::allocator<store_detail::TableVecElem<TermUnion_T>>>
+	template <typename TermUnion_T, typename Vec_T = std::vector<store_detail::TableVecElem<TermUnion_T>>>
 	class [[nodiscard]] TermStore_Table
 	{
 		static_assert(std::is_trivially_destructible_v<TermUnion_T>, "required to allow TermUnion_T to be used in VecElem union");
@@ -39,15 +39,15 @@ namespace bmath::intern {
 
 		using VecElem = typename store_detail::TableVecElem<TermUnion_T>;
 		static constexpr std::size_t table_dist = VecElem::table_dist;
-		using OccupancyTable = BitSet<table_dist>; //same definition as in VecElem, but redefined for better Intellisense
+		using Table = typename VecElem::OccupancyTable;
 
-		std::vector<VecElem, Allocator> vector;
+		Vec_T vector;
 
 		//debugging function to ensure only valid accesses
 		void check_index_validity(const std::size_t idx) const
 		{
 			throw_if(this->vector.size() < idx + 1u, "TermStore supposed to access/free unowned slot");
-			const OccupancyTable& table = this->vector[idx / table_dist].table;
+			const Table& table = this->vector[idx / table_dist].table;
 			throw_if(!table.test(idx % table_dist), "TermStore supposed to access/free already freed slot");
 		}
 
@@ -63,8 +63,8 @@ namespace bmath::intern {
 					continue;
 				}
 				else {
-					OccupancyTable& table = this->vector[table_pos].table;
-					const std::size_t relative_pos = table.find_first_false();
+					Table& table = this->vector[table_pos].table;
+					const std::size_t relative_pos = table.find_first_false(); //guaranteed to exist, as full table is handled above
 					table.set(relative_pos);
 					const std::size_t found_pos = table_pos + relative_pos;
 					if (found_pos >= this->vector.size()) {	//put new element in vector
@@ -85,7 +85,7 @@ namespace bmath::intern {
 		void free(const std::size_t idx)
 		{
 			check_index_validity(idx);
-			OccupancyTable& table = this->vector[idx / table_dist].table;
+			Table& table = this->vector[idx / table_dist].table;
 			table.reset(idx % table_dist);
 		}
 
@@ -111,7 +111,7 @@ namespace bmath::intern {
 					continue;
 				}
 				else {
-					const OccupancyTable table = this->vector[table_pos].table;
+					const Table table = this->vector[table_pos].table;
 					for (std::size_t relative_pos = 1; relative_pos < table_dist; relative_pos++) {	//first bit encodes position of table -> start one later
 						if (table_pos + relative_pos == this->vector.size()) [[unlikely]] {
 							break;
@@ -129,7 +129,7 @@ namespace bmath::intern {
 		{
 			std::size_t pop_count = 0; 
 			for (std::size_t table_pos = 0; table_pos < this->vector.size(); table_pos += table_dist) {
-				const OccupancyTable& table = this->vector[table_pos].table;
+				const Table& table = this->vector[table_pos].table;
 				pop_count += table.count();
 			}
 			return this->vector.size() - pop_count;
@@ -156,15 +156,15 @@ namespace bmath::intern {
 			FreeList free_list;
 			static_assert(sizeof(FreeList) <= sizeof(TermUnion_T), "size of union VecElem may not be defined by FreeList");
 
-			FreeListVecElem(TermUnion_T new_value)      noexcept :value(new_value) {}
-			FreeListVecElem(FreeList node)              noexcept :free_list(node) {}
-			FreeListVecElem(const FreeListVecElem& snd) noexcept :value(snd.value) {} //bitwise copy of snd
+			FreeListVecElem(const TermUnion_T& new_value) noexcept :value(new_value) {}
+			FreeListVecElem(const FreeList& node)         noexcept :free_list(node)  {}
+			FreeListVecElem(const FreeListVecElem& snd)   noexcept :value(snd.value) {} //bitwise copy of snd
 		}; //union FreeListVecElem
 
 	} //namespace store_detail
 
-	//possibly faster version, but also with less access checks, thus with no (internal) memory savety
-	template <typename TermUnion_T, typename Allocator = std::allocator<store_detail::FreeListVecElem<TermUnion_T>>>
+	//possibly faster version, but also with less access checks, thus with no (internal) memory savety	
+	template <typename TermUnion_T, typename Vec_T = std::vector<store_detail::FreeListVecElem<TermUnion_T>>>
 	class [[nodiscard]] TermStore_FreeList
 	{
 		static_assert(std::is_trivially_destructible_v<TermUnion_T>, "required to allow TermUnion_T to be used in VecElem union");
@@ -174,7 +174,7 @@ namespace bmath::intern {
 		using FreeList = store_detail::FreeList;
 
 		//first elem is guaranteed to be free_list, the rest may vary.
-		std::vector<VecElem, Allocator> vector;
+		Vec_T vector;
 
 		//assumes vector to already hold first element
 		[[nodiscard]] std::size_t get_free_position() noexcept
@@ -267,6 +267,8 @@ namespace bmath::intern {
 
 
 
+
+	//intended to be used as template parameter
 	template<typename TermUnion_T, std::size_t BufferSize>
 	class [[nodiscard]] MonotonicBufferStore :public ShortVector<TermUnion_T, BufferSize>
 	{

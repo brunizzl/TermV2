@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cstring>
 #include <cfenv>
+#include <compare>
 
 #include "termUtility.hpp"
 #include "arithmeticTerm.hpp"
@@ -770,7 +771,7 @@ namespace bmath::intern {
 			case Type_T(Type::generic_function): {
 				const GenericFunction& fn_1 = store_1.at(index_1).generic_function;
 				const GenericFunction& fn_2 = store_2.at(index_2).generic_function;
-				const auto name_cmp = fn::compare_name(store_1, store_2, fn_2, fn_1); //reverse order, as to_pretty_string is reversed again
+				const auto name_cmp = fn::compare_name(store_1, store_2, fn_2, fn_1); //reverse order, as to_pretty_string reverses again
 				if (name_cmp != std::strong_ordering::equal) {
 					return name_cmp;
 				}
@@ -794,7 +795,7 @@ namespace bmath::intern {
 				}
 			} break;
 			case Type_T(Type::variable): {
-				return string_compare(store_2, store_1, index_2, index_1); //reverse order, as to_pretty_string is reversed again
+				return string_compare(store_2, store_1, index_2, index_1); //reverse order, as to_pretty_string reverses again
 			} break;
 			case Type_T(Type::complex): {
 				const Complex& complex_1 = store_1.at(index_1).complex;
@@ -805,10 +806,10 @@ namespace bmath::intern {
 				const auto imag_1 = std::bit_cast<std::uint64_t>(complex_1.imag());
 				const auto imag_2 = std::bit_cast<std::uint64_t>(complex_2.imag());
 				if (real_1 != real_2) {
-					return real_2 <=> real_1; //reverse order, as to_pretty_string is reversed again
+					return real_2 <=> real_1; //reverse order, as to_pretty_string reverses again
 				}
 				if (imag_1 != imag_2) {
-					return imag_2 <=> imag_1; //reverse order, as to_pretty_string is reversed again
+					return imag_2 <=> imag_1; //reverse order, as to_pretty_string reverses again
 				}
 				return std::strong_ordering::equal;
 			} break;
@@ -1282,7 +1283,7 @@ namespace bmath::intern {
 namespace bmath {
 	using namespace intern;
 
-	ArithmeticTerm::ArithmeticTerm(std::string& name)
+	Term::Term(std::string& name)
 		:store(name.size() / 2)
 	{
 		auto parse_string = ParseString(name);
@@ -1292,21 +1293,21 @@ namespace bmath {
 		intern::throw_if<ParseFailure>(error_pos != TokenView::npos, error_pos, "illegal character");
 		this->head = build(this->store, parse_string);
 		name = std::move(parse_string.name); //give content of name back to name
-	} //ArithmeticTerm
+	} //Term
 
-	void ArithmeticTerm::combine_layers() noexcept
+	void Term::combine_layers() noexcept
 	{
 		tree::combine_layers(this->store, this->head);
 	}
 
-	void ArithmeticTerm::combine_values_inexact() noexcept
+	void Term::combine_values_inexact() noexcept
 	{
 		if (const OptComplex val = tree::combine_values_inexact(this->store, this->head)) {
 			this->head = TypedIdx(this->store.insert(*val), Type::complex);
 		}	
 	}
 
-	void ArithmeticTerm::combine_values_exact() noexcept
+	void Term::combine_values_exact() noexcept
 	{
 		if (const OptComplex val = tree::combine_values_exact(this->store, this->head)) {
 			tree::free(this->store, this->head);
@@ -1314,17 +1315,17 @@ namespace bmath {
 		}
 	}
 
-	void ArithmeticTerm::sort() noexcept
+	void Term::sort() noexcept
 	{
 		tree::sort(this->store, this->head);
 	}
 
-	std::string bmath::ArithmeticTerm::to_memory_layout() const
+	std::string bmath::Term::to_memory_layout() const
 	{
 		return print::to_memory_layout(this->store, this->head);
 	} //to_memory_layout
 
-	std::string ArithmeticTerm::to_string() const
+	std::string Term::to_string() const
 	{
 		std::string result;
 		result.reserve(this->store.size() * 2);
@@ -1332,7 +1333,7 @@ namespace bmath {
 		return result;
 	}
 
-	std::string ArithmeticTerm::to_pretty_string()
+	std::string Term::to_pretty_string()
 	{
 		this->combine_layers();
 		this->combine_values_exact();
@@ -1340,12 +1341,12 @@ namespace bmath {
 		return print::to_pretty_string(this->store, this->head);
 	}
 
-	std::string ArithmeticTerm::to_pretty_string() const
+	std::string Term::to_pretty_string() const
 	{
 		return print::to_pretty_string(this->store, this->head);
 	}
 
-	std::pair<intern::Store*, intern::TypedIdx> ArithmeticTerm::data() noexcept
+	std::pair<intern::Store*, intern::TypedIdx> Term::data() noexcept
 	{
 		return std::make_pair(&this->store, this->head);
 	}

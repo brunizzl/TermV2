@@ -78,6 +78,7 @@ namespace bmath::intern {
 	class [[nodiscard]] StupidBufferVector
 	{
 		static_assert(BufferSize > 0u);
+		static_assert(FirstHeapSize > BufferSize);
 		static_assert(std::is_trivially_copyable_v<Value_T>);     //big part of the "Stupid" in the name
 		static_assert(std::is_trivially_destructible_v<Value_T>); //big part of the "Stupid" in the name
 		static_assert(std::is_default_constructible_v<Value_T>);  //big part of the "Stupid" in the name
@@ -128,7 +129,13 @@ namespace bmath::intern {
 			}
 		}
 
-		constexpr void push_back(const Value_T elem) noexcept
+		constexpr Value_T& push_back(const Value_T& elem) noexcept
+		{
+			return this->emplace_back(elem);
+		}
+
+		template<typename... Args>
+		constexpr Value_T& emplace_back(Args&&... args) noexcept
 		{
 			if (this->size_ == BufferSize) [[unlikely]] {
 				Value_T *const new_data = new Value_T[FirstHeapSize];
@@ -143,7 +150,10 @@ namespace bmath::intern {
 				this->data_ = new_data;
 				this->capacity *= 2;
 			}
-			this->data_[this->size_++] = std::move(elem);
+
+			Value_T* const addr = &this->data_[this->size_++];
+			new (addr) Value_T(args...);
+			return  *addr;
 		}
 
 		constexpr Value_T pop_back() noexcept
@@ -193,10 +203,18 @@ namespace bmath::intern {
 			std::copy(init.begin(), init.end(), this->data_);
 		}
 
-		constexpr void push_pack(const Value_T elem) noexcept
+		constexpr Value_T& push_pack(const Value_T& elem) noexcept
+		{
+			return this->emplace_pack(elem);
+		}
+
+		template<typename... Args>
+		constexpr Value_T& emplace_pack(Args&&... args) noexcept
 		{
 			assert(this->size_ < MaxSize && "tried pushing on full vector");
-			this->data_[this->size_++] = std::move(elem);
+			Value_T* const addr = &this->data_[this->size_++];
+			new (addr) Value_T(args...);
+			return *addr;
 		}
 
 		constexpr Value_T pop_back() noexcept
@@ -443,20 +461,17 @@ namespace bmath::intern {
 	}; //class BitSet
 
 
-	//can be used like std::optional<double>, but with extra double functionality
+	//can be used like std::optional<double>, but with extra double operations
 	struct OptDouble
 	{
 		static_assert(std::numeric_limits<double>::has_quiet_NaN);
-		static constexpr double no_value = std::numeric_limits<double>::quiet_NaN();
-
-		double val = no_value;
+		double val = std::numeric_limits<double>::quiet_NaN(); //default initialize to invalid state
 
 		constexpr OptDouble(const double new_val) noexcept :val(new_val) {}
 		constexpr OptDouble() noexcept = default;
 
 		bool has_value() const noexcept { return !std::isnan(this->val); }
 		explicit operator bool() const noexcept { return this->has_value(); }
-		double value_or(double snd) const noexcept { return *this ? this->val : snd; }
 
 		constexpr double& operator*() noexcept { return this->val; }
 		constexpr const double& operator*() const noexcept { return this->val; }
@@ -470,25 +485,19 @@ namespace bmath::intern {
 		constexpr OptDouble operator-=(const OptDouble snd) noexcept { this->val -= snd.val; return *this; }
 		constexpr OptDouble operator*=(const OptDouble snd) noexcept { this->val *= snd.val; return *this; }
 		constexpr OptDouble operator/=(const OptDouble snd) noexcept { this->val /= snd.val; return *this; }
-
-		constexpr bool operator==(const double snd) const noexcept { return this->val == snd; }
-		constexpr bool operator!=(const double snd) const noexcept { return !(*this == snd); }
 	}; //struct OptDouble
 
-	//can be used like std::optional<std::complex<double>>, but with extra direct complex functionality
+	//can be used like std::optional<std::complex<double>>, but with extra complex operations
 	struct OptComplex
 	{
 		static_assert(std::numeric_limits<double>::has_quiet_NaN);
-		static constexpr double no_value = std::numeric_limits<double>::quiet_NaN();
-
-		std::complex<double> val = no_value;
+		std::complex<double> val = std::numeric_limits<double>::quiet_NaN(); //default initialize to invalid state
 
 		constexpr OptComplex(const std::complex<double>& new_val) noexcept :val(new_val) {}
 		constexpr OptComplex() noexcept = default;
 
 		bool has_value() const noexcept { return !std::isnan(this->val.real()); }
 		explicit operator bool() const noexcept { return this->has_value(); }
-		std::complex<double> value_or(std::complex<double> snd) const noexcept { return *this ? this->val : snd; }
 
 		constexpr std::complex<double>& operator*() noexcept { return this->val; }
 		constexpr const std::complex<double>& operator*() const noexcept { return this->val; }
