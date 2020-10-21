@@ -56,7 +56,7 @@ namespace bmath::intern {
 
 	} //namespace fn
 
-	namespace vdc {
+	namespace vc {
 
 		struct BasicSumTraits
 		{
@@ -82,7 +82,7 @@ namespace bmath::intern {
 		struct ProductTraits : public BasicProductTraits { using Object_T = Product; };
 		struct PnProductTraits : public BasicProductTraits { using Object_T = pattern::PnProduct; };
 
-	} //namespace vdc
+	} //namespace vc
 
 	//VariadicTraits must include:
 	//unsing declaration Object_T: type to construct (e.g. Sum)
@@ -384,7 +384,7 @@ namespace bmath::intern {
 		}
 		switch (head.type) {
 		case Head::Type::sum: {
-			return build_variadic<vdc::SumTraits, TypedIdx>(store, input, head.where, build_negated<Store, TypedIdx>, build);
+			return build_variadic<vc::SumTraits, TypedIdx>(store, input, head.where, build_negated<Store, TypedIdx>, build);
 		} break;
 		case Head::Type::negate: {
 			input.remove_prefix(1u);  //remove minus sign
@@ -392,7 +392,7 @@ namespace bmath::intern {
 			return build_negated(store, to_negate);
 		} break;
 		case Head::Type::product: {
-			return build_variadic<vdc::ProductTraits, TypedIdx>(store, input, head.where, build_inverted<Store, TypedIdx>, build);
+			return build_variadic<vc::ProductTraits, TypedIdx>(store, input, head.where, build_inverted<Store, TypedIdx>, build);
 		} break;
 		case Head::Type::power: {
 			const auto base_view = input.steal_prefix(head.where);
@@ -612,7 +612,7 @@ namespace bmath::intern {
 			}
 			switch (head.type) {
 			case Head::Type::sum: {
-				return build_variadic<vdc::PnSumTraits, PnTypedIdx>(store, input, head.where, build_negated<PnStore, PnTypedIdx>, *this);
+				return build_variadic<vc::PnSumTraits, PnTypedIdx>(store, input, head.where, build_negated<PnStore, PnTypedIdx>, *this);
 			} break;
 			case Head::Type::negate: {
 				input.remove_prefix(1u);  //remove minus sign
@@ -620,7 +620,7 @@ namespace bmath::intern {
 				return build_negated(store, to_negate);
 			} break;
 			case Head::Type::product: {
-				return build_variadic<vdc::PnProductTraits, PnTypedIdx>(store, input, head.where, build_inverted<PnStore, PnTypedIdx>, *this);
+				return build_variadic<vc::PnProductTraits, PnTypedIdx>(store, input, head.where, build_inverted<PnStore, PnTypedIdx>, *this);
 			} break;
 			case Head::Type::power: {
 				const auto base_view = input.steal_prefix(head.where);
@@ -679,14 +679,14 @@ namespace bmath::intern {
 			switch (type) {
 			case Type_T(Node::sum): {
 				const char* seperator = "";
-				for (const auto summand : vdc::range(store, index)) {
+				for (const auto summand : vc::range(store, index)) {
 					str.append(std::exchange(seperator, "+"));
 					print::append_to_string(store, summand, str, own_infixr);
 				}
 			} break;
 			case Type_T(Node::product): {
 				const char* seperator = "";
-				for (const auto factor : vdc::range(store, index)) {
+				for (const auto factor : vc::range(store, index)) {
 					str.append(std::exchange(seperator, "*"));
 					print::append_to_string(store, factor, str, own_infixr);
 				}
@@ -810,7 +810,7 @@ namespace bmath::intern {
 					StupidBufferVector<TypedIdx, 8> other_factors;
 					double negative_factor;
 					bool found_negative_factor = false;
-					for (const auto factor : vdc::range(store, index)) {
+					for (const auto factor : vc::range(store, index)) {
 						if (!found_negative_factor) {
 							if (const auto negative_val = get_negative_real(factor)) {
 								negative_factor = *negative_val;
@@ -861,7 +861,7 @@ namespace bmath::intern {
 			switch (type) {
 			case Type(Node::sum): {
 				bool first = true;
-				for (const auto summand : reverse_elems(vdc::range(store, index))) {
+				for (const auto summand : reverse_elems(vc::range(store, index))) {
 					if (const auto val = get_negative_real(summand)) {
 						//str += (first ? "" : " ");
 						append_real(*val, str);
@@ -890,7 +890,7 @@ namespace bmath::intern {
 				assert(!first && "found sum with zero summands");
 			} break;
 			case Type(Node::product): {
-				append_product(reverse_elems(vdc::range(store, index)));
+				append_product(reverse_elems(vc::range(store, index)));
 			} break;
 			case Type(Fn::pow): {
 				const FnParams<TypedIdx>& params = store.at(index).fn_params;
@@ -985,7 +985,7 @@ namespace bmath::intern {
 			case Type_T(Node::sum): {
 				current_str.append("sum        : {");
 				bool first = true;
-				for (const auto elem : vdc::range(store, index)) {
+				for (const auto elem : vc::range(store, index)) {
 					if (!std::exchange(first, false)) {
 						current_str.append(", ");
 					}
@@ -998,7 +998,7 @@ namespace bmath::intern {
 			case Type_T(Node::product): {
 				current_str.append("product    : {");
 				bool first = true;
-				for (const auto elem : vdc::range(store, index)) {
+				for (const auto elem : vc::range(store, index)) {
 					if (!std::exchange(first, false)) {
 						current_str.append(", ");
 					}

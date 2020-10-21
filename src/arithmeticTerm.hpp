@@ -28,8 +28,12 @@ namespace bmath::intern {
 		COUNT
 	};
 
-	enum class Fn //short for Function (note that generic_function is not listed here)
+	enum class Fn //short for Function (note that generic_function is not listed here, at it's behavior is more complicated)
 	{
+		pow,    //params[0] := base      params[1] := expo    
+		log,	//params[0] := base      params[1] := argument
+		exp,	//params[0] := argument
+		sqrt,	//params[0] := argument
 		asinh,	//params[0] := argument
 		acosh,	//params[0] := argument
 		atanh,	//params[0] := argument
@@ -39,10 +43,6 @@ namespace bmath::intern {
 		sinh,	//params[0] := argument
 		cosh,	//params[0] := argument
 		tanh,	//params[0] := argument
-		sqrt,	//params[0] := argument
-		pow,    //params[0] := base      params[1] := expo    
-		log,	//params[0] := base      params[1] := argument
-		exp,	//params[0] := argument
 		sin,	//params[0] := argument
 		cos,	//params[0] := argument
 		tan,	//params[0] := argument
@@ -132,7 +132,10 @@ namespace bmath::intern {
 			COUNT 
 		};
 
-		using PnType = SumEnum<PnVariable, Type>;
+		using PnType = SumEnum<PnVariable, Type>; //dont list all enums making up Type directly, to allow converion to Type
+
+		//as the usual Term does not know special pattern elements, these constants serve as placeholders
+		//for the actual PnType instances to also allow them beeing used in templates compiled to both pattern and normal term.
 		static constexpr unsigned _tree_match  = unsigned(PnType(PnVariable::tree_match));
 		static constexpr unsigned _value_match = unsigned(PnType(PnVariable::value_match));
 		static constexpr unsigned _value_proxy = unsigned(PnType(PnVariable::value_proxy));
@@ -347,7 +350,7 @@ namespace bmath::intern {
 	} //namespace fn
 
 	//utility for variadic types (Sum and Product)
-	namespace vdc {
+	namespace vc {
 
 		inline auto range(Store& store, std::uint32_t vd_idx) noexcept
 		{ return TypedIdxSLC::Range<Store>(store, vd_idx); }
@@ -361,7 +364,7 @@ namespace bmath::intern {
 		inline auto range(const pattern::PnStore& store, std::uint32_t vd_idx) noexcept 
 		{ return pattern::PnTypedIdxSLC::Range<const pattern::PnStore>(store, vd_idx); }
 
-	} //namespace vdc
+	} //namespace vc
 
 	//recursive tree traversal (some of these traversal functions are also found in namespace print)
 	namespace tree {

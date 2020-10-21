@@ -22,12 +22,12 @@
 		const auto [index, type] = ref.split();
 		switch (type) {
 		case Type_T(Node::sum): {
-			for (const auto summand : vdc::range(store, index)) {
+			for (const auto summand : vc::range(store, index)) {
 			}
 			assert(false);
 		} break;
 		case Type_T(Node::product): {
-			for (const auto factor : vdc::range(store, index)) {
+			for (const auto factor : vc::range(store, index)) {
 			}
 			assert(false);
 		} break;
@@ -339,7 +339,7 @@ namespace bmath::intern {
 			case Type_T(Node::sum): 
 				[[fallthrough]];
 			case Type_T(Node::product): {
-				for (const auto factor : vdc::range(store, index)) {
+				for (const auto factor : vc::range(store, index)) {
 					tree::free(store, factor);
 				}
 				TypedIdxSLC_T::free_slc(store, index);
@@ -396,7 +396,7 @@ namespace bmath::intern {
 				[[fallthrough]];
 			case Type_T(Node::product): {
 				std::size_t current_append_node = index;
-				for (auto& elem : vdc::range(store, index)) {
+				for (auto& elem : vc::range(store, index)) {
 					const auto [elem_idx, elem_type] = elem.split();
 					if (elem_type == type) {
 						elem = TypedIdxSLC_T::null_value;
@@ -448,7 +448,7 @@ namespace bmath::intern {
 			case Type_T(Node::sum): {
 				OptComplex result_val = 0.0;
 				bool only_values = true;
-				for (auto& summand : vdc::range(store, index)) {
+				for (auto& summand : vc::range(store, index)) {
 					if (const OptComplex summand_val = tree::combine_values_inexact(store, summand)) {
 						result_val += summand_val;
 						tree::free(store, summand);
@@ -469,7 +469,7 @@ namespace bmath::intern {
 			case Type_T(Node::product): {
 				OptComplex result_val = 1.0;
 				bool only_values = true;
-				for (auto& factor : vdc::range(store, index)) {
+				for (auto& factor : vc::range(store, index)) {
 					if (const OptComplex factor_val = tree::combine_values_inexact(store, factor)) {
 						result_val *= factor_val;
 						tree::free(store, factor);
@@ -565,7 +565,7 @@ namespace bmath::intern {
 			case Type_T(Node::sum): {
 				OptComplex result_val = 0.0;
 				bool only_exact = true;
-				for (auto& summand : vdc::range(store, index)) {
+				for (auto& summand : vc::range(store, index)) {
 					if (const OptComplex summand_val = tree::combine_values_exact(store, summand)) {
 						if (const OptComplex res = compute_exact([&] {return result_val + summand_val; })) {
 							result_val = res;
@@ -576,6 +576,7 @@ namespace bmath::intern {
 					}
 					only_exact = false;
 				}
+
 				if (only_exact) {
 					return result_val;
 				}
@@ -588,7 +589,7 @@ namespace bmath::intern {
 				OptComplex result_factor = 1.0;
 				OptComplex result_divisor = 1.0;
 				bool only_exact = true;
-				for (auto& factor : vdc::range(store, index)) {
+				for (auto& factor : vc::range(store, index)) {
 					if (const std::optional<TypedIdx_T> divisor = get_divisor(factor)) {
 						if (const OptComplex divisor_val = tree::combine_values_exact(store, *divisor)) {
 							if (const OptComplex res = compute_exact([&] { return result_divisor * divisor_val; })) {
@@ -697,8 +698,8 @@ namespace bmath::intern {
 			case Type_T(Node::sum):
 				[[fallthrough]];
 			case Type_T(Node::product): {
-				auto range_1 = vdc::range(store_1, index_1);
-				auto range_2 = vdc::range(store_2, index_2);
+				auto range_1 = vc::range(store_1, index_1);
+				auto range_2 = vc::range(store_2, index_2);
 				auto iter_1 = range_1.begin();
 				auto iter_2 = range_2.begin();
 				for (; iter_1 != range_1.end() && iter_2 != range_2.end(); ++iter_1, ++iter_2) {
@@ -856,7 +857,7 @@ namespace bmath::intern {
 			case SrcType_T(Node::product): {
 				const std::size_t dst_index = dst_store.insert(DstTypedIdxSLC_T());
 				std::size_t last_node_idx = dst_index;
-				for (const auto src_elem : vdc::range(src_store, src_index)) {
+				for (const auto src_elem : vc::range(src_store, src_index)) {
 					const DstTypedIdx_T dst_elem = tree::copy<DstTypedIdx_T>(src_store, dst_store, src_elem);
 					last_node_idx = DstTypedIdxSLC_T::insert_new(dst_store, last_node_idx, dst_elem);
 				}
@@ -937,7 +938,7 @@ namespace bmath::intern {
 				case Type_T(Node::product): {
 					std::size_t last_node_idx = store.insert(TypedIdxSLC_T{ equation.rhs_head });
 					equation.rhs_head = TypedIdx_T(last_node_idx, lhs_type); //new rhs_head is product (sum) of old rhs_head divided by (minus) lhs_head factors (summands).
-					for (const TypedIdx_T elem : vdc::range(store, lhs_index)) {
+					for (const TypedIdx_T elem : vc::range(store, lhs_index)) {
 						if (tree::contains(store, elem, to_isolate)) {
 							equation.lhs_head = elem; 
 						}
@@ -1072,7 +1073,7 @@ namespace bmath::intern {
 			case Type_T(Node::sum): 
 				[[fallthrough]];
 			case Type_T(Node::product): {
-				for (const auto elem : vdc::range(store, index)) {
+				for (const auto elem : vc::range(store, index)) {
 					const Res_T elem_res = fold::simple_fold<Res_T>(store, elem, apply);
 					if constexpr (may_return_early) { if (elem_res.return_early()) { return elem_res; } }
 				}
@@ -1124,7 +1125,7 @@ namespace bmath::intern {
 				[[fallthrough]];
 			case Type_T(Node::product): {
 				Res_T acc = init;
-				for (const auto elem : vdc::range(store, index)) {
+				for (const auto elem : vc::range(store, index)) {
 					const Res_T elem_res = fold::tree_fold<Res_T>(store, elem, op_apply, leaf_apply, init, finally);
 					acc = op_apply(index, type, acc, elem_res);
 					if constexpr (may_return_early) { if (acc.return_early()) { return acc; } }
