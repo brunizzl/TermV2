@@ -57,7 +57,7 @@ namespace bmath::intern {
 	template<typename TypedIdx_T, typename Store_T>
 	[[nodiscard]] TypedIdx_T build_value(Store_T& store, const std::complex<double> complex) noexcept
 	{
-		return TypedIdx_T(store.insert(complex), Type::complex);
+		return TypedIdx_T(store.insert(complex), Type(Leaf::complex));
 	}
 
 	template<typename Store_T, typename TypedIdx_T>
@@ -65,15 +65,14 @@ namespace bmath::intern {
 	{
 		using TypedIdxSLC_T = TermSLC<std::uint32_t, TypedIdx_T, 3>;
 		const TypedIdx_T minus_1 = build_value<TypedIdx_T>(store, -1.0);
-		return TypedIdx_T(store.insert(TypedIdxSLC_T({ minus_1, to_negate })), Type::product);
+		return TypedIdx_T(store.insert(TypedIdxSLC_T({ minus_1, to_negate })), Type(Node::product));
 	}
 
 	template<typename Store_T, typename TypedIdx_T>
 	[[nodiscard]] TypedIdx_T build_inverted(Store_T& store, const TypedIdx_T to_invert) noexcept
 	{
 		const TypedIdx_T minus_1 = build_value<TypedIdx_T>(store, -1.0);
-		return TypedIdx_T(store.insert(BasicKnownFunction<TypedIdx_T>
-			{ FnType::pow, to_invert, minus_1, TypedIdx_T() }), Type::known_function);
+		return TypedIdx_T(store.insert(FnParams<TypedIdx_T>{ to_invert, minus_1 }), Type(FnType::pow));
 	}
 
 	namespace pattern {
@@ -98,7 +97,7 @@ namespace bmath::intern {
 			StupidBufferVector<PnTypedIdx, 3u> lhs_instances;
 			StupidBufferVector<PnTypedIdx, 3u> rhs_instances;
 
-			constexpr MultiNameLookup(std::string_view new_name, Restriction new_restr) noexcept
+			MultiNameLookup(std::string_view new_name, Restriction new_restr) noexcept
 				:name(new_name), restr(new_restr) {}
 		};
 		
@@ -110,7 +109,7 @@ namespace bmath::intern {
 			StupidBufferVector<PnTypedIdx, 3u> lhs_instances;
 			StupidBufferVector<PnTypedIdx, 3u> rhs_instances;
 
-			constexpr ValueNameLookup(std::string_view new_name, Form new_form) noexcept
+			ValueNameLookup(std::string_view new_name, Form new_form) noexcept
 				:name(new_name), form(new_form) {}
 		};
 

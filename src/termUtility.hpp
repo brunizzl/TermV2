@@ -117,7 +117,7 @@ namespace bmath::intern {
 		StupidBufferVector& operator=(const StupidBufferVector&) = delete;
 		StupidBufferVector& operator=(StupidBufferVector&&) = delete;
 
-		StupidBufferVector(StupidBufferVector&& snd) noexcept :size_(std::exchange(snd.size_, 0u)), data_(local_data)
+		constexpr StupidBufferVector(StupidBufferVector&& snd) noexcept :size_(std::exchange(snd.size_, 0u)), data_(local_data)
 		{
 			if (snd.data_ != snd.local_data) {
 				this->data_ = std::exchange(snd.data_, nullptr);
@@ -257,6 +257,9 @@ namespace bmath::intern {
 		explicit constexpr SumEnum(const unsigned u) noexcept :value(static_cast<Value>(u)) {}
 		explicit constexpr operator unsigned() const noexcept { return static_cast<unsigned>(this->value); }
 
+		template<typename E> explicit constexpr operator E() const noexcept 
+		{ static_assert(false, "method operator E(): requested type E not part of SumEnum"); return E{}; }
+
 		template<typename E> constexpr bool is() const noexcept
 		{ static_assert(false, "method is<E>(): requested type E not part of SumEnum"); return false; }
 	}; //class SumEnum<>
@@ -282,6 +285,28 @@ namespace bmath::intern {
 
 		explicit constexpr operator Enum() const noexcept { return static_cast<Enum>(unsigned(this->value) - this_offset); }
 
+
+		template<typename E, std::enable_if_t<std::is_convertible_v<E, Enum> && !std::is_same_v<E, Enum>, void*> = nullptr>
+		constexpr E to() const noexcept //default case: search in parent types
+		{ 
+			static_assert(!std::is_integral_v<E>);
+			return this->to<Enum>().to<E>(); 
+		}
+
+		template<typename E, std::enable_if_t<!std::is_convertible_v<E, Enum> && !std::is_same_v<E, Enum>, void*> = nullptr>
+		constexpr E to() const noexcept //assumes Enum itself is SumEnum<...> and can be build from E -> hand over to Enum
+		{ 
+			static_assert(!std::is_integral_v<E>);
+			return static_cast<const Base>(*this).to<E>(); 
+		}
+
+		template<typename E, std::enable_if_t<std::is_same_v<E, Enum>, void*> = nullptr>
+		constexpr E to() const noexcept //E is same as Enum -> we have an operator for that
+		{
+			return this->operator Enum(); 
+		}
+
+
 		template<typename E, std::enable_if_t<std::is_convertible_v<E, Base> && !std::is_same_v<E, Enum>, void*> = nullptr> 
 		constexpr bool is() const noexcept //default case: search in parent types
 		{
@@ -290,7 +315,7 @@ namespace bmath::intern {
 		}
 
 		template<typename E, std::enable_if_t<!std::is_convertible_v<E, Base> && !std::is_same_v<E, Enum>, void*> = nullptr> 
-		constexpr bool is() const noexcept //Enum itself is SumEnum<...> and can be build from E -> hand over to Enum
+		constexpr bool is() const noexcept //assumes Enum itself is SumEnum<...> and can be build from E -> hand over to Enum
 		{
 			static_assert(!std::is_integral_v<E>);
 			return this->operator Enum().is<E>(); 
@@ -299,9 +324,9 @@ namespace bmath::intern {
 		template<typename E, std::enable_if_t<std::is_same_v<E, Enum>, void*> = nullptr> 
 		constexpr bool is() const noexcept //E is same as Enum -> just check if value is between offsets
 		{ 
-			static_assert(!std::is_integral_v<E>);
 			return unsigned(this->value) >= this_offset && unsigned(this->value) < next_offset; 
 		}
+
 
 		constexpr friend std::strong_ordering operator<=>(const SumEnum&, const SumEnum&) = default;
 		constexpr friend bool operator==(const SumEnum&, const SumEnum&) = default;

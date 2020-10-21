@@ -234,7 +234,7 @@ namespace bmath::intern::test {
 				const OptComplex new_rhs = tree::combine_values_exact(store, eq.rhs_head);
 				if (new_rhs) {
 					tree::free(store, eq.rhs_head);
-					eq.rhs_head = TypedIdx(store.insert(*new_rhs), Type::complex);
+					eq.rhs_head = TypedIdx(store.insert(*new_rhs), Type(Leaf::complex));
 				}
 			}
 
@@ -286,34 +286,17 @@ namespace bmath::intern::test {
 		tree::combine_layers(rhs_store, rhs_head);
 		if (const OptComplex lhs_val = tree::combine_values_exact(lhs_store, lhs_head)) {
 			tree::free(lhs_store, lhs_head);
-			lhs_head = PnTypedIdx(lhs_store.insert(*lhs_val), Type::complex);
+			lhs_head = PnTypedIdx(lhs_store.insert(*lhs_val), Type(Leaf::complex));
 		}
 		if (const OptComplex rhs_val = tree::combine_values_exact(rhs_store, rhs_head)) {
 			tree::free(rhs_store, rhs_head);
-			rhs_head = PnTypedIdx(rhs_store.insert(*rhs_val), Type::complex);
+			rhs_head = PnTypedIdx(rhs_store.insert(*rhs_val), Type(Leaf::complex));
 		}
 		tree::sort(lhs_store, lhs_head);
 		tree::sort(rhs_store, rhs_head);
 
 		std::cout << print::to_memory_layout(lhs_store, lhs_head) << "\n\n";
 		//std::cout << print::to_memory_layout(rhs_store, rhs_head) << "\n\n";
-
-		const auto result = find_value_match_subtree(lhs_store, lhs_head, table.value_table[0].lhs_instances[0]);
-		std::cout << "index of lhs k = " << result.get_index() << "\n\n";
-	}
-
-	void change_subtree()
-	{
-		std::string name = "a+2*b^c";
-		Term term(name);
-		auto [store, head] = term.data();
-		std::cout << term.to_string() << " -> ";
-
-		TypedIdx a_idx = tree::search_variable(*store, head, "a");
-		TypedIdx c_idx = tree::search_variable(*store, head, "c");
-		tree::change_subtree(*store, head, c_idx, a_idx);
-		tree::change_subtree(*store, head, a_idx, c_idx);
-		std::cout << term.to_string() << "\n";
 	}
 
 } //namespace bmath::intern::test

@@ -13,24 +13,22 @@
 
 namespace bmath::intern {
 
-	enum class Type 
+	enum class Node //common recursive nodes (FnType's and some PnVariable's are recursive as well)
 	{
 		sum,
 		product,
-		known_function,
 		generic_function,
-		variable,
-		complex,
-		COUNT	//has to be last element
+		COUNT
 	};
 
-	using TypedIdx = BasicTypedIdx<Type>;
-	using TypedIdxSLC = TermSLC<std::uint32_t, TypedIdx, 3>;
+	enum class Leaf
+	{
+		variable,
+		complex,
+		COUNT
+	};
 
-	using Sum            = TypedIdxSLC;
-	using Product        = TypedIdxSLC;
-
-	enum class FnType :std::uint32_t
+	enum class FnType //short for Function Type (note that generic_function is not listed here)
 	{
 		asinh,	//params[0] := argument
 		acosh,	//params[0] := argument
@@ -53,18 +51,20 @@ namespace bmath::intern {
 		ln,		//params[0] := argument
 		re,		//params[0] := argument
 		im,		//params[0] := argument
-		UNKNOWN //has to be last element, doubles as count
+		COUNT
 	};
 
+	using Type = SumEnum<FnType, Leaf, Node>;
+
+	using TypedIdx = BasicTypedIdx<Type>;
+	using TypedIdxSLC = TermSLC<std::uint32_t, TypedIdx, 3>;
+
+	using Sum     = TypedIdxSLC;
+	using Product = TypedIdxSLC;
+
+	//if any buildin funtion exeeds a parameter count of 4, a more involved structure needs to replace this.
 	template<typename TypedIdx_T>
-	struct BasicKnownFunction
-	{
-		FnType type;
-
-		//if any buildin funtion exeeds a parameter count of 3, a more involved structure needs to replace this.
-		TypedIdx_T params[3];
-	};
-	using KnownFunction = BasicKnownFunction<TypedIdx>;
+	using FnParams = std::array<TypedIdx_T, 4>;
 
 	struct GenericFunction
 	{
@@ -91,32 +91,32 @@ namespace bmath::intern {
 
 	union TypesUnion
 	{
-		KnownFunction known_function;
+		FnParams<TypedIdx> fn_params;
 		GenericFunction generic_function;
 		Complex complex;
 		TypedIdxSLC index_slc; //representing GenericFunction's extra parameters, Sum or Product 
 		TermString128 string;	//Variable is a string and GenericFunction may allocate additional string nodes
 
-		TypesUnion(const KnownFunction&   val) :known_function(val)   {}
-		TypesUnion(const GenericFunction& val) :generic_function(val) {}
-		TypesUnion(const Complex&         val) :complex(val)          {}
-		TypesUnion(const TypedIdxSLC&     val) :index_slc(val)        {}
-		TypesUnion(const TermString128&   val) :string(val)           {} 
+		TypesUnion(const FnParams<TypedIdx>& val) :fn_params(val)        {}
+		TypesUnion(const GenericFunction&    val) :generic_function(val) {}
+		TypesUnion(const Complex&            val) :complex(val)          {}
+		TypesUnion(const TypedIdxSLC&        val) :index_slc(val)        {}
+		TypesUnion(const TermString128&      val) :string(val)           {} 
 
 		constexpr auto operator<=>(const TypesUnion&) const = default;
 
 		template<typename T> constexpr const T& to() const noexcept;
-		template<> constexpr const KnownFunction  &to<KnownFunction  >() const noexcept { return this->known_function; }
-		template<> constexpr const GenericFunction&to<GenericFunction>() const noexcept { return this->generic_function; }
-		template<> constexpr const Complex        &to<Complex        >() const noexcept { return this->complex; }
-		template<> constexpr const TypedIdxSLC    &to<TypedIdxSLC    >() const noexcept { return this->index_slc; }
-		template<> constexpr const TermString128  &to<TermString128  >() const noexcept { return this->string; }
+		template<> constexpr const FnParams<TypedIdx> &to<FnParams<TypedIdx>>() const noexcept { return this->fn_params; }
+		template<> constexpr const GenericFunction    &to<GenericFunction   >() const noexcept { return this->generic_function; }
+		template<> constexpr const Complex            &to<Complex           >() const noexcept { return this->complex; }
+		template<> constexpr const TypedIdxSLC        &to<TypedIdxSLC       >() const noexcept { return this->index_slc; }
+		template<> constexpr const TermString128      &to<TermString128     >() const noexcept { return this->string; }
 		template<typename T> constexpr T& to() noexcept;
-		template<> constexpr KnownFunction  &to<KnownFunction  >() noexcept { return this->known_function; }
-		template<> constexpr GenericFunction&to<GenericFunction>() noexcept { return this->generic_function; }
-		template<> constexpr Complex        &to<Complex        >() noexcept { return this->complex; }
-		template<> constexpr TypedIdxSLC    &to<TypedIdxSLC    >() noexcept { return this->index_slc; }
-		template<> constexpr TermString128  &to<TermString128  >() noexcept { return this->string; }
+		template<> constexpr FnParams<TypedIdx> &to<FnParams<TypedIdx>>() noexcept { return this->fn_params; }
+		template<> constexpr GenericFunction    &to<GenericFunction   >() noexcept { return this->generic_function; }
+		template<> constexpr Complex            &to<Complex           >() noexcept { return this->complex; }
+		template<> constexpr TypedIdxSLC        &to<TypedIdxSLC       >() noexcept { return this->index_slc; }
+		template<> constexpr TermString128      &to<TermString128     >() noexcept { return this->string; }
 	};
 
 	static_assert(sizeof(TypesUnion) * 8 == 128);
@@ -142,18 +142,17 @@ namespace bmath::intern {
 
 		using PnSum = PnTypedIdxSLC;
 		using PnProduct = PnTypedIdxSLC;
-		using PnKnownFunction = BasicKnownFunction<PnTypedIdx>;
 
-		enum class Restr //the rest
+		enum class Restr
 		{
-			function, //packs both known and generic together
+			function, //packs generic_function and any in FnType together
 			any,    
 			unknown, //used only as error value
 			COUNT
 		};
 
 		//note: of Type, only sum, product, complex or variable may be used, as there is (currently)
-		//no need to differentiate between known_function and unknown_function.
+		//no need to differentiate between any of the functions of FnType and unknown_function.
 		using Restriction = SumEnum<Restr, Type>; 
 
 		template<typename TypedIdx_T>
@@ -170,7 +169,7 @@ namespace bmath::intern {
 		};
 
 		//specifies more constraints on a value
-		enum class Form
+		enum class Form :std::uint32_t
 		{
 			natural,   //{1, 2, 3, ...}
 			natural_0, //{0, 1, 2, ...}
@@ -214,7 +213,7 @@ namespace bmath::intern {
 
 		union PnTypesUnion
 		{
-			PnKnownFunction known_function;
+			FnParams<PnTypedIdx> fn_params;
 			GenericFunction generic_function;
 			Complex complex;
 			PnTypedIdxSLC index_slc; //representing GenericFunction's extra parameters, Sum or Product 
@@ -222,32 +221,32 @@ namespace bmath::intern {
 			TreeMatchVariable tree_match;
 			ValueMatchVariable value_match;
 
-			PnTypesUnion(const PnKnownFunction&    val) :known_function(val)   {}
-			PnTypesUnion(const GenericFunction&    val) :generic_function(val) {}
-			PnTypesUnion(const Complex&            val) :complex(val)          {}
-			PnTypesUnion(const PnTypedIdxSLC&      val) :index_slc(val)        {}
-			PnTypesUnion(const TermString128&      val) :string(val)           {} 
-			PnTypesUnion(const TreeMatchVariable&  val) :tree_match(val)       {} 
-			PnTypesUnion(const ValueMatchVariable& val) :value_match(val)      {} 
+			PnTypesUnion(const FnParams<PnTypedIdx>& val) :fn_params(val)        {}
+			PnTypesUnion(const GenericFunction&      val) :generic_function(val) {}
+			PnTypesUnion(const Complex&              val) :complex(val)          {}
+			PnTypesUnion(const PnTypedIdxSLC&        val) :index_slc(val)        {}
+			PnTypesUnion(const TermString128&        val) :string(val)           {} 
+			PnTypesUnion(const TreeMatchVariable&    val) :tree_match(val)       {} 
+			PnTypesUnion(const ValueMatchVariable&   val) :value_match(val)      {} 
 
 			constexpr auto operator<=>(const PnTypesUnion&) const = default;
 
 			template<typename T> constexpr const T& to() const noexcept;
-			template<> constexpr const PnKnownFunction   &to<PnKnownFunction   >() const noexcept { return this->known_function; }
-			template<> constexpr const GenericFunction   &to<GenericFunction   >() const noexcept { return this->generic_function; }
-			template<> constexpr const Complex           &to<Complex           >() const noexcept { return this->complex; }
-			template<> constexpr const PnTypedIdxSLC     &to<PnTypedIdxSLC     >() const noexcept { return this->index_slc; }
-			template<> constexpr const TermString128     &to<TermString128     >() const noexcept { return this->string; }
-			template<> constexpr const TreeMatchVariable &to<TreeMatchVariable >() const noexcept { return this->tree_match; }
-			template<> constexpr const ValueMatchVariable&to<ValueMatchVariable>() const noexcept { return this->value_match; }
+			template<> constexpr const FnParams<PnTypedIdx> &to<FnParams<PnTypedIdx>>() const noexcept { return this->fn_params; }
+			template<> constexpr const GenericFunction      &to<GenericFunction     >() const noexcept { return this->generic_function; }
+			template<> constexpr const Complex              &to<Complex             >() const noexcept { return this->complex; }
+			template<> constexpr const PnTypedIdxSLC        &to<PnTypedIdxSLC       >() const noexcept { return this->index_slc; }
+			template<> constexpr const TermString128        &to<TermString128       >() const noexcept { return this->string; }
+			template<> constexpr const TreeMatchVariable    &to<TreeMatchVariable   >() const noexcept { return this->tree_match; }
+			template<> constexpr const ValueMatchVariable   &to<ValueMatchVariable  >() const noexcept { return this->value_match; }
 			template<typename T> constexpr T& to() noexcept;
-			template<> constexpr PnKnownFunction   &to<PnKnownFunction   >() noexcept { return this->known_function; }
-			template<> constexpr GenericFunction   &to<GenericFunction   >() noexcept { return this->generic_function; }
-			template<> constexpr Complex           &to<Complex           >() noexcept { return this->complex; }
-			template<> constexpr PnTypedIdxSLC     &to<PnTypedIdxSLC     >() noexcept { return this->index_slc; }
-			template<> constexpr TermString128     &to<TermString128     >() noexcept { return this->string; }
-			template<> constexpr TreeMatchVariable &to<TreeMatchVariable >() noexcept { return this->tree_match; }
-			template<> constexpr ValueMatchVariable&to<ValueMatchVariable>() noexcept { return this->value_match; }
+			template<> constexpr FnParams<PnTypedIdx> &to<FnParams<PnTypedIdx>>() noexcept { return this->fn_params; }
+			template<> constexpr GenericFunction      &to<GenericFunction     >() noexcept { return this->generic_function; }
+			template<> constexpr Complex              &to<Complex             >() noexcept { return this->complex; }
+			template<> constexpr PnTypedIdxSLC        &to<PnTypedIdxSLC       >() noexcept { return this->index_slc; }
+			template<> constexpr TermString128        &to<TermString128       >() noexcept { return this->string; }
+			template<> constexpr TreeMatchVariable    &to<TreeMatchVariable   >() noexcept { return this->tree_match; }
+			template<> constexpr ValueMatchVariable   &to<ValueMatchVariable  >() noexcept { return this->value_match; }
 		};
 		static_assert(sizeof(PnTypesUnion) * 8 == 128);
 
@@ -290,11 +289,9 @@ namespace bmath::intern {
 			std::string rhs_memory_layout() const;
 		};
 
-		PnTypedIdx find_value_match_subtree(const PnStore& store, const PnTypedIdx head, const PnTypedIdx value_match);
-
 	} //namespace pattern
 
-	//utility for both KnownFunction and GenericFunction
+	//utility for both Function and GenericFunction
 	namespace fn {
 
 		constexpr auto param_count_table = std::to_array<std::pair<FnType, std::size_t>>({
@@ -323,13 +320,17 @@ namespace bmath::intern {
 		constexpr std::size_t param_count(FnType type) noexcept 
 		{ return find_snd(param_count_table, type); }
 
-		template<typename TypedIdx_T>
-		std::span<TypedIdx_T> range(BasicKnownFunction<TypedIdx_T>& func) noexcept
-		{ return { func.params, param_count(func.type) }; }
+		constexpr std::size_t param_count(pattern::PnType type) noexcept 
+		{ return find_snd(param_count_table, type.to<FnType>()); }
 
-		template<typename TypedIdx_T>
-		std::span<const TypedIdx_T> range(const BasicKnownFunction<TypedIdx_T>& func) noexcept
-		{ return { func.params, param_count(func.type) }; }
+
+		template<typename TypedIdx_T, typename Type_T>
+		std::span<TypedIdx_T> range(FnParams<TypedIdx_T>& params, const Type_T type) noexcept
+		{ return { params.data(), param_count(type) }; }
+
+		template<typename TypedIdx_T, typename Type_T>
+		std::span<const TypedIdx_T> range(const FnParams<TypedIdx_T>& params, const Type_T type) noexcept
+		{ return { params.data(), param_count(type) }; }
 
 		inline auto range(Store& store, GenericFunction& func) noexcept 
 		{ return TypedIdxSLC::Range<Store>(store, func.params_idx); }
@@ -419,12 +420,6 @@ namespace bmath::intern {
 
 		//returns TypedIdx() if unsuccsessfull
 		TypedIdx search_variable(const Store& store, const TypedIdx head, std::string_view name);
-
-		//the parent node of "from" changes "from" to "to"
-		//no one does freeing or allocation. (meaning from continues to live in store, but now no longer owned by old parent)
-		//returns if change was succsessfull
-		template<typename Store_T, typename TypedIdx_T>
-		bool change_subtree(Store_T& store, const TypedIdx_T ref, const TypedIdx_T from, const TypedIdx_T to);
 
 	} //namespace tree
 

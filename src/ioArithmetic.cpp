@@ -12,7 +12,7 @@ namespace bmath::intern {
 	/////////////////////////////////////////////////////////////////////local definitions//////////////////////////////////////////////////////////////////////////////////
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	//utility for both KnownFunction and GenericFunction
+	//utility for both Function and GenericFunction
 	namespace fn {
 
 		constexpr auto name_table = std::to_array<std::pair<FnType, std::string_view>>({
@@ -40,7 +40,7 @@ namespace bmath::intern {
 		});
 
 		constexpr std::string_view name_of(const FnType type) noexcept { return find_snd(name_table, type); }
-		constexpr FnType type_of(const std::string_view name) noexcept { return search_fst(name_table, name, FnType::UNKNOWN); }
+		constexpr FnType type_of(const std::string_view name) noexcept { return search_fst(name_table, name, FnType::COUNT); }
 
 		//appends only name, no parentheses or anything fancy
 		template<typename Store_T>
@@ -60,7 +60,7 @@ namespace bmath::intern {
 
 		struct BasicSumTraits
 		{
-			static constexpr Type type_name = Type::sum;
+			static constexpr Type type_name = Node::sum;
 			static constexpr char operator_char = '+';
 			static constexpr char inverse_operator_char = '-';
 			static constexpr Token operator_token = token::sum;
@@ -73,7 +73,7 @@ namespace bmath::intern {
 
 		struct BasicProductTraits
 		{
-			static constexpr Type type_name = Type::product;
+			static constexpr Type type_name = Node::product;
 			static constexpr char operator_char = '*';
 			static constexpr char inverse_operator_char = '/';
 			static constexpr Token operator_token = token::product;
@@ -103,21 +103,21 @@ namespace bmath::intern {
 	namespace pattern {
 
 		constexpr auto form_name_table = std::to_array<std::pair<ParseRestriction, std::string_view>>({
-			{ Type::sum          , "sum"           },
-			{ Type::product      , "product"       },
-			{ Type::variable     , "variable"      },
-			{ Type::complex      , "complex"       },
-			{ Restr::function    , "fn"            },
-			{ Form::natural      , "nat"           },
-			{ Form::natural_0    , "nat0"          },
-			{ Form::integer      , "int"           },
-			{ Form::real         , "real"          },
-			{ Form::not_minus_one, "not_minus_one" },
-			{ Form::negative     , "negative"      },
-			{ Form::not_negative , "not_negative"  },
-			{ Form::positive     , "positive"      },
-			{ Form::not_positive , "not_positive"  },
-			{ Restr::any         , "any"           },
+			{ Type(Node::sum     ), "sum"           },
+			{ Type(Node::product ), "product"       },
+			{ Type(Leaf::variable), "variable"      },
+			{ Type(Leaf::complex ), "complex"       },
+			{ Restr::function       , "fn"            },
+			{ Form::natural         , "nat"           },
+			{ Form::natural_0       , "nat0"          },
+			{ Form::integer         , "int"           },
+			{ Form::real            , "real"          },
+			{ Form::not_minus_one   , "not_minus_one" },
+			{ Form::negative        , "negative"      },
+			{ Form::not_negative    , "not_negative"  },
+			{ Form::positive        , "positive"      },
+			{ Form::not_positive    , "not_positive"  },
+			{ Restr::any            , "any"           },
 		});
 
 		constexpr std::string_view name_of(const ParseRestriction r) noexcept { return find_snd(form_name_table, r); }
@@ -127,27 +127,39 @@ namespace bmath::intern {
 
 	namespace print {
 
-		enum class PrintExtras { pow, COUNT };
-		using PrintType = SumEnum<PrintExtras, pattern::PnVariable, Type>;
-
-		constexpr PrintType to_print_type(pattern::PnType t) { return PrintType(unsigned(t)); }
-		static_assert(unsigned(pattern::PnType(Type::sum)) == unsigned(PrintType(Type::sum)), "to_print_type invalid");
-		static_assert(unsigned(pattern::PnType(pattern::PnVariable::tree_match)) == unsigned(PrintType(pattern::PnVariable::tree_match)), "to_print_type invalid");
-
 		//operator precedence (used to decide if parentheses are nessecary in out string)
-		constexpr auto infixr_table = std::to_array<std::pair<PrintType, int>>({
-			{ Type::known_function,               0 },
-			{ Type::generic_function,             0 },
-			{ Type::sum,                          2	},
-			{ Type::product,                      4 },
-			{ PrintExtras::pow,                   5 },
-			{ Type::variable,                     6 },
-			{ Type::complex,                      6 },//may be printed as sum/product itself, then (maybe) has to add parentheses on its own
-			{ pattern::PnVariable::tree_match,    6 },
-			{ pattern::PnVariable::value_match,   6 },
-			{ pattern::PnVariable::value_proxy,   6 },
+		constexpr auto infixr_table = std::to_array<std::pair<pattern::PnType, int>>({
+			{ Type(FnType::asinh            )     , 0 },	
+			{ Type(FnType::acosh            )     , 0 },
+			{ Type(FnType::atanh            )     , 0 },	
+			{ Type(FnType::asin             )     , 0 },	
+			{ Type(FnType::acos             )     , 0 },	
+			{ Type(FnType::atan             )     , 0 },	
+			{ Type(FnType::sinh             )     , 0 },	
+			{ Type(FnType::cosh             )     , 0 },	
+			{ Type(FnType::tanh             )     , 0 },	
+			{ Type(FnType::sqrt             )     , 0 },
+			{ Type(FnType::log              )     , 0 }, 
+			{ Type(FnType::exp              )     , 0 },
+			{ Type(FnType::sin              )     , 0 },	
+			{ Type(FnType::cos              )     , 0 },	
+			{ Type(FnType::tan              )     , 0 },	
+			{ Type(FnType::abs              )     , 0 },	
+			{ Type(FnType::arg              )     , 0 },	
+			{ Type(FnType::ln               )     , 0 },	
+			{ Type(FnType::re               )     , 0 },	
+			{ Type(FnType::im               )     , 0 },	
+			{ Type(Node::generic_function )     , 0 },
+			{ Type(Node::sum              )     , 2 },
+			{ Type(Node::product          )     , 4 },	
+			{ Type(FnType::pow              )     , 5 }, //not between other function types -> assumed to be printed with '^'  
+			{ Type(Leaf::variable         )     , 6 },
+			{ Type(Leaf::complex          )     , 6 }, //may be printed as sum/product itself, then (maybe) has to add parentheses on its own
+			{ pattern::PnVariable::tree_match     , 6 },
+			{ pattern::PnVariable::value_match    , 6 },
+			{ pattern::PnVariable::value_proxy    , 6 },
 			});
-		constexpr int infixr(PrintType type) { return find_snd(infixr_table, type); }
+		constexpr int infixr(pattern::PnType type) { return find_snd(infixr_table, type); }
 
 		void append_complex(const std::complex<double> val, std::string& dest, int parent_operator_precedence)
 		{
@@ -172,17 +184,17 @@ namespace bmath::intern {
 			bool parentheses = false;
 
 			if (val.real() != 0.0 && val.imag() != 0.0) {
-				parentheses = parent_operator_precedence > infixr(Type::sum);
+				parentheses = parent_operator_precedence > infixr(Type(Node::sum));
 				buffer << val.real();
 				add_im_to_stream(val.imag(), Flag::showpos);		
 			}
 			else if (val.real() != 0.0 && val.imag() == 0.0) {
-				parentheses = val.real() < 0.0 && parent_operator_precedence > infixr(Type::sum);	//leading '-'
+				parentheses = val.real() < 0.0 && parent_operator_precedence >= infixr(Type(Node::sum));	//leading '-'
 				buffer << val.real();
 			}
 			else if (val.real() == 0.0 && val.imag() != 0.0) {
-				parentheses = val.imag() < 0.0 && parent_operator_precedence > infixr(Type::sum);	//leading '-'	
-				parentheses |= parent_operator_precedence > infixr(Type::product);	//*i
+				parentheses = val.imag() < 0.0 && parent_operator_precedence >= infixr(Type(Node::sum));	//leading '-'	
+				parentheses |= parent_operator_precedence > infixr(Type(Node::product));	//*i
 				add_im_to_stream(val.imag(), Flag::noshowpos);
 			}
 			else {
@@ -387,7 +399,7 @@ namespace bmath::intern {
 			input.remove_prefix(1u); //remove hat
 			const TypedIdx base = build(store, base_view);
 			const TypedIdx expo = build(store, input);
-			return TypedIdx(store.insert(KnownFunction{ FnType::pow, base, expo, TypedIdx() }), Type::known_function);
+			return TypedIdx(store.insert(FnParams<TypedIdx>{ base, expo}), FnType::pow);
 		} break;
 		case Head::Type::complex_computable: {
 			return build_value<TypedIdx>(store, compute::eval_complex(input));
@@ -406,7 +418,7 @@ namespace bmath::intern {
 			return build_function<TypedIdx>(store, input, head.where, build);
 		} break;
 		case Head::Type::variable: {
-			return TypedIdx(insert_string(store, input.to_string_view()), Type::variable);
+			return TypedIdx(insert_string(store, input.to_string_view()), Leaf::variable);
 		} break;
 		default: 
 			assert(false); 
@@ -448,7 +460,7 @@ namespace bmath::intern {
 		using TypedIdxSLC_T = TermSLC<std::uint32_t, TypedIdx_T, 3u>;
 
 		const auto type = fn::type_of(input.to_string_view(0u, open_par));
-		if (type == FnType::UNKNOWN) { //build generic function
+		if (type == FnType::COUNT) { //build generic function
 			GenericFunction result;
 			{//writing name in result
 				const auto name = std::string_view(input.chars, open_par);
@@ -480,22 +492,22 @@ namespace bmath::intern {
 				const TypedIdx_T param = build_any(store, param_view);
 				last_node_idx = TypedIdxSLC_T::insert_new(store, last_node_idx, param);
 			}
-			return TypedIdx_T(store.insert(result), Type::generic_function);
+			return TypedIdx_T(store.insert(result), Type(Node::generic_function));
 		}
 		else { //build known function
-			BasicKnownFunction<TypedIdx_T> result{ FnType(type), TypedIdx_T(), TypedIdx_T(), TypedIdx_T() };
+			FnParams<TypedIdx_T> result{ TypedIdx_T(), TypedIdx_T(), TypedIdx_T(), TypedIdx_T() };
 			input.remove_suffix(1u);
 			input.remove_prefix(open_par + 1u);	//only arguments are left
 			std::size_t comma = find_first_of_skip_pars(input.tokens, token::comma);
 			auto param_view = input.steal_prefix(comma);
-			for (auto& param : fn::range(result)) {
+			for (auto& param : fn::range(result, type)) {
 				throw_if<ParseFailure>(param_view.size() == 0u, input.offset, "too few function parameters");
 				param = build_any(store, param_view);
 				comma = find_first_of_skip_pars(input.tokens, token::comma);
 				param_view = input.steal_prefix(comma);
 			}
 			throw_if<ParseFailure>(param_view.size() > 0u, input.offset, "too many function parameters");
-			return TypedIdx_T(store.insert(result), Type::known_function);
+			return TypedIdx_T(store.insert(result), Type(type));
 		}
 	} //build_function
 
@@ -615,7 +627,7 @@ namespace bmath::intern {
 				input.remove_prefix(1u); //remove hat
 				const PnTypedIdx base = this->operator()(store, base_view);
 				const PnTypedIdx expo = this->operator()(store, input);
-				return PnTypedIdx(store.insert(PnKnownFunction{ FnType::pow, base, expo, PnTypedIdx() }), Type::known_function);
+				return PnTypedIdx(store.insert(FnParams<PnTypedIdx>{ base, expo }), Type(FnType::pow));
 			} break;
 			case Head::Type::complex_computable: {
 				return build_value<PnTypedIdx>(store, compute::eval_complex(input));
@@ -636,7 +648,7 @@ namespace bmath::intern {
 			case Head::Type::variable: {
 				if (input.chars[0u] == '\'') {
 					throw_if<ParseFailure>(input.chars[input.size() - 1u] != '\'', input.offset + 1u, "found no matching \"'\"");
-					return PnTypedIdx(insert_string(store, input.to_string_view(1u, input.size() - 1u)), Type::variable);
+					return PnTypedIdx(insert_string(store, input.to_string_view(1u, input.size() - 1u)), Type(Leaf::variable));
 				}
 				else {
 					return this->table.insert_instance(store, input);
@@ -659,38 +671,33 @@ namespace bmath::intern {
 			constexpr bool pattern = std::is_same_v<Type_T, pattern::PnType>;
 
 			const auto [index, type] = ref.split();
-			const int own_infixr = infixr(to_print_type(type));
+			const int own_infixr = infixr(type);
 			if (own_infixr <= parent_infixr) {
 				str.push_back('(');
 			}
 
 			switch (type) {
-			case Type_T(Type::sum): {
+			case Type_T(Node::sum): {
 				const char* seperator = "";
 				for (const auto summand : vdc::range(store, index)) {
 					str.append(std::exchange(seperator, "+"));
 					print::append_to_string(store, summand, str, own_infixr);
 				}
 			} break;
-			case Type_T(Type::product): {
+			case Type_T(Node::product): {
 				const char* seperator = "";
 				for (const auto factor : vdc::range(store, index)) {
 					str.append(std::exchange(seperator, "*"));
 					print::append_to_string(store, factor, str, own_infixr);
 				}
 			} break;
-			case Type_T(Type::known_function): {
-				const BasicKnownFunction<TypedIdx_T>& known_function = store.at(index).known_function;
-				str.pop_back(); //pop '('
-				str.append(fn::name_of(known_function.type));
-				str.push_back('(');
-				const char* seperator = "";
-				for (const auto param : fn::range(known_function)) {
-					str.append(std::exchange(seperator, ", "));
-					print::append_to_string(store, param, str, own_infixr);
-				}
+			case Type_T(FnType::pow): {
+				const FnParams<TypedIdx_T>& params = store.at(index).fn_params;
+				print::append_to_string(store, params[0], str, own_infixr);
+				str.push_back('^');
+				print::append_to_string(store, params[1], str, own_infixr);
 			} break;
-			case Type_T(Type::generic_function): {
+			case Type_T(Node::generic_function): {
 				const GenericFunction& generic_function = store.at(index).generic_function;
 				str.pop_back(); //pop open parenthesis
 				fn::append_name(store, generic_function, str);
@@ -701,7 +708,19 @@ namespace bmath::intern {
 					print::append_to_string(store, param, str, own_infixr);
 				}
 			} break;
-			case Type_T(Type::variable): {
+			default: {
+				assert(type.is<FnType>());
+				const FnParams<TypedIdx_T>& params = store.at(index).fn_params;
+				str.pop_back(); //pop '('
+				str.append(fn::name_of(type.to<FnType>()));
+				str.push_back('(');
+				const char* seperator = "";
+				for (const auto param : fn::range(params, type)) {
+					str.append(std::exchange(seperator, ", "));
+					print::append_to_string(store, param, str, own_infixr);
+				}
+			} break;
+			case Type_T(Leaf::variable): {
 				const Variable& variable = store.at(index).string;
 				if constexpr (pattern) {
 					str.push_back('\'');
@@ -712,7 +731,7 @@ namespace bmath::intern {
 					read(store, index, str);
 				}
 			} break;
-			case Type_T(Type::complex): {
+			case Type_T(Leaf::complex): {
 				const Complex& complex = store.at(index).complex;
 				append_complex(complex, str, parent_infixr);
 			} break;
@@ -743,7 +762,6 @@ namespace bmath::intern {
 				str.append(std::to_string(index));
 				str.push_back('>');
 			} break;
-			default: assert(false); //if this assert hits, the switch above needs more cases.
 			}
 
 			if (own_infixr <= parent_infixr) {
@@ -762,7 +780,7 @@ namespace bmath::intern {
 
 			const auto get_negative_real = [&store](const TypedIdx ref) ->OptDouble {
 				const auto [index, type] = ref.split();
-				if (type == Type::complex) {
+				if (type == Leaf::complex) {
 					const Complex& complex = store.at(index).complex;
 					if (complex.real() < 0.0 && complex.imag() == 0.0) {
 						return { complex.real() };
@@ -774,13 +792,11 @@ namespace bmath::intern {
 			 //returns base, if ref is actually <base>^(-1)
 			const auto get_pow_neg1 = [get_negative_real, &store](const TypedIdx ref) -> std::optional<TypedIdx> {
 				const auto [index, type] = ref.split();
-				if (type == Type::known_function) {
-					const KnownFunction& function = store.at(index).known_function;
-					if (function.type == FnType::pow) {
-						if (const auto expo = get_negative_real(function.params[1])) {
-							if (*expo == -1.0) {
-								return { function.params[0] };
-							}
+				if (type == FnType::pow) {
+					const FnParams<TypedIdx>& params = store.at(index).fn_params;
+					if (const auto expo = get_negative_real(params[1])) {
+						if (*expo == -1.0) {
+							return { params[0] };
 						}
 					}
 				}
@@ -790,7 +806,7 @@ namespace bmath::intern {
 			struct GetNegativeProductResult { double negative_factor; StupidBufferVector<TypedIdx, 8> other_factors; };
 			const auto get_negative_product = [get_negative_real, &store](const TypedIdx ref) -> std::optional<GetNegativeProductResult> {
 				const auto [index, type] = ref.split();
-				if (type == Type::product) {
+				if (type == Node::product) {
 					StupidBufferVector<TypedIdx, 8> other_factors;
 					double negative_factor;
 					bool found_negative_factor = false;
@@ -820,13 +836,13 @@ namespace bmath::intern {
 					else if (const auto base = get_pow_neg1(elem)) {
 						//str += (first ? "1 / " : " / "); 
 						str += (first ? "1/" : "/"); 
-						str += print::to_pretty_string(store, *base, infixr(Type::product));
+						str += print::to_pretty_string(store, *base, infixr(Type(Node::product)));
 						first = false;
 					}
 					else {
 						//str += (first ? "" : " * ");
 						str += (first ? "" : "*");
-						str += print::to_pretty_string(store, elem, infixr(Type::product));
+						str += print::to_pretty_string(store, elem, infixr(Type(Node::product)));
 						first = false;
 					}
 				}
@@ -843,7 +859,7 @@ namespace bmath::intern {
 			};
 
 			switch (type) {
-			case Type::sum: {
+			case Type(Node::sum): {
 				bool first = true;
 				for (const auto summand : reverse_elems(vdc::range(store, index))) {
 					if (const auto val = get_negative_real(summand)) {
@@ -873,34 +889,18 @@ namespace bmath::intern {
 				}
 				assert(!first && "found sum with zero summands");
 			} break;
-			case Type::product: {
+			case Type(Node::product): {
 				append_product(reverse_elems(vdc::range(store, index)));
 			} break;
-			case Type::known_function: {
-				const KnownFunction& function = store.at(index).known_function;
-				if (function.type == FnType::pow) {
-					need_parentheses = infixr(PrintExtras::pow) <= parent_infixr;
-					str += print::to_pretty_string(store, function.params[0], infixr(PrintExtras::pow));
-					//str += " ^ ";
-					str += "^";
-					str += print::to_pretty_string(store, function.params[1], infixr(PrintExtras::pow));
-				}
-				else {
-					need_parentheses = false;
-					str.append(fn::name_of(function.type));
-					str.push_back('(');
-					bool first = true;
-					for (const auto param : fn::range(function)) {
-						if (!std::exchange(first, false)) {
-							//str += ", ";
-							str += ",";
-						}
-						str += print::to_pretty_string(store, param, infixr(type));
-					}
-					str.push_back(')');
-				}
+			case Type(FnType::pow): {
+				const FnParams<TypedIdx>& params = store.at(index).fn_params;
+				str += print::to_pretty_string(store, params[0], infixr(type));
+				//str += " ^ ";
+				str += "^";
+				str += print::to_pretty_string(store, params[1], infixr(type));
+
 			} break;
-			case Type::generic_function: {
+			case Type(Node::generic_function): {
 				need_parentheses = false;
 				const GenericFunction& generic_function = store.at(index).generic_function;
 				fn::append_name(store, generic_function, str);
@@ -915,15 +915,28 @@ namespace bmath::intern {
 				}
 				str.push_back(')');
 			} break;
-			case Type::variable: {
+			default: {
+				assert(type.is<FnType>());
+				const FnParams<TypedIdx>& params = store.at(index).fn_params;
+				need_parentheses = false;
+				str.append(fn::name_of(type.to<FnType>()));
+				str.push_back('(');
+				const char* separator = "";
+				for (const auto param : fn::range(params, type)) {
+					//str += std::exchange(separator, ", ");
+					str += std::exchange(separator, ",");
+					str += print::to_pretty_string(store, param, infixr(type));
+				}
+				str.push_back(')');
+			} break;
+			case Type(Leaf::variable): {
 				const Variable& variable = store.at(index).string;
 				read(store, index, str);
 			} break;
-			case Type::complex: {
+			case Type(Leaf::complex): {
 				const Complex& complex = store.at(index).complex;
 				append_complex(complex, str, parent_infixr);
 			} break;
-			default: assert(false); //if this assert hits, the switch above needs more cases.
 			}
 
 			if (need_parentheses) {
@@ -969,7 +982,7 @@ namespace bmath::intern {
 
 			std::string& current_str = content[index];
 			switch (type) {
-			case Type_T(Type::sum): {
+			case Type_T(Node::sum): {
 				current_str.append("sum        : {");
 				bool first = true;
 				for (const auto elem : vdc::range(store, index)) {
@@ -982,7 +995,7 @@ namespace bmath::intern {
 				current_str.push_back('}');
 				show_typedidx_col_nodes(index, false);
 			} break;
-			case Type_T(Type::product): {
+			case Type_T(Node::product): {
 				current_str.append("product    : {");
 				bool first = true;
 				for (const auto elem : vdc::range(store, index)) {
@@ -995,20 +1008,7 @@ namespace bmath::intern {
 				current_str.push_back('}');
 				show_typedidx_col_nodes(index, false);
 			} break;
-			case Type_T(Type::known_function): {
-				const BasicKnownFunction<TypedIdx_T>& known_function = store.at(index).known_function;
-				current_str.append("function   : {");
-				bool first = true;
-				for (const auto param : fn::range(known_function)) {
-					if (!std::exchange(first, false)) {
-						current_str.append(", ");
-					}
-					current_str.append(std::to_string(param.get_index()));
-					print::append_memory_row(store, param, content);
-				}
-				current_str.push_back('}');
-			} break;
-			case Type_T(Type::generic_function): {
+			case Type_T(Node::generic_function): {
 				const GenericFunction& generic_function = store.at(index).generic_function;
 				current_str.append("function?  : {");
 				bool first = true;
@@ -1025,11 +1025,25 @@ namespace bmath::intern {
 					show_string_nodes(generic_function.long_name_idx, true);
 				}
 			} break;
-			case Type_T(Type::variable): {
+			default: {
+				assert(type.is<FnType>());
+				const FnParams<TypedIdx_T>& params = store.at(index).fn_params;
+				current_str.append("function   : {");
+				bool first = true;
+				for (const auto param : fn::range(params, type)) {
+					if (!std::exchange(first, false)) {
+						current_str.append(", ");
+					}
+					current_str.append(std::to_string(param.get_index()));
+					print::append_memory_row(store, param, content);
+				}
+				current_str.push_back('}');
+			} break;
+			case Type_T(Leaf::variable): {
 				current_str.append("variable   : ");
 				show_string_nodes(index, false);
 			} break;
-			case Type_T(Type::complex): {
+			case Type_T(Leaf::complex): {
 				const Complex& complex = store.at(index).complex;
 				current_str.append("value      : ");
 			} break;
@@ -1041,7 +1055,6 @@ namespace bmath::intern {
 			} break;
 			case Type_T(pattern::_value_proxy): 
 				return;
-			default: assert(false); //if this assert hits, the switch above needs more cases.
 			}
 
 			//append name of subterm to line
