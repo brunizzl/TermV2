@@ -165,7 +165,7 @@ namespace bmath::intern {
 					const double real_0 = param_vals[0]->real();
 					const double real_1 = param_vals[1]->real();
 					switch (type) {
-					case FnType::pow  : return ((real_1 == -1.0) ? (1.0 / real_0) : std::pow(real_0, real_1));
+					case FnType::pow  : return std::pow(real_0, real_1);
 					case FnType::log  : return std::log(real_1) / std::log(real_0);
 					default: assert(false);
 					}
@@ -181,7 +181,7 @@ namespace bmath::intern {
 				else if (param_vals[1]->imag() == 0.0) {
 					const double real_1 = param_vals[1]->real();
 					switch (type) {
-					case FnType::pow  : return ((real_1 == -1.0) ? (1.0 / *param_vals[0]) : std::pow(*param_vals[0], real_1));
+					case FnType::pow  : return std::pow(*param_vals[0], real_1);
 					case FnType::log  : return std::log(real_1) / std::log(*param_vals[0]); 
 					default: assert(false);
 					}
@@ -543,6 +543,19 @@ namespace bmath::intern {
 			using Type_T = TypedIdx_T::Enum_T;
 			using TypedIdxSLC_T = TermSLC<std::uint32_t, TypedIdx_T, 3u>;
 			constexpr bool pattern = std::is_same_v<Type_T, pattern::PnType>;
+
+			const auto get_divisor = [&store](const TypedIdx_T ref) -> std::optional<TypedIdx_T> {
+				if (ref.get_type() == FnType::pow) {
+					const FnParams<TypedIdx_T>& params = store.at(ref.get_index()).fn_params;
+					if (params[1].get_type() == Leaf::complex) {
+						const Complex& value = store.at(params[1].get_index()).complex;
+						if (value == -1.0) {
+							return { params[0] }; //return just base
+						}
+					}
+				}
+				return {}; //return nothing
+			};
 			
 			const auto compute_exact = [](auto operate) -> OptComplex {
 				std::feclearexcept(FE_ALL_EXCEPT);
@@ -575,12 +588,23 @@ namespace bmath::intern {
 				}
 			} break;
 			case Type_T(Node::product): {
-				OptComplex result_val = 1.0;
+				OptComplex result_factor = 1.0;
+				OptComplex result_divisor = 1.0;
 				bool only_exact = true;
 				for (auto& factor : vdc::range(store, index)) {
+					if (const std::optional<TypedIdx_T> divisor = get_divisor(factor)) {
+						if (const OptComplex divisor_val = tree::combine_values_exact(store, *divisor)) {
+							if (const OptComplex res = compute_exact([&] { return result_divisor * divisor_val; })) {
+								result_divisor = res;
+								tree::free(store, factor); //free whole factor including pow() and -1
+								factor = TypedIdxSLC_T::null_value;
+								continue;
+							}
+						}
+					}
 					if (const OptComplex factor_val = tree::combine_values_exact(store, factor)) {
-						if (const OptComplex res = compute_exact([&] {return result_val * factor_val; })) {
-							result_val = res;
+						if (const OptComplex res = compute_exact([&] {return result_factor * factor_val; })) {
+							result_factor = res;
 							tree::free(store, factor);
 							factor = TypedIdxSLC_T::null_value;
 							continue;
@@ -588,12 +612,25 @@ namespace bmath::intern {
 					}
 					only_exact = false;
 				}
-				if (only_exact) {
+
+				const OptComplex result_val = compute_exact([&] { return result_factor / result_divisor; });
+				if (only_exact && result_val) {
 					return result_val;
 				}
-				else if (*result_val != 1.0) {
-					const auto new_summand = TypedIdx_T(store.insert(*result_val), Type(Leaf::complex));
-					TypedIdxSLC_T::insert_new(store, index, new_summand);
+				else if (result_val && *result_val != 1.0) {
+					const auto new_factor = TypedIdx_T(store.insert(*result_factor), Type(Leaf::complex));
+					TypedIdxSLC_T::insert_new(store, index, new_factor);
+				}
+				else {
+					if (*result_factor != 1.0) {
+						const auto new_factor = TypedIdx_T(store.insert(*result_factor), Type(Leaf::complex));
+						TypedIdxSLC_T::insert_new(store, index, new_factor);
+					}
+					if (*result_divisor != 1.0) {
+						const auto new_divisor = TypedIdx_T(store.insert(*result_divisor), Type(Leaf::complex));
+						const auto new_pow = build_inverted<Store_T, TypedIdx_T>(store, new_divisor);
+						TypedIdxSLC_T::insert_new(store, index, new_pow);
+					}
 				}
 			} break;
 			case Type_T(Node::generic_function): {
@@ -607,6 +644,7 @@ namespace bmath::intern {
 				}
 			} break;
 			default: {
+				if (!type.is<FnType>()) __debugbreak();
 				assert(type.is<FnType>()); //if this assert hits, the switch above needs more cases.
 				FnParams<TypedIdx_T>& params = store.at(index).fn_params;
 				std::array<OptComplex, 4> res_vals;
