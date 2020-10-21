@@ -38,7 +38,7 @@
 			assert(false);
 		} break;
 		default: {
-			assert(type.is<FnType>()); //if this assert hits, the switch above needs more cases.
+			assert(type.is<Fn>()); //if this assert hits, the switch above needs more cases.
 			const FnParams& params = store.at(index).fn_params;
 			for (const auto param : fn::range(params, type)) {
 			}
@@ -72,27 +72,27 @@ namespace bmath::intern {
 
 	//more unique (meaning harder to match) is smaller
 	constexpr auto uniqueness_table = std::to_array<std::pair<pattern::PnType, int>>({
-		{ Type(FnType::asinh           )  ,  0 }, //order of parameters is given -> most unique
-		{ Type(FnType::acosh           )  ,  2 }, //order of parameters is given -> most unique
-		{ Type(FnType::atanh           )  ,  4 }, //order of parameters is given -> most unique
-		{ Type(FnType::asin            )  ,  6 }, //order of parameters is given -> most unique
-		{ Type(FnType::acos            )  ,  8 }, //order of parameters is given -> most unique
-		{ Type(FnType::atan            )  , 10 }, //order of parameters is given -> most unique
-		{ Type(FnType::sinh            )  , 12 }, //order of parameters is given -> most unique
-		{ Type(FnType::cosh            )  , 14 }, //order of parameters is given -> most unique
-		{ Type(FnType::tanh            )  , 16 }, //order of parameters is given -> most unique
-		{ Type(FnType::sqrt            )  , 18 }, //order of parameters is given -> most unique
-		{ Type(FnType::pow             )  , 20 }, //order of parameters is given -> most unique
-		{ Type(FnType::log             )  , 22 }, //order of parameters is given -> most unique
-		{ Type(FnType::exp             )  , 24 }, //order of parameters is given -> most unique
-		{ Type(FnType::sin             )  , 26 }, //order of parameters is given -> most unique
-		{ Type(FnType::cos             )  , 28 }, //order of parameters is given -> most unique
-		{ Type(FnType::tan             )  , 30 }, //order of parameters is given -> most unique
-		{ Type(FnType::abs             )  , 32 }, //order of parameters is given -> most unique
-		{ Type(FnType::arg             )  , 34 }, //order of parameters is given -> most unique
-		{ Type(FnType::ln              )  , 36 }, //order of parameters is given -> most unique
-		{ Type(FnType::re              )  , 38 }, //order of parameters is given -> most unique
-		{ Type(FnType::im              )  , 40 }, //order of parameters is given -> most unique
+		{ Type(Fn::asinh           )  ,  0 }, //order of parameters is given -> most unique
+		{ Type(Fn::acosh           )  ,  2 }, //order of parameters is given -> most unique
+		{ Type(Fn::atanh           )  ,  4 }, //order of parameters is given -> most unique
+		{ Type(Fn::asin            )  ,  6 }, //order of parameters is given -> most unique
+		{ Type(Fn::acos            )  ,  8 }, //order of parameters is given -> most unique
+		{ Type(Fn::atan            )  , 10 }, //order of parameters is given -> most unique
+		{ Type(Fn::sinh            )  , 12 }, //order of parameters is given -> most unique
+		{ Type(Fn::cosh            )  , 14 }, //order of parameters is given -> most unique
+		{ Type(Fn::tanh            )  , 16 }, //order of parameters is given -> most unique
+		{ Type(Fn::sqrt            )  , 18 }, //order of parameters is given -> most unique
+		{ Type(Fn::pow             )  , 20 }, //order of parameters is given -> most unique
+		{ Type(Fn::log             )  , 22 }, //order of parameters is given -> most unique
+		{ Type(Fn::exp             )  , 24 }, //order of parameters is given -> most unique
+		{ Type(Fn::sin             )  , 26 }, //order of parameters is given -> most unique
+		{ Type(Fn::cos             )  , 28 }, //order of parameters is given -> most unique
+		{ Type(Fn::tan             )  , 30 }, //order of parameters is given -> most unique
+		{ Type(Fn::abs             )  , 32 }, //order of parameters is given -> most unique
+		{ Type(Fn::arg             )  , 34 }, //order of parameters is given -> most unique
+		{ Type(Fn::ln              )  , 36 }, //order of parameters is given -> most unique
+		{ Type(Fn::re              )  , 38 }, //order of parameters is given -> most unique
+		{ Type(Fn::im              )  , 40 }, //order of parameters is given -> most unique
 		{ Type(Node::generic_function)  , 50 }, //order of parameters is given -> most unique
 		{ Type(Node::product         )  , 55 }, //order of operands my vary -> second most unique
 		{ Type(Node::sum             )  , 60 }, //order of operands my vary -> second most unique
@@ -107,55 +107,55 @@ namespace bmath::intern {
 	//utility for both Function and GenericFunction
 	namespace fn {
 
-		OptComplex eval(FnType type, const std::array<OptComplex, 4>& param_vals)
+		OptComplex eval(Fn type, const std::array<OptComplex, 4>& param_vals)
 		{
 			if (param_count(type) == 1u) {
 				if (param_vals[0]->imag() == 0.0) {
 					const double real_val = param_vals[0]->real();
 					switch (type) {
-					case FnType::asinh: return std::asinh(real_val);
-					case FnType::acosh: return (         real_val  >= 1.0 ? std::acosh(real_val) : std::acosh(*param_vals[0]));
-					case FnType::atanh: return (std::abs(real_val) <= 1.0 ? std::atanh(real_val) : std::atanh(*param_vals[0]));
-					case FnType::asin : return (std::abs(real_val) <= 1.0 ?  std::asin(real_val) :  std::asin(*param_vals[0]));
-					case FnType::acos : return (std::abs(real_val) <= 1.0 ?  std::acos(real_val) :  std::acos(*param_vals[0]));
-					case FnType::atan : return std::atan (real_val);
-					case FnType::sinh : return std::sinh (real_val);
-					case FnType::cosh : return std::cosh (real_val);
-					case FnType::tanh : return std::tanh (real_val);
-					case FnType::sqrt : return (         real_val  >= 0.0 ?  std::sqrt(real_val) :  std::sqrt(*param_vals[0]));
-					case FnType::exp  : return std::exp  (real_val);
-					case FnType::sin  : return std::sin  (real_val);
-					case FnType::cos  : return std::cos  (real_val);
-					case FnType::tan  : return std::tan  (real_val);
-					case FnType::abs  : return std::abs  (real_val);
-					case FnType::arg  : return std::arg  (real_val);
-					case FnType::ln   : return std::log  (real_val);
-					case FnType::re   : return real_val;
-					case FnType::im   : return 0.0;
+					case Fn::asinh: return std::asinh(real_val);
+					case Fn::acosh: return (         real_val  >= 1.0 ? std::acosh(real_val) : std::acosh(*param_vals[0]));
+					case Fn::atanh: return (std::abs(real_val) <= 1.0 ? std::atanh(real_val) : std::atanh(*param_vals[0]));
+					case Fn::asin : return (std::abs(real_val) <= 1.0 ?  std::asin(real_val) :  std::asin(*param_vals[0]));
+					case Fn::acos : return (std::abs(real_val) <= 1.0 ?  std::acos(real_val) :  std::acos(*param_vals[0]));
+					case Fn::atan : return std::atan (real_val);
+					case Fn::sinh : return std::sinh (real_val);
+					case Fn::cosh : return std::cosh (real_val);
+					case Fn::tanh : return std::tanh (real_val);
+					case Fn::sqrt : return (         real_val  >= 0.0 ?  std::sqrt(real_val) :  std::sqrt(*param_vals[0]));
+					case Fn::exp  : return std::exp  (real_val);
+					case Fn::sin  : return std::sin  (real_val);
+					case Fn::cos  : return std::cos  (real_val);
+					case Fn::tan  : return std::tan  (real_val);
+					case Fn::abs  : return std::abs  (real_val);
+					case Fn::arg  : return std::arg  (real_val);
+					case Fn::ln   : return std::log  (real_val);
+					case Fn::re   : return real_val;
+					case Fn::im   : return 0.0;
 					default: assert(false);
 					}
 				}
 				else {
 					switch (type) {
-					case FnType::asinh: return std::asinh(*param_vals[0]);
-					case FnType::acosh: return std::acosh(*param_vals[0]);
-					case FnType::atanh: return std::atanh(*param_vals[0]);
-					case FnType::asin : return std::asin (*param_vals[0]);
-					case FnType::acos : return std::acos (*param_vals[0]);
-					case FnType::atan : return std::atan (*param_vals[0]);
-					case FnType::sinh : return std::sinh (*param_vals[0]);
-					case FnType::cosh : return std::cosh (*param_vals[0]);
-					case FnType::tanh : return std::tanh (*param_vals[0]);
-					case FnType::sqrt : return std::sqrt (*param_vals[0]);
-					case FnType::exp  : return std::exp  (*param_vals[0]);
-					case FnType::sin  : return std::sin  (*param_vals[0]);
-					case FnType::cos  : return std::cos  (*param_vals[0]);
-					case FnType::tan  : return std::tan  (*param_vals[0]);
-					case FnType::abs  : return std::abs  (*param_vals[0]);
-					case FnType::arg  : return std::arg  (*param_vals[0]);
-					case FnType::ln   : return std::log  (*param_vals[0]);
-					case FnType::re   : return std::real (*param_vals[0]);
-					case FnType::im   : return std::imag (*param_vals[0]);
+					case Fn::asinh: return std::asinh(*param_vals[0]);
+					case Fn::acosh: return std::acosh(*param_vals[0]);
+					case Fn::atanh: return std::atanh(*param_vals[0]);
+					case Fn::asin : return std::asin (*param_vals[0]);
+					case Fn::acos : return std::acos (*param_vals[0]);
+					case Fn::atan : return std::atan (*param_vals[0]);
+					case Fn::sinh : return std::sinh (*param_vals[0]);
+					case Fn::cosh : return std::cosh (*param_vals[0]);
+					case Fn::tanh : return std::tanh (*param_vals[0]);
+					case Fn::sqrt : return std::sqrt (*param_vals[0]);
+					case Fn::exp  : return std::exp  (*param_vals[0]);
+					case Fn::sin  : return std::sin  (*param_vals[0]);
+					case Fn::cos  : return std::cos  (*param_vals[0]);
+					case Fn::tan  : return std::tan  (*param_vals[0]);
+					case Fn::abs  : return std::abs  (*param_vals[0]);
+					case Fn::arg  : return std::arg  (*param_vals[0]);
+					case Fn::ln   : return std::log  (*param_vals[0]);
+					case Fn::re   : return std::real (*param_vals[0]);
+					case Fn::im   : return std::imag (*param_vals[0]);
 					default: assert(false);
 					}
 				}
@@ -165,31 +165,31 @@ namespace bmath::intern {
 					const double real_0 = param_vals[0]->real();
 					const double real_1 = param_vals[1]->real();
 					switch (type) {
-					case FnType::pow  : return std::pow(real_0, real_1);
-					case FnType::log  : return std::log(real_1) / std::log(real_0);
+					case Fn::pow  : return std::pow(real_0, real_1);
+					case Fn::log  : return std::log(real_1) / std::log(real_0);
 					default: assert(false);
 					}
 				}
 				else if (param_vals[0]->imag() == 0.0) {
 					const double real_0 = param_vals[0]->real();
 					switch (type) {
-					case FnType::pow  : return std::pow(real_0, *param_vals[1]);
-					case FnType::log  : return std::log(*param_vals[1]) / std::log(real_0); 
+					case Fn::pow  : return std::pow(real_0, *param_vals[1]);
+					case Fn::log  : return std::log(*param_vals[1]) / std::log(real_0); 
 					default: assert(false);
 					}
 				}
 				else if (param_vals[1]->imag() == 0.0) {
 					const double real_1 = param_vals[1]->real();
 					switch (type) {
-					case FnType::pow  : return std::pow(*param_vals[0], real_1);
-					case FnType::log  : return std::log(real_1) / std::log(*param_vals[0]); 
+					case Fn::pow  : return std::pow(*param_vals[0], real_1);
+					case Fn::log  : return std::log(real_1) / std::log(*param_vals[0]); 
 					default: assert(false);
 					}
 				}
 				else {
 					switch (type) {
-					case FnType::pow  : return std::pow(*param_vals[0], *param_vals[1]);
-					case FnType::log  : return std::log(*param_vals[1]) / std::log(*param_vals[0]); //https://en.wikipedia.org/wiki/Complex_logarithm#Generalizations
+					case Fn::pow  : return std::pow(*param_vals[0], *param_vals[1]);
+					case Fn::log  : return std::log(*param_vals[1]) / std::log(*param_vals[0]); //https://en.wikipedia.org/wiki/Complex_logarithm#Generalizations
 					default: assert(false);
 					}
 				}
@@ -218,7 +218,7 @@ namespace bmath::intern {
 			}
 			else if (restr == Restr::function) {
 				const Type type = ref.get_type();
-				return type == Type::generic_function || type.is<FnType>();
+				return type == Type::generic_function || type.is<Fn>();
 			}
 			else {
 				assert(false);
@@ -356,7 +356,7 @@ namespace bmath::intern {
 				store.free(index);
 			} break;
 			default: {
-				assert(type.is<FnType>()); //if this assert hits, the switch above needs more cases.
+				assert(type.is<Fn>()); //if this assert hits, the switch above needs more cases.
 				const FnParams<TypedIdx_T>& params = store.at(index).fn_params;
 				for (const auto param : fn::range(params, type)) {
 					tree::free(store, param);
@@ -414,7 +414,7 @@ namespace bmath::intern {
 				}
 			} break;
 			default: {
-				assert(type.is<FnType>()); //if this assert hits, the switch above needs more cases.
+				assert(type.is<Fn>()); //if this assert hits, the switch above needs more cases.
 				const FnParams<TypedIdx_T>& params = store.at(index).fn_params;
 				for (const auto param : fn::range(params, type)) {
 					tree::combine_layers(store, param);
@@ -451,6 +451,7 @@ namespace bmath::intern {
 				for (auto& summand : vdc::range(store, index)) {
 					if (const OptComplex summand_val = tree::combine_values_inexact(store, summand)) {
 						result_val += summand_val;
+						tree::free(store, summand);
 						summand = TypedIdxSLC_T::null_value;
 					}
 					else {
@@ -458,7 +459,6 @@ namespace bmath::intern {
 					}
 				}
 				if (only_values) {
-					TypedIdxSLC_T::free_slc(store, index); //all summands have already (implicitly) been freed in the loop above
 					return  result_val;
 				}
 				else if (*result_val != 0.0) {
@@ -472,6 +472,7 @@ namespace bmath::intern {
 				for (auto& factor : vdc::range(store, index)) {
 					if (const OptComplex factor_val = tree::combine_values_inexact(store, factor)) {
 						result_val *= factor_val;
+						tree::free(store, factor);
 						factor = TypedIdxSLC_T::null_value;
 					}
 					else {
@@ -479,7 +480,6 @@ namespace bmath::intern {
 					}
 				}
 				if (only_values) {
-					TypedIdxSLC_T::free_slc(store, index); //all factors have already been freed in the loop above
 					return result_val;
 				}
 				else if (*result_val != 1.0) {
@@ -491,12 +491,13 @@ namespace bmath::intern {
 				GenericFunction& function = store.at(index).generic_function;
 				for (auto& elem : fn::range(store, function)) {
 					if (const OptComplex param_res = tree::combine_values_inexact(store, elem)) {
+						tree::free(store, elem);
 						elem = TypedIdx_T(store.insert(*param_res), Type(Leaf::complex));
 					}
 				}
 			} break;
 			default: {
-				assert(type.is<FnType>()); //if this assert hits, the switch above needs more cases.
+				assert(type.is<Fn>()); //if this assert hits, the switch above needs more cases.
 				FnParams<TypedIdx_T>& params = store.at(index).fn_params;
 				std::array<OptComplex, 4> results_values;
 				bool all_computable = true;
@@ -505,22 +506,19 @@ namespace bmath::intern {
 					all_computable &= (bool) results_values[i];
 				}
 				if (all_computable) {
-					store.free(index);
-					return fn::eval(type.to<FnType>(), results_values);
+					return fn::eval(type.to<Fn>(), results_values);
 				}
 				for (std::size_t i = 0; i < fn::param_count(type); i++) {
 					if (results_values[i]) {
+						tree::free(store, params[i]);
 						params[i] = TypedIdx_T(store.insert(*results_values[i]), Type(Leaf::complex));
 					}
 				}
 			} break; 
 			case Type_T(Leaf::variable): 
 				break;
-			case Type_T(Leaf::complex): {
-				const Complex value = store.at(index).complex;
-				store.free(index);
-				return value;
-			} break;
+			case Type_T(Leaf::complex): 
+				return store.at(index).complex;
 			case Type_T(pattern::_tree_match): 
 				break;
 			case Type_T(pattern::_value_match): if constexpr (pattern) {
@@ -529,7 +527,6 @@ namespace bmath::intern {
 				const Complex copy_res = tree::combine_values_inexact(store, var.copy_idx);
 				assert(!is_valid(match_res)); //pattern variable can not decay to value
 				assert(!is_valid(copy_res));  //pattern variable can not decay to value
-				break;
 			} break; 
 			case Type_T(pattern::_value_proxy):
 				break;
@@ -545,7 +542,7 @@ namespace bmath::intern {
 			constexpr bool pattern = std::is_same_v<Type_T, pattern::PnType>;
 
 			const auto get_divisor = [&store](const TypedIdx_T ref) -> std::optional<TypedIdx_T> {
-				if (ref.get_type() == FnType::pow) {
+				if (ref.get_type() == Fn::pow) {
 					const FnParams<TypedIdx_T>& params = store.at(ref.get_index()).fn_params;
 					if (params[1].get_type() == Leaf::complex) {
 						const Complex& value = store.at(params[1].get_index()).complex;
@@ -644,8 +641,7 @@ namespace bmath::intern {
 				}
 			} break;
 			default: {
-				if (!type.is<FnType>()) __debugbreak();
-				assert(type.is<FnType>()); //if this assert hits, the switch above needs more cases.
+				assert(type.is<Fn>()); //if this assert hits, the switch above needs more cases.
 				FnParams<TypedIdx_T>& params = store.at(index).fn_params;
 				std::array<OptComplex, 4> res_vals;
 				bool only_exact = true;
@@ -654,7 +650,7 @@ namespace bmath::intern {
 					only_exact &= (bool) res_vals[i];
 				}
 				if (only_exact) {
-					if (const auto res = compute_exact([&] { return fn::eval(type.to<FnType>(), res_vals); })) {
+					if (const auto res = compute_exact([&] { return fn::eval(type.to<Fn>(), res_vals); })) {
 						return res;
 					}
 				}
@@ -747,7 +743,7 @@ namespace bmath::intern {
 				}
 			} break;
 			default: {
-				assert(type_1.is<FnType>() && type_2.is<FnType>()); //if this assert hits, the switch above needs more cases.
+				assert(type_1.is<Fn>() && type_2.is<Fn>()); //if this assert hits, the switch above needs more cases.
 				const FnParams<TypedIdx_T1>& params_1 = store_1.at(index_1).fn_params;
 				const FnParams<TypedIdx_T2>& params_2 = store_2.at(index_2).fn_params;
 				auto range_1 = fn::range(params_1, type_1);
@@ -888,7 +884,7 @@ namespace bmath::intern {
 				return DstTypedIdx_T(dst_store.insert(dst_function), src_type);
 			} break;
 			default: {
-				assert(src_type.is<FnType>());
+				assert(src_type.is<Fn>());
 				const FnParams<SrcTypedIdx_T> src_params = src_store.at(src_index).fn_params; //no reference, as src and dst could be same store -> may reallocate
 				auto dst_params = FnParams<DstTypedIdx_T>();
 				for (std::size_t i = 0u; i < fn::param_count(src_type); i++) {
@@ -967,28 +963,28 @@ namespace bmath::intern {
 				case Type_T(pattern::_value_proxy):
 					assert(false); break;
 				default: {
-					assert(lhs_type.is<FnType>());
+					assert(lhs_type.is<Fn>());
 					FnParams<TypedIdx_T>* params = &store.at(lhs_index).fn_params;
 					if (fn::param_count(lhs_type) == 1u) {
 						equation.lhs_head = params->operator[](0u);
 						params->operator[](0u) = equation.rhs_head;						
-						switch (FnType(lhs_type)) {
-						case FnType::asinh: equation.rhs_head = TypedIdx_T(lhs_index, FnType::sinh ); break;
-						case FnType::acosh: equation.rhs_head = TypedIdx_T(lhs_index, FnType::cosh ); break;
-						case FnType::atanh: equation.rhs_head = TypedIdx_T(lhs_index, FnType::tanh ); break;
-						case FnType::asin:  equation.rhs_head = TypedIdx_T(lhs_index, FnType::sin  ); break;
-						case FnType::acos:  equation.rhs_head = TypedIdx_T(lhs_index, FnType::cos  ); break;
-						case FnType::atan:  equation.rhs_head = TypedIdx_T(lhs_index, FnType::tan  ); break;
-						case FnType::sinh:  equation.rhs_head = TypedIdx_T(lhs_index, FnType::asinh); break;
-						case FnType::cosh:  equation.rhs_head = TypedIdx_T(lhs_index, FnType::acosh); break;
-						case FnType::tanh:  equation.rhs_head = TypedIdx_T(lhs_index, FnType::atanh); break;
-						case FnType::exp:   equation.rhs_head = TypedIdx_T(lhs_index, FnType::ln   ); break;
-						case FnType::ln:    equation.rhs_head = TypedIdx_T(lhs_index, FnType::exp  ); break;
-						case FnType::sin:   equation.rhs_head = TypedIdx_T(lhs_index, FnType::asin ); break;
-						case FnType::cos:   equation.rhs_head = TypedIdx_T(lhs_index, FnType::acos ); break;
-						case FnType::sqrt: {	
+						switch (Fn(lhs_type)) {
+						case Fn::asinh: equation.rhs_head = TypedIdx_T(lhs_index, Fn::sinh ); break;
+						case Fn::acosh: equation.rhs_head = TypedIdx_T(lhs_index, Fn::cosh ); break;
+						case Fn::atanh: equation.rhs_head = TypedIdx_T(lhs_index, Fn::tanh ); break;
+						case Fn::asin:  equation.rhs_head = TypedIdx_T(lhs_index, Fn::sin  ); break;
+						case Fn::acos:  equation.rhs_head = TypedIdx_T(lhs_index, Fn::cos  ); break;
+						case Fn::atan:  equation.rhs_head = TypedIdx_T(lhs_index, Fn::tan  ); break;
+						case Fn::sinh:  equation.rhs_head = TypedIdx_T(lhs_index, Fn::asinh); break;
+						case Fn::cosh:  equation.rhs_head = TypedIdx_T(lhs_index, Fn::acosh); break;
+						case Fn::tanh:  equation.rhs_head = TypedIdx_T(lhs_index, Fn::atanh); break;
+						case Fn::exp:   equation.rhs_head = TypedIdx_T(lhs_index, Fn::ln   ); break;
+						case Fn::ln:    equation.rhs_head = TypedIdx_T(lhs_index, Fn::exp  ); break;
+						case Fn::sin:   equation.rhs_head = TypedIdx_T(lhs_index, Fn::asin ); break;
+						case Fn::cos:   equation.rhs_head = TypedIdx_T(lhs_index, Fn::acos ); break;
+						case Fn::sqrt: {	
 							__debugbreak();
-							//params->type = FnType::pow;
+							//params->type = Fn::pow;
 							//const TypedIdx_T square = build_value<TypedIdx_T>(store, 2.0);
 							//params = &store.at(lhs_index).fn_params;
 							//params->params[1] = square;	
@@ -1001,7 +997,7 @@ namespace bmath::intern {
 						//const bool to_isolate_in_0 = tree::contains(store, params->params[0], to_isolate);						
 						//if (to_isolate_in_0) { //-> TypedIdx carussell is same deal as with single parameter function
 						//	switch (params->type) {
-						//	case FnType::pow: {
+						//	case Fn::pow: {
 						//		equation.lhs_head = params->params[0];
 						//		params->params[0] = equation.rhs_head;
 						//		equation.rhs_head = TypedIdx_T(lhs_index, lhs_type);
@@ -1089,7 +1085,7 @@ namespace bmath::intern {
 				}
 			} break;
 			default: {
-				assert(type.is<FnType>());
+				assert(type.is<Fn>());
 				const FnParams<TypedIdx_T> params = store.at(index).fn_params; //no reference, as apply might mutate store
 				for (const auto param : fn::range(params, type)) {
 					const Res_T elem_res = fold::simple_fold<Res_T>(store, param, apply);
@@ -1146,7 +1142,7 @@ namespace bmath::intern {
 				return finally(acc, ref);
 			} 
 			default: {
-				assert(type.is<FnType>());
+				assert(type.is<Fn>());
 				Res_T acc = init;
 				const FnParams<TypedIdx_T> params = store.at(index).fn_params; //no reference, as apply might mutate store
 				for (const auto param : fn::range(params, type)) {
@@ -1197,6 +1193,7 @@ namespace bmath {
 	void Term::combine_values_inexact() noexcept
 	{
 		if (const OptComplex val = tree::combine_values_inexact(this->store, this->head)) {
+			tree::free(this->store, this->head);
 			this->head = TypedIdx(this->store.insert(*val), Leaf::complex);
 		}	
 	}

@@ -72,7 +72,7 @@ namespace bmath::intern {
 	[[nodiscard]] TypedIdx_T build_inverted(Store_T& store, const TypedIdx_T to_invert) noexcept
 	{
 		const TypedIdx_T minus_1 = build_value<TypedIdx_T>(store, -1.0);
-		return TypedIdx_T(store.insert(FnParams<TypedIdx_T>{ to_invert, minus_1 }), Type(FnType::pow));
+		return TypedIdx_T(store.insert(FnParams<TypedIdx_T>{ to_invert, minus_1 }), Type(Fn::pow));
 	}
 
 	namespace pattern {

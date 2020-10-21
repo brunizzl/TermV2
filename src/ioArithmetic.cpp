@@ -15,32 +15,32 @@ namespace bmath::intern {
 	//utility for both Function and GenericFunction
 	namespace fn {
 
-		constexpr auto name_table = std::to_array<std::pair<FnType, std::string_view>>({
-			{ FnType::asinh, "asinh" },	
-			{ FnType::acosh, "acosh" },
-			{ FnType::atanh, "atanh" },	
-			{ FnType::asin , "asin"  },	
-			{ FnType::acos , "acos"  },	
-			{ FnType::atan , "atan"  },	
-			{ FnType::sinh , "sinh"  },	
-			{ FnType::cosh , "cosh"  },	
-			{ FnType::tanh , "tanh"  },	
-			{ FnType::sqrt , "sqrt"  },	
-			{ FnType::pow  , "pow"   },   
-			{ FnType::log  , "log"   },	
-			{ FnType::exp  , "exp"   },	
-			{ FnType::sin  , "sin"   },	
-			{ FnType::cos  , "cos"   },	
-			{ FnType::tan  , "tan"   },	
-			{ FnType::abs  , "abs"   },	
-			{ FnType::arg  , "arg"   },	
-			{ FnType::ln   , "ln"    },	
-			{ FnType::re   , "re"    },	
-			{ FnType::im   , "im"    },	
+		constexpr auto name_table = std::to_array<std::pair<Fn, std::string_view>>({
+			{ Fn::asinh, "asinh" },	
+			{ Fn::acosh, "acosh" },
+			{ Fn::atanh, "atanh" },	
+			{ Fn::asin , "asin"  },	
+			{ Fn::acos , "acos"  },	
+			{ Fn::atan , "atan"  },	
+			{ Fn::sinh , "sinh"  },	
+			{ Fn::cosh , "cosh"  },	
+			{ Fn::tanh , "tanh"  },	
+			{ Fn::sqrt , "sqrt"  },	
+			{ Fn::pow  , "pow"   },   
+			{ Fn::log  , "log"   },	
+			{ Fn::exp  , "exp"   },	
+			{ Fn::sin  , "sin"   },	
+			{ Fn::cos  , "cos"   },	
+			{ Fn::tan  , "tan"   },	
+			{ Fn::abs  , "abs"   },	
+			{ Fn::arg  , "arg"   },	
+			{ Fn::ln   , "ln"    },	
+			{ Fn::re   , "re"    },	
+			{ Fn::im   , "im"    },	
 		});
 
-		constexpr std::string_view name_of(const FnType type) noexcept { return find_snd(name_table, type); }
-		constexpr FnType type_of(const std::string_view name) noexcept { return search_fst(name_table, name, FnType::COUNT); }
+		constexpr std::string_view name_of(const Fn type) noexcept { return find_snd(name_table, type); }
+		constexpr Fn type_of(const std::string_view name) noexcept { return search_fst(name_table, name, Fn::COUNT); }
 
 		//appends only name, no parentheses or anything fancy
 		template<typename Store_T>
@@ -129,30 +129,30 @@ namespace bmath::intern {
 
 		//operator precedence (used to decide if parentheses are nessecary in out string)
 		constexpr auto infixr_table = std::to_array<std::pair<pattern::PnType, int>>({
-			{ Type(FnType::asinh          )     , 0 },	
-			{ Type(FnType::acosh          )     , 0 },
-			{ Type(FnType::atanh          )     , 0 },	
-			{ Type(FnType::asin           )     , 0 },	
-			{ Type(FnType::acos           )     , 0 },	
-			{ Type(FnType::atan           )     , 0 },	
-			{ Type(FnType::sinh           )     , 0 },	
-			{ Type(FnType::cosh           )     , 0 },	
-			{ Type(FnType::tanh           )     , 0 },	
-			{ Type(FnType::sqrt           )     , 0 },
-			{ Type(FnType::log            )     , 0 }, 
-			{ Type(FnType::exp            )     , 0 },
-			{ Type(FnType::sin            )     , 0 },	
-			{ Type(FnType::cos            )     , 0 },	
-			{ Type(FnType::tan            )     , 0 },	
-			{ Type(FnType::abs            )     , 0 },	
-			{ Type(FnType::arg            )     , 0 },	
-			{ Type(FnType::ln             )     , 0 },	
-			{ Type(FnType::re             )     , 0 },	
-			{ Type(FnType::im             )     , 0 },	
+			{ Type(Fn::asinh          )     , 0 },	
+			{ Type(Fn::acosh          )     , 0 },
+			{ Type(Fn::atanh          )     , 0 },	
+			{ Type(Fn::asin           )     , 0 },	
+			{ Type(Fn::acos           )     , 0 },	
+			{ Type(Fn::atan           )     , 0 },	
+			{ Type(Fn::sinh           )     , 0 },	
+			{ Type(Fn::cosh           )     , 0 },	
+			{ Type(Fn::tanh           )     , 0 },	
+			{ Type(Fn::sqrt           )     , 0 },
+			{ Type(Fn::log            )     , 0 }, 
+			{ Type(Fn::exp            )     , 0 },
+			{ Type(Fn::sin            )     , 0 },	
+			{ Type(Fn::cos            )     , 0 },	
+			{ Type(Fn::tan            )     , 0 },	
+			{ Type(Fn::abs            )     , 0 },	
+			{ Type(Fn::arg            )     , 0 },	
+			{ Type(Fn::ln             )     , 0 },	
+			{ Type(Fn::re             )     , 0 },	
+			{ Type(Fn::im             )     , 0 },	
 			{ Type(Node::generic_function )     , 0 },
 			{ Type(Node::sum              )     , 2 },
 			{ Type(Node::product          )     , 4 },	
-			{ Type(FnType::pow            )     , 5 }, //not between other function types -> assumed to be printed with '^'  
+			{ Type(Fn::pow            )     , 5 }, //not between other function types -> assumed to be printed with '^'  
 			{ Type(Leaf::variable         )     , 6 },
 			{ Type(Leaf::complex          )     , 6 }, //may be printed as sum/product itself, then (maybe) has to add parentheses on its own
 			{ pattern::PnVariable::tree_match   , 6 },
@@ -399,7 +399,7 @@ namespace bmath::intern {
 			input.remove_prefix(1u); //remove hat
 			const TypedIdx base = build(store, base_view);
 			const TypedIdx expo = build(store, input);
-			return TypedIdx(store.insert(FnParams<TypedIdx>{ base, expo}), FnType::pow);
+			return TypedIdx(store.insert(FnParams<TypedIdx>{ base, expo}), Fn::pow);
 		} break;
 		case Head::Type::complex_computable: {
 			return build_value<TypedIdx>(store, compute::eval_complex(input));
@@ -460,7 +460,7 @@ namespace bmath::intern {
 		using TypedIdxSLC_T = TermSLC<std::uint32_t, TypedIdx_T, 3u>;
 
 		const auto type = fn::type_of(input.to_string_view(0u, open_par));
-		if (type == FnType::COUNT) { //build generic function
+		if (type == Fn::COUNT) { //build generic function
 			GenericFunction result;
 			{//writing name in result
 				const auto name = std::string_view(input.chars, open_par);
@@ -627,7 +627,7 @@ namespace bmath::intern {
 				input.remove_prefix(1u); //remove hat
 				const PnTypedIdx base = this->operator()(store, base_view);
 				const PnTypedIdx expo = this->operator()(store, input);
-				return PnTypedIdx(store.insert(FnParams<PnTypedIdx>{ base, expo }), Type(FnType::pow));
+				return PnTypedIdx(store.insert(FnParams<PnTypedIdx>{ base, expo }), Type(Fn::pow));
 			} break;
 			case Head::Type::complex_computable: {
 				return build_value<PnTypedIdx>(store, compute::eval_complex(input));
@@ -691,7 +691,7 @@ namespace bmath::intern {
 					print::append_to_string(store, factor, str, own_infixr);
 				}
 			} break;
-			case Type_T(FnType::pow): {
+			case Type_T(Fn::pow): {
 				const FnParams<TypedIdx_T>& params = store.at(index).fn_params;
 				print::append_to_string(store, params[0], str, own_infixr);
 				str.push_back('^');
@@ -709,10 +709,10 @@ namespace bmath::intern {
 				}
 			} break;
 			default: {
-				assert(type.is<FnType>());
+				assert(type.is<Fn>());
 				const FnParams<TypedIdx_T>& params = store.at(index).fn_params;
 				str.pop_back(); //pop '('
-				str.append(fn::name_of(type.to<FnType>()));
+				str.append(fn::name_of(type.to<Fn>()));
 				str.push_back('(');
 				const char* seperator = "";
 				for (const auto param : fn::range(params, type)) {
@@ -792,7 +792,7 @@ namespace bmath::intern {
 			 //returns base, if ref is actually <base>^(-1)
 			const auto get_pow_neg1 = [get_negative_real, &store](const TypedIdx ref) -> std::optional<TypedIdx> {
 				const auto [index, type] = ref.split();
-				if (type == FnType::pow) {
+				if (type == Fn::pow) {
 					const FnParams<TypedIdx>& params = store.at(index).fn_params;
 					if (const auto expo = get_negative_real(params[1])) {
 						if (*expo == -1.0) {
@@ -892,7 +892,7 @@ namespace bmath::intern {
 			case Type(Node::product): {
 				append_product(reverse_elems(vdc::range(store, index)));
 			} break;
-			case Type(FnType::pow): {
+			case Type(Fn::pow): {
 				const FnParams<TypedIdx>& params = store.at(index).fn_params;
 				str += print::to_pretty_string(store, params[0], infixr(type));
 				//str += " ^ ";
@@ -916,10 +916,10 @@ namespace bmath::intern {
 				str.push_back(')');
 			} break;
 			default: {
-				assert(type.is<FnType>());
+				assert(type.is<Fn>());
 				const FnParams<TypedIdx>& params = store.at(index).fn_params;
 				need_parentheses = false;
-				str.append(fn::name_of(type.to<FnType>()));
+				str.append(fn::name_of(type.to<Fn>()));
 				str.push_back('(');
 				const char* separator = "";
 				for (const auto param : fn::range(params, type)) {
@@ -1026,7 +1026,7 @@ namespace bmath::intern {
 				}
 			} break;
 			default: {
-				assert(type.is<FnType>());
+				assert(type.is<Fn>());
 				const FnParams<TypedIdx_T>& params = store.at(index).fn_params;
 				current_str.append("function   : {");
 				bool first = true;

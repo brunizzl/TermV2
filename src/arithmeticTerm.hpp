@@ -13,7 +13,7 @@
 
 namespace bmath::intern {
 
-	enum class Node //common recursive nodes (FnType's and some PnVariable's are recursive as well)
+	enum class Node //common recursive nodes (Fn's and some PnVariable's are recursive as well)
 	{
 		sum,
 		product,
@@ -28,7 +28,7 @@ namespace bmath::intern {
 		COUNT
 	};
 
-	enum class FnType //short for Function Type (note that generic_function is not listed here)
+	enum class Fn //short for Function (note that generic_function is not listed here)
 	{
 		asinh,	//params[0] := argument
 		acosh,	//params[0] := argument
@@ -54,7 +54,7 @@ namespace bmath::intern {
 		COUNT
 	};
 
-	using Type = SumEnum<FnType, Leaf, Node>;
+	using Type = SumEnum<Fn, Leaf, Node>;
 
 	using TypedIdx = BasicTypedIdx<Type>;
 	using TypedIdxSLC = TermSLC<std::uint32_t, TypedIdx, 3>;
@@ -145,14 +145,14 @@ namespace bmath::intern {
 
 		enum class Restr
 		{
-			function, //packs generic_function and any in FnType together
+			function, //packs generic_function and any in Fn together
 			any,    
 			unknown, //used only as error value
 			COUNT
 		};
 
 		//note: of Type, only sum, product, complex or variable may be used, as there is (currently)
-		//no need to differentiate between any of the functions of FnType and unknown_function.
+		//no need to differentiate between any of the functions of Fn and unknown_function.
 		using Restriction = SumEnum<Restr, Type>; 
 
 		template<typename TypedIdx_T>
@@ -294,34 +294,34 @@ namespace bmath::intern {
 	//utility for both Function and GenericFunction
 	namespace fn {
 
-		constexpr auto param_count_table = std::to_array<std::pair<FnType, std::size_t>>({
-			{ FnType::asinh, 1 },	
-			{ FnType::acosh, 1 },
-			{ FnType::atanh, 1 },	
-			{ FnType::asin , 1 },	
-			{ FnType::acos , 1 },	
-			{ FnType::atan , 1 },	
-			{ FnType::sinh , 1 },	
-			{ FnType::cosh , 1 },	
-			{ FnType::tanh , 1 },	
-			{ FnType::sqrt , 1 },	
-			{ FnType::pow  , 2 }, //<- only for these two fuckers >:(  
-			{ FnType::log  , 2 }, //<- 
-			{ FnType::exp  , 1 },	
-			{ FnType::sin  , 1 },	
-			{ FnType::cos  , 1 },	
-			{ FnType::tan  , 1 },	
-			{ FnType::abs  , 1 },	
-			{ FnType::arg  , 1 },	
-			{ FnType::ln   , 1 },	
-			{ FnType::re   , 1 },	
-			{ FnType::im   , 1 },	
+		constexpr auto param_count_table = std::to_array<std::pair<Fn, std::size_t>>({
+			{ Fn::asinh, 1 },	
+			{ Fn::acosh, 1 },
+			{ Fn::atanh, 1 },	
+			{ Fn::asin , 1 },	
+			{ Fn::acos , 1 },	
+			{ Fn::atan , 1 },	
+			{ Fn::sinh , 1 },	
+			{ Fn::cosh , 1 },	
+			{ Fn::tanh , 1 },	
+			{ Fn::sqrt , 1 },	
+			{ Fn::pow  , 2 }, //<- only for these two fuckers >:(  
+			{ Fn::log  , 2 }, //<- 
+			{ Fn::exp  , 1 },	
+			{ Fn::sin  , 1 },	
+			{ Fn::cos  , 1 },	
+			{ Fn::tan  , 1 },	
+			{ Fn::abs  , 1 },	
+			{ Fn::arg  , 1 },	
+			{ Fn::ln   , 1 },	
+			{ Fn::re   , 1 },	
+			{ Fn::im   , 1 },	
 		});
-		constexpr std::size_t param_count(FnType type) noexcept 
+		constexpr std::size_t param_count(Fn type) noexcept 
 		{ return find_snd(param_count_table, type); }
 
 		constexpr std::size_t param_count(pattern::PnType type) noexcept 
-		{ return find_snd(param_count_table, type.to<FnType>()); }
+		{ return find_snd(param_count_table, type.to<Fn>()); }
 
 
 		template<typename TypedIdx_T, typename Type_T>
@@ -375,14 +375,15 @@ namespace bmath::intern {
 		void combine_layers(Store_T& store, const TypedIdx_T ref);
 
 		//if a subtree can be fully evaluated, it will be, even if the result can not be stored exactly in 
-		//floating point/ the computation is unexact
-		//the evaluated subtree also deletes itself, meaning the caller needs to reinsert the value,
-		//  if a value was returned
+		//floating point or the computation is unexact.
+		//if a value is returned, the state of the subtree is unspecified but valid (from a storage perspective) 
+		//and is expected to be deleted and replaced with the result.
 		template<typename Store_T, typename TypedIdx_T>
 		[[nodiscard]] OptComplex combine_values_inexact(Store_T& store, const TypedIdx_T ref);
 
 		//if evaluation of subtree was inexact / impossible, returns Complex(NAN, undefined), else returns result.
-		//the subtree starting at ref still remains. if deletion is desired, this has to be return_early by the caller.
+		//if an exact value is returned, the state of the subtree is unspecified but valid (from a storage perspective) 
+		//and is expected to be deleted and replaced with the result. (equivalent behavior to combine_values_inexact)
 		template<typename Store_T, typename TypedIdx_T>
 		[[nodiscard]] OptComplex combine_values_exact(Store_T& store, const TypedIdx_T ref);
 
