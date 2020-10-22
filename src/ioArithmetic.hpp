@@ -65,7 +65,7 @@ namespace bmath::intern {
 	{
 		using TypedIdxSLC_T = TermSLC<std::uint32_t, TypedIdx_T, 3>;
 		const TypedIdx_T minus_1 = build_value<TypedIdx_T>(store, -1.0);
-		return TypedIdx_T(store.insert(TypedIdxSLC_T({ minus_1, to_negate })), Type(Node::product));
+		return TypedIdx_T(store.insert(TypedIdxSLC_T({ minus_1, to_negate })), Type(Op::product));
 	}
 
 	template<typename Store_T, typename TypedIdx_T>

@@ -60,7 +60,7 @@ namespace bmath::intern {
 
 		struct BasicSumTraits
 		{
-			static constexpr Type type_name = Node::sum;
+			static constexpr Type type_name = Op::sum;
 			static constexpr char operator_char = '+';
 			static constexpr char inverse_operator_char = '-';
 			static constexpr Token operator_token = token::sum;
@@ -73,7 +73,7 @@ namespace bmath::intern {
 
 		struct BasicProductTraits
 		{
-			static constexpr Type type_name = Node::product;
+			static constexpr Type type_name = Op::product;
 			static constexpr char operator_char = '*';
 			static constexpr char inverse_operator_char = '/';
 			static constexpr Token operator_token = token::product;
@@ -103,8 +103,8 @@ namespace bmath::intern {
 	namespace pattern {
 
 		constexpr auto form_name_table = std::to_array<std::pair<ParseRestriction, std::string_view>>({
-			{ Type(Node::sum     ), "sum"           },
-			{ Type(Node::product ), "product"       },
+			{ Type(Op::sum     ), "sum"           },
+			{ Type(Op::product ), "product"       },
 			{ Type(Leaf::variable), "variable"      },
 			{ Type(Leaf::complex ), "complex"       },
 			{ Restr::function     , "fn"            },
@@ -149,9 +149,9 @@ namespace bmath::intern {
 			{ Type(Fn::ln             )     , 0 },	
 			{ Type(Fn::re             )     , 0 },	
 			{ Type(Fn::im             )     , 0 },	
-			{ Type(Node::generic_function )     , 0 },
-			{ Type(Node::sum              )     , 2 },
-			{ Type(Node::product          )     , 4 },	
+			{ Type(Op::generic_function )     , 0 },
+			{ Type(Op::sum              )     , 2 },
+			{ Type(Op::product          )     , 4 },	
 			{ Type(Fn::pow            )     , 5 }, //not between other function types -> assumed to be printed with '^'  
 			{ Type(Leaf::variable         )     , 6 },
 			{ Type(Leaf::complex          )     , 6 }, //may be printed as sum/product itself, then (maybe) has to add parentheses on its own
@@ -184,17 +184,17 @@ namespace bmath::intern {
 			bool parentheses = false;
 
 			if (val.real() != 0.0 && val.imag() != 0.0) {
-				parentheses = parent_operator_precedence > infixr(Type(Node::sum));
+				parentheses = parent_operator_precedence > infixr(Type(Op::sum));
 				buffer << val.real();
 				add_im_to_stream(val.imag(), Flag::showpos);		
 			}
 			else if (val.real() != 0.0 && val.imag() == 0.0) {
-				parentheses = val.real() < 0.0 && parent_operator_precedence >= infixr(Type(Node::sum));	//leading '-'
+				parentheses = val.real() < 0.0 && parent_operator_precedence >= infixr(Type(Op::sum));	//leading '-'
 				buffer << val.real();
 			}
 			else if (val.real() == 0.0 && val.imag() != 0.0) {
-				parentheses = val.imag() < 0.0 && parent_operator_precedence >= infixr(Type(Node::sum));	//leading '-'	
-				parentheses |= parent_operator_precedence > infixr(Type(Node::product));	//*i
+				parentheses = val.imag() < 0.0 && parent_operator_precedence >= infixr(Type(Op::sum));	//leading '-'	
+				parentheses |= parent_operator_precedence > infixr(Type(Op::product));	//*i
 				add_im_to_stream(val.imag(), Flag::noshowpos);
 			}
 			else {
@@ -492,7 +492,7 @@ namespace bmath::intern {
 				const TypedIdx_T param = build_any(store, param_view);
 				last_node_idx = TypedIdxSLC_T::insert_new(store, last_node_idx, param);
 			}
-			return TypedIdx_T(store.insert(result), Type(Node::generic_function));
+			return TypedIdx_T(store.insert(result), Type(Op::generic_function));
 		}
 		else { //build known function
 			FnParams<TypedIdx_T> result{ TypedIdx_T(), TypedIdx_T(), TypedIdx_T(), TypedIdx_T() };
@@ -677,14 +677,14 @@ namespace bmath::intern {
 			}
 
 			switch (type) {
-			case Type_T(Node::sum): {
+			case Type_T(Op::sum): {
 				const char* seperator = "";
 				for (const auto summand : vc::range(store, index)) {
 					str.append(std::exchange(seperator, "+"));
 					print::append_to_string(store, summand, str, own_infixr);
 				}
 			} break;
-			case Type_T(Node::product): {
+			case Type_T(Op::product): {
 				const char* seperator = "";
 				for (const auto factor : vc::range(store, index)) {
 					str.append(std::exchange(seperator, "*"));
@@ -697,7 +697,7 @@ namespace bmath::intern {
 				str.push_back('^');
 				print::append_to_string(store, params[1], str, own_infixr);
 			} break;
-			case Type_T(Node::generic_function): {
+			case Type_T(Op::generic_function): {
 				const GenericFunction& generic_function = store.at(index).generic_function;
 				str.pop_back(); //pop open parenthesis
 				fn::append_name(store, generic_function, str);
@@ -806,7 +806,7 @@ namespace bmath::intern {
 			struct GetNegativeProductResult { double negative_factor; StupidBufferVector<TypedIdx, 8> other_factors; };
 			const auto get_negative_product = [get_negative_real, &store](const TypedIdx ref) -> std::optional<GetNegativeProductResult> {
 				const auto [index, type] = ref.split();
-				if (type == Node::product) {
+				if (type == Op::product) {
 					StupidBufferVector<TypedIdx, 8> other_factors;
 					double negative_factor;
 					bool found_negative_factor = false;
@@ -836,13 +836,13 @@ namespace bmath::intern {
 					else if (const auto base = get_pow_neg1(elem)) {
 						//str += (first ? "1 / " : " / "); 
 						str += (first ? "1/" : "/"); 
-						str += print::to_pretty_string(store, *base, infixr(Type(Node::product)));
+						str += print::to_pretty_string(store, *base, infixr(Type(Op::product)));
 						first = false;
 					}
 					else {
 						//str += (first ? "" : " * ");
 						str += (first ? "" : "*");
-						str += print::to_pretty_string(store, elem, infixr(Type(Node::product)));
+						str += print::to_pretty_string(store, elem, infixr(Type(Op::product)));
 						first = false;
 					}
 				}
@@ -859,7 +859,7 @@ namespace bmath::intern {
 			};
 
 			switch (type) {
-			case Type(Node::sum): {
+			case Type(Op::sum): {
 				bool first = true;
 				for (const auto summand : reverse_elems(vc::range(store, index))) {
 					if (const auto val = get_negative_real(summand)) {
@@ -889,7 +889,7 @@ namespace bmath::intern {
 				}
 				assert(!first && "found sum with zero summands");
 			} break;
-			case Type(Node::product): {
+			case Type(Op::product): {
 				append_product(reverse_elems(vc::range(store, index)));
 			} break;
 			case Type(Fn::pow): {
@@ -900,7 +900,7 @@ namespace bmath::intern {
 				str += print::to_pretty_string(store, params[1], infixr(type));
 
 			} break;
-			case Type(Node::generic_function): {
+			case Type(Op::generic_function): {
 				need_parentheses = false;
 				const GenericFunction& generic_function = store.at(index).generic_function;
 				fn::append_name(store, generic_function, str);
@@ -982,7 +982,7 @@ namespace bmath::intern {
 
 			std::string& current_str = content[index];
 			switch (type) {
-			case Type_T(Node::sum): {
+			case Type_T(Op::sum): {
 				current_str.append("sum        : {");
 				bool first = true;
 				for (const auto elem : vc::range(store, index)) {
@@ -995,7 +995,7 @@ namespace bmath::intern {
 				current_str.push_back('}');
 				show_typedidx_col_nodes(index, false);
 			} break;
-			case Type_T(Node::product): {
+			case Type_T(Op::product): {
 				current_str.append("product    : {");
 				bool first = true;
 				for (const auto elem : vc::range(store, index)) {
@@ -1008,7 +1008,7 @@ namespace bmath::intern {
 				current_str.push_back('}');
 				show_typedidx_col_nodes(index, false);
 			} break;
-			case Type_T(Node::generic_function): {
+			case Type_T(Op::generic_function): {
 				const GenericFunction& generic_function = store.at(index).generic_function;
 				current_str.append("function?  : {");
 				bool first = true;

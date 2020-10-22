@@ -21,17 +21,17 @@
 
 		const auto [index, type] = ref.split();
 		switch (type) {
-		case Type_T(Node::sum): {
+		case Type_T(Op::sum): {
 			for (const auto summand : vc::range(store, index)) {
 			}
 			assert(false);
 		} break;
-		case Type_T(Node::product): {
+		case Type_T(Op::product): {
 			for (const auto factor : vc::range(store, index)) {
 			}
 			assert(false);
 		} break;
-		case Type_T(Node::generic_function): {
+		case Type_T(Op::generic_function): {
 			const GenericFunction& generic_function = store.at(index).generic_function;
 			for (const auto param : fn::range(store, generic_function)) {
 			}
@@ -93,9 +93,9 @@ namespace bmath::intern {
 		{ Type(Fn::ln              )  , 36 }, //order of parameters is given -> most unique
 		{ Type(Fn::re              )  , 38 }, //order of parameters is given -> most unique
 		{ Type(Fn::im              )  , 40 }, //order of parameters is given -> most unique
-		{ Type(Node::generic_function)  , 50 }, //order of parameters is given -> most unique
-		{ Type(Node::product         )  , 55 }, //order of operands my vary -> second most unique
-		{ Type(Node::sum             )  , 60 }, //order of operands my vary -> second most unique
+		{ Type(Op::generic_function)  , 50 }, //order of parameters is given -> most unique
+		{ Type(Op::product         )  , 55 }, //order of operands my vary -> second most unique
+		{ Type(Op::sum             )  , 60 }, //order of operands my vary -> second most unique
 		{ pattern::PnVariable::value_match, 65 }, //a bit more unique than complex
 		{ pattern::PnVariable::value_proxy, 70 }, //a bit more unique than complex
 		{ Type(Leaf::variable        )  , 75 }, //quite not unique
@@ -297,8 +297,117 @@ namespace bmath::intern {
 		{
 			return print::to_memory_layout(this->rhs_store, this->rhs_head);
 		}
-		
 
+		namespace build_value_match {
+
+			PnTypedIdx* find_storage(PnStore& store, PnTypedIdx& head, const PnTypedIdx value_match)
+			{
+				struct MatchTraits
+				{
+					bool has_match = false; //true if subterm contains value_match
+					bool computable = true; //more fitting name would be "computable if value_match would not present"
+
+					constexpr void combine(const MatchTraits snd) noexcept 
+					{ 
+						this->has_match |= snd.has_match; 
+						this->computable &= snd.computable; 
+					}
+				}; //struct MatchTraits	
+
+				//Yaaa in kow. Big O hates this implementation. I tried it in efficient and it looked so mutch worse. this is better. trust me.
+				const auto classify_subterm = [&store, value_match](const PnTypedIdx ref) -> MatchTraits {
+					struct OpAcc
+					{
+						MatchTraits acc;
+
+						constexpr OpAcc(const std::uint32_t index, const PnType type, const PnTypedIdx value_match) :acc({ false, true })
+						{
+							switch (type) {
+							case PnType(Op::sum):     break;
+							case PnType(Op::product): break;
+							case PnType(Fn::pow):     break;// for now only allow these Fn to be computed in value_match
+							case PnType(Fn::sqrt):    break;// for now only allow these Fn to be computed in value_match  
+							case PnType(Fn::exp):     break;// for now only allow these Fn to be computed in value_match
+							case PnType(Fn::ln):      break;// for now only allow these Fn to be computed in value_match 
+							case PnType(PnVariable::value_match): {
+								const bool is_right_match = PnTypedIdx(index, type) == value_match;
+								this->acc = MatchTraits{ is_right_match, is_right_match };
+								break;
+							}
+							default:
+								assert(type.is<Fn>()); 
+								[[falltrough]];
+							case PnType(Op::generic_function):
+								this->acc = MatchTraits{ false, false };
+								break;
+							}
+						}
+
+						constexpr void consume(const MatchTraits elem_res) { this->acc.combine(elem_res); }
+						constexpr MatchTraits result() const noexcept { return this->acc; }
+					}; //struct OpAcc
+
+					const auto leaf_apply = [](const std::uint32_t, const PnType type) -> MatchTraits {
+						return MatchTraits{ false, is_one_of<Leaf::complex, PnVariable::value_proxy>(type) };
+					};
+
+					return fold::tree_fold<MatchTraits, OpAcc>(store, ref, leaf_apply, value_match);
+				}; //classify_subterm
+
+				{
+					const MatchTraits this_traits = classify_subterm(head);
+					if (this_traits.computable && this_traits.has_match) {
+						return &head;
+					}
+					else if (!this_traits.has_match) {
+						return nullptr;
+					}
+				}
+
+				const auto [index, type] = head.split();
+				switch (type) {
+				case PnType(Op::sum): 
+					[[fallthrough]];
+				case PnType(Op::product): {
+					for (PnTypedIdx& elem : vc::range(store, index)) {
+						if (PnTypedIdx* const elem_res = find_storage(store, elem, value_match)) {
+							return elem_res;
+						}
+					}
+				} break;
+				case PnType(Op::generic_function): {
+					GenericFunction& generic_function = store.at(index).generic_function;
+					for (PnTypedIdx& param : fn::range(store, generic_function)) {
+						if (PnTypedIdx* const elem_res = find_storage(store, param, value_match)) {
+							return elem_res;
+						}
+					}
+				} break;
+				default: {
+					assert(type.is<Fn>()); //if this assert hits, the switch above needs more cases.
+					FnParams<PnTypedIdx>& params = store.at(index).fn_params;
+					for (PnTypedIdx& param : fn::range(params, type)) {
+						if (PnTypedIdx* const elem_res = find_storage(store, param, value_match)) {
+							return elem_res;
+						}
+					}
+				} break;
+				case PnType(pattern::_value_match): 
+					break;
+				case PnType(Leaf::variable): 
+					break;
+				case PnType(Leaf::complex): 
+					break;
+				case PnType(pattern::_tree_match): 
+					break;
+				case PnType(pattern::_value_proxy):
+					break;
+				}
+				return nullptr;
+			} //find_storage
+
+		} //namespace build_value_match
+		
 	} //namespace pattern
 
 	namespace fn {
@@ -336,15 +445,15 @@ namespace bmath::intern {
 
 			const auto [index, type] = ref.split();
 			switch (type) {
-			case Type_T(Node::sum): 
+			case Type_T(Op::sum): 
 				[[fallthrough]];
-			case Type_T(Node::product): {
+			case Type_T(Op::product): {
 				for (const auto factor : vc::range(store, index)) {
 					tree::free(store, factor);
 				}
 				TypedIdxSLC_T::free_slc(store, index);
 			} break;
-			case Type_T(Node::generic_function): {
+			case Type_T(Op::generic_function): {
 				const GenericFunction& generic_function = store.at(index).generic_function;
 				for (const auto param : fn::range(store, generic_function)) {
 					tree::free(store, param);
@@ -392,9 +501,9 @@ namespace bmath::intern {
 
 			const auto [index, type] = ref.split();
 			switch (type) {
-			case Type_T(Node::sum):
+			case Type_T(Op::sum):
 				[[fallthrough]];
-			case Type_T(Node::product): {
+			case Type_T(Op::product): {
 				std::size_t current_append_node = index;
 				for (auto& elem : vc::range(store, index)) {
 					const auto [elem_idx, elem_type] = elem.split();
@@ -407,7 +516,7 @@ namespace bmath::intern {
 					}
 				}
 			} break;
-			case Type_T(Node::generic_function): {
+			case Type_T(Op::generic_function): {
 				const GenericFunction& generic_function = store.at(index).generic_function;
 				for (const auto param : fn::range(store, generic_function)) {
 					tree::combine_layers(store, param);
@@ -445,7 +554,7 @@ namespace bmath::intern {
 
 			const auto [index, type] = ref.split();
 			switch (type) {
-			case Type_T(Node::sum): {
+			case Type_T(Op::sum): {
 				OptComplex result_val = 0.0;
 				bool only_values = true;
 				for (auto& summand : vc::range(store, index)) {
@@ -466,7 +575,7 @@ namespace bmath::intern {
 					TypedIdxSLC_T::insert_new(store, index, new_summand);
 				}
 			} break;
-			case Type_T(Node::product): {
+			case Type_T(Op::product): {
 				OptComplex result_val = 1.0;
 				bool only_values = true;
 				for (auto& factor : vc::range(store, index)) {
@@ -487,7 +596,7 @@ namespace bmath::intern {
 					TypedIdxSLC_T::insert_new(store, index, new_factor);
 				}
 			} break;
-			case Type_T(Node::generic_function): {
+			case Type_T(Op::generic_function): {
 				GenericFunction& function = store.at(index).generic_function;
 				for (auto& elem : fn::range(store, function)) {
 					if (const OptComplex param_res = tree::combine_values_inexact(store, elem)) {
@@ -562,7 +671,7 @@ namespace bmath::intern {
 
 			const auto [index, type] = ref.split();
 			switch (type) {
-			case Type_T(Node::sum): {
+			case Type_T(Op::sum): {
 				OptComplex result_val = 0.0;
 				bool only_exact = true;
 				for (auto& summand : vc::range(store, index)) {
@@ -585,7 +694,7 @@ namespace bmath::intern {
 					TypedIdxSLC_T::insert_new(store, index, new_summand);
 				}
 			} break;
-			case Type_T(Node::product): {
+			case Type_T(Op::product): {
 				OptComplex result_factor = 1.0;
 				OptComplex result_divisor = 1.0;
 				bool only_exact = true;
@@ -631,7 +740,7 @@ namespace bmath::intern {
 					}
 				}
 			} break;
-			case Type_T(Node::generic_function): {
+			case Type_T(Op::generic_function): {
 				GenericFunction& function = store.at(index).generic_function;
 				for (auto& elem : fn::range(store, function)) {
 					const OptComplex param_res = tree::combine_values_exact(store, elem);
@@ -690,14 +799,14 @@ namespace bmath::intern {
 			const auto [index_1, type_1] = ref_1.split();
 			const auto [index_2, type_2] = ref_2.split();
 			if (type_1 != type_2) [[likely]] {
-				static_assert((uniqueness(Type(Node::sum)) <=> uniqueness(Type(Node::sum))) == std::strong_ordering::equal); //dont wanna mix with std::strong_ordering::equivalent
+				static_assert((uniqueness(Type(Op::sum)) <=> uniqueness(Type(Op::sum))) == std::strong_ordering::equal); //dont wanna mix with std::strong_ordering::equivalent
 				return uniqueness(type_1) <=> uniqueness(type_2);
 			}
 
 			switch (type_1) {
-			case Type_T(Node::sum):
+			case Type_T(Op::sum):
 				[[fallthrough]];
-			case Type_T(Node::product): {
+			case Type_T(Op::product): {
 				auto range_1 = vc::range(store_1, index_1);
 				auto range_2 = vc::range(store_2, index_2);
 				auto iter_1 = range_1.begin();
@@ -717,7 +826,7 @@ namespace bmath::intern {
 						std::strong_ordering::greater;
 				}
 			} break;
-			case Type_T(Node::generic_function): {
+			case Type_T(Op::generic_function): {
 				const GenericFunction& fn_1 = store_1.at(index_1).generic_function;
 				const GenericFunction& fn_2 = store_2.at(index_2).generic_function;
 				const auto name_cmp = fn::compare_name(store_1, store_2, fn_2, fn_1); //reverse order, as to_pretty_string reverses again
@@ -824,7 +933,7 @@ namespace bmath::intern {
 					return compare(store, store, lhs, rhs) == std::strong_ordering::less;
 				};
 
-				if (type == Node::sum || type == Node::product) {
+				if (type == Op::sum || type == Op::product) {
 					TypedIdxSLC_T::sort(store, index, compare_function);						
 				}
 				return fold::Void{};
@@ -836,11 +945,20 @@ namespace bmath::intern {
 		template<typename Store_T, typename TypedIdx_T>
 		std::size_t count(Store_T& store, const TypedIdx_T ref)
 		{
-			return fold::tree_fold<std::size_t>(store, ref,
-				[](const auto, const auto, const std::size_t acc, const std::size_t elem_res) { return acc + elem_res;  },
-				[](const auto, const auto) { return std::size_t(1u); },
-				std::size_t(1u));
+			using Type_T = TypedIdx_T::Enum_T;
+
+			struct OpAcc
+			{
+				std::size_t acc;
+
+				constexpr OpAcc(std::uint32_t, Type_T, int) noexcept :acc(1u) {}
+				void consume(const std::size_t child_size) noexcept { this->acc += child_size; }
+				auto result() noexcept { return this->acc; }
+			};
+
+			return fold::tree_fold<std::size_t, OpAcc>(store, ref, [](const auto, const auto) { return 1u; });
 		} //count
+
 		template std::size_t count<Store, TypedIdx>(Store& store, const TypedIdx ref);
 
 		template<typename DstTypedIdx_T, typename SrcStore_T, typename DstStore_T, typename SrcTypedIdx_T>
@@ -852,9 +970,9 @@ namespace bmath::intern {
 
 			const auto [src_index, src_type] = src_ref.split();
 			switch (src_type) {
-			case SrcType_T(Node::sum): 
+			case SrcType_T(Op::sum): 
 				[[fallthrough]];
-			case SrcType_T(Node::product): {
+			case SrcType_T(Op::product): {
 				const std::size_t dst_index = dst_store.insert(DstTypedIdxSLC_T());
 				std::size_t last_node_idx = dst_index;
 				for (const auto src_elem : vc::range(src_store, src_index)) {
@@ -863,7 +981,7 @@ namespace bmath::intern {
 				}
 				return DstTypedIdx_T(dst_index, src_type);
 			} break;
-			case SrcType_T(Node::generic_function): {
+			case SrcType_T(Op::generic_function): {
 				const GenericFunction src_function = src_store.at(src_index).generic_function; //no reference, as src and dst could be same store -> may reallocate
 				GenericFunction dst_function;
 				std::size_t last_node_idx = dst_store.insert(DstTypedIdxSLC_T());
@@ -933,9 +1051,9 @@ namespace bmath::intern {
 
 				const auto [lhs_index, lhs_type] = equation.lhs_head.split();
 				switch (lhs_type) {
-				case Type_T(Node::sum): 
+				case Type_T(Op::sum): 
 					[[fallthrough]];
-				case Type_T(Node::product): {
+				case Type_T(Op::product): {
 					std::size_t last_node_idx = store.insert(TypedIdxSLC_T{ equation.rhs_head });
 					equation.rhs_head = TypedIdx_T(last_node_idx, lhs_type); //new rhs_head is product (sum) of old rhs_head divided by (minus) lhs_head factors (summands).
 					for (const TypedIdx_T elem : vc::range(store, lhs_index)) {
@@ -943,7 +1061,7 @@ namespace bmath::intern {
 							equation.lhs_head = elem; 
 						}
 						else {
-							const TypedIdx_T new_rhs_elem = (lhs_type == Node::sum ? 
+							const TypedIdx_T new_rhs_elem = (lhs_type == Op::sum ? 
 								build_negated <Store_T, TypedIdx_T>(store, elem) : 
 								build_inverted<Store_T, TypedIdx_T>(store, elem));
 							last_node_idx = TypedIdxSLC_T::insert_new(store, last_node_idx, new_rhs_elem);
@@ -951,7 +1069,7 @@ namespace bmath::intern {
 					}
 					TypedIdxSLC_T::free_slc(store, lhs_index); //all factors (summands) have been shifted to rhs -> delete SLC (but not recursively, elems have new owner!)
 				} break;
-				case Type_T(Node::generic_function): 
+				case Type_T(Op::generic_function): 
 					assert(false); break;
 				case Type_T(Leaf::variable): 
 					assert(false); break;
@@ -1027,27 +1145,27 @@ namespace bmath::intern {
 		template<typename Store_T, typename TypedIdx_T>
 		bool contains(const Store_T& store, const TypedIdx_T ref, const TypedIdx_T to_contain)
 		{
-			return fold::simple_fold<fold::Bool>(store, ref, 
-				[to_contain](const std::uint32_t index, const auto type) -> fold::Bool { return TypedIdx_T(index, type) == to_contain; });
+			return fold::simple_fold<fold::FindBool>(store, ref, 
+				[to_contain](const std::uint32_t index, const auto type) -> fold::FindBool { return TypedIdx_T(index, type) == to_contain; });
 		} //contains
 
 		bool contains_variables(const Store& store, const TypedIdx ref)
 		{
-			return fold::simple_fold<fold::Bool>(store, ref, [](const auto, const Type type) -> fold::Bool { return type == Leaf::variable; });
+			return fold::simple_fold<fold::FindBool>(store, ref, [](const auto, const Type type) -> fold::FindBool { return type == Leaf::variable; });
 		} //contains_variables
 
 		bool contains_variables(const pattern::PnStore& store, const pattern::PnTypedIdx ref)
 		{
 			using namespace pattern;
-			const auto test_for_variables = [](const auto, const PnType type) -> fold::Bool {
+			const auto test_for_variables = [](const auto, const PnType type) -> fold::FindBool {
 				return type == Leaf::variable || type.is<PnVariable>();
 			};
-			return fold::simple_fold<fold::Bool>(store, ref, test_for_variables);
+			return fold::simple_fold<fold::FindBool>(store, ref, test_for_variables);
 		} //contains_variables
 
 		TypedIdx search_variable(const Store& store, const TypedIdx head, std::string_view name)
 		{
-			using Res = fold::MightCut<TypedIdx>;
+			using Res = fold::Find<TypedIdx>;
 			const auto test_for_name = [name, &store](const std::uint32_t index, const Type type) -> Res {
 				return (type == Leaf::variable && string_compare(store, index, name) == std::strong_ordering::equal) ?
 					fold::done(TypedIdx(index, type)) : //name was found -> cut tree evaluation here
@@ -1060,37 +1178,37 @@ namespace bmath::intern {
 
 	namespace fold {
 
-		template<typename Res_T, typename Store_T, typename TypedIdx_T, typename Apply>
-		Res_T simple_fold(Store_T& store, const TypedIdx_T ref, Apply apply)
+		template<typename Res_T, typename Store_T, typename TypedIdx_T, typename OpFunctor>
+		Res_T simple_fold(Store_T& store, const TypedIdx_T ref, OpFunctor apply)
 		{
 			using Type_T = TypedIdx_T::Enum_T;
 			constexpr bool pattern = std::is_same_v<Type_T, pattern::PnType>;
-			constexpr bool may_return_early = MightReturnEarly<Res_T>::value;
+			constexpr bool return_early_possible = ReturnEarlyPossible<Res_T>::value;
 
 			const auto [index, type] = ref.split();
 
 			switch (type) {
-			case Type_T(Node::sum): 
+			case Type_T(Op::sum): 
 				[[fallthrough]];
-			case Type_T(Node::product): {
+			case Type_T(Op::product): {
 				for (const auto elem : vc::range(store, index)) {
 					const Res_T elem_res = fold::simple_fold<Res_T>(store, elem, apply);
-					if constexpr (may_return_early) { if (elem_res.return_early()) { return elem_res; } }
+					if constexpr (return_early_possible) { if (elem_res.return_early()) { return elem_res; } }
 				}
 			} break;
-			case Type_T(Node::generic_function): {
-				const GenericFunction generic_function = store.at(index).generic_function;  //no reference, as apply might mutate store
+			case Type_T(Op::generic_function): {
+				auto generic_function = store.at(index).generic_function;  //no reference, as apply might mutate store
 				for (const auto param : fn::range(store, generic_function)) {
 					const Res_T elem_res = fold::simple_fold<Res_T>(store, param, apply);
-					if constexpr (may_return_early) { if (elem_res.return_early()) { return elem_res; } }
+					if constexpr (return_early_possible) { if (elem_res.return_early()) { return elem_res; } }
 				}
 			} break;
 			default: {
 				assert(type.is<Fn>());
-				const FnParams<TypedIdx_T> params = store.at(index).fn_params; //no reference, as apply might mutate store
+				auto params = store.at(index).fn_params; //no reference, as apply might mutate store
 				for (const auto param : fn::range(params, type)) {
 					const Res_T elem_res = fold::simple_fold<Res_T>(store, param, apply);
-					if constexpr (may_return_early) { if (elem_res.return_early()) { return elem_res; } }
+					if constexpr (return_early_possible) { if (elem_res.return_early()) { return elem_res; } }
 				}
 			} break;
 			case Type_T(Leaf::variable): 
@@ -1100,11 +1218,11 @@ namespace bmath::intern {
 			case Type_T(pattern::_tree_match): 
 				break;
 			case Type_T(pattern::_value_match): if constexpr (pattern) {
-				const pattern::ValueMatchVariable var = store.at(index).value_match; //no reference, as apply might mutate store
+				auto var = store.at(index).value_match; //no reference, as apply might mutate store
 				const Res_T elem_res_1 = fold::simple_fold<Res_T>(store, var.match_idx, apply);
-				if constexpr (may_return_early) { if (elem_res_1.return_early()) { return elem_res_1; } }
+				if constexpr (return_early_possible) { if (elem_res_1.return_early()) { return elem_res_1; } }
 				const Res_T elem_res_2 = fold::simple_fold<Res_T>(store, var.copy_idx, apply);
-				if constexpr (may_return_early) { if (elem_res_2.return_early()) { return elem_res_2; } }
+				if constexpr (return_early_possible) { if (elem_res_2.return_early()) { return elem_res_2; } }
 			} break;
 			case Type_T(pattern::_value_proxy):
 				break;
@@ -1112,54 +1230,53 @@ namespace bmath::intern {
 			return apply(index, type); 
 		} //simple_fold
 
-		template<typename Res_T, typename Store_T, typename TypedIdx_T, typename OpApply, typename LeafApply, typename Finally>
-		Res_T tree_fold(Store_T& store, const TypedIdx_T ref, OpApply op_apply, LeafApply leaf_apply, const Res_T init, Finally finally)
+		template<typename Res_T, typename OpAccumulator, typename Store_T, typename TypedIdx_T, typename LeafApply, typename AccInit>
+		Res_T tree_fold(Store_T& store, const TypedIdx_T ref, LeafApply leaf_apply, const AccInit init)
 		{
 			using Type_T = TypedIdx_T::Enum_T;
 			constexpr bool pattern = std::is_same_v<Type_T, pattern::PnType>;
-			constexpr bool may_return_early = MightReturnEarly<Res_T>::value;
+			constexpr bool return_early_possible = ReturnEarlyPossible<Res_T>::value;
 
 			const auto [index, type] = ref.split();
 			switch (type) {
-			case Type_T(Node::sum): 
+			case Type_T(Op::sum): 
 				[[fallthrough]];
-			case Type_T(Node::product): {
-				Res_T acc = init;
+			case Type_T(Op::product): {
+				OpAccumulator acc(index, type, init);
 				for (const auto elem : vc::range(store, index)) {
-					const Res_T elem_res = fold::tree_fold<Res_T>(store, elem, op_apply, leaf_apply, init, finally);
-					acc = op_apply(index, type, acc, elem_res);
-					if constexpr (may_return_early) { if (acc.return_early()) { return acc; } }
+					acc.consume(fold::tree_fold<Res_T, OpAccumulator>(store, elem, leaf_apply, init));
 				}
-				return finally(acc, ref);
+				return acc.result();
 			} 
-			case Type_T(Node::generic_function): {
-				Res_T acc = init;
+			case Type_T(Op::generic_function): {
+				OpAccumulator acc(index, type, init);
 				const GenericFunction generic_function = store.at(index).generic_function;  //no reference, as apply might mutate store
 				for (const auto param : fn::range(store, generic_function)) {
-					const Res_T param_res = fold::tree_fold<Res_T>(store, param, op_apply, leaf_apply, init, finally);
-					acc = op_apply(index, type, acc, param_res);
-					if constexpr (may_return_early) { if (acc.return_early()) { return acc; } }
+					acc.consume(fold::tree_fold<Res_T, OpAccumulator>(store, param, leaf_apply, init));
 				}
-				return finally(acc, ref);
+				return acc.result();
 			} 
 			default: {
 				assert(type.is<Fn>());
-				Res_T acc = init;
+				OpAccumulator acc(index, type, init);
 				const FnParams<TypedIdx_T> params = store.at(index).fn_params; //no reference, as apply might mutate store
 				for (const auto param : fn::range(params, type)) {
-					const Res_T param_res = fold::tree_fold<Res_T>(store, param, op_apply, leaf_apply, init, finally);
-					acc = op_apply(index, type, acc, param_res);
-					if constexpr (may_return_early) { if (acc.return_early()) { return acc; } }
+					acc.consume(fold::tree_fold<Res_T, OpAccumulator>(store, param, leaf_apply, init));
 				}
-				return finally(acc, ref);			
+				return acc.result();		
 			}
+			case Type_T(pattern::_value_match): if constexpr (pattern) {
+				OpAccumulator acc(index, type, init);
+				const pattern::ValueMatchVariable var = store.at(index).value_match; //no reference, as apply might mutate store
+				acc.consume(fold::tree_fold<Res_T, OpAccumulator>(store, var.match_idx, leaf_apply, init));
+				acc.consume(fold::tree_fold<Res_T, OpAccumulator>(store, var.copy_idx, leaf_apply, init));
+				return acc.result();
+			} [[fallthrough]];
 			case Type_T(Leaf::variable): 
 				[[fallthrough]];
 			case Type_T(Leaf::complex): 
 				[[fallthrough]];
 			case Type_T(pattern::_tree_match): 
-				[[fallthrough]];
-			case Type_T(pattern::_value_match): //sees value_match as leaf :o
 				[[fallthrough]];
 			case Type_T(pattern::_value_proxy):
 				return leaf_apply(index, type);

@@ -13,7 +13,7 @@
 
 namespace bmath::intern {
 
-	enum class Node //common recursive nodes (Fn's and some PnVariable's are recursive as well)
+	enum class Op //Short for Operation (Fn's are operations as well, but organisation stuff)
 	{
 		sum,
 		product,
@@ -28,6 +28,7 @@ namespace bmath::intern {
 		COUNT
 	};
 
+	//these are luped together, because they behave the same in most cases -> can be seperated easily from rest
 	enum class Fn //short for Function (note that generic_function is not listed here, at it's behavior is more complicated)
 	{
 		pow,    //params[0] := base      params[1] := expo    
@@ -54,7 +55,7 @@ namespace bmath::intern {
 		COUNT
 	};
 
-	using Type = SumEnum<Fn, Leaf, Node>;
+	using Type = SumEnum<Fn, Leaf, Op>;
 
 	using TypedIdx = BasicTypedIdx<Type>;
 	using TypedIdxSLC = TermSLC<std::uint32_t, TypedIdx, 3>;
@@ -292,6 +293,16 @@ namespace bmath::intern {
 			std::string rhs_memory_layout() const;
 		};
 
+		//these functions provide utitity to change value_match from its state holding two value_proxy directly to actually
+		//having copy_idx and match_idx initialized (thus value_match also bubbles up a bit in term)
+		namespace build_value_match {
+
+			//returns pointer to position in parent of value_match, where value_match is held
+			//assumed head to be passed at reference to its own storage position
+			PnTypedIdx* find_storage(PnStore& store, PnTypedIdx& head, const PnTypedIdx value_match);
+
+		} //namespace build_value_match
+
 	} //namespace pattern
 
 	//utility for both Function and GenericFunction
@@ -430,63 +441,55 @@ namespace bmath::intern {
 	namespace fold {
 
 		template<typename Wrapped_T>
-		struct MightCut //might cut fold early, as result is already known then (also known as shortcircuit)
+		struct Find //the simple_fold evaluation stops early if cut is true and returns value (and cut)
 		{
-			Wrapped_T value = Wrapped_T{};
+			Wrapped_T value;
 			bool cut = false;
 
 			constexpr bool return_early() const noexcept { return this->cut; }
 			constexpr Wrapped_T& operator*() noexcept { return this->value; }
 			constexpr const Wrapped_T& operator*() const noexcept { return this->value; }
 		};
-		template<typename Wrapped_T> constexpr MightCut<Wrapped_T> done(const Wrapped_T w) { return { w, true  }; }
-		template<typename Wrapped_T> constexpr MightCut<Wrapped_T> more(const Wrapped_T w) { return { w, false }; }
+		template<typename Wrapped_T> constexpr Find<Wrapped_T> done(const Wrapped_T w) { return { w, true  }; }
+		template<typename Wrapped_T> constexpr Find<Wrapped_T> more(const Wrapped_T w) { return { w, false }; }
 		
-		template<>
-		struct MightCut<void>
+		struct FindBool //the simple_fold evaluation stops early if cut is true and returns true
 		{
 			bool cut = false;
 
 			constexpr bool return_early() const noexcept { return this->cut; }
 			constexpr operator bool() const noexcept { return this->cut; }
-			constexpr MightCut(bool init) :cut(init) {}
-			constexpr MightCut() = default;
+			constexpr FindBool(bool init) :cut(init) {}
+			constexpr FindBool() = default;
 		};
-		using Bool = MightCut<void>;
 
 
 		template<typename T, typename = void> 
-		struct MightReturnEarly :std::false_type {};
+		struct ReturnEarlyPossible :std::false_type {};
 
 		template<typename T> 
-		struct MightReturnEarly <T, std::void_t<decltype(std::declval<T>().return_early())>	> :std::true_type {};
+		struct ReturnEarlyPossible <T, std::void_t<decltype(std::declval<T>().return_early())>	> :std::true_type {};
 
-		static_assert(MightReturnEarly<MightCut<TypedIdx>>::value);
-		static_assert(MightReturnEarly<Bool>::value);
-		static_assert(!MightReturnEarly<bool>::value);
+		static_assert(ReturnEarlyPossible<Find<TypedIdx>>::value);
+		static_assert(ReturnEarlyPossible<FindBool>::value);
+		static_assert(!ReturnEarlyPossible<bool>::value);
 
 
 		struct Void {}; //used, if there is nothing to be returned
 
-		//calls apply with every node (postorder), parameters are (index, type), apply is assumed to return Res_T
-		//assumes Res_T to have static constexpr bool might_cut defined, 
+		//calls apply with every node (postorder), parameters are (std::uint32_t index, Type_T type), apply returns Res_T
 		//Res_T might have nonstatic member return_early, to indicate if the fold may be stopped early, as the result is already known
-		template<typename Res_T, typename Store_T, typename TypedIdx_T, typename Apply>
-		Res_T simple_fold(Store_T& store, const TypedIdx_T ref, Apply apply);
+		template<typename Res_T, typename Store_T, typename TypedIdx_T, typename OpFunctor>
+		Res_T simple_fold(Store_T& store, const TypedIdx_T ref, OpFunctor apply);
 
-		template<typename Res_T, typename TypedIdx_T>
-		struct DefaultFinally { constexpr Res_T operator()(Res_T r, TypedIdx_T) const noexcept { return r; } };
-
-		//this fold differentiates between recursive nodes (operations) and Leafes (values and variables (also ValueMatchVariable!))
-		//op_apply is called directly after each recursive call with parameters (index, type, acc, elem_res) and returns Res_T
-		//  (with elem_res beeing the result of the recursive call.) 
-		//  acc is initialized for every recursive node on its own as init.
-		//leaf_apply has parameters (index, type) and returns Res_T.		
-		//Res_T might have nonstatic method return_early(), to indicate if the fold may be stopped early, as the result is already known
-		template<typename Res_T, typename Store_T, typename TypedIdx_T, typename OpApply, typename LeafApply,
-			typename Finally = DefaultFinally<Res_T, TypedIdx_T>>
-		Res_T tree_fold(Store_T& store, const TypedIdx_T ref, OpApply op_apply, LeafApply leaf_apply, 
-				const Res_T init, Finally finally = {});
+		//this fold differentiates between recursive nodes (Op's, Fn's and ValueMatchVariable) and Leafes (values and variables)
+		//OpAccumulator is constructed before a recursive call is made and consumes each recursive result. It thus needs to at least
+		//  have a Constructor taking as arguments (std::uint32_t index, Type_T type, AccInit init) 
+		//  and a consume method taking as single parameter (Res_T elem_res)
+		//  a result method taking no parameters and returning Res_T
+		//leaf_apply has parameters (std::uint32_t index, Type_T type) and returns Res_T.		
+		template<typename Res_T, typename OpAccumulator, typename Store_T, typename TypedIdx_T, typename LeafApply, typename AccInit = int>
+		Res_T tree_fold(Store_T& store, const TypedIdx_T ref, LeafApply leaf_apply, const AccInit init = 0);
 
 	} //namespace fold
 
