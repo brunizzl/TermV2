@@ -424,7 +424,7 @@ namespace bmath::intern {
 					*value_match_storage = proxy_value;
 					*value_match_subtree = value_match;
 
-					PnTypedIdx match_data = tree::copy<PnTypedIdx>(store, store, var->copy_idx); //invalidates var
+					PnTypedIdx match_data = tree::copy(store, store, var->copy_idx); //invalidates var
 					const auto [new_match_data, new_match_idx] = stupid_solve_for(store, { match_data, proxy_value }, proxy_value);
 					assert(new_match_data == proxy_value);
 					var = &store.at(value_match.get_index()).value_match;
@@ -1050,34 +1050,34 @@ namespace bmath::intern {
 
 		template std::size_t count<Store, TypedIdx>(Store& store, const TypedIdx ref);
 
-		template<typename DstTypedIdx_T, typename SrcStore_T, typename DstStore_T, typename SrcTypedIdx_T>
-		DstTypedIdx_T copy(const SrcStore_T& src_store, DstStore_T& dst_store, const SrcTypedIdx_T src_ref)
+		template<typename Store_T, typename TypedIdx_T>
+		TypedIdx_T copy(const Store_T& src_store, Store_T& dst_store, const TypedIdx_T src_ref)
 		{
-			using SrcType_T = SrcTypedIdx_T::Enum_T;
-			using DstTypedIdxSLC_T = TermSLC<std::uint32_t, DstTypedIdx_T, 3>;
-			constexpr bool src_pattern = std::is_same_v<SrcType_T, pattern::PnType>;
+			using Type_T = TypedIdx_T::Enum_T;
+			using TypedIdxSLC_T = TermSLC<std::uint32_t, TypedIdx_T, 3>;
+			constexpr bool src_pattern = std::is_same_v<Type_T, pattern::PnType>;
 
 			const auto [src_index, src_type] = src_ref.split();
 			switch (src_type) {
-			case SrcType_T(Op::sum): 
+			case Type_T(Op::sum): 
 				[[fallthrough]];
-			case SrcType_T(Op::product): {
-				const std::size_t dst_index = dst_store.insert(DstTypedIdxSLC_T());
+			case Type_T(Op::product): {
+				const std::size_t dst_index = dst_store.insert(TypedIdxSLC_T());
 				std::size_t last_node_idx = dst_index;
 				for (const auto src_elem : vc::range(src_store, src_index)) {
-					const DstTypedIdx_T dst_elem = tree::copy<DstTypedIdx_T>(src_store, dst_store, src_elem);
-					last_node_idx = DstTypedIdxSLC_T::insert_new(dst_store, last_node_idx, dst_elem);
+					const TypedIdx_T dst_elem = tree::copy(src_store, dst_store, src_elem);
+					last_node_idx = TypedIdxSLC_T::insert_new(dst_store, last_node_idx, dst_elem);
 				}
-				return DstTypedIdx_T(dst_index, src_type);
+				return TypedIdx_T(dst_index, src_type);
 			} break;
-			case SrcType_T(Op::generic_function): {
+			case Type_T(Op::generic_function): {
 				const GenericFunction src_function = src_store.at(src_index).generic_function; //no reference, as src and dst could be same store -> may reallocate
 				GenericFunction dst_function;
-				std::size_t last_node_idx = dst_store.insert(DstTypedIdxSLC_T());
+				std::size_t last_node_idx = dst_store.insert(TypedIdxSLC_T());
 				dst_function.params_idx = static_cast<std::uint32_t>(last_node_idx);
 				for (const auto src_param : fn::range(src_store, src_function)) {
-					const DstTypedIdx_T dst_param = tree::copy<DstTypedIdx_T>(src_store, dst_store, src_param);
-					last_node_idx = DstTypedIdxSLC_T::insert_new(dst_store, last_node_idx, dst_param);
+					const TypedIdx_T dst_param = tree::copy(src_store, dst_store, src_param);
+					last_node_idx = TypedIdxSLC_T::insert_new(dst_store, last_node_idx, dst_param);
 				}
 				std::string src_name; //in most cases the small string optimisation works, else dont care
 				read(src_store, src_index, src_name);
@@ -1089,40 +1089,45 @@ namespace bmath::intern {
 					dst_function.long_name_idx = insert_string(dst_store, src_name);
 					dst_function.name_size = GenericFunction::NameSize::longer;
 				}
-				return DstTypedIdx_T(dst_store.insert(dst_function), src_type);
+				return TypedIdx_T(dst_store.insert(dst_function), src_type);
 			} break;
 			default: {
 				assert(src_type.is<Fn>());
-				const FnParams<SrcTypedIdx_T> src_params = src_store.at(src_index).fn_params; //no reference, as src and dst could be same store -> may reallocate
-				auto dst_params = FnParams<DstTypedIdx_T>();
+				const FnParams<TypedIdx_T> src_params = src_store.at(src_index).fn_params; //no reference, as src and dst could be same store -> may reallocate
+				auto dst_params = FnParams<TypedIdx_T>();
 				for (std::size_t i = 0u; i < fn::param_count(src_type); i++) {
-					dst_params[i] = tree::copy<DstTypedIdx_T>(src_store, dst_store, src_params[i]);
+					dst_params[i] = tree::copy(src_store, dst_store, src_params[i]);
 				}
-				return DstTypedIdx_T(dst_store.insert(dst_params), src_type);
+				return TypedIdx_T(dst_store.insert(dst_params), src_type);
 			} break;
-			case SrcType_T(Leaf::variable): {
+			case Type_T(Leaf::variable): {
 				std::string src_name; //in most cases the small string optimisation works, else dont care
 				read(src_store, src_index, src_name);
 				const std::size_t dst_index = insert_string(dst_store, src_name);
-				return DstTypedIdx_T(dst_index, src_type);
+				return TypedIdx_T(dst_index, src_type);
 			} break;
-			case SrcType_T(Leaf::complex): {
+			case Type_T(Leaf::complex): {
 				const std::size_t dst_index = dst_store.insert(src_store.at(src_index));
-				return DstTypedIdx_T(dst_index, src_type);
+				return TypedIdx_T(dst_index, src_type);
 			} break;
-			case SrcType_T(pattern::_tree_match): if constexpr (src_pattern) {
-				const std::size_t dst_index = dst_store.insert(src_store.at(src_index));
-				return DstTypedIdx_T(dst_index, src_type);
-			} assert(false); return DstTypedIdx_T();
-			case SrcType_T(pattern::_value_match):
-				assert(false); return DstTypedIdx_T();
-			case SrcType_T(pattern::_value_proxy):
-				return src_ref;
+			case Type_T(pattern::_tree_match): if constexpr (src_pattern) {
+				const std::size_t dst_index = dst_store.insert(src_store.at(src_index)); //shallow copy of var
+				return TypedIdx_T(dst_index, src_type);
+			} assert(false); return TypedIdx_T();
+			case Type_T(pattern::_value_match): if constexpr (src_pattern) {
+				const pattern::ValueMatchVariable src_var = src_store.at(src_index).value_match;
+				auto dst_var = pattern::ValueMatchVariable(src_var.match_data_idx, src_var.form);
+				dst_var.match_idx = tree::copy(src_store, dst_store, src_var.match_idx);
+				dst_var.copy_idx = tree::copy(src_store, dst_store, src_var.copy_idx);
+				const std::size_t dst_index = dst_store.insert(dst_var);
+				return TypedIdx_T(dst_index, src_type);
+			} assert(false); return TypedIdx_T();				
+			case Type_T(pattern::_value_proxy):
+				return src_ref; //return same ref, as proxy does not own any nodes in src_store anyway (index has different meaning)
 			}
 		} //copy
-		template TypedIdx copy<TypedIdx, Store, Store, TypedIdx>(const Store& src_store, Store& dst_store, const TypedIdx src_ref);
-		template pattern::PnTypedIdx copy<pattern::PnTypedIdx, pattern::PnStore, pattern::PnStore, pattern::PnTypedIdx>
-			(const pattern::PnStore& src_store, pattern::PnStore& dst_store, const pattern::PnTypedIdx src_ref);
+		template TypedIdx copy<Store, TypedIdx>(const Store& src_store, Store& dst_store, const TypedIdx src_ref);
+		template pattern::PnTypedIdx copy<pattern::PnStore, pattern::PnTypedIdx> (const pattern::PnStore& src_store, pattern::PnStore& dst_store, const pattern::PnTypedIdx src_ref);
 
 
 		template<typename Store_T, typename TypedIdx_T>

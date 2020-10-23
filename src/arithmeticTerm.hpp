@@ -423,8 +423,8 @@ namespace bmath::intern {
 		std::size_t count(Store_T& store, const TypedIdx_T ref);
 
 		//copies subtree starting at src_ref into dst_store and returns its head
-		template<typename DstTypedIdx_T, typename SrcStore_T, typename DstStore_T, typename SrcTypedIdx_T>
-		[[nodiscard]] DstTypedIdx_T copy(const SrcStore_T& src_store, DstStore_T& dst_store, const SrcTypedIdx_T src_ref);
+		template<typename Store_T, typename TypedIdx_T>
+		[[nodiscard]] TypedIdx_T copy(const Store_T& src_store, Store_T& dst_store, const TypedIdx_T src_ref);
 
 		//returns true iff subtree starting at ref contains to_contain (or is to_contain itself)
 		template<typename Store_T, typename TypedIdx_T>

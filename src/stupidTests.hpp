@@ -221,7 +221,7 @@ namespace bmath::intern::test {
 		std::cout << "term_1: " << term_1.to_string() << "\n";
 
 		auto [store, head_1] = term_1.data();
-		auto head_2 = tree::copy<TypedIdx>(*store, *store, head_1);
+		auto head_2 = tree::copy(*store, *store, head_1);
 
 		std::string term_2_str;
 		print::append_to_string(*store, head_2, term_2_str);
