@@ -531,27 +531,13 @@ namespace bmath::intern {
 
 		PnTypedIdx NameLookupTable::insert_instance(PnStore& store, const ParseView input)
 		{
-			const auto crop = [](std::string_view name) -> std::array<char, 4u> { //this is very stupid, however i dont care.
-				if (name.size() >= 3u) {
-					return { name[0u], name[1u], name[2u], '\0' };
-				}
-				if (name.size() == 2u) {
-					return { name[0u], name[1u], '\0', '\0' };
-				}
-				if (name.size() == 1u) {
-					return { name[0u], '\0', '\0', '\0' };
-				}
-				assert(false && "expected positive match_variable name size");
-				return {};
-			};
-
 			const auto name = input.to_string_view();
 			auto var_idx = PnTypedIdx();
 			if (const auto iter = std::find_if(this->tree_table.begin(), this->tree_table.end(), [name](const auto& x) { return x.name == name; }); 
 				iter != this->tree_table.end()) 
 			{
 				const std::uint32_t match_data_idx = std::distance(this->tree_table.begin(), iter);
-				const TreeMatchVariable var = { match_data_idx, iter->restr, crop(name) };
+				const TreeMatchVariable var = { match_data_idx, iter->restr };
 				var_idx = PnTypedIdx(store.insert(var), PnVariable::tree_match);
 				(this->build_lhs ? iter->lhs_instances : iter->rhs_instances).push_back(var_idx);
 			}
@@ -722,14 +708,7 @@ namespace bmath::intern {
 			} break;
 			case Type_T(Leaf::variable): {
 				const Variable& variable = store.at(index).string;
-				if constexpr (pattern) {
-					str.push_back('\'');
-					read(store, index, str);
-					str.push_back('\'');
-				}
-				else {
-					read(store, index, str);
-				}
+				read(store, index, str);
 			} break;
 			case Type_T(Leaf::complex): {
 				const Complex& complex = store.at(index).complex;
@@ -737,19 +716,19 @@ namespace bmath::intern {
 			} break;
 			case Type_T(pattern::_tree_match): if constexpr (pattern) {
 				const pattern::TreeMatchVariable& var = store.at(index).tree_match;
-				str.push_back('{');
-				str.append(var.name.data());
+				str.append("{T");
+				str.append(std::to_string(var.match_data_idx));
 				if (var.restr != pattern::Restr::any) {
 					str.push_back(':');
 					str.append(name_of(var.restr));
 				}
-				str.append(", [");
-				str.append(std::to_string(var.match_data_idx));
-				str.append("]}");
+				str.push_back('}');
 			} break;
 			case Type_T(pattern::_value_match): if constexpr (pattern) {
 				const pattern::ValueMatchVariable& var = store.at(index).value_match;
-				str.push_back('{');
+				str.append("{V");
+				str.append(std::to_string(var.match_data_idx));
+				str.push_back(':');
 				str.append(name_of(var.form));
 				str.append(", ");
 				print::append_to_string(store, var.match_idx, str);
@@ -758,9 +737,7 @@ namespace bmath::intern {
 				str.push_back('}');
 			} break;
 			case Type_T(pattern::_value_proxy): if constexpr (pattern) {
-				str.push_back('<');
-				str.append(std::to_string(index));
-				str.push_back('>');
+				str.push_back('P');
 			} break;
 			}
 
@@ -956,7 +933,7 @@ namespace bmath::intern {
 
 			const auto [index, type] = ref.split();
 
-			auto show_typedidx_col_nodes = [&store, &content, index](std::uint32_t idx, bool show_first) {
+			const auto show_typedidx_col_nodes = [&store, &content, index](std::uint32_t idx, bool show_first) {
 				const TypedIdxSLC_T* col = &store.at(idx).index_slc;
 				if (show_first) {
 					content[idx].append("(SLC node part of index " + std::to_string(index) + ')');
@@ -966,7 +943,7 @@ namespace bmath::intern {
 					col = &store.at(col->next_idx).index_slc;
 				}
 			};
-			auto show_string_nodes = [&store, &content, index](std::uint32_t idx, bool show_first) {
+			const auto show_string_nodes = [&store, &content, index](std::uint32_t idx, bool show_first) {
 				const TermString128* str = &store.at(idx).string;
 				if (show_first) {
 					content[idx].append("(str node part of index " + std::to_string(index) + ": \""
@@ -1051,7 +1028,14 @@ namespace bmath::intern {
 				current_str.append("tree_match : ");
 			} break;
 			case Type_T(pattern::_value_match): if constexpr (pattern) {
-				current_str.append("value_match: ");
+				current_str.append("value_match: {m:");
+				const pattern::ValueMatchVariable& var = store.at(index).value_match;
+				current_str.append(std::to_string(var.match_idx.get_index()));
+				current_str.append(" c:");
+				current_str.append(std::to_string(var.copy_idx.get_index()));
+				current_str.push_back('}');
+				print::append_memory_row(store, var.match_idx, content);
+				print::append_memory_row(store, var.copy_idx, content);
 			} break;
 			case Type_T(pattern::_value_proxy): 
 				return;
@@ -1063,36 +1047,41 @@ namespace bmath::intern {
 		} //append_memory_row
 
 		template<typename Store_T, typename TypedIdx_T>
-		std::string to_memory_layout(const Store_T& store, const TypedIdx_T head)
+		std::string to_memory_layout(const Store_T& store, const std::initializer_list<const TypedIdx_T> heads)
 		{
-			std::vector<std::string> elements;
-			elements.reserve(store.size() + 1);
-			for (std::size_t i = 0; i < store.size(); i++) {
-				elements.push_back("");
-				if (i < 10) { //please std::format, i need you :(
-					elements[i] = " ";
-				}
-				elements[i].append(std::to_string(i));
-				elements[i].append(" | ");
-			}
-			print::append_memory_row(store, head, elements);
+			std::vector<std::string> rows(store.size(), "");
 
-			for (const auto i : store.free_slots()) {
-				elements[i].append("-----free slot-----");
-			}		
-
-			for (auto& elem : elements) {
-				elem.push_back('\n');
-			}
-			std::string result("   | head at index: " + std::to_string(head.get_index()) + '\n');
+			std::string result("   | heads at index: ");
 			result.reserve(store.size() * 15);
-			for (auto& elem : elements) {
-				result.append(elem);
+			{
+				const char* separator = "";
+				for (const TypedIdx_T head : heads) {
+					result += std::exchange(separator, ", ");
+					result += std::to_string(head.get_index());
+					print::append_memory_row(store, head, rows);
+				}
+				result += "\n";
+			}
+			for (const auto i : store.free_slots()) {
+				rows[i].append("-----free slot-----");
+			}
+			{
+				int i = 0;
+				for (auto& elem : rows) {
+					if (i < 10) { //please std::format, i need you :(
+						result += " ";
+					}
+					result += std::to_string(i);
+					result += " | ";
+					result += elem;
+					result += "\n";
+					i++;
+				}
 			}
 			return result;
 		} //to_memory_layout
-		template std::string to_memory_layout<Store, TypedIdx>(const Store& store, const TypedIdx head);
-		template std::string to_memory_layout<pattern::PnStore, pattern::PnTypedIdx>(const pattern::PnStore& store, const pattern::PnTypedIdx head);
+		template std::string to_memory_layout<Store, TypedIdx>(const Store& store, const std::initializer_list<const TypedIdx> head);
+		template std::string to_memory_layout<pattern::PnStore, pattern::PnTypedIdx>(const pattern::PnStore& store, const std::initializer_list<const pattern::PnTypedIdx> head);
 
 	} //namespace print
 

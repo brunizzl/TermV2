@@ -169,7 +169,6 @@ namespace bmath::intern {
 		{
 			std::uint32_t match_data_idx; //indexes in MatchData::tree_match_data
 			Restriction restr = Restr::any;
-			std::array<char, 4u> name; //just convinience for debugging, not actually needed, thus this small and crappy
 		};
 
 		//specifies more constraints on a value
@@ -297,9 +296,18 @@ namespace bmath::intern {
 		//having copy_idx and match_idx initialized (thus value_match also bubbles up a bit in term)
 		namespace build_value_match {
 
-			//returns pointer to position in parent of value_match, where value_match is held
-			//assumed head to be passed at reference to its own storage position
-			PnTypedIdx* find_storage(PnStore& store, PnTypedIdx& head, const PnTypedIdx value_match);
+			//returns pointer to position in parent of value_match, where value_match is to be held in future
+			// (currently value_match is at 
+			//assumes head to be passed at reference to its own storage position
+			PnTypedIdx* find_value_match_subtree(PnStore& store, PnTypedIdx& head, const PnTypedIdx value_match);
+
+			void rearrange(PnStore& store, PnTypedIdx& head, const PnTypedIdx value_match);
+
+			struct Equation { PnTypedIdx lhs_head, rhs_head; };
+
+			//reorders lhs and rhs until to_isolate is lhs_head, returns updated lhs_head and rhs_head
+			//(possible other subtrees identical to to_isolate are not considered, thus the name prefix)
+			[[nodiscard]] Equation stupid_solve_for(PnStore& store, Equation eq, const PnTypedIdx to_isolate);
 
 		} //namespace build_value_match
 
@@ -410,21 +418,13 @@ namespace bmath::intern {
 		template<typename Store_T, typename TypedIdx_T>
 		void sort(Store_T& store, const TypedIdx_T ref);
 
-		//counts number of nodes occupied by subtree
+		//counts number of logical nodes of subtree
 		template<typename Store_T, typename TypedIdx_T>
 		std::size_t count(Store_T& store, const TypedIdx_T ref);
 
 		//copies subtree starting at src_ref into dst_store and returns its head
 		template<typename DstTypedIdx_T, typename SrcStore_T, typename DstStore_T, typename SrcTypedIdx_T>
 		[[nodiscard]] DstTypedIdx_T copy(const SrcStore_T& src_store, DstStore_T& dst_store, const SrcTypedIdx_T src_ref);
-
-		template<typename TypedIdx_T>
-		struct Equation { TypedIdx_T lhs_head; TypedIdx_T rhs_head; };
-
-		//reorders lhs and rhs until to_isolate is lhs_head, 
-		//(possible other subtrees identical to to_isolate are not considered, thus the name prefix)
-		template<typename Store_T, typename TypedIdx_T>
-		void stupid_solve_for(Store_T& store, Equation<TypedIdx_T>& equation, const TypedIdx_T to_isolate);
 
 		//returns true iff subtree starting at ref contains to_contain (or is to_contain itself)
 		template<typename Store_T, typename TypedIdx_T>
@@ -435,6 +435,15 @@ namespace bmath::intern {
 
 		//returns TypedIdx() if unsuccsessfull
 		TypedIdx search_variable(const Store& store, const TypedIdx head, std::string_view name);
+
+		//first combines layers, then combines values exact, then sorts
+		//return value is new head
+		template<typename Store_T, typename TypedIdx_T>
+		[[nodiscard]] TypedIdx_T establish_basic_order(Store_T& store, TypedIdx_T head);
+
+		//returns pointer to field of parent of subtree, where subtree is held
+		template<typename Store_T, typename TypedIdx_T>
+		TypedIdx_T* find_subtree_owner(Store_T& store, TypedIdx_T* const head, const TypedIdx_T subtree);
 
 	} //namespace tree
 
@@ -479,17 +488,18 @@ namespace bmath::intern {
 
 		//calls apply with every node (postorder), parameters are (std::uint32_t index, Type_T type), apply returns Res_T
 		//Res_T might have nonstatic member return_early, to indicate if the fold may be stopped early, as the result is already known
-		template<typename Res_T, typename Store_T, typename TypedIdx_T, typename OpFunctor>
-		Res_T simple_fold(Store_T& store, const TypedIdx_T ref, OpFunctor apply);
+		template<typename Res_T, typename Store_T, typename TypedIdx_T, typename Apply>
+		Res_T simple_fold(Store_T& store, const TypedIdx_T ref, Apply apply);
 
 		//this fold differentiates between recursive nodes (Op's, Fn's and ValueMatchVariable) and Leafes (values and variables)
 		//OpAccumulator is constructed before a recursive call is made and consumes each recursive result. It thus needs to at least
-		//  have a Constructor taking as arguments (std::uint32_t index, Type_T type, AccInit init) 
+		//  have a Constructor taking as arguments (TypedIdx_T& ref, AccInit... init) 
 		//  and a consume method taking as single parameter (Res_T elem_res)
 		//  a result method taking no parameters and returning Res_T
-		//leaf_apply has parameters (std::uint32_t index, Type_T type) and returns Res_T.		
-		template<typename Res_T, typename OpAccumulator, typename Store_T, typename TypedIdx_T, typename LeafApply, typename AccInit = int>
-		Res_T tree_fold(Store_T& store, const TypedIdx_T ref, LeafApply leaf_apply, const AccInit init = 0);
+		//leaf_apply has parameters (TypedIdx_T& ref) and returns Res_T.		
+		template<typename Res_T, typename OpAccumulator, typename Store_T, typename TypedIdx_T, typename LeafApply, 
+			typename... AccInit>
+		Res_T tree_fold(Store_T& store, TypedIdx_T* ref, LeafApply leaf_apply, const AccInit... init);
 
 	} //namespace fold
 

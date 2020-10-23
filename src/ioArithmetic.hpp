@@ -118,7 +118,7 @@ namespace bmath::intern {
 		{
 			std::vector<MultiNameLookup> tree_table;
 			std::vector<ValueNameLookup> value_table;
-			bool build_lhs = true; //if false -> build rhs
+			bool build_lhs = true; //false -> currently building rhs
 
 			PnTypedIdx insert_instance(PnStore& store, const ParseView input);
 		};
@@ -145,7 +145,7 @@ namespace bmath::intern {
 		std::string to_pretty_string(const Store& store, const TypedIdx ref, const int parent_infixr = 0);
 
 		template<typename Store_T, typename TypedIdx_T>
-		std::string to_memory_layout(const Store_T& store, const TypedIdx_T head);
+		std::string to_memory_layout(const Store_T& store, const std::initializer_list<const TypedIdx_T> heads);
 
 	} //namespace print
 

@@ -154,15 +154,22 @@ namespace bmath::intern::test {
 	} //arithmetic_term
 
 	void pattern_term() {
-		std::cout << "-------------------------------------------------------------------------------------\n";
 		using namespace bmath::intern::pattern;
-		//std::string s = "a, b | a^2 + 2 a b + b^2 = (a + b)^2";
-		//std::string s = "cos('pi') = -1";
-		std::string s = "a:real, b, c:complex | (a b)^c = a^c b^c";
-		const PnTerm pattern(s);
-		std::cout << "pattern: " << pattern.to_string() << "\n\n";
-		std::cout << "lhs speicher:\n" << pattern.lhs_memory_layout() << "\n\n";
-		std::cout << "rhs speicher:\n" << pattern.rhs_memory_layout() << "\n\n";
+
+		std::vector<std::string> term_names = {
+			"a :any, k :int | a^(2 k + 1) = a a^(2 k)",
+			"a:real, b, c:complex | (a b)^c = a^c b^c",
+			"a, b | a^2 + 2 a b + b^2 = (a + b)^2",
+			"cos('pi') = -1",
+		};
+		for (auto& s : term_names) {
+			std::cout << "-------------------------------------------------------------------------------------\n";
+			std::cout << "baue aus: \"" << s << "\"\n";
+			const PnTerm pattern(s);
+			std::cout << "pattern: " << pattern.to_string() << "\n\n";
+			std::cout << "lhs speicher:\n" << pattern.lhs_memory_layout() << "\n\n";
+			std::cout << "rhs speicher:\n" << pattern.rhs_memory_layout() << "\n\n";
+		}
 	} //pattern_term
 
 	void bit_set()
@@ -207,45 +214,6 @@ namespace bmath::intern::test {
 		}
 	}
 
-	void stupid_solve_for()
-	{
-		std::vector<std::pair<std::string, std::string>> vec = { 
-			{"1-a", "c"}, 
-			{"1+a", "c"}, 
-			{"exp(a)", "c"}, 
-			{"a*4-2", "5"}, 
-			{"a^4*5", "c"} };
-		for (auto& [lhs_str, rhs_str] : vec) {
-			ParseString lhs_parse = lhs_str;
-			ParseString rhs_parse = rhs_str;
-			Store store;
-			tree::Equation<TypedIdx> eq = { build(store, lhs_parse), build(store, rhs_parse) };
-
-			std::string equation_str;
-			print::append_to_string(store, eq.lhs_head, equation_str);
-			equation_str += " = ";
-			print::append_to_string(store, eq.rhs_head, equation_str);
-			std::cout << equation_str << "\n";
-
-			const auto a_idx = tree::search_variable(store, eq.lhs_head, "a");
-			tree::stupid_solve_for(store, eq, a_idx);
-			tree::combine_layers(store, eq.rhs_head);
-			{
-				const OptComplex new_rhs = tree::combine_values_exact(store, eq.rhs_head);
-				if (new_rhs) {
-					tree::free(store, eq.rhs_head);
-					eq.rhs_head = TypedIdx(store.insert(*new_rhs), Type(Leaf::complex));
-				}
-			}
-
-			equation_str.clear();
-			print::append_to_string(store, eq.lhs_head, equation_str);
-			equation_str += " = ";
-			print::append_to_string(store, eq.rhs_head, equation_str);
-			std::cout << equation_str << "\n\n";
-		}
-	}
-
 	void copy()
 	{
 		std::string term_name = "1+2-a*(4+6)^2";
@@ -258,45 +226,7 @@ namespace bmath::intern::test {
 		std::string term_2_str;
 		print::append_to_string(*store, head_2, term_2_str);
 		std::cout << "term_2: " << term_2_str << "\n";
-		std::cout << term_1.to_memory_layout() << "\n";
-		std::cout << print::to_memory_layout(*store, head_2) << "\n";
-	}
-
-	void find_value_match_subtree()
-	{
-		using namespace pattern;
-		std::string s = "a :any, k :int | a^(2 k+1) = a a^(2 k)";
-
-		auto parse_string = ParseString(s);
-		parse_string.allow_implicit_product();
-		parse_string.remove_space();
-		const auto parts = split(parse_string);
-		NameLookupTable table = parse_declarations(parts.declarations);
-		throw_if(table.tree_table.size() > MatchData::max_tree_match_count, "too many tree match variables declared");
-		throw_if(table.value_table.size() > MatchData::max_value_match_count, "too many value match variables declared");
-		PatternBuildFunction build_function = { table };
-
-		PnStore lhs_store;
-		PnTypedIdx lhs_head = build_function(lhs_store, parts.lhs);
-		table.build_lhs = false;
-		PnStore rhs_store;
-		PnTypedIdx rhs_head = build_function(rhs_store, parts.rhs);
-
-		tree::combine_layers(lhs_store, lhs_head);
-		tree::combine_layers(rhs_store, rhs_head);
-		if (const OptComplex lhs_val = tree::combine_values_exact(lhs_store, lhs_head)) {
-			tree::free(lhs_store, lhs_head);
-			lhs_head = PnTypedIdx(lhs_store.insert(*lhs_val), Type(Leaf::complex));
-		}
-		if (const OptComplex rhs_val = tree::combine_values_exact(rhs_store, rhs_head)) {
-			tree::free(rhs_store, rhs_head);
-			rhs_head = PnTypedIdx(rhs_store.insert(*rhs_val), Type(Leaf::complex));
-		}
-		tree::sort(lhs_store, lhs_head);
-		tree::sort(rhs_store, rhs_head);
-
-		std::cout << print::to_memory_layout(lhs_store, lhs_head) << "\n\n";
-		//std::cout << print::to_memory_layout(rhs_store, rhs_head) << "\n\n";
+		std::cout << print::to_memory_layout(*store, { head_1, head_2 }) << "\n";
 	}
 
 } //namespace bmath::intern::test

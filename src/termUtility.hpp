@@ -9,6 +9,7 @@
 #include <type_traits>
 #include <bit>
 #include <complex>
+#include <concepts>
 
 namespace bmath::intern {
 
