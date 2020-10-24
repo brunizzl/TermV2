@@ -563,11 +563,11 @@ namespace bmath::intern {
 					const ParseRestriction restr = form_type(var_view.to_string_view(colon + 1u));
 					throw_if<ParseFailure>(restr == Restr::unknown, var_view.offset + colon + 1u, "unknown restriction");
 					if (restr.is<Form>()) {
-						result.value_table.emplace_back(var_view.to_string_view(0, colon), restr.operator bmath::intern::pattern::Form());
+						result.value_table.emplace_back(var_view.to_string_view(0, colon), restr.to<Form>());
 					}
 					else {
 						assert(restr.is<Restriction>());
-						result.tree_table.emplace_back(var_view.to_string_view(0, colon), restr.operator bmath::intern::pattern::Restriction());
+						result.tree_table.emplace_back(var_view.to_string_view(0, colon), restr.to<Restriction>());
 					}
 				}
 				else {
@@ -925,7 +925,7 @@ namespace bmath::intern {
 		} //to_pretty_string
 
 		template<typename Store_T, typename TypedIdx_T>
-		void append_memory_row(const Store_T& store, const TypedIdx_T ref, std::vector<std::string>& content)
+		void append_memory_row(const Store_T& store, const TypedIdx_T ref, std::vector<std::string>& rows)
 		{
 			using Type_T = TypedIdx_T::Enum_T;
 			using TypedIdxSLC_T = TermSLC<std::uint32_t, TypedIdx_T, 3>;
@@ -933,31 +933,31 @@ namespace bmath::intern {
 
 			const auto [index, type] = ref.split();
 
-			const auto show_typedidx_col_nodes = [&store, &content, index](std::uint32_t idx, bool show_first) {
+			const auto show_typedidx_col_nodes = [&store, &rows, index](std::uint32_t idx, bool show_first) {
 				const TypedIdxSLC_T* col = &store.at(idx).index_slc;
 				if (show_first) {
-					content[idx].append("(SLC node part of index " + std::to_string(index) + ')');
+					rows[idx].append("(SLC node part of index " + std::to_string(index) + ')');
 				}
 				while (col->next_idx != TypedIdxSLC_T::null_index) {
-					content[col->next_idx].append("(SLC node part of index " + std::to_string(index) + ')');
+					rows[col->next_idx].append("(SLC node part of index " + std::to_string(index) + ')');
 					col = &store.at(col->next_idx).index_slc;
 				}
 			};
-			const auto show_string_nodes = [&store, &content, index](std::uint32_t idx, bool show_first) {
+			const auto show_string_nodes = [&store, &rows, index](std::uint32_t idx, bool show_first) {
 				const TermString128* str = &store.at(idx).string;
 				if (show_first) {
-					content[idx].append("(str node part of index " + std::to_string(index) + ": \""
+					rows[idx].append("(str node part of index " + std::to_string(index) + ": \""
 						+ std::string(str->values, TermString128::array_size) + "\")");
 				}
 				while (str->next_idx != TermString128::null_index) {
 					const std::size_t str_idx = str->next_idx;
 					str = &store.at(str->next_idx).string;
-					content[str_idx].append("(str node part of index " + std::to_string(index) + ": \""
+					rows[str_idx].append("(str node part of index " + std::to_string(index) + ": \""
 						+ std::string(str->values, TermString128::array_size) + "\")");
 				}
 			};
 
-			std::string& current_str = content[index];
+			std::string& current_str = rows[index];
 			switch (type) {
 			case Type_T(Op::sum): {
 				current_str.append("sum        : {");
@@ -967,7 +967,7 @@ namespace bmath::intern {
 						current_str.append(", ");
 					}
 					current_str.append(std::to_string(elem.get_index()));
-					print::append_memory_row(store, elem, content);
+					print::append_memory_row(store, elem, rows);
 				}
 				current_str.push_back('}');
 				show_typedidx_col_nodes(index, false);
@@ -980,7 +980,7 @@ namespace bmath::intern {
 						current_str.append(", ");
 					}
 					current_str.append(std::to_string(elem.get_index()));
-					print::append_memory_row(store, elem, content);
+					print::append_memory_row(store, elem, rows);
 				}
 				current_str.push_back('}');
 				show_typedidx_col_nodes(index, false);
@@ -994,7 +994,7 @@ namespace bmath::intern {
 						current_str.append(", ");
 					}
 					current_str.append(std::to_string(param.get_index()));
-					print::append_memory_row(store, param, content);
+					print::append_memory_row(store, param, rows);
 				}
 				current_str.push_back('}');
 				show_typedidx_col_nodes(generic_function.params_idx, true);
@@ -1012,7 +1012,7 @@ namespace bmath::intern {
 						current_str.append(", ");
 					}
 					current_str.append(std::to_string(param.get_index()));
-					print::append_memory_row(store, param, content);
+					print::append_memory_row(store, param, rows);
 				}
 				current_str.push_back('}');
 			} break;
@@ -1028,14 +1028,14 @@ namespace bmath::intern {
 				current_str.append("tree_match : ");
 			} break;
 			case Type_T(pattern::_value_match): if constexpr (pattern) {
-				current_str.append("value_match: {m:");
 				const pattern::ValueMatchVariable& var = store.at(index).value_match;
+				current_str.append("value_match: {m:");
 				current_str.append(std::to_string(var.match_idx.get_index()));
 				current_str.append(" c:");
 				current_str.append(std::to_string(var.copy_idx.get_index()));
 				current_str.push_back('}');
-				print::append_memory_row(store, var.match_idx, content);
-				print::append_memory_row(store, var.copy_idx, content);
+				print::append_memory_row(store, var.match_idx, rows);
+				print::append_memory_row(store, var.copy_idx, rows);
 			} break;
 			case Type_T(pattern::_value_proxy): 
 				return;

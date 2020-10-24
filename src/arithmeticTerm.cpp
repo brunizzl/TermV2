@@ -273,10 +273,10 @@ namespace bmath::intern {
 
 			for (const auto& value_match : table.value_table) {
 				for (const auto lhs_instance : value_match.lhs_instances) {
-					build_value_match::rearrange(this->lhs_store, this->lhs_head, lhs_instance);
+					pn_tree::rearrange_value_match(this->lhs_store, this->lhs_head, lhs_instance);
 				}
 				for (const auto rhs_instance : value_match.rhs_instances) {
-					build_value_match::rearrange(this->rhs_store, this->rhs_head, rhs_instance);
+					pn_tree::rearrange_value_match(this->rhs_store, this->rhs_head, rhs_instance);
 				}
 			}
 		}
@@ -300,7 +300,7 @@ namespace bmath::intern {
 			return print::to_memory_layout(this->rhs_store, { this->rhs_head });
 		}
 
-		namespace build_value_match {
+		namespace pn_tree {
 
 			PnTypedIdx* find_value_match_subtree(PnStore& store, PnTypedIdx& head, const PnTypedIdx value_match)
 			{
@@ -322,7 +322,7 @@ namespace bmath::intern {
 					{
 						MatchTraits acc;
 
-						constexpr OpAccumulator(PnTypedIdx& ref, const PnTypedIdx value_match, const PnTypedIdx value_proxy) 
+						constexpr OpAccumulator(const PnTypedIdx ref, const PnTypedIdx value_match, const PnTypedIdx value_proxy) 
 							:acc({ .has_match = false, .computable = true })
 						{
 							const PnType type = ref.get_type();
@@ -343,7 +343,7 @@ namespace bmath::intern {
 								break;
 							}
 							}
-						}
+						} //ctor
 
 						constexpr void consume(const MatchTraits elem_res) { this->acc.combine(elem_res); }
 						constexpr MatchTraits result() const noexcept { return this->acc; }
@@ -356,7 +356,7 @@ namespace bmath::intern {
 					const ValueMatchVariable& var = store.at(value_match.get_index()).value_match;
 					assert(var.copy_idx == var.match_idx);
 
-					return fold::tree_fold<MatchTraits, OpAccumulator>(store, &ref, leaf_apply, value_match, var.copy_idx);
+					return fold::tree_fold<MatchTraits, OpAccumulator>(store, ref, leaf_apply, value_match, var.copy_idx);
 				}; //classify_subterm
 
 				{
@@ -411,7 +411,7 @@ namespace bmath::intern {
 				return nullptr;
 			} //find_value_match_subtree
 
-			void rearrange(PnStore& store, PnTypedIdx& head, const PnTypedIdx value_match)
+			void rearrange_value_match(PnStore& store, PnTypedIdx& head, const PnTypedIdx value_match)
 			{
 				PnTypedIdx* const value_match_subtree = find_value_match_subtree(store, head, value_match);
 				PnTypedIdx* const value_match_storage = tree::find_subtree_owner(store, &head, value_match);
@@ -433,7 +433,7 @@ namespace bmath::intern {
 					var->match_idx = tree::establish_basic_order(store, var->match_idx);
 				}
 
-			} //rearrange
+			} //rearrange_value_match
 
 			Equation stupid_solve_for(PnStore& store, Equation eq, const PnTypedIdx to_isolate)
 			{
@@ -505,7 +505,7 @@ namespace bmath::intern {
 				return eq;
 			} //stupid_solve_for
 
-		} //namespace build_value_match
+		} //namespace pn_tree
 		
 	} //namespace pattern
 
@@ -1045,9 +1045,8 @@ namespace bmath::intern {
 				auto result() noexcept { return this->acc; }
 			};
 
-			return fold::tree_fold<std::size_t, OpAccumulator>(store, &ref, [](auto) { return 1u; });
+			return fold::tree_fold<std::size_t, OpAccumulator>(store, ref, [](auto) { return 1u; });
 		} //count
-
 		template std::size_t count<Store, TypedIdx>(Store& store, const TypedIdx ref);
 
 		template<typename Store_T, typename TypedIdx_T>
@@ -1295,44 +1294,44 @@ namespace bmath::intern {
 		} //simple_fold
 
 		template<typename Res_T, typename OpAccumulator, typename Store_T, typename TypedIdx_T, typename LeafApply, typename... AccInit>
-		Res_T tree_fold(Store_T& store, TypedIdx_T* ref, LeafApply leaf_apply, const AccInit... init)
+		Res_T tree_fold(Store_T& store, const TypedIdx_T ref, LeafApply leaf_apply, const AccInit... init)
 		{
 			using Type_T = typename TypedIdx_T::Enum_T;
 			constexpr bool pattern = std::is_same_v<Type_T, pattern::PnType>;
 
-			const auto [index, type] = ref->split();
+			const auto [index, type] = ref.split();
 			switch (type) {
 			case Type_T(Op::sum): 
 				[[fallthrough]];
 			case Type_T(Op::product): {
-				OpAccumulator acc(*ref, init...);
-				for (auto& elem : vc::range(store, index)) {
-					acc.consume(fold::tree_fold<Res_T, OpAccumulator>(store, &elem, leaf_apply, init...));
+				OpAccumulator acc(ref, init...);
+				for (const auto elem : vc::range(store, index)) {
+					acc.consume(fold::tree_fold<Res_T, OpAccumulator>(store, elem, leaf_apply, init...));
 				}
 				return acc.result();
 			} 
 			case Type_T(Op::generic_function): {
-				OpAccumulator acc(*ref, init...);
+				OpAccumulator acc(ref, init...);
 				auto& generic_function = store.at(index).generic_function; 
-				for (auto& param : fn::range(store, generic_function)) {
-					acc.consume(fold::tree_fold<Res_T, OpAccumulator>(store, &param, leaf_apply, init...));
+				for (const auto param : fn::range(store, generic_function)) {
+					acc.consume(fold::tree_fold<Res_T, OpAccumulator>(store, param, leaf_apply, init...));
 				}
 				return acc.result();
 			} 
 			default: {
 				assert(type.is<Fn>());
-				OpAccumulator acc(*ref, init...);
+				OpAccumulator acc(ref, init...);
 				auto& params = store.at(index).fn_params;
-				for (auto& param : fn::range(params, type)) {
-					acc.consume(fold::tree_fold<Res_T, OpAccumulator>(store, &param, leaf_apply, init...));
+				for (const auto param : fn::range(params, type)) {
+					acc.consume(fold::tree_fold<Res_T, OpAccumulator>(store, param, leaf_apply, init...));
 				}
 				return acc.result();		
 			}
 			case Type_T(pattern::_value_match): if constexpr (pattern) {
-				OpAccumulator acc(*ref, init...);
+				OpAccumulator acc(ref, init...);
 				auto& var = store.at(index).value_match;
-				acc.consume(fold::tree_fold<Res_T, OpAccumulator>(store, &var.match_idx, leaf_apply, init...));
-				acc.consume(fold::tree_fold<Res_T, OpAccumulator>(store, &var.copy_idx, leaf_apply, init...));
+				acc.consume(fold::tree_fold<Res_T, OpAccumulator>(store, var.match_idx, leaf_apply, init...));
+				acc.consume(fold::tree_fold<Res_T, OpAccumulator>(store, var.copy_idx, leaf_apply, init...));
 				return acc.result();
 			} [[fallthrough]];
 			case Type_T(Leaf::variable): 
@@ -1342,7 +1341,7 @@ namespace bmath::intern {
 			case Type_T(pattern::_tree_match): 
 				[[fallthrough]];
 			case Type_T(pattern::_value_proxy):
-				return leaf_apply(*ref);
+				return leaf_apply(ref);
 			}
 		} //tree_fold
 

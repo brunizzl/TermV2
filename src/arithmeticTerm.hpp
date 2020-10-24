@@ -186,7 +186,6 @@ namespace bmath::intern {
 			COUNT
 		};
 
-		//only conciders the forms relevant for an actual number
 		bool has_form(const Complex& nr, const Form form);
 
 		//in a valid pattern, all ValueMatchVariables of same name (thrown away after building) 
@@ -292,24 +291,26 @@ namespace bmath::intern {
 			std::string rhs_memory_layout() const;
 		};
 
-		//these functions provide utitity to change value_match from its state holding two value_proxy directly to actually
-		//having copy_idx and match_idx initialized (thus value_match also bubbles up a bit in term)
-		namespace build_value_match {
+		//algorithms specific to patterns
+		namespace pn_tree {
 
 			//returns pointer to position in parent of value_match, where value_match is to be held in future
-			// (currently value_match is at 
+			// (currently value_match is only somewhere in the subtree that it will own, not nesseccarily at the root.
 			//assumes head to be passed at reference to its own storage position
 			PnTypedIdx* find_value_match_subtree(PnStore& store, PnTypedIdx& head, const PnTypedIdx value_match);
 
-			void rearrange(PnStore& store, PnTypedIdx& head, const PnTypedIdx value_match);
+			//changes value_match from its state holding two value_proxy directly to actually
+			//having copy_idx and match_idx initialized (thus value_match also bubbles up a bit in term)
+			void rearrange_value_match(PnStore& store, PnTypedIdx& head, const PnTypedIdx value_match);
 
 			struct Equation { PnTypedIdx lhs_head, rhs_head; };
 
 			//reorders lhs and rhs until to_isolate is lhs_head, returns updated lhs_head and rhs_head
 			//(possible other subtrees identical to to_isolate are not considered, thus the name prefix)
+			//currently only used in rearrange_value_match, thus quite specialized
 			[[nodiscard]] Equation stupid_solve_for(PnStore& store, Equation eq, const PnTypedIdx to_isolate);
 
-		} //namespace build_value_match
+		} //namespace pn_tree
 
 	} //namespace pattern
 
@@ -499,7 +500,7 @@ namespace bmath::intern {
 		//leaf_apply has parameters (TypedIdx_T& ref) and returns Res_T.		
 		template<typename Res_T, typename OpAccumulator, typename Store_T, typename TypedIdx_T, typename LeafApply, 
 			typename... AccInit>
-		Res_T tree_fold(Store_T& store, TypedIdx_T* ref, LeafApply leaf_apply, const AccInit... init);
+		Res_T tree_fold(Store_T& store, const TypedIdx_T ref, LeafApply leaf_apply, const AccInit... init);
 
 	} //namespace fold
 
