@@ -446,6 +446,12 @@ namespace bmath::intern {
 		template<typename Store_T, typename TypedIdx_T>
 		TypedIdx_T* find_subtree_owner(Store_T& store, TypedIdx_T* const head, const TypedIdx_T subtree);
 
+		//compares term starting at head in store with pattern starting at pn_head in pn_store
+		//if match is succsessfull, match_data stores what pattern's match variables matched and true is returned.
+		//if match was not succsessfull, match_data is NOT reset and false is returned
+		bool match(const Store& store, const pattern::PnStore& pn_store, const TypedIdx head, 
+			const pattern::PnTypedIdx pn_head, pattern::MatchData& match_data);
+
 	} //namespace tree
 
 	namespace fold {

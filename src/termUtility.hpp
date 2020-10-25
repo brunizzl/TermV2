@@ -258,8 +258,8 @@ namespace bmath::intern {
 		explicit constexpr SumEnum(const unsigned u) noexcept :value(static_cast<Value>(u)) {}
 		explicit constexpr operator unsigned() const noexcept { return static_cast<unsigned>(this->value); }
 
-		template<typename E> explicit constexpr operator E() const noexcept 
-		{ static_assert(false, "method operator E(): requested type E not part of SumEnum"); return E{}; }
+		template<typename E> constexpr E to() const noexcept
+		{ static_assert(false, "method to<E>(): requested type E not part of SumEnum"); return E(-1); }
 
 		template<typename E> constexpr bool is() const noexcept
 		{ static_assert(false, "method is<E>(): requested type E not part of SumEnum"); return false; }
@@ -268,7 +268,9 @@ namespace bmath::intern {
 	template<typename Enum, typename... TailEnums>
 	class [[nodiscard]] SumEnum<Enum, TailEnums...> :public SumEnum<TailEnums...>
 	{
-		static_assert(!std::is_integral_v<Enum>, "only expect actual enum or SumEnum /WrapEnum in template parameters");
+		template<typename E, typename = void> struct HasCOUNT :std::false_type {};
+		template<typename E> struct HasCOUNT<E, std::void_t<decltype(Enum::COUNT)>> :std::true_type {};
+		static_assert(HasCOUNT<Enum>::value, "Enum part of SumEnum must name last member COUNT (or be wrapped in WrapEnum)");
 
 		using Base = SumEnum<TailEnums...>;
 		static constexpr unsigned this_offset = Base::next_offset;
@@ -283,8 +285,6 @@ namespace bmath::intern {
 
 		template<typename E, std::enable_if_t<std::is_convertible_v<E, Enum> && !std::is_same_v<E, Enum>, void*> = nullptr>
 		constexpr SumEnum(const E e) noexcept : Base(unsigned(Enum(e)) + this_offset) {} //Enum itself is SumEnum<...> and can be build from E
-
-		explicit constexpr operator Enum() const noexcept { return static_cast<Enum>(unsigned(this->value) - this_offset); }
 
 
 		template<typename E, std::enable_if_t<std::is_convertible_v<E, Enum> && !std::is_same_v<E, Enum>, void*> = nullptr>
@@ -304,7 +304,7 @@ namespace bmath::intern {
 		template<typename E, std::enable_if_t<std::is_same_v<E, Enum>, void*> = nullptr>
 		constexpr E to() const noexcept //E is same as Enum -> we have an operator for that
 		{
-			return this->operator Enum(); 
+			return static_cast<Enum>(unsigned(this->value) - this_offset);
 		}
 
 
@@ -319,7 +319,7 @@ namespace bmath::intern {
 		constexpr bool is() const noexcept //assumes Enum itself is SumEnum<...> and can be build from E -> hand over to Enum
 		{
 			static_assert(!std::is_integral_v<E>);
-			return this->operator Enum().is<E>(); 
+			return this->to<Enum>().is<E>(); 
 		}
 
 		template<typename E, std::enable_if_t<std::is_same_v<E, Enum>, void*> = nullptr> 
@@ -358,6 +358,22 @@ namespace bmath::intern {
 			rhs++;
 		}
 		return *lhs <=> *rhs;
+	}
+
+	constexpr std::strong_ordering compare_complex(const std::complex<double>& lhs, const std::complex<double>& rhs)
+	{
+		static_assert(sizeof(double) == sizeof(std::uint64_t), "bit_cast may cast to something of doubles size.");
+		//with not actually comparing the doubles as such, strong ordering is possible
+		const auto lhs_re = std::bit_cast<std::uint64_t>(lhs.real()); 
+		const auto rhs_re = std::bit_cast<std::uint64_t>(rhs.real());
+		const auto lhs_im = std::bit_cast<std::uint64_t>(lhs.imag());
+		const auto rhs_im = std::bit_cast<std::uint64_t>(rhs.imag());
+		if (lhs_re != rhs_re) {
+			return lhs_re <=> rhs_re; 
+		}
+		else {
+			return lhs_im <=> rhs_im; 
+		}
 	}
 
 

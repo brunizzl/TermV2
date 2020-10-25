@@ -284,9 +284,9 @@ namespace bmath::intern {
 		std::string PnTerm::to_string() const
 		{
 			std::string str;
-			bmath::intern::print::append_to_string(this->lhs_store, this->lhs_head, str);
+			print::append_to_string(this->lhs_store, this->lhs_head, str);
 			str.append(" = ");
-			bmath::intern::print::append_to_string(this->rhs_store, this->rhs_head, str);
+			print::append_to_string(this->rhs_store, this->rhs_head, str);
 			return str;
 		}
 
@@ -973,25 +973,13 @@ namespace bmath::intern {
 			case Type_T(Leaf::complex): {
 				const Complex& complex_1 = store_1.at(index_1).complex;
 				const Complex& complex_2 = store_2.at(index_2).complex;
-				static_assert(sizeof(double) * 8 == 64, "bit_cast may cast to something of doubles size.");
-				const auto real_1 = std::bit_cast<std::uint64_t>(complex_1.real()); //with not actually comparing the doubles as such, strong ordering is possible
-				const auto real_2 = std::bit_cast<std::uint64_t>(complex_2.real());
-				const auto imag_1 = std::bit_cast<std::uint64_t>(complex_1.imag());
-				const auto imag_2 = std::bit_cast<std::uint64_t>(complex_2.imag());
-				if (real_1 != real_2) {
-					return real_2 <=> real_1; //reverse order, as to_pretty_string reverses again
-				}
-				if (imag_1 != imag_2) {
-					return imag_2 <=> imag_1; //reverse order, as to_pretty_string reverses again
-				}
-				return std::strong_ordering::equal;
+				return compare_complex(complex_2, complex_1); //reverse order, as to_pretty_string reverses again
 			} break;
 			case Type_T(pattern::_tree_match): if constexpr (pattern) {
 				const pattern::TreeMatchVariable& var_1 = store_1.at(index_1).tree_match;
 				const pattern::TreeMatchVariable& var_2 = store_2.at(index_2).tree_match;
 				return var_1.match_data_idx <=> var_2.match_data_idx; //reverse to make pretty_string prettier
-
-			} assert(false); return std::strong_ordering::equal;
+			} break;
 			case Type_T(pattern::_value_match): if constexpr (pattern) {
 				const pattern::ValueMatchVariable& var_1 = store_1.at(index_1).value_match;
 				const pattern::ValueMatchVariable& var_2 = store_2.at(index_2).value_match;
@@ -1004,14 +992,14 @@ namespace bmath::intern {
 				if (const auto cmp = tree::compare(store_1, store_2, var_1.match_idx, var_2.match_idx); cmp != std::strong_ordering::equal) {
 					return cmp;
 				}
-				if (const auto cmp = tree::compare(store_1, store_2, var_1.copy_idx, var_2.copy_idx); cmp != std::strong_ordering::equal) {
-					return cmp;
-				}
-				return std::strong_ordering::equal;
-			} assert(false); return std::strong_ordering::equal;
-			case Type_T(pattern::_value_proxy):
+				return tree::compare(store_1, store_2, var_1.copy_idx, var_2.copy_idx);
+			} break;
+			case Type_T(pattern::_value_proxy): if constexpr (pattern) {
 				return index_1 <=> index_2;
+			} break;
 			}
+			assert(false); 
+			return std::strong_ordering::equal;
 		} //compare
 		
 		template<typename Store_T, typename TypedIdx_T>
@@ -1236,6 +1224,63 @@ namespace bmath::intern {
 			};
 			return *fold::simple_fold<Res>(store, head, test_for_name);
 		} //search_variable
+
+		bool match(const Store& store, const pattern::PnStore& pn_store, const TypedIdx head, const pattern::PnTypedIdx pn_head, pattern::MatchData& match_data)
+		{
+			
+			const auto [index, type] = head.split();
+			const auto [pn_index, pn_type] = pn_head.split();
+
+			if (pn_type.is<Type>()) {
+				if (type != pn_type) [[likely]] {
+					return false;
+				}
+				else {
+					switch (type) {
+					case Type(Op::sum): {
+
+						for (const auto summand : vc::range(store, index)) {
+						}
+					} break;
+					case Type(Op::product): {
+						for (const auto factor : vc::range(store, index)) {
+						}
+						assert(false);
+					} break;
+					case Type(Op::generic_function): {
+						const GenericFunction& generic_function = store.at(index).generic_function;
+						for (const auto param : fn::range(store, generic_function)) {
+						}
+						assert(false);
+					} break;
+					default: {
+						assert(type.is<Fn>()); //if this assert hits, the switch above needs more cases.
+						const auto& params = store.at(index).fn_params;
+						const auto& pn_params = pn_store.at(pn_index).fn_params;
+						auto range = fn::range(params, type);
+						auto pn_range = fn::range(pn_params, pn_type);
+						auto iter = range.begin();
+						auto pn_iter = pn_range.begin();
+						for (; iter != range.end(); ++iter, ++pn_iter) { //iter and pn_iter both go over same number of params
+							if (!tree::match(store, pn_store, *iter, *pn_iter, match_data)) {
+								return false;
+							}
+						}
+						return true;
+					} break;
+					case Type(Leaf::variable):
+						return string_compare(store, pn_store, index, pn_index) == std::strong_ordering::equal;
+					case Type(Leaf::complex): {
+						const Complex& complex = store.at(index).complex;
+						const Complex& pn_complex = pn_store.at(pn_index).complex;
+						return compare_complex(complex, pn_complex) == std::strong_ordering::equal;
+					} break;
+					}
+				}
+			}
+			return false;
+			
+		} //match
 
 	} //namespace tree
 
