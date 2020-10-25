@@ -15,7 +15,8 @@
 #include "ioArithmetic.hpp"
 
 /*
-	void prototype(const Store & store, const TypedIdx ref)
+	template<typename Union_T, typename Type_T>
+	void prototype(const BasicRef<Union_T,Type_T> ref)
 	{
 		using TypedIdx_T = BasicTypedIdx<Type_T>;
 		using TypedIdxSLC_T = TermSLC<std::uint32_t, TypedIdx_T, 3>;
@@ -561,8 +562,7 @@ namespace bmath::intern {
 			} break;
 			default: {
 				assert(ref.type.is<Fn>());
-				const FnParams<TypedIdx_T>& params = *ref;
-				for (const TypedIdx_T param : fn::range(params, ref.type)) {
+				for (const TypedIdx_T param : fn::range(ref->fn_params, ref.type)) {
 					tree::free(ref.new_at(param));
 				}
 				ref.free();

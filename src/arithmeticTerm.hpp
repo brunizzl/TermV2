@@ -123,7 +123,7 @@ namespace bmath::intern {
 	using Store = BasicStore<TypesUnion>;
 
 
-	using MutRef = BasicRef<TypesUnion, Type, false>;
+	using MutRef = BasicMutRef<TypesUnion, Type>;
 	using Ref = BasicRef<TypesUnion, Type>;
 
 
@@ -257,7 +257,7 @@ namespace bmath::intern {
 
 		using PnStore = BasicStore<PnTypesUnion>;
 
-		using PnMutRef = BasicRef<PnTypesUnion, PnType, false>;
+		using PnMutRef = BasicMutRef<PnTypesUnion, PnType>;
 		using PnRef = BasicRef<PnTypesUnion, PnType>;
 
 		//all MatchVariables of same name in pattern (e.g. "a" in pattern "a*b+a" share the same SharedTreeDatum to know 
