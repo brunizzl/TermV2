@@ -644,7 +644,7 @@ namespace bmath::intern {
 		} //combine_layers
 
 		template<typename Union_T, typename TypedIdx_T>
-		OptComplex combine_values_inexact(TermStore<Union_T>& store, const TypedIdx_T ref)
+		OptComplex combine_values_inexact(BasicStore<Union_T>& store, const TypedIdx_T ref)
 		{
 			using Type_T = TypedIdx_T::Enum_T;
 			using TypedIdxSLC_T = TermSLC<std::uint32_t, TypedIdx_T, 3>;
@@ -742,7 +742,7 @@ namespace bmath::intern {
 		} //combine_values_inexact
 
 		template<typename Union_T, typename TypedIdx_T>
-		OptComplex combine_values_exact(TermStore<Union_T>& store, const TypedIdx_T ref)
+		OptComplex combine_values_exact(BasicStore<Union_T>& store, const TypedIdx_T ref)
 		{
 			using Type_T = TypedIdx_T::Enum_T;
 			using TypedIdxSLC_T = TermSLC<std::uint32_t, TypedIdx_T, 3u>;
@@ -833,7 +833,7 @@ namespace bmath::intern {
 					}
 					if (*result_divisor != 1.0) {
 						const auto new_divisor = TypedIdx_T(store.insert(*result_divisor), Type(Leaf::complex));
-						const auto new_pow = build_inverted<TermStore<Union_T>, TypedIdx_T>(store, new_divisor);
+						const auto new_pow = build_inverted<BasicStore<Union_T>, TypedIdx_T>(store, new_divisor);
 						TypedIdxSLC_T::insert_new(store, index, new_pow);
 					}
 				}
@@ -1037,7 +1037,7 @@ namespace bmath::intern {
 		template std::size_t count<Store, TypedIdx>(Store& store, const TypedIdx ref);
 
 		template<typename Union_T, typename TypedIdx_T>
-		TypedIdx_T copy(const TermStore<Union_T>& src_store, TermStore<Union_T>& dst_store, const TypedIdx_T src_ref)
+		TypedIdx_T copy(const BasicStore<Union_T>& src_store, BasicStore<Union_T>& dst_store, const TypedIdx_T src_ref)
 		{
 			using Type_T = TypedIdx_T::Enum_T;
 			using TypedIdxSLC_T = TermSLC<std::uint32_t, TypedIdx_T, 3>;
@@ -1124,7 +1124,7 @@ namespace bmath::intern {
 		} //contains
 
 		template<typename Union_T, typename TypedIdx_T>
-		TypedIdx_T establish_basic_order(TermStore<Union_T>& store, TypedIdx_T head)
+		TypedIdx_T establish_basic_order(BasicStore<Union_T>& store, TypedIdx_T head)
 		{
 			using Type_T = TypedIdx_T::Enum_T;
 			if (head.get_type() != Leaf::complex) {

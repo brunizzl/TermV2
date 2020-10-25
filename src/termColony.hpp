@@ -15,7 +15,7 @@ namespace bmath::intern {
 
 	//single linked colony is similar to a single linked list, but each node holds a whole array containing ArraySize Value_T,
 	//not only a single Value_T (as an ordinary list would). TermSLC directly represents the node, there is no extra head or management.
-	//TermSLC is build to reside inside a TermStore, thus it works with TypedIdx_T to access later nodes, not with pointers.
+	//TermSLC is build to reside inside a BasicStore, thus it works with TypedIdx_T to access later nodes, not with pointers.
 	template <typename Index_T, typename Value_T, std::size_t ArraySize>
 	struct [[nodiscard]] TermSLC
 	{
@@ -23,11 +23,11 @@ namespace bmath::intern {
 		static_assert(std::is_trivially_destructible_v<Value_T>);
 		static_assert(std::is_trivially_copyable_v<Value_T>);
 
-		static constexpr Index_T null_index = Index_T();	//assumed to hold a value invalid as an actual index in a TermStore
+		static constexpr Index_T null_index = Index_T();	//assumed to hold a value invalid as an actual index in a BasicStore
 		static constexpr Value_T null_value = Value_T();
 		static constexpr std::size_t array_size = ArraySize; //make visible to outside
 
-		Index_T next_idx;	//index of next SLC block in TermStore
+		Index_T next_idx;	//index of next SLC block in BasicStore
 		Value_T values[ArraySize];
 
 		constexpr TermSLC(const Value_T fst_elem = null_value) noexcept :next_idx(null_index)
@@ -60,7 +60,7 @@ namespace bmath::intern {
 
 		//also allows SLC::null_index to be passed in
 		template<typename Union_T>
-		static void free_slc(TermStore<Union_T>& store, const Index_T slc_idx)
+		static void free_slc(BasicStore<Union_T>& store, const Index_T slc_idx)
 		{
 			SLCRef<Union_T> ref = SLCRef<Union_T>(store, slc_idx);
 			Index_T last_idx;
@@ -74,7 +74,7 @@ namespace bmath::intern {
 		//returns position of node where insert happened.
 		//this allows easy insertion of n elements in O(n), instead of O(n^2)
 		template<typename Union_T>
-		static std::uint32_t insert_new(TermStore<Union_T>& store, const std::uint32_t slc_idx, Value_T elem)
+		static std::uint32_t insert_new(BasicStore<Union_T>& store, const std::uint32_t slc_idx, Value_T elem)
 		{
 			auto ref = SLCRef<Union_T>(store, slc_idx);
 			while (true) {
@@ -98,7 +98,7 @@ namespace bmath::intern {
 		//returns position of previously last node
 		//this allows easy appending of n slcs of length O(1) in O(n), instead of O(n^2)
 		template<typename Union_T>
-		[[nodiscard]] static std::size_t append(TermStore<Union_T>& store, const Index_T this_idx, const Index_T append_idx)
+		[[nodiscard]] static std::size_t append(BasicStore<Union_T>& store, const Index_T this_idx, const Index_T append_idx)
 		{
 			static_assert(!std::is_same_v<TermSLC, TermString128>, "append is not meant for strings");
 			auto ref = SLCRef<Union_T>(store, this_idx);
@@ -114,7 +114,7 @@ namespace bmath::intern {
 		template<typename Union_T, bool Const = false>
 		struct SLCRef
 		{
-			using Store_T = std::conditional_t<Const, const TermStore<Union_T>, TermStore<Union_T>>;
+			using Store_T = std::conditional_t<Const, const BasicStore<Union_T>, BasicStore<Union_T>>;
 			using SLC_T = std::conditional_t<Const, const TermSLC, TermSLC>;
 
 			Store_T& store;
@@ -216,7 +216,7 @@ namespace bmath::intern {
 		}; //struct SLCRef
 
 		template<typename Union_T, typename Compare>
-		static void sort(TermStore<Union_T>& store, const Index_T slc_idx, Compare compare) noexcept
+		static void sort(BasicStore<Union_T>& store, const Index_T slc_idx, Compare compare) noexcept
 		{
 			StupidBufferVector<Value_T, 16> all_values;
 			SLCRef<Union_T> range = SLCRef<Union_T>(store, slc_idx);
@@ -243,7 +243,7 @@ namespace bmath::intern {
 
 		//O(n) operation, use with care.
 		template<typename Union_T>
-		static std::size_t slow_size(const TermStore<Union_T>& store, const Index_T slc_idx)
+		static std::size_t slow_size(const BasicStore<Union_T>& store, const Index_T slc_idx)
 		{
 			std::size_t result = 0;
 			for (auto&& : SLCRef<Union_T, true>(store, slc_idx)) {
@@ -259,7 +259,7 @@ namespace bmath::intern {
 	static_assert(sizeof(TermString128) * 8 == 128);
 
 	template<typename Union_T>
-	[[nodiscard]] std::size_t insert_string(TermStore<Union_T>& store, std::string_view str)
+	[[nodiscard]] std::size_t insert_string(BasicStore<Union_T>& store, std::string_view str)
 	{
 		std::uint32_t prev_inserted_at = TermString128::null_index;
 		{
@@ -282,7 +282,7 @@ namespace bmath::intern {
 	} //insert_string
 
 	template<typename Union_T>
-	void read(const TermStore<Union_T>& store, const std::size_t source_idx, std::string& dest)
+	void read(const BasicStore<Union_T>& store, const std::size_t source_idx, std::string& dest)
 	{
 		auto ref = TermString128::SLCRef<Union_T, true>(store, source_idx);
 		while (ref->next_idx != TermString128::null_index) {
@@ -298,8 +298,8 @@ namespace bmath::intern {
 	} //read
 
 	template<typename Union_T1, typename Union_T2>
-	[[nodiscard]] std::strong_ordering string_compare(const TermStore<Union_T1>& store_1, 
-		const TermStore<Union_T2>& store_2, const std::uint32_t idx_1, const std::uint32_t idx_2)
+	[[nodiscard]] std::strong_ordering string_compare(const BasicStore<Union_T1>& store_1, 
+		const BasicStore<Union_T2>& store_2, const std::uint32_t idx_1, const std::uint32_t idx_2)
 	{
 		auto ref_1 = TermString128::SLCRef<Union_T1, true>(store_1, idx_1);
 		auto ref_2 = TermString128::SLCRef<Union_T2, true>(store_2, idx_2);
@@ -329,7 +329,7 @@ namespace bmath::intern {
 	}
 
 	template<typename Union_T>
-	[[nodiscard]] std::strong_ordering string_compare(const TermStore<Union_T>& store,
+	[[nodiscard]] std::strong_ordering string_compare(const BasicStore<Union_T>& store,
 		const std::uint32_t idx, std::string_view view)
 	{
 		auto ref = TermString128::SLCRef<Union_T, true>(store, idx);

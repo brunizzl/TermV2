@@ -120,7 +120,7 @@ namespace bmath::intern {
 	};
 
 	static_assert(sizeof(TypesUnion) * 8 == 128);
-	using Store = TermStore<TypesUnion>;
+	using Store = BasicStore<TypesUnion>;
 
 
 	using Ref = BasicRef<TypesUnion, Type>;
@@ -255,7 +255,7 @@ namespace bmath::intern {
 		};
 		static_assert(sizeof(PnTypesUnion) * 8 == 128);
 
-		using PnStore = TermStore<PnTypesUnion>;
+		using PnStore = BasicStore<PnTypesUnion>;
 
 		using PnRef = BasicRef<PnTypesUnion, PnType>;
 		using const_PnRef = const_BasicRef<PnTypesUnion, PnType>;
@@ -446,13 +446,13 @@ namespace bmath::intern {
 		//if a value is returned, the state of the subtree is unspecified but valid (from a storage perspective) 
 		//and is expected to be deleted and replaced with the result.
 		template<typename Union_T, typename TypedIdx_T>
-		[[nodiscard]] OptComplex combine_values_inexact(TermStore<Union_T>& store, const TypedIdx_T ref);
+		[[nodiscard]] OptComplex combine_values_inexact(BasicStore<Union_T>& store, const TypedIdx_T ref);
 
 		//if evaluation of subtree was inexact / impossible, returns Complex(NAN, undefined), else returns result.
 		//if an exact value is returned, the state of the subtree is unspecified but valid (from a storage perspective) 
 		//and is expected to be deleted and replaced with the result. (equivalent behavior to combine_values_inexact)
 		template<typename Union_T, typename TypedIdx_T>
-		[[nodiscard]] OptComplex combine_values_exact(TermStore<Union_T>& store, const TypedIdx_T ref);
+		[[nodiscard]] OptComplex combine_values_exact(BasicStore<Union_T>& store, const TypedIdx_T ref);
 
 		//compares two subterms of perhaps different stores, assumes both to have their variadic parts sorted
 		template<typename Store_T1, typename Store_T2, typename TypedIdx_T1, typename TypedIdx_T2>
@@ -469,7 +469,7 @@ namespace bmath::intern {
 
 		//copies subtree starting at src_ref into dst_store and returns its head
 		template<typename Union_T, typename TypedIdx_T>
-		[[nodiscard]] TypedIdx_T copy(const TermStore<Union_T>& src_store, TermStore<Union_T>& dst_store, const TypedIdx_T src_ref);
+		[[nodiscard]] TypedIdx_T copy(const BasicStore<Union_T>& src_store, BasicStore<Union_T>& dst_store, const TypedIdx_T src_ref);
 
 		//returns true iff subtree starting at ref contains to_contain (or is to_contain itself)
 		template<typename Store_T, typename TypedIdx_T>
@@ -484,7 +484,7 @@ namespace bmath::intern {
 		//first combines layers, then combines values exact, then sorts
 		//return value is new head
 		template<typename Union_T, typename TypedIdx_T>
-		[[nodiscard]] TypedIdx_T establish_basic_order(TermStore<Union_T>& store, TypedIdx_T head);
+		[[nodiscard]] TypedIdx_T establish_basic_order(BasicStore<Union_T>& store, TypedIdx_T head);
 
 		//returns pointer to field of parent of subtree, where subtree is held
 		template<typename Store_T, typename TypedIdx_T>

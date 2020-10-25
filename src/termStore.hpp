@@ -33,7 +33,7 @@ namespace bmath::intern {
 
 	//possibly preferred version for debugging
 	template <typename Union_T, typename Vec_T = std::vector<store_detail::TableVecElem<Union_T>>>
-	class [[nodiscard]] TermStore_Table
+	class [[nodiscard]] BasicStore_Table
 	{
 		static_assert(std::is_trivially_destructible_v<Union_T>, "required to allow Union_T to be used in VecElem union");
 		static_assert(std::is_trivially_copyable_v<Union_T>, "dunno, feels like a sane thing.");
@@ -47,14 +47,14 @@ namespace bmath::intern {
 		//debugging function to ensure only valid accesses
 		void check_index_validity(const std::size_t idx) const
 		{
-			throw_if(this->vector.size() < idx + 1u, "TermStore supposed to access/free unowned slot");
+			throw_if(this->vector.size() < idx + 1u, "BasicStore supposed to access/free unowned slot");
 			const Table& table = this->vector[idx / table_dist].table;
-			throw_if(!table.test(idx % table_dist), "TermStore supposed to access/free already freed slot");
+			throw_if(!table.test(idx % table_dist), "BasicStore supposed to access/free already freed slot");
 		}
 
 	public:
 
-		TermStore_Table(const std::size_t reserve = 0) noexcept :vector() { vector.reserve(reserve); }
+		BasicStore_Table(const std::size_t reserve = 0) noexcept :vector() { vector.reserve(reserve); }
 
 		//never construct recursively using insert, as this will break if vector has to reallocate
 		[[nodiscard]] std::size_t insert(const Union_T& new_elem)
@@ -136,7 +136,7 @@ namespace bmath::intern {
 			return this->vector.size() - pop_count;
 		} //count_free_slots
 
-	};	//class TermStore_Table
+	};	//class BasicStore_Table
 
 
 
@@ -166,7 +166,7 @@ namespace bmath::intern {
 
 	//possibly faster version, but also with less access checks, thus with no (internal) memory savety	
 	template <typename Union_T, typename Vec_T = std::vector<store_detail::FreeListVecElem<Union_T>>>
-	class [[nodiscard]] TermStore_FreeList
+	class [[nodiscard]] BasicStore_FreeList
 	{
 		static_assert(std::is_trivially_destructible_v<Union_T>, "required to allow Union_T to be used in VecElem union");
 		static_assert(std::is_trivially_copyable_v<Union_T>, "dunno, feels like a sane thing.");
@@ -195,7 +195,7 @@ namespace bmath::intern {
 
 	public:
 
-		TermStore_FreeList(std::size_t reserve = 0) :vector() { vector.reserve(reserve); }
+		BasicStore_FreeList(std::size_t reserve = 0) :vector() { vector.reserve(reserve); }
 
 		//never construct recursively using insert, as this will break if vector has to reallocate
 		[[nodiscard]] std::size_t insert(const Union_T& new_elem)
@@ -260,11 +260,12 @@ namespace bmath::intern {
 			return result;
 		} //count_free_slots
 
-	};	//class TermStore_FreeList
+	};	//class BasicStore_FreeList
 
 	template<typename Union_T>
-	using TermStore = TermStore_Table<Union_T>;
-	//using TermStore = TermStore_FreeList<Union_T>;
+	using BasicStore = BasicStore_Table<Union_T>;
+	//using BasicStore = BasicStore_FreeList<Union_T>;
+
 
 
 
@@ -274,7 +275,7 @@ namespace bmath::intern {
 	template<typename Union_T, typename Type_T, bool Const = false>
 	struct BasicRef
 	{
-		using Store_T = std::conditional_t<Const, const TermStore<Union_T>, TermStore<Union_T>>;
+		using Store_T = std::conditional_t<Const, const BasicStore<Union_T>, BasicStore<Union_T>>;
 		Store_T& store;
 		const std::uint32_t index;
 		const Type_T type;
