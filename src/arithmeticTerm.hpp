@@ -106,22 +106,26 @@ namespace bmath::intern {
 
 		constexpr auto operator<=>(const TypesUnion&) const = default;
 
-		template<typename T> constexpr const T& to() const noexcept;
-		template<> constexpr const FnParams<TypedIdx> &to<FnParams<TypedIdx>>() const noexcept { return this->fn_params; }
-		template<> constexpr const GenericFunction    &to<GenericFunction   >() const noexcept { return this->generic_function; }
-		template<> constexpr const Complex            &to<Complex           >() const noexcept { return this->complex; }
-		template<> constexpr const TypedIdxSLC        &to<TypedIdxSLC       >() const noexcept { return this->index_slc; }
-		template<> constexpr const TermString128      &to<TermString128     >() const noexcept { return this->string; }
-		template<typename T> constexpr T& to() noexcept;
-		template<> constexpr FnParams<TypedIdx> &to<FnParams<TypedIdx>>() noexcept { return this->fn_params; }
-		template<> constexpr GenericFunction    &to<GenericFunction   >() noexcept { return this->generic_function; }
-		template<> constexpr Complex            &to<Complex           >() noexcept { return this->complex; }
-		template<> constexpr TypedIdxSLC        &to<TypedIdxSLC       >() noexcept { return this->index_slc; }
-		template<> constexpr TermString128      &to<TermString128     >() noexcept { return this->string; }
+		constexpr operator const FnParams<TypedIdx> &() const noexcept { return this->fn_params; }
+		constexpr operator const GenericFunction    &() const noexcept { return this->generic_function; }
+		constexpr operator const Complex            &() const noexcept { return this->complex; }
+		constexpr operator const TypedIdxSLC        &() const noexcept { return this->index_slc; }
+		constexpr operator const TermString128      &() const noexcept { return this->string; }
+
+		constexpr operator FnParams<TypedIdx> &() noexcept { return this->fn_params; }
+		constexpr operator GenericFunction    &() noexcept { return this->generic_function; }
+		constexpr operator Complex            &() noexcept { return this->complex; }
+		constexpr operator TypedIdxSLC        &() noexcept { return this->index_slc; }
+		constexpr operator TermString128      &() noexcept { return this->string; }
 	};
 
 	static_assert(sizeof(TypesUnion) * 8 == 128);
 	using Store = TermStore<TypesUnion>;
+
+
+	using Ref = BasicRef<TypesUnion, Type>;
+	using const_Ref = const_BasicRef<TypesUnion, Type>;
+
 
 	namespace pattern {
 
@@ -160,7 +164,7 @@ namespace bmath::intern {
 		using Restriction = SumEnum<Restr, Type>; 
 
 		template<typename TypedIdx_T>
-		bool meets_restriction(const TypedIdx_T ref, const Restriction restr);
+		bool meets_restriction(const TypedIdx_T head, const Restriction restr);
 
 		//in a valid pattern, all TreeMatchVariables of same name share the same restr and the same match_data_idx.
 		//it is allowed to have multiple instances of the same TreeMatchVariable per side.
@@ -233,26 +237,28 @@ namespace bmath::intern {
 
 			constexpr auto operator<=>(const PnTypesUnion&) const = default;
 
-			template<typename T> constexpr const T& to() const noexcept;
-			template<> constexpr const FnParams<PnTypedIdx> &to<FnParams<PnTypedIdx>>() const noexcept { return this->fn_params; }
-			template<> constexpr const GenericFunction      &to<GenericFunction     >() const noexcept { return this->generic_function; }
-			template<> constexpr const Complex              &to<Complex             >() const noexcept { return this->complex; }
-			template<> constexpr const PnTypedIdxSLC        &to<PnTypedIdxSLC       >() const noexcept { return this->index_slc; }
-			template<> constexpr const TermString128        &to<TermString128       >() const noexcept { return this->string; }
-			template<> constexpr const TreeMatchVariable    &to<TreeMatchVariable   >() const noexcept { return this->tree_match; }
-			template<> constexpr const ValueMatchVariable   &to<ValueMatchVariable  >() const noexcept { return this->value_match; }
-			template<typename T> constexpr T& to() noexcept;
-			template<> constexpr FnParams<PnTypedIdx> &to<FnParams<PnTypedIdx>>() noexcept { return this->fn_params; }
-			template<> constexpr GenericFunction      &to<GenericFunction     >() noexcept { return this->generic_function; }
-			template<> constexpr Complex              &to<Complex             >() noexcept { return this->complex; }
-			template<> constexpr PnTypedIdxSLC        &to<PnTypedIdxSLC       >() noexcept { return this->index_slc; }
-			template<> constexpr TermString128        &to<TermString128       >() noexcept { return this->string; }
-			template<> constexpr TreeMatchVariable    &to<TreeMatchVariable   >() noexcept { return this->tree_match; }
-			template<> constexpr ValueMatchVariable   &to<ValueMatchVariable  >() noexcept { return this->value_match; }
+			constexpr operator const FnParams<PnTypedIdx> &() const noexcept { return this->fn_params; }
+			constexpr operator const GenericFunction      &() const noexcept { return this->generic_function; }
+			constexpr operator const Complex              &() const noexcept { return this->complex; }
+			constexpr operator const PnTypedIdxSLC        &() const noexcept { return this->index_slc; }
+			constexpr operator const TermString128        &() const noexcept { return this->string; }
+			constexpr operator const TreeMatchVariable    &() const noexcept { return this->tree_match; }
+			constexpr operator const ValueMatchVariable   &() const noexcept { return this->value_match; }
+
+			constexpr operator FnParams<PnTypedIdx> &() noexcept { return this->fn_params; }
+			constexpr operator GenericFunction      &() noexcept { return this->generic_function; }
+			constexpr operator Complex              &() noexcept { return this->complex; }
+			constexpr operator PnTypedIdxSLC        &() noexcept { return this->index_slc; }
+			constexpr operator TermString128        &() noexcept { return this->string; }
+			constexpr operator TreeMatchVariable    &() noexcept { return this->tree_match; }
+			constexpr operator ValueMatchVariable   &() noexcept { return this->value_match; }
 		};
 		static_assert(sizeof(PnTypesUnion) * 8 == 128);
 
 		using PnStore = TermStore<PnTypesUnion>;
+
+		using PnRef = BasicRef<PnTypesUnion, PnType>;
+		using const_PnRef = const_BasicRef<PnTypesUnion, PnType>;
 
 		//all MatchVariables of same name in pattern (e.g. "a" in pattern "a*b+a" share the same SharedTreeDatum to know 
 		//whitch actually matched, and if the name "a" is already matched, even if the current instance is not.
@@ -355,34 +361,72 @@ namespace bmath::intern {
 		std::span<const TypedIdx_T> range(const FnParams<TypedIdx_T>& params, const Type_T type) noexcept
 		{ return { params.data(), param_count(type) }; }
 
-		inline auto range(Store& store, GenericFunction& func) noexcept 
-		{ return TypedIdxSLC::Range<Store>(store, func.params_idx); }
+		[[deprecated]] inline auto range(Store& store, GenericFunction& func) noexcept 
+		{ return TypedIdxSLC::SLCRef<TypesUnion>(store, func.params_idx); }
 
-		inline auto range(const Store& store, const GenericFunction& func) noexcept 
-		{ return TypedIdxSLC::Range<const Store>(store, func.params_idx); }
+		[[deprecated]] inline auto range(const Store& store, const GenericFunction& func) noexcept 
+		{ return TypedIdxSLC::SLCRef<TypesUnion, true>(store, func.params_idx); }
 
-		inline auto range(pattern::PnStore& store, GenericFunction& func) noexcept 
-		{ return pattern::PnTypedIdxSLC::Range<pattern::PnStore>(store, func.params_idx); }
+		[[deprecated]] inline auto range(pattern::PnStore& store, GenericFunction& func) noexcept 
+		{ return pattern::PnTypedIdxSLC::SLCRef<pattern::PnTypesUnion>(store, func.params_idx); }
 
-		inline auto range(const pattern::PnStore& store, const GenericFunction& func) noexcept 
-		{ return pattern::PnTypedIdxSLC::Range<const pattern::PnStore>(store, func.params_idx); }
+		[[deprecated]] inline auto range(const pattern::PnStore& store, const GenericFunction& func) noexcept 
+		{ return pattern::PnTypedIdxSLC::SLCRef<pattern::PnTypesUnion, true>(store, func.params_idx); }
+
+
+		inline auto range(Ref ref) noexcept 
+		{ 
+			assert(ref.type == Op::generic_function);
+			return TypedIdxSLC::SLCRef<TypesUnion>(ref.store, ref->generic_function.params_idx); 
+		}
+
+		inline auto range(const_Ref ref) noexcept 
+		{ 
+			assert(ref.type == Op::generic_function);
+			return TypedIdxSLC::SLCRef<TypesUnion, true>(ref.store, ref->generic_function.params_idx); 
+		}
+
+		inline auto range(pattern::PnRef ref) noexcept 
+		{ 
+			assert(ref.type == Op::generic_function);
+			return pattern::PnTypedIdxSLC::SLCRef<pattern::PnTypesUnion>(ref.store, ref->generic_function.params_idx); 
+		}
+
+		inline auto range(pattern::const_PnRef ref) noexcept 
+		{ 
+			assert(ref.type == Op::generic_function);
+			return pattern::PnTypedIdxSLC::SLCRef<pattern::PnTypesUnion, true>(ref.store, ref->generic_function.params_idx); 
+		}
 
 	} //namespace fn
 
 	//utility for variadic types (Sum and Product)
 	namespace vc {
 
-		inline auto range(Store& store, std::uint32_t vd_idx) noexcept
-		{ return TypedIdxSLC::Range<Store>(store, vd_idx); }
+		[[deprecated]] inline auto range(Store& store, std::uint32_t vd_idx) noexcept
+		{ return TypedIdxSLC::SLCRef<TypesUnion>(store, vd_idx); }
 
-		inline auto range(const Store& store, std::uint32_t vd_idx) noexcept 
-		{ return TypedIdxSLC::Range<const Store>(store, vd_idx); }
+		[[deprecated]] inline auto range(const Store& store, std::uint32_t vd_idx) noexcept 
+		{ return TypedIdxSLC::SLCRef<TypesUnion, true>(store, vd_idx); }
 
-		inline auto range(pattern::PnStore& store, std::uint32_t vd_idx) noexcept
-		{ return pattern::PnTypedIdxSLC::Range<pattern::PnStore>(store, vd_idx); }
+		[[deprecated]] inline auto range(pattern::PnStore& store, std::uint32_t vd_idx) noexcept
+		{ return pattern::PnTypedIdxSLC::SLCRef<pattern::PnTypesUnion>(store, vd_idx); }
 
-		inline auto range(const pattern::PnStore& store, std::uint32_t vd_idx) noexcept 
-		{ return pattern::PnTypedIdxSLC::Range<const pattern::PnStore>(store, vd_idx); }
+		[[deprecated]] inline auto range(const pattern::PnStore& store, std::uint32_t vd_idx) noexcept 
+		{ return pattern::PnTypedIdxSLC::SLCRef<pattern::PnTypesUnion, true>(store, vd_idx); }
+
+
+		inline auto range(Ref ref) noexcept
+		{ return TypedIdxSLC::SLCRef<TypesUnion>(ref.store, ref.index); }
+
+		inline auto range(const_Ref ref) noexcept 
+		{ return TypedIdxSLC::SLCRef<TypesUnion, true>(ref.store, ref.index); }
+
+		inline auto range(pattern::PnRef ref) noexcept
+		{ return pattern::PnTypedIdxSLC::SLCRef<pattern::PnTypesUnion>(ref.store, ref.index); }
+
+		inline auto range(pattern::const_PnRef ref) noexcept 
+		{ return pattern::PnTypedIdxSLC::SLCRef<pattern::PnTypesUnion, true>(ref.store, ref.index); }
 
 	} //namespace vc
 
@@ -390,8 +434,8 @@ namespace bmath::intern {
 	namespace tree {
 
 		//removes subtree starting at ref from store
-		template<typename Store_T, typename TypedIdx_T>
-		void free(Store_T& store, const TypedIdx_T ref);
+		template<typename Union_T, typename Type_T>
+		void free(BasicRef<Union_T, Type_T> ref);
 
 		//flatten sums holding als summands and products holding products as factors
 		template<typename Store_T, typename TypedIdx_T>
@@ -401,14 +445,14 @@ namespace bmath::intern {
 		//floating point or the computation is unexact.
 		//if a value is returned, the state of the subtree is unspecified but valid (from a storage perspective) 
 		//and is expected to be deleted and replaced with the result.
-		template<typename Store_T, typename TypedIdx_T>
-		[[nodiscard]] OptComplex combine_values_inexact(Store_T& store, const TypedIdx_T ref);
+		template<typename Union_T, typename TypedIdx_T>
+		[[nodiscard]] OptComplex combine_values_inexact(TermStore<Union_T>& store, const TypedIdx_T ref);
 
 		//if evaluation of subtree was inexact / impossible, returns Complex(NAN, undefined), else returns result.
 		//if an exact value is returned, the state of the subtree is unspecified but valid (from a storage perspective) 
 		//and is expected to be deleted and replaced with the result. (equivalent behavior to combine_values_inexact)
-		template<typename Store_T, typename TypedIdx_T>
-		[[nodiscard]] OptComplex combine_values_exact(Store_T& store, const TypedIdx_T ref);
+		template<typename Union_T, typename TypedIdx_T>
+		[[nodiscard]] OptComplex combine_values_exact(TermStore<Union_T>& store, const TypedIdx_T ref);
 
 		//compares two subterms of perhaps different stores, assumes both to have their variadic parts sorted
 		template<typename Store_T1, typename Store_T2, typename TypedIdx_T1, typename TypedIdx_T2>
@@ -424,8 +468,8 @@ namespace bmath::intern {
 		std::size_t count(Store_T& store, const TypedIdx_T ref);
 
 		//copies subtree starting at src_ref into dst_store and returns its head
-		template<typename Store_T, typename TypedIdx_T>
-		[[nodiscard]] TypedIdx_T copy(const Store_T& src_store, Store_T& dst_store, const TypedIdx_T src_ref);
+		template<typename Union_T, typename TypedIdx_T>
+		[[nodiscard]] TypedIdx_T copy(const TermStore<Union_T>& src_store, TermStore<Union_T>& dst_store, const TypedIdx_T src_ref);
 
 		//returns true iff subtree starting at ref contains to_contain (or is to_contain itself)
 		template<typename Store_T, typename TypedIdx_T>
@@ -439,8 +483,8 @@ namespace bmath::intern {
 
 		//first combines layers, then combines values exact, then sorts
 		//return value is new head
-		template<typename Store_T, typename TypedIdx_T>
-		[[nodiscard]] TypedIdx_T establish_basic_order(Store_T& store, TypedIdx_T head);
+		template<typename Union_T, typename TypedIdx_T>
+		[[nodiscard]] TypedIdx_T establish_basic_order(TermStore<Union_T>& store, TypedIdx_T head);
 
 		//returns pointer to field of parent of subtree, where subtree is held
 		template<typename Store_T, typename TypedIdx_T>

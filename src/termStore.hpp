@@ -5,6 +5,7 @@
 #include <array>
 
 #include "termUtility.hpp"
+#include "typedIndex.hpp"
 
 namespace bmath::intern {
 
@@ -13,17 +14,17 @@ namespace bmath::intern {
 		//every table_dist'th element in vec will not store actual term content, but a table of which of 
 		//the next (table_dist -1) slots are still free. 
 		//thus this union can act as both.
-		template<typename TermUnion_T>
+		template<typename Union_T>
 		union [[nodiscard]] TableVecElem
 		{
-			static constexpr std::size_t table_dist = sizeof(TermUnion_T) * 8;	//also number of elements each table keeps track of
+			static constexpr std::size_t table_dist = sizeof(Union_T) * 8;	//also number of elements each table keeps track of
 			using OccupancyTable = BitSet<table_dist>; 
 
-			TermUnion_T value;
+			Union_T value;
 			OccupancyTable table;
-			static_assert(sizeof(TermUnion_T) == sizeof(OccupancyTable), "union VecElem assumes equal member size");
+			static_assert(sizeof(Union_T) == sizeof(OccupancyTable), "union VecElem assumes equal member size");
 
-			TableVecElem(const TermUnion_T& new_value) noexcept :value(new_value) {}
+			TableVecElem(const Union_T& new_value) noexcept :value(new_value) {}
 			TableVecElem(unsigned long init)           noexcept :table(init)      {}
 			TableVecElem(const TableVecElem& snd)      noexcept :table(snd.table) {} //bitwise copy of snd
 		}; //union TableVecElem
@@ -31,13 +32,13 @@ namespace bmath::intern {
 	} //namespace store_detail
 
 	//possibly preferred version for debugging
-	template <typename TermUnion_T, typename Vec_T = std::vector<store_detail::TableVecElem<TermUnion_T>>>
+	template <typename Union_T, typename Vec_T = std::vector<store_detail::TableVecElem<Union_T>>>
 	class [[nodiscard]] TermStore_Table
 	{
-		static_assert(std::is_trivially_destructible_v<TermUnion_T>, "required to allow TermUnion_T to be used in VecElem union");
-		static_assert(std::is_trivially_copyable_v<TermUnion_T>, "dunno, feels like a sane thing.");
+		static_assert(std::is_trivially_destructible_v<Union_T>, "required to allow Union_T to be used in VecElem union");
+		static_assert(std::is_trivially_copyable_v<Union_T>, "dunno, feels like a sane thing.");
 
-		using VecElem = typename store_detail::TableVecElem<TermUnion_T>;
+		using VecElem = typename store_detail::TableVecElem<Union_T>;
 		static constexpr std::size_t table_dist = VecElem::table_dist;
 		using Table = typename VecElem::OccupancyTable;
 
@@ -56,7 +57,7 @@ namespace bmath::intern {
 		TermStore_Table(const std::size_t reserve = 0) noexcept :vector() { vector.reserve(reserve); }
 
 		//never construct recursively using insert, as this will break if vector has to reallocate
-		[[nodiscard]] std::size_t insert(const TermUnion_T& new_elem)
+		[[nodiscard]] std::size_t insert(const Union_T& new_elem)
 		{
 			for (std::size_t table_pos = 0; table_pos < this->vector.size(); table_pos += table_dist) {
 				if (this->vector[table_pos].table.all()) [[unlikely]] {	//currently optimizes for case with only one table present
@@ -89,13 +90,13 @@ namespace bmath::intern {
 			table.reset(idx % table_dist);
 		}
 
-		[[nodiscard]] TermUnion_T& at(const std::size_t idx)
+		[[nodiscard]] Union_T& at(const std::size_t idx)
 		{
 			check_index_validity(idx);	
 			return this->vector[idx].value;
 		}
 
-		[[nodiscard]] const TermUnion_T& at(const std::size_t idx) const
+		[[nodiscard]] const Union_T& at(const std::size_t idx) const
 		{
 			check_index_validity(idx);		
 			return this->vector[idx].value;
@@ -149,14 +150,14 @@ namespace bmath::intern {
 		};
 
 		//at this->vector[0] always resides a node of the FreeList. all currently unused elements are listed from there.
-		template <typename TermUnion_T>
+		template <typename Union_T>
 		union [[nodiscard]] FreeListVecElem
 		{
-			TermUnion_T value;
+			Union_T value;
 			FreeList free_list;
-			static_assert(sizeof(FreeList) <= sizeof(TermUnion_T), "size of union VecElem may not be defined by FreeList");
+			static_assert(sizeof(FreeList) <= sizeof(Union_T), "size of union VecElem may not be defined by FreeList");
 
-			FreeListVecElem(const TermUnion_T& new_value) noexcept :value(new_value) {}
+			FreeListVecElem(const Union_T& new_value) noexcept :value(new_value) {}
 			FreeListVecElem(const FreeList& node)         noexcept :free_list(node)  {}
 			FreeListVecElem(const FreeListVecElem& snd)   noexcept :value(snd.value) {} //bitwise copy of snd
 		}; //union FreeListVecElem
@@ -164,13 +165,13 @@ namespace bmath::intern {
 	} //namespace store_detail
 
 	//possibly faster version, but also with less access checks, thus with no (internal) memory savety	
-	template <typename TermUnion_T, typename Vec_T = std::vector<store_detail::FreeListVecElem<TermUnion_T>>>
+	template <typename Union_T, typename Vec_T = std::vector<store_detail::FreeListVecElem<Union_T>>>
 	class [[nodiscard]] TermStore_FreeList
 	{
-		static_assert(std::is_trivially_destructible_v<TermUnion_T>, "required to allow TermUnion_T to be used in VecElem union");
-		static_assert(std::is_trivially_copyable_v<TermUnion_T>, "dunno, feels like a sane thing.");
+		static_assert(std::is_trivially_destructible_v<Union_T>, "required to allow Union_T to be used in VecElem union");
+		static_assert(std::is_trivially_copyable_v<Union_T>, "dunno, feels like a sane thing.");
 
-		using VecElem = store_detail::FreeListVecElem<TermUnion_T>;
+		using VecElem = store_detail::FreeListVecElem<Union_T>;
 		using FreeList = store_detail::FreeList;
 
 		//first elem is guaranteed to be free_list, the rest may vary.
@@ -197,7 +198,7 @@ namespace bmath::intern {
 		TermStore_FreeList(std::size_t reserve = 0) :vector() { vector.reserve(reserve); }
 
 		//never construct recursively using insert, as this will break if vector has to reallocate
-		[[nodiscard]] std::size_t insert(const TermUnion_T& new_elem)
+		[[nodiscard]] std::size_t insert(const Union_T& new_elem)
 		{
 			if (this->vector.size() == 0) [[unlikely]] {
 				this->vector.reserve(2u); //reserve for both first free_list node and the new element
@@ -223,13 +224,13 @@ namespace bmath::intern {
 			const std::size_t second_idx = first.next;
 			FreeList& new_node = this->vector[idx].free_list;
 
-			new_node.next = second_idx;				  //TermUnion_T guaranteed to be trivially destructable -> just override with FreeList
+			new_node.next = second_idx;				  //Union_T guaranteed to be trivially destructable -> just override with FreeList
 			first.next = idx;
 		}
 
 		//no tests if a free_list is accessed, as only position of the first node is known anyway.
-		[[nodiscard]] TermUnion_T& at(const std::size_t idx) noexcept { return this->vector[idx].value; }
-		[[nodiscard]] const TermUnion_T& at(const std::size_t idx) const noexcept { return this->vector[idx].value; }
+		[[nodiscard]] Union_T& at(const std::size_t idx) noexcept { return this->vector[idx].value; }
+		[[nodiscard]] const Union_T& at(const std::size_t idx) const noexcept { return this->vector[idx].value; }
 
 		[[nodiscard]] std::size_t size() const noexcept { return vector.size(); }
 
@@ -261,33 +262,35 @@ namespace bmath::intern {
 
 	};	//class TermStore_FreeList
 
-	template<typename TermUnion_T>
-	using TermStore = TermStore_Table<TermUnion_T>;
-	//using TermStore = TermStore_FreeList<TermUnion_T>;
+	template<typename Union_T>
+	using TermStore = TermStore_Table<Union_T>;
+	//using TermStore = TermStore_FreeList<Union_T>;
 
 
 
 
-	//intended to be used as template parameter
-	template<typename TermUnion_T, std::size_t BufferSize>
-	class [[nodiscard]] MonotonicBufferStore :public ShortVector<TermUnion_T, BufferSize>
+	//as any algorithm accessing an element of a term needs also access to its store, both store and TypedIdx info
+	//  are neatly bundled as a package here
+	template<typename Union_T, typename Type_T, bool Const = false>
+	struct BasicRef
 	{
-		using Base = ShortVector<TermUnion_T, BufferSize>;
+		using Store_T = std::conditional_t<Const, const TermStore<Union_T>, TermStore<Union_T>>;
+		Store_T& store;
+		const std::uint32_t index;
+		const Type_T type;
 
-	public:
-		using Base::Base;
+		BasicRef(Store_T& new_store, const BasicTypedIdx<Type_T> elem) noexcept
+			:store(new_store), index(elem.get_index()), type(elem.get_type()) {}
 
-		constexpr [[nodiscard]] std::size_t insert(const TermUnion_T& new_elem)
-		{
-			const std::size_t pos = this->size();
-			this->push_pack(new_elem);
-			return pos;
-		}
+		std::conditional_t<Const, const Union_T&, Union_T&> operator*() { return store.at(index); }
+		std::conditional_t<Const, const Union_T*, Union_T*> operator->() { return &store.at(index); }
 
-		constexpr [[nodiscard]] TermUnion_T& at(std::size_t idx) noexcept { return this->operator[](idx); }
-		constexpr [[nodiscard]] const TermUnion_T& at(std::size_t idx) const noexcept { return this->operator[](idx); }
+		BasicRef new_at(const BasicTypedIdx<Type_T> elem) { return BasicRef(this->store, elem); }
 
-		constexpr friend std::strong_ordering operator<=>(const MonotonicBufferStore&, const MonotonicBufferStore&) = default;
-		constexpr friend bool operator==(const MonotonicBufferStore&, const MonotonicBufferStore&) = default;
-	}; //class MonotonicBufferStore
-}
+		void free() { this->store.free(this->index); }
+	}; //struct BasicRef
+
+	template<typename Union_T, typename Type_T>
+	using const_BasicRef = BasicRef<Union_T, Type_T, true>;
+
+} //namespace bmath::intern

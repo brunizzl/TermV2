@@ -94,11 +94,11 @@ namespace bmath::intern {
 	//BuildInverse recieves an already build term (by TypedIdx_T) and returns the inverse (by TypedIdx_T)
 	//  e.g. for sum, it should turn "a" -> "a*(-1)", for product "a" -> "a^(-1)"
 	//BuildAny can buld any type of term, this function will very likely already call build_variadic.
-	template<typename VariadicTraits, typename TypedIdx_T, typename TermStore_T, typename BuildInverse, typename BuildAny>
-	[[nodiscard]] TypedIdx_T build_variadic(TermStore_T& store, ParseView input, std::size_t op_idx, BuildInverse build_inverse, BuildAny build_any);
+	template<typename VariadicTraits, typename TypedIdx_T, typename Store_T, typename BuildInverse, typename BuildAny>
+	[[nodiscard]] TypedIdx_T build_variadic(Store_T& store, ParseView input, std::size_t op_idx, BuildInverse build_inverse, BuildAny build_any);
 
-	template<typename TypedIdx_T, typename TermStore_T, typename BuildAny>
-	[[nodiscard]] TypedIdx_T build_function(TermStore_T& store, ParseView input, const std::size_t open_par, BuildAny build_any);
+	template<typename TypedIdx_T, typename Store_T, typename BuildAny>
+	[[nodiscard]] TypedIdx_T build_function(Store_T& store, ParseView input, const std::size_t open_par, BuildAny build_any);
 
 	namespace pattern {
 
@@ -426,8 +426,8 @@ namespace bmath::intern {
 		}
 	} //build
 
-	template<typename VariadicTraits, typename TypedIdx_T, typename TermStore_T, typename BuildInverse, typename BuildAny>
-	TypedIdx_T build_variadic(TermStore_T& store, ParseView input, std::size_t op_idx, BuildInverse build_inverse, BuildAny build_any)
+	template<typename VariadicTraits, typename TypedIdx_T, typename Store_T, typename BuildInverse, typename BuildAny>
+	TypedIdx_T build_variadic(Store_T& store, ParseView input, std::size_t op_idx, BuildInverse build_inverse, BuildAny build_any)
 	{
 		using Result_T = VariadicTraits::Object_T;
 
@@ -454,8 +454,8 @@ namespace bmath::intern {
 		return TypedIdx_T(variadic_idx, VariadicTraits::type_name);
 	} //build_variadic
 
-	template<typename TypedIdx_T, typename TermStore_T, typename BuildAny>
-	[[nodiscard]] TypedIdx_T build_function(TermStore_T& store, ParseView input, const std::size_t open_par, BuildAny build_any)
+	template<typename TypedIdx_T, typename Store_T, typename BuildAny>
+	[[nodiscard]] TypedIdx_T build_function(Store_T& store, ParseView input, const std::size_t open_par, BuildAny build_any)
 	{
 		using TypedIdxSLC_T = TermSLC<std::uint32_t, TypedIdx_T, 3u>;
 
