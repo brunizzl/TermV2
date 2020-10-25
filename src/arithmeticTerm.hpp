@@ -123,8 +123,8 @@ namespace bmath::intern {
 	using Store = BasicStore<TypesUnion>;
 
 
+	using MutRef = BasicRef<TypesUnion, Type, false>;
 	using Ref = BasicRef<TypesUnion, Type>;
-	using const_Ref = const_BasicRef<TypesUnion, Type>;
 
 
 	namespace pattern {
@@ -257,8 +257,8 @@ namespace bmath::intern {
 
 		using PnStore = BasicStore<PnTypesUnion>;
 
+		using PnMutRef = BasicRef<PnTypesUnion, PnType, false>;
 		using PnRef = BasicRef<PnTypesUnion, PnType>;
-		using const_PnRef = const_BasicRef<PnTypesUnion, PnType>;
 
 		//all MatchVariables of same name in pattern (e.g. "a" in pattern "a*b+a" share the same SharedTreeDatum to know 
 		//whitch actually matched, and if the name "a" is already matched, even if the current instance is not.
@@ -295,6 +295,11 @@ namespace bmath::intern {
 			std::string to_string() const;
 			std::string lhs_memory_layout() const;
 			std::string rhs_memory_layout() const;
+
+			PnMutRef lhs_ref() noexcept { return PnMutRef(this->lhs_store, this->lhs_head); }
+			PnMutRef rhs_ref() noexcept { return PnMutRef(this->rhs_store, this->rhs_head); }
+			PnRef lhs_ref() const noexcept { return PnRef(this->lhs_store, this->lhs_head); }
+			PnRef rhs_ref() const noexcept { return PnRef(this->rhs_store, this->rhs_head); }
 		};
 
 		//algorithms specific to patterns
@@ -361,41 +366,29 @@ namespace bmath::intern {
 		std::span<const TypedIdx_T> range(const FnParams<TypedIdx_T>& params, const Type_T type) noexcept
 		{ return { params.data(), param_count(type) }; }
 
-		[[deprecated]] inline auto range(Store& store, GenericFunction& func) noexcept 
-		{ return TypedIdxSLC::SLCRef<TypesUnion>(store, func.params_idx); }
 
-		[[deprecated]] inline auto range(const Store& store, const GenericFunction& func) noexcept 
-		{ return TypedIdxSLC::SLCRef<TypesUnion, true>(store, func.params_idx); }
-
-		[[deprecated]] inline auto range(pattern::PnStore& store, GenericFunction& func) noexcept 
-		{ return pattern::PnTypedIdxSLC::SLCRef<pattern::PnTypesUnion>(store, func.params_idx); }
-
-		[[deprecated]] inline auto range(const pattern::PnStore& store, const GenericFunction& func) noexcept 
-		{ return pattern::PnTypedIdxSLC::SLCRef<pattern::PnTypesUnion, true>(store, func.params_idx); }
-
+		inline auto range(MutRef ref) noexcept 
+		{ 
+			assert(ref.type == Op::generic_function);
+			return TypedIdxSLC::SLCRef<TypesUnion, false>(*ref.store, ref->generic_function.params_idx); 
+		}
 
 		inline auto range(Ref ref) noexcept 
 		{ 
 			assert(ref.type == Op::generic_function);
-			return TypedIdxSLC::SLCRef<TypesUnion>(ref.store, ref->generic_function.params_idx); 
+			return TypedIdxSLC::SLCRef<TypesUnion, true>(*ref.store, ref->generic_function.params_idx); 
 		}
 
-		inline auto range(const_Ref ref) noexcept 
+		inline auto range(pattern::PnMutRef ref) noexcept 
 		{ 
 			assert(ref.type == Op::generic_function);
-			return TypedIdxSLC::SLCRef<TypesUnion, true>(ref.store, ref->generic_function.params_idx); 
+			return pattern::PnTypedIdxSLC::SLCRef<pattern::PnTypesUnion, false>(*ref.store, ref->generic_function.params_idx); 
 		}
 
 		inline auto range(pattern::PnRef ref) noexcept 
 		{ 
 			assert(ref.type == Op::generic_function);
-			return pattern::PnTypedIdxSLC::SLCRef<pattern::PnTypesUnion>(ref.store, ref->generic_function.params_idx); 
-		}
-
-		inline auto range(pattern::const_PnRef ref) noexcept 
-		{ 
-			assert(ref.type == Op::generic_function);
-			return pattern::PnTypedIdxSLC::SLCRef<pattern::PnTypesUnion, true>(ref.store, ref->generic_function.params_idx); 
+			return pattern::PnTypedIdxSLC::SLCRef<pattern::PnTypesUnion, true>(*ref.store, ref->generic_function.params_idx); 
 		}
 
 	} //namespace fn
@@ -403,30 +396,17 @@ namespace bmath::intern {
 	//utility for variadic types (Sum and Product)
 	namespace vc {
 
-		[[deprecated]] inline auto range(Store& store, std::uint32_t vd_idx) noexcept
-		{ return TypedIdxSLC::SLCRef<TypesUnion>(store, vd_idx); }
+		inline auto range(MutRef ref) noexcept
+		{ return TypedIdxSLC::SLCRef<TypesUnion, false>(*ref.store, ref.index); }
 
-		[[deprecated]] inline auto range(const Store& store, std::uint32_t vd_idx) noexcept 
-		{ return TypedIdxSLC::SLCRef<TypesUnion, true>(store, vd_idx); }
+		inline auto range(Ref ref) noexcept 
+		{ return TypedIdxSLC::SLCRef<TypesUnion, true>(*ref.store, ref.index); }
 
-		[[deprecated]] inline auto range(pattern::PnStore& store, std::uint32_t vd_idx) noexcept
-		{ return pattern::PnTypedIdxSLC::SLCRef<pattern::PnTypesUnion>(store, vd_idx); }
+		inline auto range(pattern::PnMutRef ref) noexcept
+		{ return pattern::PnTypedIdxSLC::SLCRef<pattern::PnTypesUnion, false>(*ref.store, ref.index); }
 
-		[[deprecated]] inline auto range(const pattern::PnStore& store, std::uint32_t vd_idx) noexcept 
-		{ return pattern::PnTypedIdxSLC::SLCRef<pattern::PnTypesUnion, true>(store, vd_idx); }
-
-
-		inline auto range(Ref ref) noexcept
-		{ return TypedIdxSLC::SLCRef<TypesUnion>(ref.store, ref.index); }
-
-		inline auto range(const_Ref ref) noexcept 
-		{ return TypedIdxSLC::SLCRef<TypesUnion, true>(ref.store, ref.index); }
-
-		inline auto range(pattern::PnRef ref) noexcept
-		{ return pattern::PnTypedIdxSLC::SLCRef<pattern::PnTypesUnion>(ref.store, ref.index); }
-
-		inline auto range(pattern::const_PnRef ref) noexcept 
-		{ return pattern::PnTypedIdxSLC::SLCRef<pattern::PnTypesUnion, true>(ref.store, ref.index); }
+		inline auto range(pattern::PnRef ref) noexcept 
+		{ return pattern::PnTypedIdxSLC::SLCRef<pattern::PnTypesUnion, true>(*ref.store, ref.index); }
 
 	} //namespace vc
 
@@ -435,66 +415,64 @@ namespace bmath::intern {
 
 		//removes subtree starting at ref from store
 		template<typename Union_T, typename Type_T>
-		void free(BasicRef<Union_T, Type_T> ref);
+		void free(const BasicMutRef<Union_T, Type_T> ref);
 
 		//flatten sums holding als summands and products holding products as factors
-		template<typename Store_T, typename TypedIdx_T>
-		void combine_layers(Store_T& store, const TypedIdx_T ref);
+		template<typename Union_T, typename Type_T>
+		void combine_layers(const BasicMutRef<Union_T, Type_T> ref);
 
 		//if a subtree can be fully evaluated, it will be, even if the result can not be stored exactly in 
 		//floating point or the computation is unexact.
 		//if a value is returned, the state of the subtree is unspecified but valid (from a storage perspective) 
 		//and is expected to be deleted and replaced with the result.
-		template<typename Union_T, typename TypedIdx_T>
-		[[nodiscard]] OptComplex combine_values_inexact(BasicStore<Union_T>& store, const TypedIdx_T ref);
+		template<typename Union_T, typename Type_T>
+		[[nodiscard]] OptComplex combine_values_inexact(const BasicMutRef<Union_T, Type_T> ref);
 
 		//if evaluation of subtree was inexact / impossible, returns Complex(NAN, undefined), else returns result.
 		//if an exact value is returned, the state of the subtree is unspecified but valid (from a storage perspective) 
 		//and is expected to be deleted and replaced with the result. (equivalent behavior to combine_values_inexact)
-		template<typename Union_T, typename TypedIdx_T>
-		[[nodiscard]] OptComplex combine_values_exact(BasicStore<Union_T>& store, const TypedIdx_T ref);
+		template<typename Union_T, typename Type_T>
+		[[nodiscard]] OptComplex combine_values_exact(const BasicMutRef<Union_T, Type_T> ref);
 
 		//compares two subterms of perhaps different stores, assumes both to have their variadic parts sorted
-		template<typename Store_T1, typename Store_T2, typename TypedIdx_T1, typename TypedIdx_T2>
-		[[nodiscard]] std::strong_ordering compare(const Store_T1& store_1, const Store_T2& store_2, 
-			const TypedIdx_T1 ref_1, const TypedIdx_T2 ref_2);
+		template<typename Union_T1, typename Type_T1, typename Union_T2, typename Type_T2>
+		[[nodiscard]] std::strong_ordering compare(const BasicRef<Union_T1, Type_T1> ref_1, const BasicRef<Union_T2, Type_T2> ref_2);
 
 		//sorts variadic parts by compare
-		template<typename Store_T, typename TypedIdx_T>
-		void sort(Store_T& store, const TypedIdx_T ref);
+		template<typename Union_T, typename Type_T>
+		void sort(const BasicMutRef<Union_T, Type_T> ref);
 
 		//counts number of logical nodes of subtree
-		template<typename Store_T, typename TypedIdx_T>
-		std::size_t count(Store_T& store, const TypedIdx_T ref);
+		template<typename Union_T, typename Type_T>
+		std::size_t count(const BasicRef<Union_T, Type_T> ref);
 
 		//copies subtree starting at src_ref into dst_store and returns its head
-		template<typename Union_T, typename TypedIdx_T>
-		[[nodiscard]] TypedIdx_T copy(const BasicStore<Union_T>& src_store, BasicStore<Union_T>& dst_store, const TypedIdx_T src_ref);
+		template<typename Union_T, typename Type_T>
+		[[nodiscard]] BasicTypedIdx<Type_T> copy(const BasicRef<Union_T, Type_T> src_ref, BasicStore<Union_T>& dst_store);
 
 		//returns true iff subtree starting at ref contains to_contain (or is to_contain itself)
-		template<typename Store_T, typename TypedIdx_T>
-		bool contains(const Store_T& store, const TypedIdx_T ref, const TypedIdx_T to_contain);
+		template<typename Union_T, typename Type_T>
+		bool contains(const BasicRef<Union_T, Type_T> ref, const BasicTypedIdx<Type_T> to_contain);
 
-		bool contains_variables(const Store& store, const TypedIdx ref);
-		bool contains_variables(const pattern::PnStore& store, const pattern::PnTypedIdx ref);
+		bool contains_variables(const Ref ref);
+		bool contains_variables(const pattern::PnRef ref);
 
 		//returns TypedIdx() if unsuccsessfull
-		TypedIdx search_variable(const Store& store, const TypedIdx head, std::string_view name);
+		TypedIdx search_variable(const Ref ref, std::string_view name);
 
 		//first combines layers, then combines values exact, then sorts
 		//return value is new head
-		template<typename Union_T, typename TypedIdx_T>
-		[[nodiscard]] TypedIdx_T establish_basic_order(BasicStore<Union_T>& store, TypedIdx_T head);
+		template<typename Union_T, typename Type_T>
+		[[nodiscard]] BasicTypedIdx<Type_T> establish_basic_order(const BasicMutRef<Union_T, Type_T> ref);
 
 		//returns pointer to field of parent of subtree, where subtree is held
-		template<typename Store_T, typename TypedIdx_T>
-		TypedIdx_T* find_subtree_owner(Store_T& store, TypedIdx_T* const head, const TypedIdx_T subtree);
+		template<typename Union_T, typename TypedIdx_T>
+		TypedIdx_T* find_subtree_owner(BasicStore<Union_T>& store, TypedIdx_T* const head, const TypedIdx_T subtree);
 
 		//compares term starting at head in store with pattern starting at pn_head in pn_store
 		//if match is succsessfull, match_data stores what pattern's match variables matched and true is returned.
 		//if match was not succsessfull, match_data is NOT reset and false is returned
-		bool match(const Store& store, const pattern::PnStore& pn_store, const TypedIdx head, 
-			const pattern::PnTypedIdx pn_head, pattern::MatchData& match_data);
+		bool match(const pattern::PnRef pn_ref, const Ref ref, pattern::MatchData& match_data);
 
 	} //namespace tree
 
@@ -537,20 +515,20 @@ namespace bmath::intern {
 
 		struct Void {}; //used, if there is nothing to be returned
 
-		//calls apply with every node (postorder), parameters are (std::uint32_t index, Type_T type), apply returns Res_T
+		//calls apply with every node (postorder), parameter is (BasicRef<Union_T, Type_T, Const> ref), apply returns Res_T
 		//Res_T might have nonstatic member return_early, to indicate if the fold may be stopped early, as the result is already known
-		template<typename Res_T, typename Store_T, typename TypedIdx_T, typename Apply>
-		Res_T simple_fold(Store_T& store, const TypedIdx_T ref, Apply apply);
+		template<typename Res_T, typename Union_T, typename Type_T, bool Const, typename Apply>
+		Res_T simple_fold(const BasicRef<Union_T, Type_T, Const> ref, Apply apply);
 
 		//this fold differentiates between recursive nodes (Op's, Fn's and ValueMatchVariable) and Leafes (values and variables)
 		//OpAccumulator is constructed before a recursive call is made and consumes each recursive result. It thus needs to at least
-		//  have a Constructor taking as arguments (TypedIdx_T& ref, AccInit... init) 
+		//  have a Constructor taking as arguments (BasicRef<Union_T, Type_T, Const> ref, AccInit... init) 
 		//  and a consume method taking as single parameter (Res_T elem_res)
 		//  a result method taking no parameters and returning Res_T
-		//leaf_apply has parameters (TypedIdx_T& ref) and returns Res_T.		
-		template<typename Res_T, typename OpAccumulator, typename Store_T, typename TypedIdx_T, typename LeafApply, 
-			typename... AccInit>
-		Res_T tree_fold(Store_T& store, const TypedIdx_T ref, LeafApply leaf_apply, const AccInit... init);
+		//leaf_apply has parameters (BasicRef<Union_T, Type_T, Const> ref) and returns Res_T.		
+		template<typename Res_T, typename OpAccumulator, typename Union_T, typename Type_T, bool Const, 
+			typename LeafApply, typename... AccInit>
+		Res_T tree_fold(const BasicRef<Union_T, Type_T, Const> ref, LeafApply leaf_apply, const AccInit... init);
 
 	} //namespace fold
 
@@ -577,7 +555,8 @@ namespace bmath {
 		std::string to_pretty_string(); //will tidy up term first
 		std::string to_pretty_string() const; //assumes sorted term
 
-		std::pair<intern::Store*, intern::TypedIdx> data() noexcept;
+		intern::MutRef ref() noexcept;
+		intern::Ref ref() const noexcept;
 	};	//class Term
 
 }	//namespace bmath

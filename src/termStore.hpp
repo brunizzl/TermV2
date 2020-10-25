@@ -54,7 +54,7 @@ namespace bmath::intern {
 
 	public:
 
-		BasicStore_Table(const std::size_t reserve = 0) noexcept :vector() { vector.reserve(reserve); }
+		constexpr BasicStore_Table(const std::size_t reserve = 0) noexcept :vector() { vector.reserve(reserve); }
 
 		//never construct recursively using insert, as this will break if vector has to reallocate
 		[[nodiscard]] std::size_t insert(const Union_T& new_elem)
@@ -195,7 +195,7 @@ namespace bmath::intern {
 
 	public:
 
-		BasicStore_FreeList(std::size_t reserve = 0) :vector() { vector.reserve(reserve); }
+		constexpr BasicStore_FreeList(std::size_t reserve = 0) :vector() { vector.reserve(reserve); }
 
 		//never construct recursively using insert, as this will break if vector has to reallocate
 		[[nodiscard]] std::size_t insert(const Union_T& new_elem)
@@ -272,26 +272,33 @@ namespace bmath::intern {
 
 	//as any algorithm accessing an element of a term needs also access to its store, both store and TypedIdx info
 	//  are neatly bundled as a package here
-	template<typename Union_T, typename Type_T, bool Const = false>
+	template<typename Union_T, typename Type_T, bool Const = true>
 	struct BasicRef
 	{
 		using Store_T = std::conditional_t<Const, const BasicStore<Union_T>, BasicStore<Union_T>>;
-		Store_T& store;
-		const std::uint32_t index;
-		const Type_T type;
+		Store_T* const store; //actual pointer to have shallow constness
+		std::uint32_t index;
+		Type_T type;
 
-		BasicRef(Store_T& new_store, const BasicTypedIdx<Type_T> elem) noexcept
-			:store(new_store), index(elem.get_index()), type(elem.get_type()) {}
+		constexpr BasicRef(Store_T& new_store, const BasicTypedIdx<Type_T> elem) noexcept
+			:store(&new_store), index(elem.get_index()), type(elem.get_type()) {}
 
-		std::conditional_t<Const, const Union_T&, Union_T&> operator*() { return store.at(index); }
-		std::conditional_t<Const, const Union_T*, Union_T*> operator->() { return &store.at(index); }
+		constexpr BasicRef(Store_T& new_store, const std::uint32_t new_index) noexcept
+			:store(&new_store), index(new_index), type(Type_T::COUNT) {}
 
-		BasicRef new_at(const BasicTypedIdx<Type_T> elem) { return BasicRef(this->store, elem); }
+		constexpr std::conditional_t<Const, const Union_T&, Union_T&> operator*() const { return store->at(index); }
+		constexpr std::conditional_t<Const, const Union_T*, Union_T*> operator->() const { return &store->at(index); }
 
-		void free() { this->store.free(this->index); }
+		constexpr void set(const BasicTypedIdx<Type_T> elem) noexcept { this->index = elem.get_index(); this->type = elem.get_type() }
+		constexpr BasicRef new_at(const BasicTypedIdx<Type_T> elem) const noexcept { return BasicRef(*this->store, elem); }
+		constexpr BasicRef unsave_at(const std::uint32_t new_index) const noexcept { return BasicRef(*this->store, new_index); }
+
+		constexpr BasicTypedIdx<Type_T> typed_idx() const noexcept { return BasicTypedIdx<Type_T>(this->index, this->type); }
+
+		constexpr void free() const { this->store->free(this->index); }
 	}; //struct BasicRef
 
 	template<typename Union_T, typename Type_T>
-	using const_BasicRef = BasicRef<Union_T, Type_T, true>;
+	using BasicMutRef = BasicRef<Union_T, Type_T, false>;
 
 } //namespace bmath::intern

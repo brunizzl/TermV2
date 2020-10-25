@@ -43,14 +43,16 @@ namespace bmath::intern {
 		constexpr Fn type_of(const std::string_view name) noexcept { return search_fst(name_table, name, Fn::COUNT); }
 
 		//appends only name, no parentheses or anything fancy
-		template<typename Store_T>
-		void append_name(const Store_T& store, const GenericFunction& func, std::string& str)
+		template<typename Union_T, typename Type_T>
+		void append_name(const BasicRef<Union_T, Type_T> ref, std::string& str)
 		{
-			if (func.name_size == GenericFunction::NameSize::small) {
-				str.append(func.short_name);
+			assert(ref.type == Op::generic_function);
+			const GenericFunction fn = *ref;
+			if (fn.name_size == GenericFunction::NameSize::small) {
+				str.append(fn.short_name);
 			}
 			else {
-				read(store, func.long_name_idx, str);
+				read(ref.unsave_at(fn.long_name_idx), str);
 			}
 		} //append_name 
 
@@ -650,72 +652,68 @@ namespace bmath::intern {
 
 	namespace print {
 
-		template<typename Store_T, typename TypedIdx_T>
-		void append_to_string(const Store_T& store, const TypedIdx_T ref, std::string& str, const int parent_infixr)
+		template<typename Union_T, typename Type_T>
+		void append_to_string(const BasicRef<Union_T, Type_T> ref, std::string& str, const int parent_infixr)
 		{
-			using Type_T = TypedIdx_T::Enum_T;
+			using TypedIdx_T = BasicTypedIdx<Type_T>;
 			constexpr bool pattern = std::is_same_v<Type_T, pattern::PnType>;
 
-			const auto [index, type] = ref.split();
-			const int own_infixr = infixr(type);
+			const int own_infixr = infixr(ref.type);
 			if (own_infixr <= parent_infixr) {
 				str.push_back('(');
 			}
 
-			switch (type) {
+			switch (ref.type) {
 			case Type_T(Op::sum): {
 				const char* seperator = "";
-				for (const auto summand : vc::range(store, index)) {
+				for (const auto summand : vc::range(ref)) {
 					str.append(std::exchange(seperator, "+"));
-					print::append_to_string(store, summand, str, own_infixr);
+					print::append_to_string(ref.new_at(summand), str, own_infixr);
 				}
 			} break;
 			case Type_T(Op::product): {
 				const char* seperator = "";
-				for (const auto factor : vc::range(store, index)) {
+				for (const auto factor : vc::range(ref)) {
 					str.append(std::exchange(seperator, "*"));
-					print::append_to_string(store, factor, str, own_infixr);
+					print::append_to_string(ref.new_at(factor), str, own_infixr);
 				}
 			} break;
 			case Type_T(Fn::pow): {
-				const FnParams<TypedIdx_T>& params = store.at(index).fn_params;
-				print::append_to_string(store, params[0], str, own_infixr);
+				const FnParams<TypedIdx_T>& params = *ref;
+				print::append_to_string(ref.new_at(params[0]), str, own_infixr);
 				str.push_back('^');
-				print::append_to_string(store, params[1], str, own_infixr);
+				print::append_to_string(ref.new_at(params[1]), str, own_infixr);
 			} break;
 			case Type_T(Op::generic_function): {
-				const GenericFunction& generic_function = store.at(index).generic_function;
+				const GenericFunction& generic_function = *ref;
 				str.pop_back(); //pop open parenthesis
-				fn::append_name(store, generic_function, str);
+				fn::append_name(ref, str);
 				str.push_back('(');
 				const char* seperator = "";
-				for (const auto param : fn::range(store, generic_function)) {
+				for (const auto param : fn::range(ref)) {
 					str.append(std::exchange(seperator, ", "));
-					print::append_to_string(store, param, str, own_infixr);
+					print::append_to_string(ref.new_at(param), str, own_infixr);
 				}
 			} break;
 			default: {
-				assert(type.is<Fn>());
-				const FnParams<TypedIdx_T>& params = store.at(index).fn_params;
+				assert(ref.type.is<Fn>());
 				str.pop_back(); //pop '('
-				str.append(fn::name_of(type.to<Fn>()));
+				str.append(fn::name_of(ref.type.to<Fn>()));
 				str.push_back('(');
 				const char* seperator = "";
-				for (const auto param : fn::range(params, type)) {
+				for (const auto param : fn::range(ref->fn_params, ref.type)) {
 					str.append(std::exchange(seperator, ", "));
-					print::append_to_string(store, param, str, own_infixr);
+					print::append_to_string(ref.new_at(param), str, own_infixr);
 				}
 			} break;
 			case Type_T(Leaf::variable): {
-				const Variable& variable = store.at(index).string;
-				read(store, index, str);
+				read(ref, str);
 			} break;
 			case Type_T(Leaf::complex): {
-				const Complex& complex = store.at(index).complex;
-				append_complex(complex, str, parent_infixr);
+				append_complex(ref->complex, str, parent_infixr);
 			} break;
 			case Type_T(pattern::_tree_match): if constexpr (pattern) {
-				const pattern::TreeMatchVariable& var = store.at(index).tree_match;
+				const pattern::TreeMatchVariable& var = *ref;
 				str.append("{T");
 				str.append(std::to_string(var.match_data_idx));
 				if (var.restr != pattern::Restr::any) {
@@ -725,15 +723,15 @@ namespace bmath::intern {
 				str.push_back('}');
 			} break;
 			case Type_T(pattern::_value_match): if constexpr (pattern) {
-				const pattern::ValueMatchVariable& var = store.at(index).value_match;
+				const pattern::ValueMatchVariable& var = *ref;
 				str.append("{V");
 				str.append(std::to_string(var.match_data_idx));
 				str.push_back(':');
 				str.append(name_of(var.form));
 				str.append(", ");
-				print::append_to_string(store, var.match_idx, str);
+				print::append_to_string(ref.new_at(var.match_idx), str);
 				str.append(", ");
-				print::append_to_string(store, var.copy_idx, str);
+				print::append_to_string(ref.new_at(var.copy_idx), str);
 				str.push_back('}');
 			} break;
 			case Type_T(pattern::_value_proxy): if constexpr (pattern) {
@@ -745,20 +743,18 @@ namespace bmath::intern {
 				str.push_back(')');
 			}
 		} //append_to_string
-		template void append_to_string<Store, TypedIdx>(const Store& store, const TypedIdx ref, std::string& str, const int parent_infixr);
-		template void append_to_string<pattern::PnStore, pattern::PnTypedIdx>(const pattern::PnStore& store, const pattern::PnTypedIdx ref, std::string& str, const int parent_infixr);
+		template void append_to_string<TypesUnion, Type>(const Ref ref, std::string& str, const int parent_infixr);
+		template void append_to_string<pattern::PnTypesUnion, pattern::PnType>(const pattern::PnRef ref, std::string& str, const int parent_infixr);
 
-		std::string print::to_pretty_string(const Store& store, const TypedIdx ref, const int parent_infixr)
+		std::string print::to_pretty_string(const Ref ref, const int parent_infixr)
 		{
 			std::string str;
 
-			const auto [index, type] = ref.split();
-			bool need_parentheses = infixr(type) <= parent_infixr;
+			bool need_parentheses = infixr(ref.type) <= parent_infixr;
 
-			const auto get_negative_real = [&store](const TypedIdx ref) ->OptDouble {
-				const auto [index, type] = ref.split();
-				if (type == Leaf::complex) {
-					const Complex& complex = store.at(index).complex;
+			const auto get_negative_real = [](const Ref ref) ->OptDouble {
+				if (ref.type == Leaf::complex) {
+					const Complex& complex = *ref;
 					if (complex.real() < 0.0 && complex.imag() == 0.0) {
 						return { complex.real() };
 					}
@@ -767,11 +763,10 @@ namespace bmath::intern {
 			}; //get_negative_real
 
 			 //returns base, if ref is actually <base>^(-1)
-			const auto get_pow_neg1 = [get_negative_real, &store](const TypedIdx ref) -> std::optional<TypedIdx> {
-				const auto [index, type] = ref.split();
-				if (type == Fn::pow) {
-					const FnParams<TypedIdx>& params = store.at(index).fn_params;
-					if (const auto expo = get_negative_real(params[1])) {
+			const auto get_pow_neg1 = [get_negative_real](const Ref ref) -> std::optional<TypedIdx> {
+				if (ref.type == Fn::pow) {
+					const FnParams<TypedIdx>& params = *ref;
+					if (const auto expo = get_negative_real(ref.new_at(params[1]))) {
 						if (*expo == -1.0) {
 							return { params[0] };
 						}
@@ -781,15 +776,14 @@ namespace bmath::intern {
 			}; //get_pow_neg1
 
 			struct GetNegativeProductResult { double negative_factor; StupidBufferVector<TypedIdx, 8> other_factors; };
-			const auto get_negative_product = [get_negative_real, &store](const TypedIdx ref) -> std::optional<GetNegativeProductResult> {
-				const auto [index, type] = ref.split();
-				if (type == Op::product) {
+			const auto get_negative_product = [get_negative_real](const Ref ref) -> std::optional<GetNegativeProductResult> {
+				if (ref.type == Op::product) {
 					StupidBufferVector<TypedIdx, 8> other_factors;
 					double negative_factor;
 					bool found_negative_factor = false;
-					for (const auto factor : vc::range(store, index)) {
+					for (const auto factor : vc::range(ref)) {
 						if (!found_negative_factor) {
-							if (const auto negative_val = get_negative_real(factor)) {
+							if (const auto negative_val = get_negative_real(ref.new_at(factor))) {
 								negative_factor = *negative_val;
 								found_negative_factor = true;
 								continue;
@@ -804,22 +798,22 @@ namespace bmath::intern {
 				return {};
 			}; //get_negative_product
 
-			const auto append_product = [get_negative_real, get_pow_neg1, &store, &str](const auto& vec) {
+			const auto append_product = [get_negative_real, get_pow_neg1, &ref, &str](const auto& vec) {
 				bool first = true;
 				for (const auto elem : vec) {
-					if (auto val = get_negative_real(elem); val && first && *val == -1.0) {
+					if (auto val = get_negative_real(ref.new_at(elem)); val && first && *val == -1.0) {
 						str += "-";
 					}
-					else if (const auto base = get_pow_neg1(elem)) {
+					else if (const auto base = get_pow_neg1(ref.new_at(elem))) {
 						//str += (first ? "1 / " : " / "); 
 						str += (first ? "1/" : "/"); 
-						str += print::to_pretty_string(store, *base, infixr(Type(Op::product)));
+						str += print::to_pretty_string(ref.new_at(*base), infixr(Type(Op::product)));
 						first = false;
 					}
 					else {
 						//str += (first ? "" : " * ");
 						str += (first ? "" : "*");
-						str += print::to_pretty_string(store, elem, infixr(Type(Op::product)));
+						str += print::to_pretty_string(ref.new_at(elem), infixr(Type(Op::product)));
 						first = false;
 					}
 				}
@@ -835,15 +829,15 @@ namespace bmath::intern {
 				return result;
 			};
 
-			switch (type) {
+			switch (ref.type) {
 			case Type(Op::sum): {
 				bool first = true;
-				for (const auto summand : reverse_elems(vc::range(store, index))) {
-					if (const auto val = get_negative_real(summand)) {
+				for (const auto summand : reverse_elems(vc::range(ref))) {
+					if (const auto val = get_negative_real(ref.new_at(summand))) {
 						//str += (first ? "" : " ");
 						append_real(*val, str);
 					}
-					else if (auto product = get_negative_product(summand)) {
+					else if (auto product = get_negative_product(ref.new_at(summand))) {
 						if (product->negative_factor != -1.0) {
 							//str += (first ? "" : " ");
 							append_real(product->negative_factor, str);
@@ -860,59 +854,54 @@ namespace bmath::intern {
 					else {
 						//str += (first ? "" : " + ");
 						str += (first ? "" : "+");
-						str += print::to_pretty_string(store, summand, infixr(type));
+						str += print::to_pretty_string(ref.new_at(summand), infixr(ref.type));
 					}
 					first = false;
 				}
 				assert(!first && "found sum with zero summands");
 			} break;
 			case Type(Op::product): {
-				append_product(reverse_elems(vc::range(store, index)));
+				append_product(reverse_elems(vc::range(ref)));
 			} break;
 			case Type(Fn::pow): {
-				const FnParams<TypedIdx>& params = store.at(index).fn_params;
-				str += print::to_pretty_string(store, params[0], infixr(type));
+				const FnParams<TypedIdx>& params = *ref;
+				str += print::to_pretty_string(ref.new_at(params[0]), infixr(ref.type));
 				//str += " ^ ";
 				str += "^";
-				str += print::to_pretty_string(store, params[1], infixr(type));
-
+				str += print::to_pretty_string(ref.new_at(params[1]), infixr(ref.type));
 			} break;
 			case Type(Op::generic_function): {
 				need_parentheses = false;
-				const GenericFunction& generic_function = store.at(index).generic_function;
-				fn::append_name(store, generic_function, str);
+				fn::append_name(ref, str);
 				str.push_back('(');
 				bool first = true;
-				for (const auto param : fn::range(store, generic_function)) {
+				for (const auto param : fn::range(ref)) {
 					if (!std::exchange(first, false)) {
 						//str += ", ";
 						str += ",";
 					}
-					str += print::to_pretty_string(store, param, infixr(type));
+					str += print::to_pretty_string(ref.new_at(param), infixr(ref.type));
 				}
 				str.push_back(')');
 			} break;
 			default: {
-				assert(type.is<Fn>());
-				const FnParams<TypedIdx>& params = store.at(index).fn_params;
+				assert(ref.type.is<Fn>());
 				need_parentheses = false;
-				str.append(fn::name_of(type.to<Fn>()));
+				str.append(fn::name_of(ref.type.to<Fn>()));
 				str.push_back('(');
 				const char* separator = "";
-				for (const auto param : fn::range(params, type)) {
+				for (const auto param : fn::range(ref->fn_params, ref.type)) {
 					//str += std::exchange(separator, ", ");
 					str += std::exchange(separator, ",");
-					str += print::to_pretty_string(store, param, infixr(type));
+					str += print::to_pretty_string(ref.new_at(param), infixr(ref.type));
 				}
 				str.push_back(')');
 			} break;
 			case Type(Leaf::variable): {
-				const Variable& variable = store.at(index).string;
-				read(store, index, str);
+				read(ref, str);
 			} break;
 			case Type(Leaf::complex): {
-				const Complex& complex = store.at(index).complex;
-				append_complex(complex, str, parent_infixr);
+				append_complex(ref->complex, str, parent_infixr);
 			} break;
 			}
 
@@ -924,77 +913,69 @@ namespace bmath::intern {
 			}
 		} //to_pretty_string
 
-		template<typename Store_T, typename TypedIdx_T>
-		void append_memory_row(const Store_T& store, const TypedIdx_T ref, std::vector<std::string>& rows)
+		template<typename Union_T, typename Type_T>
+		void append_memory_row(const BasicRef<Union_T, Type_T> ref, std::vector<std::string>& rows)
 		{
-			using Type_T = TypedIdx_T::Enum_T;
+			using TypedIdx_T = BasicTypedIdx<Type_T>;
 			using TypedIdxSLC_T = TermSLC<std::uint32_t, TypedIdx_T, 3>;
 			constexpr bool pattern = std::is_same_v<Type_T, pattern::PnType>;
 
-			const auto [index, type] = ref.split();
-
-			const auto show_typedidx_col_nodes = [&store, &rows, index](std::uint32_t idx, bool show_first) {
-				const TypedIdxSLC_T* col = &store.at(idx).index_slc;
+			const auto show_typedidx_col_nodes = [&ref, &rows](std::uint32_t idx, bool show_first) {
+				const TypedIdxSLC_T* col = &ref.store->at(idx).index_slc;
 				if (show_first) {
-					rows[idx].append("(SLC node part of index " + std::to_string(index) + ')');
+					rows[idx].append("(SLC node part of index " + std::to_string(ref.index) + ')');
 				}
 				while (col->next_idx != TypedIdxSLC_T::null_index) {
-					rows[col->next_idx].append("(SLC node part of index " + std::to_string(index) + ')');
-					col = &store.at(col->next_idx).index_slc;
+					rows[col->next_idx].append("(SLC node part of index " + std::to_string(ref.index) + ')');
+					col = &ref.store->at(col->next_idx).index_slc;
 				}
 			};
-			const auto show_string_nodes = [&store, &rows, index](std::uint32_t idx, bool show_first) {
-				const TermString128* str = &store.at(idx).string;
+			const auto show_string_nodes = [&ref, &rows](std::uint32_t idx, bool show_first) {
+				const TermString128* str = &ref.store->at(idx).string;
 				if (show_first) {
-					rows[idx].append("(str node part of index " + std::to_string(index) + ": \""
+					rows[idx].append("(str node part of index " + std::to_string(ref.index) + ": \""
 						+ std::string(str->values, TermString128::array_size) + "\")");
 				}
 				while (str->next_idx != TermString128::null_index) {
 					const std::size_t str_idx = str->next_idx;
-					str = &store.at(str->next_idx).string;
-					rows[str_idx].append("(str node part of index " + std::to_string(index) + ": \""
+					str = &ref.store->at(str->next_idx).string;
+					rows[str_idx].append("(str node part of index " + std::to_string(ref.index) + ": \""
 						+ std::string(str->values, TermString128::array_size) + "\")");
 				}
 			};
 
-			std::string& current_str = rows[index];
-			switch (type) {
+			std::string& current_str = rows[ref.index];
+			switch (ref.type) {
 			case Type_T(Op::sum): {
 				current_str.append("sum        : {");
-				bool first = true;
-				for (const auto elem : vc::range(store, index)) {
-					if (!std::exchange(first, false)) {
-						current_str.append(", ");
-					}
+				const char* separator = "";
+				for (const auto elem : vc::range(ref)) {
+					current_str.append(std::exchange(separator, ", "));
 					current_str.append(std::to_string(elem.get_index()));
-					print::append_memory_row(store, elem, rows);
+					print::append_memory_row(ref.new_at(elem), rows);
 				}
 				current_str.push_back('}');
-				show_typedidx_col_nodes(index, false);
+				show_typedidx_col_nodes(ref.index, false);
 			} break;
 			case Type_T(Op::product): {
 				current_str.append("product    : {");
-				bool first = true;
-				for (const auto elem : vc::range(store, index)) {
-					if (!std::exchange(first, false)) {
-						current_str.append(", ");
-					}
+				const char* separator = "";
+				for (const auto elem : vc::range(ref)) {
+					current_str.append(std::exchange(separator, ", "));
 					current_str.append(std::to_string(elem.get_index()));
-					print::append_memory_row(store, elem, rows);
+					print::append_memory_row(ref.new_at(elem), rows);
 				}
 				current_str.push_back('}');
-				show_typedidx_col_nodes(index, false);
+				show_typedidx_col_nodes(ref.index, false);
 			} break;
 			case Type_T(Op::generic_function): {
-				const GenericFunction& generic_function = store.at(index).generic_function;
+				const GenericFunction& generic_function = *ref;
 				current_str.append("function?  : {");
-				bool first = true;
-				for (const auto param : fn::range(store, generic_function)) {
-					if (!std::exchange(first, false)) {
-						current_str.append(", ");
-					}
+				const char* separator = "";
+				for (const auto param : fn::range(ref)) {
+					current_str.append(std::exchange(separator, ", "));
 					current_str.append(std::to_string(param.get_index()));
-					print::append_memory_row(store, param, rows);
+					print::append_memory_row(ref.new_at(param), rows);
 				}
 				current_str.push_back('}');
 				show_typedidx_col_nodes(generic_function.params_idx, true);
@@ -1003,39 +984,35 @@ namespace bmath::intern {
 				}
 			} break;
 			default: {
-				assert(type.is<Fn>());
-				const FnParams<TypedIdx_T>& params = store.at(index).fn_params;
+				assert(ref.type.is<Fn>());
 				current_str.append("function   : {");
-				bool first = true;
-				for (const auto param : fn::range(params, type)) {
-					if (!std::exchange(first, false)) {
-						current_str.append(", ");
-					}
+				const char* separator = "";
+				for (const auto param : fn::range(ref->fn_params, ref.type)) {
+					current_str.append(std::exchange(separator, ", "));
 					current_str.append(std::to_string(param.get_index()));
-					print::append_memory_row(store, param, rows);
+					print::append_memory_row(ref.new_at(param), rows);
 				}
 				current_str.push_back('}');
 			} break;
 			case Type_T(Leaf::variable): {
 				current_str.append("variable   : ");
-				show_string_nodes(index, false);
+				show_string_nodes(ref.index, false);
 			} break;
 			case Type_T(Leaf::complex): {
-				const Complex& complex = store.at(index).complex;
 				current_str.append("value      : ");
 			} break;
 			case Type_T(pattern::_tree_match): if constexpr (pattern) {
 				current_str.append("tree_match : ");
 			} break;
 			case Type_T(pattern::_value_match): if constexpr (pattern) {
-				const pattern::ValueMatchVariable& var = store.at(index).value_match;
+				const pattern::ValueMatchVariable& var = *ref;
 				current_str.append("value_match: {m:");
 				current_str.append(std::to_string(var.match_idx.get_index()));
 				current_str.append(" c:");
 				current_str.append(std::to_string(var.copy_idx.get_index()));
 				current_str.push_back('}');
-				print::append_memory_row(store, var.match_idx, rows);
-				print::append_memory_row(store, var.copy_idx, rows);
+				print::append_memory_row(ref.new_at(var.match_idx), rows);
+				print::append_memory_row(ref.new_at(var.copy_idx), rows);
 			} break;
 			case Type_T(pattern::_value_proxy): 
 				return;
@@ -1043,11 +1020,11 @@ namespace bmath::intern {
 
 			//append name of subterm to line
 			current_str.append(std::max(0, 35 - (int)current_str.size()), ' ');
-			append_to_string(store, ref, current_str, 0);
+			append_to_string(ref, current_str, 0);
 		} //append_memory_row
 
-		template<typename Store_T, typename TypedIdx_T>
-		std::string to_memory_layout(const Store_T& store, const std::initializer_list<const TypedIdx_T> heads)
+		template<typename Union_T, typename Type_T>
+		std::string to_memory_layout(const BasicStore<Union_T>& store, const std::initializer_list<const BasicTypedIdx<Type_T>> heads)
 		{
 			std::vector<std::string> rows(store.size(), "");
 
@@ -1055,10 +1032,10 @@ namespace bmath::intern {
 			result.reserve(store.size() * 15);
 			{
 				const char* separator = "";
-				for (const TypedIdx_T head : heads) {
+				for (const auto head : heads) {
 					result += std::exchange(separator, ", ");
 					result += std::to_string(head.get_index());
-					print::append_memory_row(store, head, rows);
+					print::append_memory_row(BasicRef<Union_T, Type_T>(store, head), rows);
 				}
 				result += "\n";
 			}
@@ -1080,8 +1057,8 @@ namespace bmath::intern {
 			}
 			return result;
 		} //to_memory_layout
-		template std::string to_memory_layout<Store, TypedIdx>(const Store& store, const std::initializer_list<const TypedIdx> head);
-		template std::string to_memory_layout<pattern::PnStore, pattern::PnTypedIdx>(const pattern::PnStore& store, const std::initializer_list<const pattern::PnTypedIdx> head);
+		template std::string to_memory_layout<TypesUnion, Type>(const Store& store, const std::initializer_list<const TypedIdx> head);
+		template std::string to_memory_layout<pattern::PnTypesUnion, pattern::PnType>(const pattern::PnStore& store, const std::initializer_list<const pattern::PnTypedIdx> head);
 
 	} //namespace print
 

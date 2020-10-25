@@ -220,13 +220,13 @@ namespace bmath::intern::test {
 		Term term_1(term_name);
 		std::cout << "term_1: " << term_1.to_string() << "\n";
 
-		auto [store, head_1] = term_1.data();
-		auto head_2 = tree::copy(*store, *store, head_1);
+		Ref ref = static_cast<const Term&>(term_1).ref();
+		auto head_2 = tree::copy(ref, const_cast<Store&>(*ref.store));
 
 		std::string term_2_str;
-		print::append_to_string(*store, head_2, term_2_str);
+		print::append_to_string(ref, term_2_str);
 		std::cout << "term_2: " << term_2_str << "\n";
-		std::cout << print::to_memory_layout(*store, { head_1, head_2 }) << "\n";
+		std::cout << print::to_memory_layout(*ref.store, { ref.typed_idx(), head_2 }) << "\n";
 	}
 
 } //namespace bmath::intern::test

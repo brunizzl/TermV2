@@ -215,17 +215,17 @@ namespace bmath::intern {
 			const TermSLC* operator->() const { return &static_cast<const TermSLC&>(store.at(index)); }
 		}; //struct SLCRef
 
-		template<typename Union_T, typename Compare>
-		static void sort(BasicStore<Union_T>& store, const Index_T slc_idx, Compare compare) noexcept
+		template<typename Union_T, typename Type_T, typename Compare>
+		static void sort(const BasicMutRef<Union_T, Type_T> ref, Compare compare) noexcept
 		{
 			StupidBufferVector<Value_T, 16> all_values;
-			SLCRef<Union_T> range = SLCRef<Union_T>(store, slc_idx);
+			SLCRef<Union_T> range = SLCRef<Union_T>(*ref.store, ref.index);
 			for (const Value_T elem : range) {
 				all_values.push_back(elem);
 			}
 			std::sort(all_values.begin(), all_values.end(), compare);
 
-			SLCRef<Union_T>::Iterator iter = range.unchecked_begin(); //also expose empty slots
+			auto iter = range.unchecked_begin(); //also expose empty slots
 			for (std::size_t i = 0; i < all_values.size(); i++) { //copy sorted elements back (leave no gaps)
 				*iter = all_values[i];
 				iter.unchecked_increment(); //also expose empty slots
@@ -236,17 +236,17 @@ namespace bmath::intern {
 				while (iter.array_idx < array_size) {
 					iter.ref->values[iter.array_idx++] = null_value;
 				}
-				free_slc(store, iter.ref->next_idx);
+				free_slc(*ref.store, iter.ref->next_idx);
 				iter.ref->next_idx = null_index;
 			}
 		} //sort
 
 		//O(n) operation, use with care.
-		template<typename Union_T>
-		static std::size_t slow_size(const BasicStore<Union_T>& store, const Index_T slc_idx)
+		template<typename Union_T, typename Type_T>
+		static std::size_t slow_size(const BasicRef<Union_T, Type_T> ref)
 		{
 			std::size_t result = 0;
-			for (auto&& : SLCRef<Union_T, true>(store, slc_idx)) {
+			for (auto&& : SLCRef<Union_T, true>(ref.store, ref.index)) {
 				result++;
 			}
 			return result;
@@ -281,10 +281,10 @@ namespace bmath::intern {
 		return prev_inserted_at;
 	} //insert_string
 
-	template<typename Union_T>
-	void read(const BasicStore<Union_T>& store, const std::size_t source_idx, std::string& dest)
+	template<typename Union_T, typename Type_T>
+	void read(const BasicRef<Union_T, Type_T> in_ref, std::string& dest)
 	{
-		auto ref = TermString128::SLCRef<Union_T, true>(store, source_idx);
+		auto ref = TermString128::SLCRef<Union_T, true>(*in_ref.store, in_ref.index);
 		while (ref->next_idx != TermString128::null_index) {
 			dest.append(ref->values, TermString128::array_size);
 			ref.index = ref->next_idx;
@@ -297,12 +297,12 @@ namespace bmath::intern {
 		}			
 	} //read
 
-	template<typename Union_T1, typename Union_T2>
-	[[nodiscard]] std::strong_ordering string_compare(const BasicStore<Union_T1>& store_1, 
-		const BasicStore<Union_T2>& store_2, const std::uint32_t idx_1, const std::uint32_t idx_2)
+	template<typename Union_T1, typename Type_T1, typename Union_T2, typename Type_T2>
+	[[nodiscard]] std::strong_ordering string_compare(
+		const BasicRef<Union_T1, Type_T1> in_ref_1, const BasicRef<Union_T2, Type_T2> in_ref_2)
 	{
-		auto ref_1 = TermString128::SLCRef<Union_T1, true>(store_1, idx_1);
-		auto ref_2 = TermString128::SLCRef<Union_T2, true>(store_2, idx_2);
+		auto ref_1 = TermString128::SLCRef<Union_T1, true>(*in_ref_1.store, in_ref_1.index);
+		auto ref_2 = TermString128::SLCRef<Union_T2, true>(*in_ref_2.store, in_ref_2.index);
 		while (ref_1->next_idx != TermString128::null_index &&
 			ref_2->next_idx != TermString128::null_index) 
 		{
@@ -328,11 +328,10 @@ namespace bmath::intern {
 		}
 	}
 
-	template<typename Union_T>
-	[[nodiscard]] std::strong_ordering string_compare(const BasicStore<Union_T>& store,
-		const std::uint32_t idx, std::string_view view)
+	template<typename Union_T, typename Type_T>
+	[[nodiscard]] std::strong_ordering string_compare(const BasicRef<Union_T, Type_T> in_ref, std::string_view view)
 	{
-		auto ref = TermString128::SLCRef<Union_T, true>(store, idx);
+		auto ref = TermString128::SLCRef<Union_T, true>(*in_ref.store, in_ref.index);
 		while (view.size() > TermString128::array_size && ref->next_idx != TermString128::null_index) {
 			const auto cmp = compare_arrays(ref->values, view.data(), TermString128::array_size);
 			if (cmp != std::strong_ordering::equal) {

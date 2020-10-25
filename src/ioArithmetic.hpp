@@ -138,14 +138,15 @@ namespace bmath::intern {
 
 	namespace print {
 
-		template<typename Store_T, typename TypedIdx_T>
-		void append_to_string(const Store_T& store, const TypedIdx_T ref, std::string& str, const int parent_infixr = 0);
+		template<typename Union_T, typename Type_T>
+		void append_to_string(const BasicRef<Union_T, Type_T> ref, std::string& str, const int parent_infixr = 0);
 
 		//prettier, but also slower
-		std::string to_pretty_string(const Store& store, const TypedIdx ref, const int parent_infixr = 0);
+		std::string to_pretty_string(const Ref ref, const int parent_infixr = 0);
 
-		template<typename Store_T, typename TypedIdx_T>
-		std::string to_memory_layout(const Store_T& store, const std::initializer_list<const TypedIdx_T> heads);
+		template<typename Union_T, typename Type_T>
+		std::string to_memory_layout(const BasicStore<Union_T>& store, 
+			const std::initializer_list<const BasicTypedIdx<Type_T>> heads);
 
 	} //namespace print
 
