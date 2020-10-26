@@ -303,8 +303,7 @@ namespace bmath::intern {
 	{
 		auto ref_1 = TermString128::SLCRef<Union_T1, true>(*in_ref_1.store, in_ref_1.index);
 		auto ref_2 = TermString128::SLCRef<Union_T2, true>(*in_ref_2.store, in_ref_2.index);
-		while (ref_1->next_idx != TermString128::null_index &&
-			ref_2->next_idx != TermString128::null_index) 
+		while (ref_1->next_idx != TermString128::null_index && ref_2->next_idx != TermString128::null_index) 
 		{
 			static_assert(('a' <=> 'a') == std::strong_ordering::equal); //dont wanna mix with std::strong_ordering::equivalent
 			const auto cmp = compare_arrays(ref_1->values, ref_2->values, TermString128::array_size);

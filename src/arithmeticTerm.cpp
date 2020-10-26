@@ -319,7 +319,7 @@ namespace bmath::intern {
 					{
 						MatchTraits acc;
 
-						constexpr OpAccumulator(PnRef ref, const PnTypedIdx value_match, const PnTypedIdx value_proxy) 
+						constexpr OpAccumulator(const PnRef ref, const PnTypedIdx value_match, const PnTypedIdx value_proxy) 
 							:acc({ .has_match = false, .computable = true })
 						{
 							switch (ref.type) {
@@ -345,7 +345,7 @@ namespace bmath::intern {
 						constexpr MatchTraits result() const noexcept { return this->acc; }
 					}; //struct OpAccumulator
 
-					const auto leaf_apply = [](PnRef ref) -> MatchTraits {
+					const auto leaf_apply = [](const PnRef ref) -> MatchTraits {
 						return MatchTraits{ false, is_one_of<Leaf::complex, PnVariable::value_proxy>(ref.type) };
 					};
 
@@ -408,26 +408,27 @@ namespace bmath::intern {
 
 			void rearrange_value_match(PnStore& store, PnTypedIdx& head, const PnTypedIdx value_match)
 			{
+				using VarRef = BasicNodeRef<PnTypesUnion, ValueMatchVariable>;
+
 				PnTypedIdx* const value_match_subtree = find_value_match_subtree(store, head, value_match);
-				PnTypedIdx* const value_match_storage = tree::find_subtree_owner(store, &head, value_match);
-				ValueMatchVariable* var = &store.at(value_match.get_index()).value_match;
-				const PnTypedIdx proxy_value = var->copy_idx;
-				assert(var->copy_idx == var->match_idx);
+				PnTypedIdx* const value_match_storage = tree::find_subtree_owner(store, head, value_match);
 
 				if (value_match_storage != value_match_subtree) { //else value_match owns just itself, no nodes upstream
-					var->copy_idx = *value_match_subtree; //keep the nodes now owned by value_match in current arrangement as tree to copy
-					*value_match_storage = proxy_value;
-					*value_match_subtree = value_match;
+					const VarRef var = VarRef(store, value_match.get_index());
+					const PnTypedIdx proxy_value = var->copy_idx;
+					assert(var->copy_idx == var->match_idx);
 
-					PnTypedIdx match_data = tree::copy(PnRef(store, var->copy_idx), store); //invalidates var
-					const auto [new_match_data, new_match_idx] = stupid_solve_for(store, { match_data, proxy_value }, proxy_value);
-					assert(new_match_data == proxy_value);
-					var = &store.at(value_match.get_index()).value_match;
+					var->copy_idx = *value_match_subtree; //keep the nodes now owned by value_match in current arrangement as tree to copy
+					*value_match_storage = proxy_value; //value_match_storage is now owned by value_match. it would break the tree structure to leave the reference to itself there
+					*value_match_subtree = value_match; //previous owner of subtree now belonging to value_match becomes owner of value_match itself (value_match now bubbled up)
+
+					const PnTypedIdx match_data = tree::copy(PnRef(store, var->copy_idx), store); //this and the following step might invalidate pointers into store data
+					const auto [new_match_data, new_match_idx] = stupid_solve_for(store, { match_data, proxy_value }, proxy_value); //rhs starts with just proxy_value
+					assert(new_match_data == proxy_value); //all terms around old position of value_match have been reversed around new_match_idx -> lhs should only have proxy left
 					var->match_idx = new_match_idx;
 
 					var->match_idx = tree::establish_basic_order(PnMutRef(store, var->match_idx));
 				}
-
 			} //rearrange_value_match
 
 			Equation stupid_solve_for(PnStore& store, Equation eq, const PnTypedIdx to_isolate)
@@ -1133,30 +1134,30 @@ namespace bmath::intern {
 		} //establish_basic_order
 
 		template<typename Union_T, typename TypedIdx_T>
-		TypedIdx_T* find_subtree_owner(BasicStore<Union_T>& store, TypedIdx_T* const head, const TypedIdx_T subtree)
+		TypedIdx_T* find_subtree_owner(BasicStore<Union_T>& store, TypedIdx_T& head, const TypedIdx_T subtree)
 		{
 			using Type_T = TypedIdx_T::Enum_T;
 			using TypedIdxSLC_T = TermSLC<std::uint32_t, TypedIdx_T, 3>;
 			constexpr bool pattern = std::is_same_v<Type_T, pattern::PnType>;
 
-			if (*head == subtree) {
-				return head;
+			if (head == subtree) {
+				return &head;
 			}
 			else {
-				const auto [index, type] = head->split();
+				const auto [index, type] = head.split();
 				switch (type) {
 				case Type_T(Op::sum): 
 					[[fallthrough]];
 				case Type_T(Op::product): {
-					for (TypedIdx_T& elem : vc::range(BasicMutRef<Union_T, Type_T>(store, *head))) {
-						if (TypedIdx_T* const elem_res = tree::find_subtree_owner(store, &elem, subtree)) {
+					for (TypedIdx_T& elem : vc::range(BasicMutRef<Union_T, Type_T>(store, head))) {
+						if (TypedIdx_T* const elem_res = tree::find_subtree_owner(store, elem, subtree)) {
 							return elem_res;
 						}
 					}
 				} break;
 				case Type_T(Op::generic_function): {
-					for (TypedIdx_T& param : fn::range(BasicMutRef<Union_T, Type_T>(store, *head))) {
-						if (TypedIdx_T* const param_res = tree::find_subtree_owner(store, &param, subtree)) {
+					for (TypedIdx_T& param : fn::range(BasicMutRef<Union_T, Type_T>(store, head))) {
+						if (TypedIdx_T* const param_res = tree::find_subtree_owner(store, param, subtree)) {
 							return param_res;
 						}
 					}
@@ -1165,7 +1166,7 @@ namespace bmath::intern {
 					assert(type.is<Fn>()); //if this assert hits, the switch above needs more cases.
 					FnParams<TypedIdx_T>& params = store.at(index).fn_params;
 					for (TypedIdx_T& param : fn::range(params, type)) {
-						if (TypedIdx_T* const param_res = tree::find_subtree_owner(store, &param, subtree)) {
+						if (TypedIdx_T* const param_res = tree::find_subtree_owner(store, param, subtree)) {
 							return param_res;
 						}
 					}
@@ -1178,10 +1179,10 @@ namespace bmath::intern {
 					break;
 				case Type_T(pattern::_value_match): if constexpr (pattern) {
 					pattern::ValueMatchVariable& var = store.at(index).value_match;
-					if (TypedIdx_T* const copy_res = tree::find_subtree_owner(store, &var.copy_idx, subtree)) {
+					if (TypedIdx_T* const copy_res = tree::find_subtree_owner(store, var.copy_idx, subtree)) {
 						return copy_res;
 					}
-					if (TypedIdx_T* const match_res = tree::find_subtree_owner(store, &var.match_idx, subtree)) {
+					if (TypedIdx_T* const match_res = tree::find_subtree_owner(store, var.match_idx, subtree)) {
 						return match_res;
 					}
 				} break;

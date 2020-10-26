@@ -286,8 +286,8 @@ namespace bmath::intern {
 		constexpr BasicRef(Store_T& new_store, const std::uint32_t new_index) noexcept
 			:store(&new_store), index(new_index), type(Type_T::COUNT) {}
 
-		constexpr std::conditional_t<Const, const Union_T&, Union_T&> operator*() const { return store->at(index); }
-		constexpr std::conditional_t<Const, const Union_T*, Union_T*> operator->() const { return &store->at(index); }
+		constexpr auto& operator*() const { return store->at(index); }
+		constexpr auto* operator->() const { return &store->at(index); }
 
 		constexpr void set(const BasicTypedIdx<Type_T> elem) noexcept { this->index = elem.get_index(); this->type = elem.get_type() }
 		constexpr BasicRef new_at(const BasicTypedIdx<Type_T> elem) const noexcept { return BasicRef(*this->store, elem); }
@@ -300,5 +300,25 @@ namespace bmath::intern {
 
 	template<typename Union_T, typename Type_T>
 	using BasicMutRef = BasicRef<Union_T, Type_T, false>;
+
+
+	//in contrast to BasicRef, this struct only stands for a single type in that Union_T thingy
+	//as this struct is advantageous only if one assumes the store to be modified and possibly changing its data location,
+	//  only a mutable version of BasicNodeRef exists.
+	template<typename Union_T, typename Own_T>
+	struct BasicNodeRef
+	{
+		BasicStore<Union_T>* const store;
+		std::uint32_t index;
+
+		constexpr BasicNodeRef(BasicStore<Union_T>& new_store, const std::uint32_t new_index)
+			:store(&new_store), index(new_index) {}
+
+		template<typename Type_T, bool Const>
+		constexpr BasicNodeRef(const BasicRef<Union_T, Type_T, Const>& ref) :store(ref.store), index(ref.index) {}
+
+		constexpr auto& operator*() const { return static_cast<Own_T&>(store->at(index)); }
+		constexpr auto* operator->() const { return &static_cast<Own_T&>(store->at(index)); }
+	};
 
 } //namespace bmath::intern

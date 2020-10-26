@@ -467,7 +467,7 @@ namespace bmath::intern {
 
 		//returns pointer to field of parent of subtree, where subtree is held
 		template<typename Union_T, typename TypedIdx_T>
-		TypedIdx_T* find_subtree_owner(BasicStore<Union_T>& store, TypedIdx_T* const head, const TypedIdx_T subtree);
+		TypedIdx_T* find_subtree_owner(BasicStore<Union_T>& store, TypedIdx_T& head, const TypedIdx_T subtree);
 
 		//compares term starting at head in store with pattern starting at pn_head in pn_store
 		//if match is succsessfull, match_data stores what pattern's match variables matched and true is returned.
