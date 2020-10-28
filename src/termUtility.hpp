@@ -283,26 +283,27 @@ namespace bmath::intern {
 		using Base::Base;
 		constexpr SumEnum(const Enum e) noexcept :Base(static_cast<Value>(unsigned(e) + this_offset)) {}
 
+		//this constructor applies, if Enum itself is SumEnum<...> or WrapEnum and can be build from E
 		template<typename E, std::enable_if_t<std::is_convertible_v<E, Enum> && !std::is_same_v<E, Enum>, void*> = nullptr>
-		constexpr SumEnum(const E e) noexcept : Base(unsigned(Enum(e)) + this_offset) {} //Enum itself is SumEnum<...> and can be build from E
+		constexpr SumEnum(const E e) noexcept : Base(unsigned(Enum(e)) + this_offset) {}
 
 
 		template<typename E, std::enable_if_t<std::is_convertible_v<E, Enum> && !std::is_same_v<E, Enum>, void*> = nullptr>
-		constexpr E to() const noexcept //default case: search in parent types
+		constexpr E to() const noexcept //assumes Enum itself is SumEnum<...> and can be build from E -> hand over to Enum
 		{ 
 			static_assert(!std::is_integral_v<E>);
 			return this->to<Enum>().to<E>(); 
 		}
 
 		template<typename E, std::enable_if_t<!std::is_convertible_v<E, Enum> && !std::is_same_v<E, Enum>, void*> = nullptr>
-		constexpr E to() const noexcept //assumes Enum itself is SumEnum<...> and can be build from E -> hand over to Enum
+		constexpr E to() const noexcept //default case: search in parent types
 		{ 
 			static_assert(!std::is_integral_v<E>);
 			return static_cast<const Base>(*this).to<E>(); 
 		}
 
 		template<typename E, std::enable_if_t<std::is_same_v<E, Enum>, void*> = nullptr>
-		constexpr E to() const noexcept //E is same as Enum -> we have an operator for that
+		constexpr E to() const noexcept //E is same as Enum -> just undo the offset
 		{
 			return static_cast<Enum>(unsigned(this->value) - this_offset);
 		}
@@ -329,8 +330,8 @@ namespace bmath::intern {
 		}
 
 
-		constexpr friend std::strong_ordering operator<=>(const SumEnum&, const SumEnum&) = default;
-		constexpr friend bool operator==(const SumEnum&, const SumEnum&) = default;
+		constexpr friend std::strong_ordering operator<=>(const SumEnum&, const SumEnum&) noexcept = default;
+		constexpr friend bool operator==(const SumEnum&, const SumEnum&) noexcept = default;
 		static constexpr Value COUNT = static_cast<Value>(next_offset); //only relevant for outhermost instanciation
 	}; //class SumEnum<Enum, TailEnums...>
 
@@ -344,6 +345,9 @@ namespace bmath::intern {
 		explicit constexpr WrapEnum(const unsigned u) noexcept :value(static_cast<E>(u)) {}
 		constexpr operator E() const noexcept { return this->value; }
 		explicit constexpr operator unsigned() const noexcept { return static_cast<unsigned>(this->value); }
+
+		constexpr friend std::strong_ordering operator<=>(const WrapEnum&, const WrapEnum&) noexcept = default;
+		constexpr friend bool operator==(const WrapEnum&, const WrapEnum&) noexcept = default;
 		static constexpr E COUNT = Count;
 	}; //struct WrapEnum 
 
@@ -393,16 +397,15 @@ namespace bmath::intern {
 		constexpr IntBitSet(const UInt_T new_data) noexcept :data(new_data) {}
 		constexpr operator UInt_T() const noexcept { return this->data; }
 
-		constexpr void   set(const std::size_t pos) noexcept { this->data |=  (UInt_T(1) << pos); }
+		constexpr void  flip(const std::size_t pos) noexcept { this->data ^=  (UInt_T(1) << pos); }
 		constexpr void reset(const std::size_t pos) noexcept { this->data &= ~(UInt_T(1) << pos); }
+		constexpr void   set(const std::size_t pos) noexcept { this->data |=  (UInt_T(1) << pos); }
 		constexpr void   set(const std::size_t pos, const bool val) noexcept { val ? this->set(pos) : this->reset(pos); }
 
 		constexpr bool  test(const std::size_t pos) const noexcept { return this->data & (UInt_T(1) << pos); }
 		constexpr bool  all() const noexcept { return !(~this->data); }
 		constexpr bool  any() const noexcept { return this->data; }
 		constexpr bool none() const noexcept { return !this->data; }
-
-		constexpr void flip(const std::size_t pos) { this->set(pos, !this->test(pos)); }
 
 		constexpr std::size_t count() const noexcept
 		{
@@ -438,7 +441,7 @@ namespace bmath::intern {
 	using BitSet32 = IntBitSet<std::uint32_t>;
 	using BitSet64 = IntBitSet<std::uint64_t>;
 
-	template<std::size_t Bits, std::enable_if_t<Bits % 64u == 0u, void*> = nullptr>
+	template<std::size_t Bits, std::enable_if_t<(Bits % 64u == 0u), void*> = nullptr>
 	class [[nodiscard]] BitSet
 	{
 		static constexpr std::size_t array_size = Bits / 64u;
@@ -459,9 +462,9 @@ namespace bmath::intern {
 		constexpr void   set(const std::size_t pos, const bool val) noexcept { this->data[pos / 64u].set(pos % 64u, val); }
 
 		constexpr bool  test(const std::size_t pos) const noexcept { return this->data[pos / 64u].test(pos % 64u); }
-		constexpr bool  all() const noexcept { return this->test_all([](const BitSet64 x) { return x.all(); }); }
+		constexpr bool  all() const noexcept { return this->test_all([](const BitSet64& x) { return x.all(); }); }
 		constexpr bool  any() const noexcept { return !this->none(); }
-		constexpr bool none() const noexcept { return this->test_all([](const BitSet64 x) { return x.none(); }); }
+		constexpr bool none() const noexcept { return this->test_all([](const BitSet64& x) { return x.none(); }); }
 
 		constexpr void flip(const std::size_t pos) { this->data[pos / 64u].flip(pos % 64u); }
 
@@ -550,6 +553,6 @@ namespace bmath::intern {
 		constexpr const OptComplex& operator-=(const OptComplex& snd) noexcept { this->val -= snd.val; return *this; }
 		constexpr const OptComplex& operator*=(const OptComplex& snd) noexcept { this->val *= snd.val; return *this; }
 		constexpr const OptComplex& operator/=(const OptComplex& snd) noexcept { this->val /= snd.val; return *this; }
-	};
+	}; //struct OptComplex
 
 } //namespace bmath::intern

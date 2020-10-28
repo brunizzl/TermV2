@@ -58,7 +58,7 @@ namespace bmath::intern {
 	using Type = SumEnum<Fn, Leaf, Op>;
 
 	using TypedIdx = BasicTypedIdx<Type>;
-	using TypedIdxSLC = TermSLC<std::uint32_t, TypedIdx, 3>;
+	using TypedIdxSLC = TermSLC<TypedIdx>;
 
 	using Sum     = TypedIdxSLC;
 	using Product = TypedIdxSLC;
@@ -76,7 +76,7 @@ namespace bmath::intern {
 		union
 		{
 			char short_name[8] = "";
-			std::uint32_t long_name_idx;	//points to TermString128 containing name (if active)
+			std::uint32_t long_name_idx;	//points to StringSLC containing name (if active)
 		};
 	private:
 		char short_name_extension[3] = ""; //just implementation detail, no one needs to see this
@@ -87,7 +87,7 @@ namespace bmath::intern {
 		std::uint32_t params_idx = 0; //points to TypedIdxSLC containing the parameters
 	};
 
-	using  Variable = TermString128;
+	using  Variable = StringSLC;
 	using Complex = std::complex<double>;
 
 	union TypesUnion
@@ -96,13 +96,13 @@ namespace bmath::intern {
 		GenericFunction generic_function;
 		Complex complex;
 		TypedIdxSLC index_slc; //representing GenericFunction's extra parameters, Sum or Product 
-		TermString128 string;	//Variable is a string and GenericFunction may allocate additional string nodes
+		StringSLC string;	//Variable is a string and GenericFunction may allocate additional string nodes
 
 		TypesUnion(const FnParams<TypedIdx>& val) :fn_params(val)        {}
 		TypesUnion(const GenericFunction&    val) :generic_function(val) {}
 		TypesUnion(const Complex&            val) :complex(val)          {}
 		TypesUnion(const TypedIdxSLC&        val) :index_slc(val)        {}
-		TypesUnion(const TermString128&      val) :string(val)           {} 
+		TypesUnion(const StringSLC&      val) :string(val)           {} 
 
 		constexpr auto operator<=>(const TypesUnion&) const = default;
 
@@ -110,13 +110,13 @@ namespace bmath::intern {
 		constexpr operator const GenericFunction    &() const noexcept { return this->generic_function; }
 		constexpr operator const Complex            &() const noexcept { return this->complex; }
 		constexpr operator const TypedIdxSLC        &() const noexcept { return this->index_slc; }
-		constexpr operator const TermString128      &() const noexcept { return this->string; }
+		constexpr operator const StringSLC      &() const noexcept { return this->string; }
 
 		constexpr operator FnParams<TypedIdx> &() noexcept { return this->fn_params; }
 		constexpr operator GenericFunction    &() noexcept { return this->generic_function; }
 		constexpr operator Complex            &() noexcept { return this->complex; }
 		constexpr operator TypedIdxSLC        &() noexcept { return this->index_slc; }
-		constexpr operator TermString128      &() noexcept { return this->string; }
+		constexpr operator StringSLC      &() noexcept { return this->string; }
 	};
 
 	static_assert(sizeof(TypesUnion) * 8 == 128);
@@ -146,7 +146,7 @@ namespace bmath::intern {
 		static constexpr unsigned _value_proxy = unsigned(PnType(PnVariable::value_proxy));
 
 		using PnTypedIdx = BasicTypedIdx<PnType>;
-		using PnTypedIdxSLC = TermSLC<std::uint32_t, PnTypedIdx, 3>;
+		using PnTypedIdxSLC = TermSLC<PnTypedIdx>;
 
 		using PnSum = PnTypedIdxSLC;
 		using PnProduct = PnTypedIdxSLC;
@@ -223,7 +223,7 @@ namespace bmath::intern {
 			GenericFunction generic_function;
 			Complex complex;
 			PnTypedIdxSLC index_slc; //representing GenericFunction's extra parameters, Sum or Product 
-			TermString128 string;	//PnVariable is a string and GenericFunction may allocate additional string nodes
+			StringSLC string;	//PnVariable is a string and GenericFunction may allocate additional string nodes
 			TreeMatchVariable tree_match;
 			ValueMatchVariable value_match;
 
@@ -231,7 +231,7 @@ namespace bmath::intern {
 			PnTypesUnion(const GenericFunction&      val) :generic_function(val) {}
 			PnTypesUnion(const Complex&              val) :complex(val)          {}
 			PnTypesUnion(const PnTypedIdxSLC&        val) :index_slc(val)        {}
-			PnTypesUnion(const TermString128&        val) :string(val)           {} 
+			PnTypesUnion(const StringSLC&        val) :string(val)           {} 
 			PnTypesUnion(const TreeMatchVariable&    val) :tree_match(val)       {} 
 			PnTypesUnion(const ValueMatchVariable&   val) :value_match(val)      {} 
 
@@ -241,7 +241,7 @@ namespace bmath::intern {
 			constexpr operator const GenericFunction      &() const noexcept { return this->generic_function; }
 			constexpr operator const Complex              &() const noexcept { return this->complex; }
 			constexpr operator const PnTypedIdxSLC        &() const noexcept { return this->index_slc; }
-			constexpr operator const TermString128        &() const noexcept { return this->string; }
+			constexpr operator const StringSLC        &() const noexcept { return this->string; }
 			constexpr operator const TreeMatchVariable    &() const noexcept { return this->tree_match; }
 			constexpr operator const ValueMatchVariable   &() const noexcept { return this->value_match; }
 
@@ -249,7 +249,7 @@ namespace bmath::intern {
 			constexpr operator GenericFunction      &() noexcept { return this->generic_function; }
 			constexpr operator Complex              &() noexcept { return this->complex; }
 			constexpr operator PnTypedIdxSLC        &() noexcept { return this->index_slc; }
-			constexpr operator TermString128        &() noexcept { return this->string; }
+			constexpr operator StringSLC        &() noexcept { return this->string; }
 			constexpr operator TreeMatchVariable    &() noexcept { return this->tree_match; }
 			constexpr operator ValueMatchVariable   &() noexcept { return this->value_match; }
 		};

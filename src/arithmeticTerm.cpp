@@ -19,7 +19,7 @@
 	void prototype(const BasicRef<Union_T,Type_T> ref)
 	{
 		using TypedIdx_T = BasicTypedIdx<Type_T>;
-		using TypedIdxSLC_T = TermSLC<std::uint32_t, TypedIdx_T, 3>;
+		using TypedIdxSLC_T = TermSLC<TypedIdx_T>;
 		constexpr bool pattern = std::is_same_v<Type_T, pattern::PnType>;
 
 		switch (ref.type) {
@@ -538,7 +538,7 @@ namespace bmath::intern {
 		void free(const BasicMutRef<Union_T,Type_T> ref)
 		{
 			using TypedIdx_T = BasicTypedIdx<Type_T>;
-			using TypedIdxSLC_T = TermSLC<std::uint32_t, TypedIdx_T, 3>;
+			using TypedIdxSLC_T = TermSLC<TypedIdx_T>;
 			constexpr bool pattern = std::is_same_v<Type_T, pattern::PnType>;
 
 			switch (ref.type) {
@@ -557,7 +557,7 @@ namespace bmath::intern {
 				const GenericFunction& generic_function = *ref;
 				TypedIdxSLC_T::free_slc(*ref.store, generic_function.params_idx);
 				if (generic_function.name_size == GenericFunction::NameSize::longer) {
-					TermString128::free_slc(*ref.store, generic_function.long_name_idx);
+					StringSLC::free_slc(*ref.store, generic_function.long_name_idx);
 				}
 				ref.free();
 			} break;
@@ -569,7 +569,7 @@ namespace bmath::intern {
 				ref.free();
 			} break;
 			case Type_T(Leaf::variable): {
-				TermString128::free_slc(*ref.store, ref.index);
+				StringSLC::free_slc(*ref.store, ref.index);
 			} break;
 			case Type_T(Leaf::complex): {
 				ref.free();
@@ -592,7 +592,7 @@ namespace bmath::intern {
 		void combine_layers(BasicMutRef<Union_T,Type_T> ref)
 		{
 			using TypedIdx_T = BasicTypedIdx<Type_T>;
-			using TypedIdxSLC_T = TermSLC<std::uint32_t, TypedIdx_T, 3>;
+			using TypedIdxSLC_T = TermSLC<TypedIdx_T>;
 			constexpr bool pattern = std::is_same_v<Type_T, pattern::PnType>;
 
 			switch (ref.type) {
@@ -644,7 +644,7 @@ namespace bmath::intern {
 		OptComplex combine_values_inexact(const BasicMutRef<Union_T,Type_T> ref)
 		{
 			using TypedIdx_T = BasicTypedIdx<Type_T>;
-			using TypedIdxSLC_T = TermSLC<std::uint32_t, TypedIdx_T, 3>;
+			using TypedIdxSLC_T = TermSLC<TypedIdx_T>;
 			constexpr bool pattern = std::is_same_v<Type_T, pattern::PnType>;
 
 			switch (ref.type) {
@@ -741,7 +741,7 @@ namespace bmath::intern {
 		OptComplex combine_values_exact(const BasicMutRef<Union_T,Type_T> ref)
 		{
 			using TypedIdx_T = BasicTypedIdx<Type_T>;
-			using TypedIdxSLC_T = TermSLC<std::uint32_t, TypedIdx_T, 3u>;
+			using TypedIdxSLC_T = TermSLC<TypedIdx_T>;
 			constexpr bool pattern = std::is_same_v<Type_T, pattern::PnType>;
 
 			const auto get_divisor = [](BasicMutRef<Union_T, Type_T> ref) -> std::optional<TypedIdx_T> {
@@ -993,7 +993,7 @@ namespace bmath::intern {
 		void sort(const BasicMutRef<Union_T,Type_T> ref)
 		{
 			using TypedIdx_T = BasicTypedIdx<Type_T>;
-			using TypedIdxSLC_T = TermSLC<std::uint32_t, TypedIdx_T, 3u>;
+			using TypedIdxSLC_T = TermSLC<TypedIdx_T>;
 
 			const auto sort_variadic = [&](BasicMutRef<Union_T, Type_T> ref) {
 				const auto compare_function = [&](const TypedIdx_T lhs, const TypedIdx_T rhs) {
@@ -1030,7 +1030,7 @@ namespace bmath::intern {
 		[[nodiscard]] BasicTypedIdx<Type_T> copy(const BasicRef<Union_T,Type_T> src_ref, BasicStore<Union_T>& dst_store)
 		{
 			using TypedIdx_T = BasicTypedIdx<Type_T>;
-			using TypedIdxSLC_T = TermSLC<std::uint32_t, TypedIdx_T, 3>;
+			using TypedIdxSLC_T = TermSLC<TypedIdx_T>;
 			constexpr bool src_pattern = std::is_same_v<Type_T, pattern::PnType>;
 
 			switch (src_ref.type) {
@@ -1137,7 +1137,7 @@ namespace bmath::intern {
 		TypedIdx_T* find_subtree_owner(BasicStore<Union_T>& store, TypedIdx_T& head, const TypedIdx_T subtree)
 		{
 			using Type_T = TypedIdx_T::Enum_T;
-			using TypedIdxSLC_T = TermSLC<std::uint32_t, TypedIdx_T, 3>;
+			using TypedIdxSLC_T = TermSLC<TypedIdx_T>;
 			constexpr bool pattern = std::is_same_v<Type_T, pattern::PnType>;
 
 			if (head == subtree) {
@@ -1233,7 +1233,16 @@ namespace bmath::intern {
 						assert(false);
 					} break;
 					case Type(Op::generic_function): {
-						assert(false);
+						auto range = fn::range(ref);
+						auto pn_range = fn::range(pn_ref);
+						auto iter = range.begin();
+						auto pn_iter = pn_range.begin();
+						for (; iter != range.end() && pn_iter != pn_range.end(); ++iter, ++pn_iter) { //iter and pn_iter both go over same number of params
+							if (!tree::match(pn_ref.new_at(*pn_iter), ref.new_at(*iter), match_data)) {
+								return false;
+							}
+						}
+						return iter == range.end() && pn_iter == pn_range.end();
 					} break;
 					default: {
 						assert(ref.type.is<Fn>()); //if this assert hits, the switch above needs more cases.

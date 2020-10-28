@@ -15,19 +15,20 @@ namespace bmath::intern {
 
 	//single linked colony is similar to a single linked list, but each node holds a whole array containing ArraySize Value_T,
 	//not only a single Value_T (as an ordinary list would). TermSLC directly represents the node, there is no extra head or management.
-	//TermSLC is build to reside inside a BasicStore, thus it works with TypedIdx_T to access later nodes, not with pointers.
-	template <typename Index_T, typename Value_T, std::size_t ArraySize>
+	//TermSLC is build to reside inside a BasicStore, thus it works with std::uint32_t to access later nodes, not with pointers.
+	//as (as of writing this anyway) a unit in TermStore has a size of 128 bits, the default ArraSize fills that space.
+	template <typename Value_T, std::size_t ArraySize = (128u / 8u - sizeof(uint32_t)) / sizeof(Value_T)>
 	struct [[nodiscard]] TermSLC
 	{
-		static_assert(std::is_unsigned_v<Index_T>);
+		static_assert(std::is_unsigned_v<std::uint32_t>);
 		static_assert(std::is_trivially_destructible_v<Value_T>);
 		static_assert(std::is_trivially_copyable_v<Value_T>);
 
-		static constexpr Index_T null_index = Index_T();	//assumed to hold a value invalid as an actual index in a BasicStore
+		static constexpr std::uint32_t null_index = 0u;	//assumed to hold a value invalid as an actual index in a BasicStore
 		static constexpr Value_T null_value = Value_T();
 		static constexpr std::size_t array_size = ArraySize; //make visible to outside
 
-		Index_T next_idx;	//index of next SLC block in BasicStore
+		std::uint32_t next_idx;	//index of next SLC block in BasicStore
 		Value_T values[ArraySize];
 
 		constexpr TermSLC(const Value_T fst_elem = null_value) noexcept :next_idx(null_index)
@@ -39,7 +40,7 @@ namespace bmath::intern {
 		}
 
 		//can only fill up to single block
-		constexpr TermSLC(const std::span<const Value_T> new_values, const Index_T next_block) :next_idx(next_block)
+		constexpr TermSLC(const std::span<const Value_T> new_values, const std::uint32_t next_block) :next_idx(next_block)
 		{
 			assert(new_values.size() <= ArraySize);
 			std::copy(new_values.begin(), new_values.end(), this->values);
@@ -60,10 +61,10 @@ namespace bmath::intern {
 
 		//also allows SLC::null_index to be passed in
 		template<typename Union_T>
-		static void free_slc(BasicStore<Union_T>& store, const Index_T slc_idx)
+		static void free_slc(BasicStore<Union_T>& store, const std::uint32_t slc_idx)
 		{
 			SLCRef<Union_T> ref = SLCRef<Union_T>(store, slc_idx);
-			Index_T last_idx;
+			std::uint32_t last_idx;
 			while (ref.index != null_index) {
 				last_idx = ref.index;
 				ref.index = ref->next_idx;
@@ -98,9 +99,9 @@ namespace bmath::intern {
 		//returns position of previously last node
 		//this allows easy appending of n slcs of length O(1) in O(n), instead of O(n^2)
 		template<typename Union_T>
-		[[nodiscard]] static std::size_t append(BasicStore<Union_T>& store, const Index_T this_idx, const Index_T append_idx)
+		[[nodiscard]] static std::size_t append(BasicStore<Union_T>& store, const std::uint32_t this_idx, const std::uint32_t append_idx)
 		{
-			static_assert(!std::is_same_v<TermSLC, TermString128>, "append is not meant for strings");
+			static_assert(!std::is_same_v<TermSLC, StringSLC>, "append is not meant for strings");
 			auto ref = SLCRef<Union_T>(store, this_idx);
 			while (ref->next_idx != null_index) {
 				ref.index = ref->next_idx;
@@ -117,10 +118,10 @@ namespace bmath::intern {
 			using Store_T = std::conditional_t<Const, const BasicStore<Union_T>, BasicStore<Union_T>>;
 			using SLC_T = std::conditional_t<Const, const TermSLC, TermSLC>;
 
-			Store_T& store;
-			Index_T index;
+			Store_T* const store;
+			std::uint32_t index;
 
-			SLCRef(Store_T& new_store, Index_T new_slc_idx) :store(new_store), index(new_slc_idx) {}
+			SLCRef(Store_T& new_store, std::uint32_t new_slc_idx) :store(&new_store), index(new_slc_idx) {}
 
 			struct Iterator
 			{
@@ -133,13 +134,13 @@ namespace bmath::intern {
 				SLCRef ref;						//.index == 0, if whole object represents end()
 				std::uint32_t array_idx;		// == SLC::array_size, if whole object represents end()
 
-				Iterator(SLCRef& new_ref, std::uint32_t new_array_idx) :ref(new_ref), array_idx(new_array_idx) {}
+				Iterator(const SLCRef& new_ref, std::uint32_t new_array_idx) :ref(new_ref), array_idx(new_array_idx) {}
 
 				Iterator(const Iterator& other) :ref(other.ref), array_idx(other.array_idx) {}
 
 				Iterator& operator=(const Iterator& other)
 				{
-					assert(&this->ref.store == &other.ref.store);
+					assert(this->ref.store == other.ref.store);
 					this->ref.index = other.ref.index;
 					this->array_idx = other.array_idx;
 					return *this;
@@ -189,18 +190,18 @@ namespace bmath::intern {
 
 				bool operator==(const Iterator& other) const noexcept
 				{
-					assert(&this->ref.store == &other.ref.store && "only comparison between iterators in same term makes sense");
+					assert(this->ref.store == other.ref.store && "only comparison between iterators in same term makes sense");
 					return this->array_idx == other.array_idx && this->ref.index == other.ref.index;
 				}
 			};	//struct Iterator
 
 			//not meant to normally iterate through values, as also null_value might occur at begin
-			Iterator unchecked_begin() noexcept
+			Iterator unchecked_begin() const noexcept
 			{
-				return Iterator(*this, 0);
+				return Iterator(*this, 0u);
 			}
 
-			Iterator begin() 
+			Iterator begin() const
 			{ 
 				auto iter = this->unchecked_begin();
 				if (iter.ref->values[0] == null_value) [[unlikely]] {
@@ -209,10 +210,10 @@ namespace bmath::intern {
 				return iter; 
 			}
 
-			Iterator end() noexcept { return Iterator(SLCRef(this->store, 0u), array_size); }
+			Iterator end() const noexcept { return Iterator(SLCRef(*this->store, 0u), array_size); }
 
-			SLC_T* operator->() { return &static_cast<SLC_T&>(store.at(index)); }
-			const TermSLC* operator->() const { return &static_cast<const TermSLC&>(store.at(index)); }
+			SLC_T* operator->() { return &static_cast<SLC_T&>(store->at(index)); }
+			const TermSLC* operator->() const { return &static_cast<const TermSLC&>(store->at(index)); }
 		}; //struct SLCRef
 
 		template<typename Union_T, typename Type_T, typename Compare>
@@ -255,28 +256,28 @@ namespace bmath::intern {
 	};	//struct TermSLC 
 
 
-	using TermString128 = TermSLC<std::uint32_t, char, 12>;
-	static_assert(sizeof(TermString128) * 8 == 128);
+	using StringSLC = TermSLC<char>;
+	static_assert(sizeof(StringSLC) * 8 == 128);
 
 	template<typename Union_T>
 	[[nodiscard]] std::size_t insert_string(BasicStore<Union_T>& store, std::string_view str)
 	{
-		std::uint32_t prev_inserted_at = TermString128::null_index;
+		std::uint32_t prev_inserted_at = StringSLC::null_index;
 		{
-			const std::size_t last_substr_length = str.length() % TermString128::array_size;
+			const std::size_t last_substr_length = str.length() % StringSLC::array_size;
 			if (last_substr_length > 0) {
 				const std::size_t last_substr_begin = str.length() - last_substr_length;
 				const std::span<const char> last_view(str.data() + last_substr_begin, last_substr_length);
-				prev_inserted_at = store.insert(TermString128(last_view, prev_inserted_at));
+				prev_inserted_at = store.insert(StringSLC(last_view, prev_inserted_at));
 				str.remove_suffix(last_substr_length);
 			}
 		}
-		assert((str.length() % TermString128::array_size == 0) && "last shorter bit should have been cut off already");
+		assert((str.length() % StringSLC::array_size == 0) && "last shorter bit should have been cut off already");
 		while (str.length()) {
-			const char *const last_view_begin = str.data() + str.length() - TermString128::array_size;
-			const std::span<const char> last_view(last_view_begin, TermString128::array_size);
-			prev_inserted_at = store.insert(TermString128(last_view, prev_inserted_at));
-			str.remove_suffix(TermString128::array_size);
+			const char *const last_view_begin = str.data() + str.length() - StringSLC::array_size;
+			const std::span<const char> last_view(last_view_begin, StringSLC::array_size);
+			prev_inserted_at = store.insert(StringSLC(last_view, prev_inserted_at));
+			str.remove_suffix(StringSLC::array_size);
 		}
 		return prev_inserted_at;
 	} //insert_string
@@ -284,12 +285,12 @@ namespace bmath::intern {
 	template<typename Union_T, typename Type_T>
 	void read(const BasicRef<Union_T, Type_T> in_ref, std::string& dest)
 	{
-		auto ref = TermString128::SLCRef<Union_T, true>(*in_ref.store, in_ref.index);
-		while (ref->next_idx != TermString128::null_index) {
-			dest.append(ref->values, TermString128::array_size);
+		auto ref = StringSLC::SLCRef<Union_T, true>(*in_ref.store, in_ref.index);
+		while (ref->next_idx != StringSLC::null_index) {
+			dest.append(ref->values, StringSLC::array_size);
 			ref.index = ref->next_idx;
 		}
-		for (std::size_t i = 0u; i < TermString128::array_size; i++) {
+		for (std::size_t i = 0u; i < StringSLC::array_size; i++) {
 			if (ref->values[i] == '\0') [[unlikely]] {
 				return;
 			}
@@ -301,12 +302,12 @@ namespace bmath::intern {
 	[[nodiscard]] std::strong_ordering string_compare(
 		const BasicRef<Union_T1, Type_T1> in_ref_1, const BasicRef<Union_T2, Type_T2> in_ref_2)
 	{
-		auto ref_1 = TermString128::SLCRef<Union_T1, true>(*in_ref_1.store, in_ref_1.index);
-		auto ref_2 = TermString128::SLCRef<Union_T2, true>(*in_ref_2.store, in_ref_2.index);
-		while (ref_1->next_idx != TermString128::null_index && ref_2->next_idx != TermString128::null_index) 
+		auto ref_1 = StringSLC::SLCRef<Union_T1, true>(*in_ref_1.store, in_ref_1.index);
+		auto ref_2 = StringSLC::SLCRef<Union_T2, true>(*in_ref_2.store, in_ref_2.index);
+		while (ref_1->next_idx != StringSLC::null_index && ref_2->next_idx != StringSLC::null_index) 
 		{
 			static_assert(('a' <=> 'a') == std::strong_ordering::equal); //dont wanna mix with std::strong_ordering::equivalent
-			const auto cmp = compare_arrays(ref_1->values, ref_2->values, TermString128::array_size);
+			const auto cmp = compare_arrays(ref_1->values, ref_2->values, StringSLC::array_size);
 			if (cmp != std::strong_ordering::equal) {
 				return cmp;
 			}
@@ -315,13 +316,13 @@ namespace bmath::intern {
 				ref_2.index = ref_2->next_idx;
 			}
 		}
-		if (ref_1->next_idx == TermString128::null_index &&
-			ref_2->next_idx == TermString128::null_index) 
+		if (ref_1->next_idx == StringSLC::null_index &&
+			ref_2->next_idx == StringSLC::null_index) 
 		{
-			return compare_arrays(ref_1->values, ref_2->values, TermString128::array_size);
+			return compare_arrays(ref_1->values, ref_2->values, StringSLC::array_size);
 		}
 		else {
-			return ref_1->next_idx == TermString128::null_index ?
+			return ref_1->next_idx == StringSLC::null_index ?
 				std::strong_ordering::less : 
 				std::strong_ordering::greater;
 		}
@@ -330,23 +331,23 @@ namespace bmath::intern {
 	template<typename Union_T, typename Type_T>
 	[[nodiscard]] std::strong_ordering string_compare(const BasicRef<Union_T, Type_T> in_ref, std::string_view view)
 	{
-		auto ref = TermString128::SLCRef<Union_T, true>(*in_ref.store, in_ref.index);
-		while (view.size() > TermString128::array_size && ref->next_idx != TermString128::null_index) {
-			const auto cmp = compare_arrays(ref->values, view.data(), TermString128::array_size);
+		auto ref = StringSLC::SLCRef<Union_T, true>(*in_ref.store, in_ref.index);
+		while (view.size() > StringSLC::array_size && ref->next_idx != StringSLC::null_index) {
+			const auto cmp = compare_arrays(ref->values, view.data(), StringSLC::array_size);
 			if (cmp != std::strong_ordering::equal) {
 				return cmp;
 			}
 			else {
 				ref.index = ref->next_idx;
-				view.remove_prefix(TermString128::array_size);
+				view.remove_prefix(StringSLC::array_size);
 			}
 		}
-		if (view.size() <= TermString128::array_size && ref->next_idx == TermString128::null_index) {
-			const std::size_t shorter_length = std::min(TermString128::array_size, view.size());
+		if (view.size() <= StringSLC::array_size && ref->next_idx == StringSLC::null_index) {
+			const std::size_t shorter_length = std::min(StringSLC::array_size, view.size());
 			return compare_arrays(ref->values, view.data(), shorter_length);
 		}
 		else {
-			return view.size() <= TermString128::array_size ?
+			return view.size() <= StringSLC::array_size ?
 				std::strong_ordering::less : 
 				std::strong_ordering::greater;
 		}

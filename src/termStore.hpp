@@ -308,7 +308,7 @@ namespace bmath::intern {
 	template<typename Union_T, typename Own_T>
 	struct BasicNodeRef
 	{
-		BasicStore<Union_T>* const store;
+		BasicStore<Union_T>* const store; //actual pointer to have shallow constness
 		std::uint32_t index;
 
 		constexpr BasicNodeRef(BasicStore<Union_T>& new_store, const std::uint32_t new_index)

@@ -459,7 +459,7 @@ namespace bmath::intern {
 	template<typename TypedIdx_T, typename Store_T, typename BuildAny>
 	[[nodiscard]] TypedIdx_T build_function(Store_T& store, ParseView input, const std::size_t open_par, BuildAny build_any)
 	{
-		using TypedIdxSLC_T = TermSLC<std::uint32_t, TypedIdx_T, 3u>;
+		using TypedIdxSLC_T = TermSLC<TypedIdx_T>;
 
 		const auto type = fn::type_of(input.to_string_view(0u, open_par));
 		if (type == Fn::COUNT) { //build generic function
@@ -917,7 +917,7 @@ namespace bmath::intern {
 		void append_memory_row(const BasicRef<Union_T, Type_T> ref, std::vector<std::string>& rows)
 		{
 			using TypedIdx_T = BasicTypedIdx<Type_T>;
-			using TypedIdxSLC_T = TermSLC<std::uint32_t, TypedIdx_T, 3>;
+			using TypedIdxSLC_T = TermSLC<TypedIdx_T>;
 			constexpr bool pattern = std::is_same_v<Type_T, pattern::PnType>;
 
 			const auto show_typedidx_col_nodes = [&ref, &rows](std::uint32_t idx, bool show_first) {
@@ -931,16 +931,16 @@ namespace bmath::intern {
 				}
 			};
 			const auto show_string_nodes = [&ref, &rows](std::uint32_t idx, bool show_first) {
-				const TermString128* str = &ref.store->at(idx).string;
+				const StringSLC* str = &ref.store->at(idx).string;
 				if (show_first) {
 					rows[idx].append("(str node part of index " + std::to_string(ref.index) + ": \""
-						+ std::string(str->values, TermString128::array_size) + "\")");
+						+ std::string(str->values, StringSLC::array_size) + "\")");
 				}
-				while (str->next_idx != TermString128::null_index) {
+				while (str->next_idx != StringSLC::null_index) {
 					const std::size_t str_idx = str->next_idx;
 					str = &ref.store->at(str->next_idx).string;
 					rows[str_idx].append("(str node part of index " + std::to_string(ref.index) + ": \""
-						+ std::string(str->values, TermString128::array_size) + "\")");
+						+ std::string(str->values, StringSLC::array_size) + "\")");
 				}
 			};
 
