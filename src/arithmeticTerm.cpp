@@ -1226,9 +1226,8 @@ namespace bmath::intern {
 				}
 				else {
 					switch (ref.type) {
-					case Type(Op::sum): {
-						assert(false);
-					} break;
+					case Type(Op::sum): 
+						[[fallthrough]];
 					case Type(Op::product): {
 						assert(false);
 					} break;
@@ -1237,7 +1236,7 @@ namespace bmath::intern {
 						auto pn_range = fn::range(pn_ref);
 						auto iter = range.begin();
 						auto pn_iter = pn_range.begin();
-						for (; iter != range.end() && pn_iter != pn_range.end(); ++iter, ++pn_iter) { //iter and pn_iter both go over same number of params
+						for (; iter != range.end() && pn_iter != pn_range.end(); ++iter, ++pn_iter) {
 							if (!tree::match(pn_ref.new_at(*pn_iter), ref.new_at(*iter), match_data)) {
 								return false;
 							}
