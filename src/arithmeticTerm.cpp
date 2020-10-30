@@ -30,7 +30,7 @@
 			}
 			assert(false);
 		} break;
-		case Type_T(Op::generic_function): {
+		case Type_T(Op::generic_fn): {
 			for (const TypedIdx_T param : fn::range(ref)) {
 			}
 			assert(false);
@@ -92,7 +92,7 @@ namespace bmath::intern {
 		{ Type(Fn::ln              )  , 36 }, //order of parameters is given -> most unique
 		{ Type(Fn::re              )  , 38 }, //order of parameters is given -> most unique
 		{ Type(Fn::im              )  , 40 }, //order of parameters is given -> most unique
-		{ Type(Op::generic_function)  , 50 }, //order of parameters is given -> most unique
+		{ Type(Op::generic_fn)  , 50 }, //order of parameters is given -> most unique
 		{ Type(Op::product         )  , 55 }, //order of operands my vary -> second most unique
 		{ Type(Op::sum             )  , 60 }, //order of operands my vary -> second most unique
 		{ pattern::PnVariable::value_match, 65 }, //a bit more unique than complex
@@ -103,7 +103,7 @@ namespace bmath::intern {
 	});
 	constexpr int uniqueness(pattern::PnType type) noexcept { return find_snd(uniqueness_table, type); }
 
-	//utility for both Function and GenericFunction
+	//utility for both Function and GenericFn
 	namespace fn {
 
 		OptComplex eval(Fn type, const std::array<OptComplex, 4>& param_vals)
@@ -217,7 +217,7 @@ namespace bmath::intern {
 			}
 			else if (restr == Restr::function) {
 				const Type type = head.get_type();
-				return type == Type::generic_function || type.is<Fn>();
+				return type == Type::generic_fn || type.is<Fn>();
 			}
 			else {
 				assert(false);
@@ -330,7 +330,7 @@ namespace bmath::intern {
 							default:
 								assert(ref.type.is<Fn>()); 
 								[[fallthrough]];
-							case PnType(Op::generic_function):
+							case PnType(Op::generic_fn):
 								this->acc = MatchTraits{ .has_match = false, .computable = false };
 								break;
 							case PnType(PnVariable::value_match): {
@@ -376,7 +376,7 @@ namespace bmath::intern {
 						}
 					}
 				} break;
-				case PnType(Op::generic_function): {
+				case PnType(Op::generic_fn): {
 					for (PnTypedIdx& param : fn::range(PnMutRef(store, head))) {
 						if (PnTypedIdx* const elem_res = find_value_match_subtree(store, param, value_match)) {
 							return elem_res;
@@ -408,7 +408,7 @@ namespace bmath::intern {
 
 			void rearrange_value_match(PnStore& store, PnTypedIdx& head, const PnTypedIdx value_match)
 			{
-				using VarRef = BasicNodeRef<PnTypesUnion, ValueMatchVariable>;
+				using VarRef = BasicNodeRef<PnTypesUnion, ValueMatchVariable, Const::no>;
 
 				PnTypedIdx* const value_match_subtree = find_value_match_subtree(store, head, value_match);
 				PnTypedIdx* const value_match_storage = tree::find_subtree_owner(store, head, value_match);
@@ -455,9 +455,10 @@ namespace bmath::intern {
 								last_node_idx = PnTypedIdxSLC::insert_new(store, last_node_idx, new_rhs_elem);
 							}
 						}
-						PnTypedIdxSLC::free_slc(store, lhs_index); //all factors (summands) have been shifted to rhs -> delete SLC (but not recursively, elems have new owner!)
+						//all factors (summands) have been shifted to rhs -> delete SLC (but not recursively, elems have new owner!)
+						free_slc(PnTypedIdxSLC::SLCMutRef<PnTypesUnion>(store, lhs_index)); 
 					} break;
-					case PnType(Op::generic_function): 
+					case PnType(Op::generic_fn): 
 						assert(false); break;
 					case PnType(Leaf::variable): 
 						assert(false); break;
@@ -510,21 +511,21 @@ namespace bmath::intern {
 		template<typename Union_T1, typename Type_T1, typename Union_T2, typename Type_T2>
 		std::strong_ordering compare_name(const BasicRef<Union_T1, Type_T1> ref_1, const BasicRef<Union_T2, Type_T2> ref_2)
 		{
-			assert(ref_1.type == Op::generic_function && ref_2.type == Op::generic_function);
-			const GenericFunction& fn_1 = *ref_1;
-			const GenericFunction& fn_2 = *ref_2;
-			if (fn_1.name_size == GenericFunction::NameSize::small &&
-				fn_2.name_size == GenericFunction::NameSize::small) 
+			assert(ref_1.type == Op::generic_fn && ref_2.type == Op::generic_fn);
+			const GenericFn& fn_1 = *ref_1;
+			const GenericFn& fn_2 = *ref_2;
+			if (fn_1.name_size == GenericFn::NameSize::small &&
+				fn_2.name_size == GenericFn::NameSize::small) 
 			{//change to comparison of std::string_view when they support <=>
-				return compare_arrays(fn_1.short_name, fn_2.short_name, GenericFunction::short_name_max);				
+				return compare_arrays(fn_1.short_name, fn_2.short_name, GenericFn::short_name_max);				
 			}
-			else if (fn_1.name_size == GenericFunction::NameSize::longer &&
-			         fn_2.name_size == GenericFunction::NameSize::longer) 			
+			else if (fn_1.name_size == GenericFn::NameSize::longer &&
+			         fn_2.name_size == GenericFn::NameSize::longer) 			
 			{
-				return string_compare(ref_1.unsave_at(fn_1.long_name_idx), ref_2.unsave_at(fn_2.long_name_idx));
+				return str_slc::compare(ref_1.new_as<StringSLC>(fn_1.long_name_idx), ref_2.new_as<StringSLC>(fn_2.long_name_idx));
 			}
 			else {
-				return fn_1.name_size == GenericFunction::NameSize::small ?
+				return fn_1.name_size == GenericFn::NameSize::small ?
 					std::strong_ordering::less : 
 					std::strong_ordering::greater;
 			}
@@ -548,40 +549,40 @@ namespace bmath::intern {
 				for (const TypedIdx_T elem : vc::range(ref)) {
 					tree::free(ref.new_at(elem));
 				}
-				TypedIdxSLC_T::free_slc(*ref.store, ref.index);
+				free_slc(ref.cast<TypedIdxSLC_T>());
 			} break;
-			case Type_T(Op::generic_function): {
+			case Type_T(Op::generic_fn): {
 				for (const TypedIdx_T param : fn::range(ref)) {
 					tree::free(ref.new_at(param));
 				}
-				const GenericFunction& generic_function = *ref;
-				TypedIdxSLC_T::free_slc(*ref.store, generic_function.params_idx);
-				if (generic_function.name_size == GenericFunction::NameSize::longer) {
-					StringSLC::free_slc(*ref.store, generic_function.long_name_idx);
+				const GenericFn& generic_fn = *ref;
+				free_slc(ref.new_as<TypedIdxSLC_T>(generic_fn.params_idx));
+				if (generic_fn.name_size == GenericFn::NameSize::longer) {
+					free_slc(ref.new_as<StringSLC>(generic_fn.long_name_idx));
 				}
-				ref.free();
+				ref.store->free(ref.index);
 			} break;
 			default: {
 				assert(ref.type.is<Fn>());
 				for (const TypedIdx_T param : fn::range(ref->fn_params, ref.type)) {
 					tree::free(ref.new_at(param));
 				}
-				ref.free();
+				ref.store->free(ref.index);
 			} break;
 			case Type_T(Leaf::variable): {
-				StringSLC::free_slc(*ref.store, ref.index);
+				free_slc(ref.cast<StringSLC>());
 			} break;
 			case Type_T(Leaf::complex): {
-				ref.free();
+				ref.store->free(ref.index);
 			} break;
 			case Type_T(pattern::_tree_match): if constexpr (pattern) {
-				ref.free();
+				ref.store->free(ref.index);
 			} break;
 			case Type_T(pattern::_value_match): if constexpr (pattern) {
 				pattern::ValueMatchVariable& var = *ref;
 				tree::free(ref.new_at(var.match_idx));
 				tree::free(ref.new_at(var.copy_idx));
-				ref.free();
+				ref.store->free(ref.index);
 			} break;
 			case Type_T(pattern::_value_proxy):
 				break;
@@ -589,7 +590,7 @@ namespace bmath::intern {
 		} //free
 
 		template<typename Union_T, typename Type_T>
-		void combine_layers(BasicMutRef<Union_T,Type_T> ref)
+		BasicTypedIdx<Type_T>  combine_layers(const BasicMutRef<Union_T,Type_T> ref)
 		{
 			using TypedIdx_T = BasicTypedIdx<Type_T>;
 			using TypedIdxSLC_T = TermSLC<TypedIdx_T>;
@@ -599,6 +600,9 @@ namespace bmath::intern {
 			case Type_T(Op::sum):
 				[[fallthrough]];
 			case Type_T(Op::product): {
+				std::uint32_t elem_count = 0u;       
+				TypedIdx_T last_elem = TypedIdx_T(); 
+
 				std::uint32_t current_append_node = ref.index;
 				for (auto& elem : vc::range(ref)) {
 					const auto [elem_idx, elem_type] = elem.split();
@@ -607,21 +611,29 @@ namespace bmath::intern {
 						current_append_node = TypedIdxSLC_T::append(*ref.store, current_append_node, elem_idx);
 					}
 					else {
-						tree::combine_layers(ref.new_at(elem));
+						elem = tree::combine_layers(ref.new_at(elem));
 					}
+
+					elem_count++;
+					last_elem = elem;
+				}
+
+				if (elem_count == 1u) { //sum / product is redundant, if there only is a single summand / factor
+					free_slc(ref.cast<TypedIdxSLC_T>());
+					return last_elem;
 				}
 			} break;
-			case Type_T(Op::generic_function): {
-				const GenericFunction& generic_function = *ref;
-				for (const auto param : fn::range(ref)) {
-					tree::combine_layers(ref.new_at(param));
+			case Type_T(Op::generic_fn): {
+				GenericFn& generic_fn = *ref;
+				for (auto& param : fn::range(ref)) {
+					param = tree::combine_layers(ref.new_at(param));
 				}
 			} break;
 			default: {
 				assert(ref.type.is<Fn>());
-				const FnParams<TypedIdx_T>& params = *ref;
-				for (const auto param : fn::range(params, ref.type)) {
-					tree::combine_layers(ref.new_at(param));
+				FnParams<TypedIdx_T>& params = *ref;
+				for (auto& param : fn::range(params, ref.type)) {
+					param = tree::combine_layers(ref.new_at(param));
 				}
 			} break;
 			case Type_T(Leaf::variable):
@@ -632,12 +644,13 @@ namespace bmath::intern {
 				break;
 			case Type_T(pattern::_value_match): if constexpr (pattern) {
 				pattern::ValueMatchVariable& var = *ref;
-				tree::combine_layers(ref.new_at(var.match_idx));
-				tree::combine_layers(ref.new_at(var.copy_idx));
+				var.match_idx = tree::combine_layers(ref.new_at(var.match_idx));
+				var.copy_idx = tree::combine_layers(ref.new_at(var.copy_idx));
 			} break;
 			case Type_T(pattern::_value_proxy):
 				break;
 			}
+			return ref.typed_idx(); //as default the nodes position or type does not change.
 		} //combine_layers
 
 		template<typename Union_T, typename Type_T>
@@ -690,8 +703,8 @@ namespace bmath::intern {
 					TypedIdxSLC_T::insert_new(*ref.store, ref.index, new_factor);
 				}
 			} break;
-			case Type_T(Op::generic_function): {
-				GenericFunction& function = *ref;
+			case Type_T(Op::generic_fn): {
+				GenericFn& function = *ref;
 				for (auto& elem : fn::range(ref)) {
 					if (const OptComplex param_res = tree::combine_values_inexact(ref.new_at(elem))) {
 						tree::free(ref.new_at(elem));
@@ -832,8 +845,8 @@ namespace bmath::intern {
 					}
 				}
 			} break;
-			case Type_T(Op::generic_function): {
-				GenericFunction& function = *ref;
+			case Type_T(Op::generic_fn): {
+				GenericFn& function = *ref;
 				for (auto& elem : fn::range(ref)) {
 					const OptComplex param_res = tree::combine_values_exact(ref.new_at(elem));
 					if (param_res) {
@@ -899,43 +912,43 @@ namespace bmath::intern {
 			case Type_T1(Op::product): {
 				auto range_1 = vc::range(ref_1);
 				auto range_2 = vc::range(ref_2);
-				auto iter_1 = range_1.begin();
-				auto iter_2 = range_2.begin();
-				for (; iter_1 != range_1.end() && iter_2 != range_2.end(); ++iter_1, ++iter_2) {
+				auto iter_1 = begin(range_1);
+				auto iter_2 = begin(range_2);
+				for (; iter_1 != end(range_1) && iter_2 != end(range_2); ++iter_1, ++iter_2) {
 					const auto iter_compare = tree::compare(ref_1.new_at(*iter_1), ref_2.new_at(*iter_2));
 					if (iter_compare != std::strong_ordering::equal) [[likely]] {
 						return iter_compare;
 					}
 				}
-				if (iter_1 == range_1.end() && iter_2 == range_2.end()) {
+				if (iter_1 == end(range_1) && iter_2 == end(range_2)) {
 					return std::strong_ordering::equal;
 				}
 				else {
-					return iter_1 == range_1.end() ?
+					return iter_1 == end(range_1) ?
 						std::strong_ordering::less :
 						std::strong_ordering::greater;
 				}
 			} break;
-			case Type_T1(Op::generic_function): {
+			case Type_T1(Op::generic_fn): {
 				const auto name_cmp = fn::compare_name(ref_2, ref_1); //reverse order, as to_pretty_string reverses again
 				if (name_cmp != std::strong_ordering::equal) {
 					return name_cmp;
 				}
 				auto range_1 = fn::range(ref_1);
 				auto range_2 = fn::range(ref_2);
-				auto iter_1 = range_1.begin();
-				auto iter_2 = range_2.begin();
-				for (; iter_1 != range_1.end() && iter_2 != range_2.end(); ++iter_1, ++iter_2) {
+				auto iter_1 = begin(range_1);
+				auto iter_2 = begin(range_2);
+				for (; iter_1 != end(range_1) && iter_2 != end(range_2); ++iter_1, ++iter_2) {
 					const auto iter_compare = tree::compare(ref_1.new_at(*iter_1), ref_2.new_at(*iter_2));
 					if (iter_compare != std::strong_ordering::equal) [[likely]] {
 						return iter_compare;
 					}
 				}
-				if (iter_1 == range_1.end() && iter_2 == range_2.end()) {
+				if (iter_1 == end(range_1) && iter_2 == end(range_2)) {
 					return std::strong_ordering::equal;
 				}
 				else {
-					return iter_1 == range_1.end() ?
+					return iter_1 == end(range_1) ?
 						std::strong_ordering::less :
 						std::strong_ordering::greater;
 				}
@@ -955,7 +968,7 @@ namespace bmath::intern {
 				return std::strong_ordering::equal;
 			} break;
 			case Type_T1(Leaf::variable): {
-				return string_compare(ref_2, ref_1); //reverse order, as to_pretty_string reverses again
+				return str_slc::compare(ref_2.cast<StringSLC>(), ref_1.cast<StringSLC>()); //reverse order, as to_pretty_string reverses again
 			} break;
 			case Type_T1(Leaf::complex): {
 				const Complex& complex_1 = *ref_1;
@@ -1002,7 +1015,7 @@ namespace bmath::intern {
 				};
 
 				if (ref.type == Op::sum || ref.type == Op::product) {
-					TypedIdxSLC_T::sort(ref, compare_function);						
+					sort_slc(ref.cast<TypedIdxSLC_T>(), compare_function);						
 				}
 				return fold::Void{};
 			};
@@ -1045,9 +1058,9 @@ namespace bmath::intern {
 				}
 				return TypedIdx_T(dst_index, src_ref.type);
 			} break;
-			case Type_T(Op::generic_function): {
-				const GenericFunction src_function = *src_ref; //no reference, as src and dst could be same store -> may reallocate
-				GenericFunction dst_function;
+			case Type_T(Op::generic_fn): {
+				const GenericFn src_function = *src_ref; //no reference, as src and dst could be same store -> may reallocate
+				GenericFn dst_function;
 				std::uint32_t last_node_idx = dst_store.insert(TypedIdxSLC_T());
 				dst_function.params_idx = last_node_idx;
 				for (const auto src_param : fn::range(src_ref)) {
@@ -1055,14 +1068,14 @@ namespace bmath::intern {
 					last_node_idx = TypedIdxSLC_T::insert_new(dst_store, last_node_idx, dst_param);
 				}
 				std::string src_name; //in most cases the small string optimisation works, else dont care
-				read(src_ref, src_name);
-				if (src_name.size() <= GenericFunction::short_name_max) [[likely]] {
+				str_slc::read(src_ref.cast<StringSLC>(), src_name);
+				if (src_name.size() <= GenericFn::short_name_max) [[likely]] {
 					std::copy(src_name.begin(), src_name.end(), dst_function.short_name);
-					dst_function.name_size = GenericFunction::NameSize::small;
+					dst_function.name_size = GenericFn::NameSize::small;
 				}
 				else {
-					dst_function.long_name_idx = insert_string(dst_store, src_name);
-					dst_function.name_size = GenericFunction::NameSize::longer;
+					dst_function.long_name_idx = str_slc::insert(dst_store, src_name);
+					dst_function.name_size = GenericFn::NameSize::longer;
 				}
 				return TypedIdx_T(dst_store.insert(dst_function), src_ref.type);
 			} break;
@@ -1077,8 +1090,8 @@ namespace bmath::intern {
 			} break;
 			case Type_T(Leaf::variable): {
 				std::string src_name; //in most cases the small string optimisation works, else dont care
-				read(src_ref, src_name);
-				const std::size_t dst_index = insert_string(dst_store, src_name);
+				str_slc::read(src_ref.cast<StringSLC>(), src_name);
+				const std::size_t dst_index = str_slc::insert(dst_store, src_name);
 				return TypedIdx_T(dst_index, src_ref.type);
 			} break;
 			case Type_T(Leaf::complex): {
@@ -1117,20 +1130,19 @@ namespace bmath::intern {
 		} //contains
 
 		template<typename Union_T, typename Type_T>
-		BasicTypedIdx<Type_T> establish_basic_order(const BasicMutRef<Union_T,Type_T> ref)
+		BasicTypedIdx<Type_T> establish_basic_order(BasicMutRef<Union_T,Type_T> ref)
 		{
 			using TypedIdx_T = BasicTypedIdx<Type_T>;
 
-			BasicTypedIdx<Type_T> new_head = ref.typed_idx();
 			if (ref.type != Leaf::complex) {
-				tree::combine_layers(ref);
+				ref.set(tree::combine_layers(ref));
 				if (const OptComplex val = tree::combine_values_exact(ref)) {
 					tree::free(ref);
-					new_head = TypedIdx_T(ref.store->insert(*val), Type(Leaf::complex));
+					ref.set(TypedIdx_T(ref.store->insert(*val), Type(Leaf::complex)));
 				}
 				tree::sort(ref);
 			}
-			return new_head;
+			return ref.typed_idx();
 		} //establish_basic_order
 
 		template<typename Union_T, typename TypedIdx_T>
@@ -1155,7 +1167,7 @@ namespace bmath::intern {
 						}
 					}
 				} break;
-				case Type_T(Op::generic_function): {
+				case Type_T(Op::generic_fn): {
 					for (TypedIdx_T& param : fn::range(BasicMutRef<Union_T, Type_T>(store, head))) {
 						if (TypedIdx_T* const param_res = tree::find_subtree_owner(store, param, subtree)) {
 							return param_res;
@@ -1208,10 +1220,10 @@ namespace bmath::intern {
 			return fold::simple_fold<fold::FindBool>(ref, test_for_variables);
 		} //contains_variables
 
-		TypedIdx search_variable(const Ref ref, std::string_view name)
+		TypedIdx search_variable(const Ref ref, const std::string_view name)
 		{
 			const auto test_for_name = [name](Ref ref) -> fold::Find<TypedIdx> {
-				return (ref.type == Leaf::variable && string_compare(ref, name) == std::strong_ordering::equal) ?
+				return (ref.type == Leaf::variable && str_slc::compare(ref.cast<StringSLC>(), name) == std::strong_ordering::equal) ?
 					fold::done(TypedIdx(ref.index, ref.type)) : //name was found -> cut tree evaluation here
 					fold::more(TypedIdx());
 			};
@@ -1220,6 +1232,10 @@ namespace bmath::intern {
 
 		bool match(const pattern::PnRef pn_ref, const Ref ref, pattern::MatchData& match_data)
 		{
+			const auto contains_match_var = [](const pattern::PnRef ref) -> bool {
+				return fold::simple_fold<fold::FindBool>(ref, [](pattern::PnRef ref) -> fold::FindBool { return ref.type.is<pattern::PnVariable>(); });
+			};
+
 			if (pn_ref.type.is<Type>()) {
 				if (pn_ref.type != ref.type) [[likely]] {
 					return false;
@@ -1231,17 +1247,17 @@ namespace bmath::intern {
 					case Type(Op::product): {
 						assert(false);
 					} break;
-					case Type(Op::generic_function): {
+					case Type(Op::generic_fn): {
 						auto range = fn::range(ref);
 						auto pn_range = fn::range(pn_ref);
-						auto iter = range.begin();
-						auto pn_iter = pn_range.begin();
-						for (; iter != range.end() && pn_iter != pn_range.end(); ++iter, ++pn_iter) {
+						auto iter = begin(range);
+						auto pn_iter = begin(pn_range);
+						for (; iter != end(range) && pn_iter != end(pn_range); ++iter, ++pn_iter) {
 							if (!tree::match(pn_ref.new_at(*pn_iter), ref.new_at(*iter), match_data)) {
 								return false;
 							}
 						}
-						return iter == range.end() && pn_iter == pn_range.end();
+						return iter == end(range) && pn_iter == end(pn_range);
 					} break;
 					default: {
 						assert(ref.type.is<Fn>()); //if this assert hits, the switch above needs more cases.
@@ -1257,7 +1273,7 @@ namespace bmath::intern {
 						return true;
 					} break;
 					case Type(Leaf::variable):
-						return string_compare(pn_ref, ref) == std::strong_ordering::equal;
+						return str_slc::compare(pn_ref.cast<StringSLC>(), ref.cast<StringSLC>()) == std::strong_ordering::equal;
 					case Type(Leaf::complex): {
 						const Complex& complex = *ref;
 						const Complex& pn_complex = *pn_ref;
@@ -1274,8 +1290,8 @@ namespace bmath::intern {
 
 	namespace fold {
 
-		template<typename Res_T, typename Union_T, typename Type_T, bool Const, typename Apply>
-		Res_T simple_fold(const BasicRef<Union_T, Type_T, Const> ref, Apply apply)
+		template<typename Res_T, typename Union_T, typename Type_T, Const is_const, typename Apply>
+		Res_T simple_fold(const BasicRef<Union_T, Type_T, is_const> ref, Apply apply)
 		{
 			constexpr bool pattern = std::is_same_v<Type_T, pattern::PnType>;
 			constexpr bool return_early_possible = ReturnEarlyPossible<Res_T>::value;
@@ -1289,7 +1305,7 @@ namespace bmath::intern {
 					if constexpr (return_early_possible) { if (elem_res.return_early()) { return elem_res; } }
 				}
 			} break;
-			case Type_T(Op::generic_function): {
+			case Type_T(Op::generic_fn): {
 				for (const auto param : fn::range(ref)) {
 					const Res_T param_res = fold::simple_fold<Res_T>(ref.new_at(param), apply);
 					if constexpr (return_early_possible) { if (param_res.return_early()) { return param_res; } }
@@ -1321,8 +1337,8 @@ namespace bmath::intern {
 			return apply(ref); 
 		} //simple_fold
 
-		template<typename Res_T, typename OpAccumulator, typename Union_T, typename Type_T, bool Const, typename LeafApply, typename... AccInit>
-		Res_T tree_fold(const BasicRef<Union_T, Type_T, Const> ref, LeafApply leaf_apply, const AccInit... init)
+		template<typename Res_T, typename OpAccumulator, typename Union_T, typename Type_T, Const is_const, typename LeafApply, typename... AccInit>
+		Res_T tree_fold(const BasicRef<Union_T, Type_T, is_const> ref, LeafApply leaf_apply, const AccInit... init)
 		{
 			constexpr bool pattern = std::is_same_v<Type_T, pattern::PnType>;
 
@@ -1336,7 +1352,7 @@ namespace bmath::intern {
 				}
 				return acc.result();
 			} 
-			case Type_T(Op::generic_function): {
+			case Type_T(Op::generic_fn): {
 				OpAccumulator acc(ref, init...);
 				for (const auto param : fn::range(ref)) {
 					acc.consume(fold::tree_fold<Res_T, OpAccumulator>(ref.new_at(param), leaf_apply, init...));
@@ -1391,7 +1407,7 @@ namespace bmath {
 
 	void Term::combine_layers() noexcept
 	{
-		tree::combine_layers(MutRef(this->store, this->head));
+		this->head = tree::combine_layers(MutRef(this->store, this->head));
 	}
 
 	void Term::combine_values_inexact() noexcept

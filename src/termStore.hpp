@@ -270,12 +270,18 @@ namespace bmath::intern {
 
 
 
+
+	enum class Const :bool { no = false, yes = true };
+
+	template<typename Union_T, typename Own_T, Const is_const>
+	struct BasicNodeRef;
+
 	//as any algorithm accessing an element of a term needs also access to its store, both store and TypedIdx info
 	//  are neatly bundled as a package here
-	template<typename Union_T, typename Type_T, bool Const = true>
+	template<typename Union_T, typename Type_T, Const is_const = Const::yes>
 	struct BasicRef
 	{
-		using Store_T = std::conditional_t<Const, const BasicStore<Union_T>, BasicStore<Union_T>>;
+		using Store_T = std::conditional_t<(bool)is_const, const BasicStore<Union_T>, BasicStore<Union_T>>;
 		Store_T* const store; //actual pointer to have shallow constness
 		std::uint32_t index;
 		Type_T type;
@@ -289,36 +295,51 @@ namespace bmath::intern {
 		constexpr auto& operator*() const { return store->at(index); }
 		constexpr auto* operator->() const { return &store->at(index); }
 
-		constexpr void set(const BasicTypedIdx<Type_T> elem) noexcept { this->index = elem.get_index(); this->type = elem.get_type() }
+		constexpr void set(const BasicTypedIdx<Type_T> elem) noexcept 
+		{ 
+			this->index = elem.get_index(); 
+			this->type = elem.get_type(); 		
+		}
+
 		constexpr BasicRef new_at(const BasicTypedIdx<Type_T> elem) const noexcept { return BasicRef(*this->store, elem); }
-		constexpr BasicRef unsave_at(const std::uint32_t new_index) const noexcept { return BasicRef(*this->store, new_index); }
+
+		template<typename Own_T, Const result_const = is_const>
+		constexpr auto cast() const noexcept { return BasicNodeRef<Union_T, Own_T, result_const>(*this); }
+
+		template<typename Own_T, Const result_const = is_const>
+		constexpr auto new_as(const std::uint32_t new_index) const noexcept 
+		{ 
+			return BasicNodeRef<Union_T, Own_T, result_const>(*this->store, new_index); 
+		}
 
 		constexpr BasicTypedIdx<Type_T> typed_idx() const noexcept { return BasicTypedIdx<Type_T>(this->index, this->type); }
-
-		constexpr void free() const { this->store->free(this->index); }
 	}; //struct BasicRef
 
 	template<typename Union_T, typename Type_T>
-	using BasicMutRef = BasicRef<Union_T, Type_T, false>;
+	using BasicMutRef = BasicRef<Union_T, Type_T, Const::no>;
 
 
-	//in contrast to BasicRef, this struct only stands for a single type in that Union_T thingy
-	//as this struct is advantageous only if one assumes the store to be modified and possibly changing its data location,
-	//  only a mutable version of BasicNodeRef exists.
-	template<typename Union_T, typename Own_T>
+	//in contrast to BasicRef, this struct only stands for the single type Own_T in that Union_T thingy
+	template<typename Union_T, typename Own_T, Const is_const>
 	struct BasicNodeRef
 	{
-		BasicStore<Union_T>* const store; //actual pointer to have shallow constness
+		static_assert(std::is_convertible_v<Union_T, Own_T>);
+
+		using Store_T = std::conditional_t<(bool)is_const, const BasicStore<Union_T>, BasicStore<Union_T>>;
+		using Const_Own_T = std::conditional_t<(bool)is_const, const Own_T, Own_T>;
+		Store_T* const store; //actual pointer to have shallow constness
 		std::uint32_t index;
 
-		constexpr BasicNodeRef(BasicStore<Union_T>& new_store, const std::uint32_t new_index)
+		constexpr BasicNodeRef(Store_T& new_store, const std::uint32_t new_index)
 			:store(&new_store), index(new_index) {}
 
-		template<typename Type_T, bool Const>
-		constexpr BasicNodeRef(const BasicRef<Union_T, Type_T, Const>& ref) :store(ref.store), index(ref.index) {}
+		template<typename Type_T>
+		constexpr BasicNodeRef(const BasicRef<Union_T, Type_T, is_const>& ref) :store(ref.store), index(ref.index) {}
 
-		constexpr auto& operator*() const { return static_cast<Own_T&>(store->at(index)); }
-		constexpr auto* operator->() const { return &static_cast<Own_T&>(store->at(index)); }
+		constexpr auto new_at(const std::size_t new_index) const noexcept { return BasicNodeRef(*this->store, new_index); }
+
+		constexpr auto& operator*() const { return static_cast<Const_Own_T&>(store->at(index)); }
+		constexpr auto* operator->() const { return &static_cast<Const_Own_T&>(store->at(index)); }
 	};
 
 } //namespace bmath::intern

@@ -12,7 +12,7 @@ namespace bmath::intern {
 	/////////////////////////////////////////////////////////////////////local definitions//////////////////////////////////////////////////////////////////////////////////
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	//utility for both Function and GenericFunction
+	//utility for both Function and GenericFn
 	namespace fn {
 
 		constexpr auto name_table = std::to_array<std::pair<Fn, std::string_view>>({
@@ -43,16 +43,14 @@ namespace bmath::intern {
 		constexpr Fn type_of(const std::string_view name) noexcept { return search_fst(name_table, name, Fn::COUNT); }
 
 		//appends only name, no parentheses or anything fancy
-		template<typename Union_T, typename Type_T>
-		void append_name(const BasicRef<Union_T, Type_T> ref, std::string& str)
+		template<typename Union_T>
+		void append_name(const BasicNodeRef<Union_T, GenericFn, Const::yes> fn, std::string& str)
 		{
-			assert(ref.type == Op::generic_function);
-			const GenericFunction fn = *ref;
-			if (fn.name_size == GenericFunction::NameSize::small) {
-				str.append(fn.short_name);
+			if (fn->name_size == GenericFn::NameSize::small) {
+				str.append(fn->short_name);
 			}
 			else {
-				read(ref.unsave_at(fn.long_name_idx), str);
+				str_slc::read(str_slc::StrRef<Union_T>(*fn.store, fn->long_name_idx), str);
 			}
 		} //append_name 
 
@@ -151,7 +149,7 @@ namespace bmath::intern {
 			{ Type(Fn::ln             )     , 0 },	
 			{ Type(Fn::re             )     , 0 },	
 			{ Type(Fn::im             )     , 0 },	
-			{ Type(Op::generic_function )     , 0 },
+			{ Type(Op::generic_fn )     , 0 },
 			{ Type(Op::sum              )     , 2 },
 			{ Type(Op::product          )     , 4 },	
 			{ Type(Fn::pow            )     , 5 }, //not between other function types -> assumed to be printed with '^'  
@@ -420,7 +418,7 @@ namespace bmath::intern {
 			return build_function<TypedIdx>(store, input, head.where, build);
 		} break;
 		case Head::Type::variable: {
-			return TypedIdx(insert_string(store, input.to_string_view()), Leaf::variable);
+			return TypedIdx(str_slc::insert(store, input.to_string_view()), Leaf::variable);
 		} break;
 		default: 
 			assert(false); 
@@ -435,7 +433,7 @@ namespace bmath::intern {
 
 		const auto subterm_view = input.steal_prefix(op_idx);
 		const TypedIdx_T subterm = build_any(store, subterm_view);
-		const std::size_t variadic_idx = store.insert(Result_T(subterm));
+		const std::size_t variadic_idx = store.insert(Result_T({ subterm }));
 		std::size_t last_node_idx = variadic_idx;
 		while (input.size()) {
 			const char current_operator = input.chars[0u];
@@ -463,15 +461,15 @@ namespace bmath::intern {
 
 		const auto type = fn::type_of(input.to_string_view(0u, open_par));
 		if (type == Fn::COUNT) { //build generic function
-			GenericFunction result;
+			GenericFn result;
 			{//writing name in result
 				const auto name = std::string_view(input.chars, open_par);
-				if (name.size() > GenericFunction::short_name_max) [[unlikely]] {
-					result.name_size = GenericFunction::NameSize::longer;
-					result.long_name_idx = insert_string(store, name);
+				if (name.size() > GenericFn::short_name_max) [[unlikely]] {
+					result.name_size = GenericFn::NameSize::longer;
+					result.long_name_idx = str_slc::insert(store, name);
 				}
 				else {
-					result.name_size = GenericFunction::NameSize::small;
+					result.name_size = GenericFn::NameSize::small;
 					for (std::size_t i = 0u; i < name.size(); i++) {
 						result.short_name[i] = name[i]; //maybe go over bound of short_name and into short_name_extension (undefined behavior oh wee!)
 					}
@@ -484,7 +482,7 @@ namespace bmath::intern {
 				const std::size_t comma = find_first_of_skip_pars(input.tokens, token::comma);
 				const auto param_view = input.steal_prefix(comma); //now input starts with comma
 				const TypedIdx_T param = build_any(store, param_view);
-				result.params_idx = store.insert(TypedIdxSLC_T(param));
+				result.params_idx = store.insert(TypedIdxSLC_T({ param }));
 			}
 			std::size_t last_node_idx = result.params_idx;
 			while (input.size()) {
@@ -494,7 +492,7 @@ namespace bmath::intern {
 				const TypedIdx_T param = build_any(store, param_view);
 				last_node_idx = TypedIdxSLC_T::insert_new(store, last_node_idx, param);
 			}
-			return TypedIdx_T(store.insert(result), Type(Op::generic_function));
+			return TypedIdx_T(store.insert(result), Type(Op::generic_fn));
 		}
 		else { //build known function
 			FnParams<TypedIdx_T> result{ TypedIdx_T(), TypedIdx_T(), TypedIdx_T(), TypedIdx_T() };
@@ -636,7 +634,7 @@ namespace bmath::intern {
 			case Head::Type::variable: {
 				if (input.chars[0u] == '\'') {
 					throw_if<ParseFailure>(input.chars[input.size() - 1u] != '\'', input.offset + 1u, "found no matching \"'\"");
-					return PnTypedIdx(insert_string(store, input.to_string_view(1u, input.size() - 1u)), Type(Leaf::variable));
+					return PnTypedIdx(str_slc::insert(store, input.to_string_view(1u, input.size() - 1u)), Type(Leaf::variable));
 				}
 				else {
 					return this->table.insert_instance(store, input);
@@ -684,10 +682,10 @@ namespace bmath::intern {
 				str.push_back('^');
 				print::append_to_string(ref.new_at(params[1]), str, own_infixr);
 			} break;
-			case Type_T(Op::generic_function): {
-				const GenericFunction& generic_function = *ref;
+			case Type_T(Op::generic_fn): {
+				const GenericFn& generic_fn = *ref;
 				str.pop_back(); //pop open parenthesis
-				fn::append_name(ref, str);
+				fn::append_name(ref.cast<GenericFn>(), str);
 				str.push_back('(');
 				const char* seperator = "";
 				for (const auto param : fn::range(ref)) {
@@ -707,7 +705,7 @@ namespace bmath::intern {
 				}
 			} break;
 			case Type_T(Leaf::variable): {
-				read(ref, str);
+				str_slc::read(ref.cast<StringSLC>(), str);
 			} break;
 			case Type_T(Leaf::complex): {
 				append_complex(ref->complex, str, parent_infixr);
@@ -870,9 +868,9 @@ namespace bmath::intern {
 				str += "^";
 				str += print::to_pretty_string(ref.new_at(params[1]), infixr(ref.type));
 			} break;
-			case Type(Op::generic_function): {
+			case Type(Op::generic_fn): {
 				need_parentheses = false;
-				fn::append_name(ref, str);
+				fn::append_name(ref.cast<GenericFn>(), str);
 				str.push_back('(');
 				bool first = true;
 				for (const auto param : fn::range(ref)) {
@@ -898,7 +896,7 @@ namespace bmath::intern {
 				str.push_back(')');
 			} break;
 			case Type(Leaf::variable): {
-				read(ref, str);
+				str_slc::read(ref.cast<StringSLC>(), str);
 			} break;
 			case Type(Leaf::complex): {
 				append_complex(ref->complex, str, parent_infixr);
@@ -934,13 +932,13 @@ namespace bmath::intern {
 				const StringSLC* str = &ref.store->at(idx).string;
 				if (show_first) {
 					rows[idx].append("(str node part of index " + std::to_string(ref.index) + ": \""
-						+ std::string(str->values, StringSLC::array_size) + "\")");
+						+ std::string(str->data, StringSLC::array_size) + "\")");
 				}
 				while (str->next_idx != StringSLC::null_index) {
 					const std::size_t str_idx = str->next_idx;
 					str = &ref.store->at(str->next_idx).string;
 					rows[str_idx].append("(str node part of index " + std::to_string(ref.index) + ": \""
-						+ std::string(str->values, StringSLC::array_size) + "\")");
+						+ std::string(str->data, StringSLC::array_size) + "\")");
 				}
 			};
 
@@ -968,8 +966,8 @@ namespace bmath::intern {
 				current_str.push_back('}');
 				show_typedidx_col_nodes(ref.index, false);
 			} break;
-			case Type_T(Op::generic_function): {
-				const GenericFunction& generic_function = *ref;
+			case Type_T(Op::generic_fn): {
+				const GenericFn& generic_fn = *ref;
 				current_str.append("function?  : {");
 				const char* separator = "";
 				for (const auto param : fn::range(ref)) {
@@ -978,9 +976,9 @@ namespace bmath::intern {
 					print::append_memory_row(ref.new_at(param), rows);
 				}
 				current_str.push_back('}');
-				show_typedidx_col_nodes(generic_function.params_idx, true);
-				if (generic_function.name_size == GenericFunction::NameSize::longer) {
-					show_string_nodes(generic_function.long_name_idx, true);
+				show_typedidx_col_nodes(generic_fn.params_idx, true);
+				if (generic_fn.name_size == GenericFn::NameSize::longer) {
+					show_string_nodes(generic_fn.long_name_idx, true);
 				}
 			} break;
 			default: {

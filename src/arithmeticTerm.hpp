@@ -17,7 +17,7 @@ namespace bmath::intern {
 	{
 		sum,
 		product,
-		generic_function,
+		generic_fn,
 		COUNT
 	};
 
@@ -29,7 +29,7 @@ namespace bmath::intern {
 	};
 
 	//these are luped together, because they behave the same in most cases -> can be seperated easily from rest
-	enum class Fn //short for Function (note that generic_function is not listed here, at it's behavior is more complicated)
+	enum class Fn //short for Function (note that generic_fn is not listed here, at it's behavior is more complicated)
 	{
 		pow,    //params[0] := base      params[1] := expo    
 		log,	//params[0] := base      params[1] := argument
@@ -67,7 +67,7 @@ namespace bmath::intern {
 	template<typename TypedIdx_T>
 	using FnParams = std::array<TypedIdx_T, 4>;
 
-	struct GenericFunction
+	struct GenericFn
 	{
 		static constexpr std::size_t short_name_max = 8 + 3; //plus '\0' at end, supplied by name_size
 
@@ -93,30 +93,30 @@ namespace bmath::intern {
 	union TypesUnion
 	{
 		FnParams<TypedIdx> fn_params;
-		GenericFunction generic_function;
+		GenericFn generic_fn;
 		Complex complex;
-		TypedIdxSLC index_slc; //representing GenericFunction's extra parameters, Sum or Product 
-		StringSLC string;	//Variable is a string and GenericFunction may allocate additional string nodes
+		TypedIdxSLC index_slc; //representing GenericFn's extra parameters, Sum or Product 
+		StringSLC string;	//Variable is a string and GenericFn may allocate additional string nodes
 
 		TypesUnion(const FnParams<TypedIdx>& val) :fn_params(val)        {}
-		TypesUnion(const GenericFunction&    val) :generic_function(val) {}
+		TypesUnion(const GenericFn&    val) :generic_fn(val) {}
 		TypesUnion(const Complex&            val) :complex(val)          {}
 		TypesUnion(const TypedIdxSLC&        val) :index_slc(val)        {}
-		TypesUnion(const StringSLC&      val) :string(val)           {} 
+		TypesUnion(const StringSLC&          val) :string(val)           {} 
 
 		constexpr auto operator<=>(const TypesUnion&) const = default;
 
 		constexpr operator const FnParams<TypedIdx> &() const noexcept { return this->fn_params; }
-		constexpr operator const GenericFunction    &() const noexcept { return this->generic_function; }
+		constexpr operator const GenericFn    &() const noexcept { return this->generic_fn; }
 		constexpr operator const Complex            &() const noexcept { return this->complex; }
 		constexpr operator const TypedIdxSLC        &() const noexcept { return this->index_slc; }
-		constexpr operator const StringSLC      &() const noexcept { return this->string; }
+		constexpr operator const StringSLC          &() const noexcept { return this->string; }
 
 		constexpr operator FnParams<TypedIdx> &() noexcept { return this->fn_params; }
-		constexpr operator GenericFunction    &() noexcept { return this->generic_function; }
+		constexpr operator GenericFn    &() noexcept { return this->generic_fn; }
 		constexpr operator Complex            &() noexcept { return this->complex; }
 		constexpr operator TypedIdxSLC        &() noexcept { return this->index_slc; }
-		constexpr operator StringSLC      &() noexcept { return this->string; }
+		constexpr operator StringSLC          &() noexcept { return this->string; }
 	};
 
 	static_assert(sizeof(TypesUnion) * 8 == 128);
@@ -153,7 +153,7 @@ namespace bmath::intern {
 
 		enum class Restr
 		{
-			function, //packs generic_function and any in Fn together
+			function, //packs generic_fn and any in Fn together
 			any,    
 			unknown, //used only as error value
 			COUNT
@@ -220,36 +220,36 @@ namespace bmath::intern {
 		union PnTypesUnion
 		{
 			FnParams<PnTypedIdx> fn_params;
-			GenericFunction generic_function;
+			GenericFn generic_fn;
 			Complex complex;
-			PnTypedIdxSLC index_slc; //representing GenericFunction's extra parameters, Sum or Product 
-			StringSLC string;	//PnVariable is a string and GenericFunction may allocate additional string nodes
+			PnTypedIdxSLC index_slc; //representing GenericFn's extra parameters, Sum or Product 
+			StringSLC string;	//PnVariable is a string and GenericFn may allocate additional string nodes
 			TreeMatchVariable tree_match;
 			ValueMatchVariable value_match;
 
 			PnTypesUnion(const FnParams<PnTypedIdx>& val) :fn_params(val)        {}
-			PnTypesUnion(const GenericFunction&      val) :generic_function(val) {}
+			PnTypesUnion(const GenericFn&      val) :generic_fn(val) {}
 			PnTypesUnion(const Complex&              val) :complex(val)          {}
 			PnTypesUnion(const PnTypedIdxSLC&        val) :index_slc(val)        {}
-			PnTypesUnion(const StringSLC&        val) :string(val)           {} 
+			PnTypesUnion(const StringSLC&            val) :string(val)           {} 
 			PnTypesUnion(const TreeMatchVariable&    val) :tree_match(val)       {} 
 			PnTypesUnion(const ValueMatchVariable&   val) :value_match(val)      {} 
 
 			constexpr auto operator<=>(const PnTypesUnion&) const = default;
 
 			constexpr operator const FnParams<PnTypedIdx> &() const noexcept { return this->fn_params; }
-			constexpr operator const GenericFunction      &() const noexcept { return this->generic_function; }
+			constexpr operator const GenericFn      &() const noexcept { return this->generic_fn; }
 			constexpr operator const Complex              &() const noexcept { return this->complex; }
 			constexpr operator const PnTypedIdxSLC        &() const noexcept { return this->index_slc; }
-			constexpr operator const StringSLC        &() const noexcept { return this->string; }
+			constexpr operator const StringSLC            &() const noexcept { return this->string; }
 			constexpr operator const TreeMatchVariable    &() const noexcept { return this->tree_match; }
 			constexpr operator const ValueMatchVariable   &() const noexcept { return this->value_match; }
 
 			constexpr operator FnParams<PnTypedIdx> &() noexcept { return this->fn_params; }
-			constexpr operator GenericFunction      &() noexcept { return this->generic_function; }
+			constexpr operator GenericFn      &() noexcept { return this->generic_fn; }
 			constexpr operator Complex              &() noexcept { return this->complex; }
 			constexpr operator PnTypedIdxSLC        &() noexcept { return this->index_slc; }
-			constexpr operator StringSLC        &() noexcept { return this->string; }
+			constexpr operator StringSLC            &() noexcept { return this->string; }
 			constexpr operator TreeMatchVariable    &() noexcept { return this->tree_match; }
 			constexpr operator ValueMatchVariable   &() noexcept { return this->value_match; }
 		};
@@ -325,7 +325,7 @@ namespace bmath::intern {
 
 	} //namespace pattern
 
-	//utility for both Function and GenericFunction
+	//utility for both Function and GenericFn
 	namespace fn {
 
 		constexpr auto param_count_table = std::to_array<std::pair<Fn, std::size_t>>({
@@ -369,26 +369,26 @@ namespace bmath::intern {
 
 		inline auto range(MutRef ref) noexcept 
 		{ 
-			assert(ref.type == Op::generic_function);
-			return TypedIdxSLC::SLCRef<TypesUnion, false>(*ref.store, ref->generic_function.params_idx); 
+			assert(ref.type == Op::generic_fn);
+			return TypedIdxSLC::SLCMutRef<TypesUnion>(*ref.store, ref->generic_fn.params_idx); 
 		}
 
 		inline auto range(Ref ref) noexcept 
 		{ 
-			assert(ref.type == Op::generic_function);
-			return TypedIdxSLC::SLCRef<TypesUnion, true>(*ref.store, ref->generic_function.params_idx); 
+			assert(ref.type == Op::generic_fn);
+			return TypedIdxSLC::SLCRef<TypesUnion>(*ref.store, ref->generic_fn.params_idx); 
 		}
 
 		inline auto range(pattern::PnMutRef ref) noexcept 
 		{ 
-			assert(ref.type == Op::generic_function);
-			return pattern::PnTypedIdxSLC::SLCRef<pattern::PnTypesUnion, false>(*ref.store, ref->generic_function.params_idx); 
+			assert(ref.type == Op::generic_fn);
+			return pattern::PnTypedIdxSLC::SLCMutRef<pattern::PnTypesUnion>(*ref.store, ref->generic_fn.params_idx); 
 		}
 
 		inline auto range(pattern::PnRef ref) noexcept 
 		{ 
-			assert(ref.type == Op::generic_function);
-			return pattern::PnTypedIdxSLC::SLCRef<pattern::PnTypesUnion, true>(*ref.store, ref->generic_function.params_idx); 
+			assert(ref.type == Op::generic_fn);
+			return pattern::PnTypedIdxSLC::SLCRef<pattern::PnTypesUnion>(*ref.store, ref->generic_fn.params_idx); 
 		}
 
 	} //namespace fn
@@ -397,16 +397,16 @@ namespace bmath::intern {
 	namespace vc {
 
 		inline auto range(MutRef ref) noexcept
-		{ return TypedIdxSLC::SLCRef<TypesUnion, false>(*ref.store, ref.index); }
+		{ return TypedIdxSLC::SLCMutRef<TypesUnion>(*ref.store, ref.index); }
 
 		inline auto range(Ref ref) noexcept 
-		{ return TypedIdxSLC::SLCRef<TypesUnion, true>(*ref.store, ref.index); }
+		{ return TypedIdxSLC::SLCRef<TypesUnion>(*ref.store, ref.index); }
 
 		inline auto range(pattern::PnMutRef ref) noexcept
-		{ return pattern::PnTypedIdxSLC::SLCRef<pattern::PnTypesUnion, false>(*ref.store, ref.index); }
+		{ return pattern::PnTypedIdxSLC::SLCMutRef<pattern::PnTypesUnion>(*ref.store, ref.index); }
 
 		inline auto range(pattern::PnRef ref) noexcept 
-		{ return pattern::PnTypedIdxSLC::SLCRef<pattern::PnTypesUnion, true>(*ref.store, ref.index); }
+		{ return pattern::PnTypedIdxSLC::SLCRef<pattern::PnTypesUnion>(*ref.store, ref.index); }
 
 	} //namespace vc
 
@@ -417,9 +417,11 @@ namespace bmath::intern {
 		template<typename Union_T, typename Type_T>
 		void free(const BasicMutRef<Union_T, Type_T> ref);
 
-		//flatten sums holding als summands and products holding products as factors
+		//flatten sums holding sums as summands and products holding products as factors
+		//also eliminates unessecary indirections like sums with a single summand or products with a single factor
+		//  to enable this second behavior, the index and type of ref may change, thus this is returned.
 		template<typename Union_T, typename Type_T>
-		void combine_layers(const BasicMutRef<Union_T, Type_T> ref);
+		[[nodiscard]] BasicTypedIdx<Type_T> combine_layers(const BasicMutRef<Union_T, Type_T> ref);
 
 		//if a subtree can be fully evaluated, it will be, even if the result can not be stored exactly in 
 		//floating point or the computation is unexact.
@@ -458,12 +460,12 @@ namespace bmath::intern {
 		bool contains_variables(const pattern::PnRef ref);
 
 		//returns TypedIdx() if unsuccsessfull
-		TypedIdx search_variable(const Ref ref, std::string_view name);
+		TypedIdx search_variable(const Ref ref, const std::string_view name);
 
 		//first combines layers, then combines values exact, then sorts
 		//return value is new head
 		template<typename Union_T, typename Type_T>
-		[[nodiscard]] BasicTypedIdx<Type_T> establish_basic_order(const BasicMutRef<Union_T, Type_T> ref);
+		[[nodiscard]] BasicTypedIdx<Type_T> establish_basic_order(BasicMutRef<Union_T, Type_T> ref);
 
 		//returns pointer to field of parent of subtree, where subtree is held
 		template<typename Union_T, typename TypedIdx_T>
@@ -513,12 +515,14 @@ namespace bmath::intern {
 		static_assert(!ReturnEarlyPossible<bool>::value);
 
 
-		struct Void {}; //used, if there is nothing to be returned
+		struct Void {}; //used if there is nothing to be returned from simple_fold
 
 		//calls apply with every node (postorder), parameter is (BasicRef<Union_T, Type_T, Const> ref), apply returns Res_T
 		//Res_T might have nonstatic member return_early, to indicate if the fold may be stopped early, as the result is already known
-		template<typename Res_T, typename Union_T, typename Type_T, bool Const, typename Apply>
-		Res_T simple_fold(const BasicRef<Union_T, Type_T, Const> ref, Apply apply);
+		//not really a fold function in the classical sense, as there is no information accumulated. 
+		//  eighter you have the final result or not. (or dont return a result at all)
+		template<typename Res_T, typename Union_T, typename Type_T, Const is_const, typename Apply>
+		Res_T simple_fold(const BasicRef<Union_T, Type_T, is_const> ref, Apply apply);
 
 		//this fold differentiates between recursive nodes (Op's, Fn's and ValueMatchVariable) and Leafes (values and variables)
 		//OpAccumulator is constructed before a recursive call is made and consumes each recursive result. It thus needs to at least
@@ -526,9 +530,9 @@ namespace bmath::intern {
 		//  and a consume method taking as single parameter (Res_T elem_res)
 		//  a result method taking no parameters and returning Res_T
 		//leaf_apply has parameters (BasicRef<Union_T, Type_T, Const> ref) and returns Res_T.		
-		template<typename Res_T, typename OpAccumulator, typename Union_T, typename Type_T, bool Const, 
+		template<typename Res_T, typename OpAccumulator, typename Union_T, typename Type_T, Const is_const, 
 			typename LeafApply, typename... AccInit>
-		Res_T tree_fold(const BasicRef<Union_T, Type_T, Const> ref, LeafApply leaf_apply, const AccInit... init);
+		Res_T tree_fold(const BasicRef<Union_T, Type_T, is_const> ref, LeafApply leaf_apply, const AccInit... init);
 
 	} //namespace fold
 
