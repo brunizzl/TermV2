@@ -12,7 +12,7 @@ namespace bmath::intern {
 	/////////////////////////////////////////////////////////////////////local definitions//////////////////////////////////////////////////////////////////////////////////
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	//utility for both Function and GenericFn
+	//utility for both Function and NamedFn
 	namespace fn {
 
 		constexpr auto name_table = std::to_array<std::pair<Fn, std::string_view>>({
@@ -44,9 +44,9 @@ namespace bmath::intern {
 
 		//appends only name, no parentheses or anything fancy
 		template<typename Union_T>
-		void append_name(const BasicNodeRef<Union_T, GenericFn, Const::yes> fn, std::string& str)
+		void append_name(const BasicNodeRef<Union_T, NamedFn, Const::yes> fn, std::string& str)
 		{
-			if (fn->name_size == GenericFn::NameSize::small) {
+			if (fn->name_size == NamedFn::NameSize::small) {
 				str.append(fn->short_name);
 			}
 			else {
@@ -149,7 +149,7 @@ namespace bmath::intern {
 			{ Type(Fn::ln             )     , 0 },	
 			{ Type(Fn::re             )     , 0 },	
 			{ Type(Fn::im             )     , 0 },	
-			{ Type(Op::generic_fn )     , 0 },
+			{ Type(Op::named_fn )     , 0 },
 			{ Type(Op::sum              )     , 2 },
 			{ Type(Op::product          )     , 4 },	
 			{ Type(Fn::pow            )     , 5 }, //not between other function types -> assumed to be printed with '^'  
@@ -461,15 +461,15 @@ namespace bmath::intern {
 
 		const auto type = fn::type_of(input.to_string_view(0u, open_par));
 		if (type == Fn::COUNT) { //build generic function
-			GenericFn result;
+			NamedFn result;
 			{//writing name in result
 				const auto name = std::string_view(input.chars, open_par);
-				if (name.size() > GenericFn::short_name_max) [[unlikely]] {
-					result.name_size = GenericFn::NameSize::longer;
+				if (name.size() > NamedFn::short_name_max) [[unlikely]] {
+					result.name_size = NamedFn::NameSize::longer;
 					result.long_name_idx = str_slc::insert(store, name);
 				}
 				else {
-					result.name_size = GenericFn::NameSize::small;
+					result.name_size = NamedFn::NameSize::small;
 					for (std::size_t i = 0u; i < name.size(); i++) {
 						result.short_name[i] = name[i]; //maybe go over bound of short_name and into short_name_extension (undefined behavior oh wee!)
 					}
@@ -492,7 +492,7 @@ namespace bmath::intern {
 				const TypedIdx_T param = build_any(store, param_view);
 				last_node_idx = TypedIdxSLC_T::insert_new(store, last_node_idx, param);
 			}
-			return TypedIdx_T(store.insert(result), Type(Op::generic_fn));
+			return TypedIdx_T(store.insert(result), Type(Op::named_fn));
 		}
 		else { //build known function
 			FnParams<TypedIdx_T> result{ TypedIdx_T(), TypedIdx_T(), TypedIdx_T(), TypedIdx_T() };
@@ -682,10 +682,10 @@ namespace bmath::intern {
 				str.push_back('^');
 				print::append_to_string(ref.new_at(params[1]), str, own_infixr);
 			} break;
-			case Type_T(Op::generic_fn): {
-				const GenericFn& generic_fn = *ref;
+			case Type_T(Op::named_fn): {
+				const NamedFn& named_fn = *ref;
 				str.pop_back(); //pop open parenthesis
-				fn::append_name(ref.cast<GenericFn>(), str);
+				fn::append_name(ref.cast<NamedFn>(), str);
 				str.push_back('(');
 				const char* seperator = "";
 				for (const auto param : fn::range(ref)) {
@@ -868,9 +868,9 @@ namespace bmath::intern {
 				str += "^";
 				str += print::to_pretty_string(ref.new_at(params[1]), infixr(ref.type));
 			} break;
-			case Type(Op::generic_fn): {
+			case Type(Op::named_fn): {
 				need_parentheses = false;
-				fn::append_name(ref.cast<GenericFn>(), str);
+				fn::append_name(ref.cast<NamedFn>(), str);
 				str.push_back('(');
 				bool first = true;
 				for (const auto param : fn::range(ref)) {
@@ -966,8 +966,8 @@ namespace bmath::intern {
 				current_str.push_back('}');
 				show_typedidx_col_nodes(ref.index, false);
 			} break;
-			case Type_T(Op::generic_fn): {
-				const GenericFn& generic_fn = *ref;
+			case Type_T(Op::named_fn): {
+				const NamedFn& named_fn = *ref;
 				current_str.append("function?  : {");
 				const char* separator = "";
 				for (const auto param : fn::range(ref)) {
@@ -976,9 +976,9 @@ namespace bmath::intern {
 					print::append_memory_row(ref.new_at(param), rows);
 				}
 				current_str.push_back('}');
-				show_typedidx_col_nodes(generic_fn.params_idx, true);
-				if (generic_fn.name_size == GenericFn::NameSize::longer) {
-					show_string_nodes(generic_fn.long_name_idx, true);
+				show_typedidx_col_nodes(named_fn.params_idx, true);
+				if (named_fn.name_size == NamedFn::NameSize::longer) {
+					show_string_nodes(named_fn.long_name_idx, true);
 				}
 			} break;
 			default: {

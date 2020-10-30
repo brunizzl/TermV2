@@ -17,7 +17,7 @@ namespace bmath::intern {
 	{
 		sum,
 		product,
-		generic_fn,
+		named_fn,
 		COUNT
 	};
 
@@ -29,7 +29,7 @@ namespace bmath::intern {
 	};
 
 	//these are luped together, because they behave the same in most cases -> can be seperated easily from rest
-	enum class Fn //short for Function (note that generic_fn is not listed here, at it's behavior is more complicated)
+	enum class Fn //short for Function (note that named_fn is not listed here, at it's behavior is more complicated)
 	{
 		pow,    //params[0] := base      params[1] := expo    
 		log,	//params[0] := base      params[1] := argument
@@ -67,7 +67,7 @@ namespace bmath::intern {
 	template<typename TypedIdx_T>
 	using FnParams = std::array<TypedIdx_T, 4>;
 
-	struct GenericFn
+	struct NamedFn
 	{
 		static constexpr std::size_t short_name_max = 8 + 3; //plus '\0' at end, supplied by name_size
 
@@ -93,13 +93,13 @@ namespace bmath::intern {
 	union TypesUnion
 	{
 		FnParams<TypedIdx> fn_params;
-		GenericFn generic_fn;
+		NamedFn named_fn;
 		Complex complex;
-		TypedIdxSLC index_slc; //representing GenericFn's extra parameters, Sum or Product 
-		StringSLC string;	//Variable is a string and GenericFn may allocate additional string nodes
+		TypedIdxSLC index_slc; //representing NamedFn's extra parameters, Sum or Product 
+		StringSLC string;	//Variable is a string and NamedFn may allocate additional string nodes
 
 		TypesUnion(const FnParams<TypedIdx>& val) :fn_params(val)        {}
-		TypesUnion(const GenericFn&    val) :generic_fn(val) {}
+		TypesUnion(const NamedFn&            val) :named_fn(val)         {}
 		TypesUnion(const Complex&            val) :complex(val)          {}
 		TypesUnion(const TypedIdxSLC&        val) :index_slc(val)        {}
 		TypesUnion(const StringSLC&          val) :string(val)           {} 
@@ -107,13 +107,13 @@ namespace bmath::intern {
 		constexpr auto operator<=>(const TypesUnion&) const = default;
 
 		constexpr operator const FnParams<TypedIdx> &() const noexcept { return this->fn_params; }
-		constexpr operator const GenericFn    &() const noexcept { return this->generic_fn; }
+		constexpr operator const NamedFn            &() const noexcept { return this->named_fn; }
 		constexpr operator const Complex            &() const noexcept { return this->complex; }
 		constexpr operator const TypedIdxSLC        &() const noexcept { return this->index_slc; }
 		constexpr operator const StringSLC          &() const noexcept { return this->string; }
 
 		constexpr operator FnParams<TypedIdx> &() noexcept { return this->fn_params; }
-		constexpr operator GenericFn    &() noexcept { return this->generic_fn; }
+		constexpr operator NamedFn            &() noexcept { return this->named_fn; }
 		constexpr operator Complex            &() noexcept { return this->complex; }
 		constexpr operator TypedIdxSLC        &() noexcept { return this->index_slc; }
 		constexpr operator StringSLC          &() noexcept { return this->string; }
@@ -153,7 +153,7 @@ namespace bmath::intern {
 
 		enum class Restr
 		{
-			function, //packs generic_fn and any in Fn together
+			function, //packs named_fn and any in Fn together
 			any,    
 			unknown, //used only as error value
 			COUNT
@@ -220,15 +220,15 @@ namespace bmath::intern {
 		union PnTypesUnion
 		{
 			FnParams<PnTypedIdx> fn_params;
-			GenericFn generic_fn;
+			NamedFn named_fn;
 			Complex complex;
-			PnTypedIdxSLC index_slc; //representing GenericFn's extra parameters, Sum or Product 
-			StringSLC string;	//PnVariable is a string and GenericFn may allocate additional string nodes
+			PnTypedIdxSLC index_slc; //representing NamedFn's extra parameters, Sum or Product 
+			StringSLC string;	//PnVariable is a string and NamedFn may allocate additional string nodes
 			TreeMatchVariable tree_match;
 			ValueMatchVariable value_match;
 
 			PnTypesUnion(const FnParams<PnTypedIdx>& val) :fn_params(val)        {}
-			PnTypesUnion(const GenericFn&      val) :generic_fn(val) {}
+			PnTypesUnion(const NamedFn&              val) :named_fn(val)         {}
 			PnTypesUnion(const Complex&              val) :complex(val)          {}
 			PnTypesUnion(const PnTypedIdxSLC&        val) :index_slc(val)        {}
 			PnTypesUnion(const StringSLC&            val) :string(val)           {} 
@@ -238,7 +238,7 @@ namespace bmath::intern {
 			constexpr auto operator<=>(const PnTypesUnion&) const = default;
 
 			constexpr operator const FnParams<PnTypedIdx> &() const noexcept { return this->fn_params; }
-			constexpr operator const GenericFn      &() const noexcept { return this->generic_fn; }
+			constexpr operator const NamedFn              &() const noexcept { return this->named_fn; }
 			constexpr operator const Complex              &() const noexcept { return this->complex; }
 			constexpr operator const PnTypedIdxSLC        &() const noexcept { return this->index_slc; }
 			constexpr operator const StringSLC            &() const noexcept { return this->string; }
@@ -246,7 +246,7 @@ namespace bmath::intern {
 			constexpr operator const ValueMatchVariable   &() const noexcept { return this->value_match; }
 
 			constexpr operator FnParams<PnTypedIdx> &() noexcept { return this->fn_params; }
-			constexpr operator GenericFn      &() noexcept { return this->generic_fn; }
+			constexpr operator NamedFn              &() noexcept { return this->named_fn; }
 			constexpr operator Complex              &() noexcept { return this->complex; }
 			constexpr operator PnTypedIdxSLC        &() noexcept { return this->index_slc; }
 			constexpr operator StringSLC            &() noexcept { return this->string; }
@@ -325,7 +325,7 @@ namespace bmath::intern {
 
 	} //namespace pattern
 
-	//utility for both Function and GenericFn
+	//utility for both NamedFn and the types in Fn 
 	namespace fn {
 
 		constexpr auto param_count_table = std::to_array<std::pair<Fn, std::size_t>>({
@@ -359,36 +359,26 @@ namespace bmath::intern {
 
 
 		template<typename TypedIdx_T, typename Type_T>
-		std::span<TypedIdx_T> range(FnParams<TypedIdx_T>& params, const Type_T type) noexcept
+		constexpr std::span<TypedIdx_T> range(FnParams<TypedIdx_T>& params, const Type_T type) noexcept
 		{ return { params.data(), param_count(type) }; }
 
 		template<typename TypedIdx_T, typename Type_T>
-		std::span<const TypedIdx_T> range(const FnParams<TypedIdx_T>& params, const Type_T type) noexcept
+		constexpr std::span<const TypedIdx_T> range(const FnParams<TypedIdx_T>& params, const Type_T type) noexcept
 		{ return { params.data(), param_count(type) }; }
 
 
-		inline auto range(MutRef ref) noexcept 
+		template<Const is_const>
+		constexpr auto range(const BasicRef<TypesUnion, Type, is_const> ref) noexcept 
 		{ 
-			assert(ref.type == Op::generic_fn);
-			return TypedIdxSLC::SLCMutRef<TypesUnion>(*ref.store, ref->generic_fn.params_idx); 
+			assert(ref.type == Op::named_fn);
+			return ref.new_as<TypedIdxSLC>(ref->named_fn.params_idx); 
 		}
 
-		inline auto range(Ref ref) noexcept 
+		template<Const is_const>
+		constexpr auto range(const BasicRef<pattern::PnTypesUnion, pattern::PnType, is_const> ref) noexcept 
 		{ 
-			assert(ref.type == Op::generic_fn);
-			return TypedIdxSLC::SLCRef<TypesUnion>(*ref.store, ref->generic_fn.params_idx); 
-		}
-
-		inline auto range(pattern::PnMutRef ref) noexcept 
-		{ 
-			assert(ref.type == Op::generic_fn);
-			return pattern::PnTypedIdxSLC::SLCMutRef<pattern::PnTypesUnion>(*ref.store, ref->generic_fn.params_idx); 
-		}
-
-		inline auto range(pattern::PnRef ref) noexcept 
-		{ 
-			assert(ref.type == Op::generic_fn);
-			return pattern::PnTypedIdxSLC::SLCRef<pattern::PnTypesUnion>(*ref.store, ref->generic_fn.params_idx); 
+			assert(ref.type == Op::named_fn);
+			return ref.new_as<pattern::PnTypedIdxSLC>(ref->named_fn.params_idx); 
 		}
 
 	} //namespace fn
@@ -396,17 +386,11 @@ namespace bmath::intern {
 	//utility for variadic types (Sum and Product)
 	namespace vc {
 
-		inline auto range(MutRef ref) noexcept
-		{ return TypedIdxSLC::SLCMutRef<TypesUnion>(*ref.store, ref.index); }
+		inline auto range(const MutRef ref) noexcept { return ref.cast<TypedIdxSLC>(); }
+		inline auto range(const    Ref ref) noexcept { return ref.cast<TypedIdxSLC>(); }
 
-		inline auto range(Ref ref) noexcept 
-		{ return TypedIdxSLC::SLCRef<TypesUnion>(*ref.store, ref.index); }
-
-		inline auto range(pattern::PnMutRef ref) noexcept
-		{ return pattern::PnTypedIdxSLC::SLCMutRef<pattern::PnTypesUnion>(*ref.store, ref.index); }
-
-		inline auto range(pattern::PnRef ref) noexcept 
-		{ return pattern::PnTypedIdxSLC::SLCRef<pattern::PnTypesUnion>(*ref.store, ref.index); }
+		inline auto range(const pattern::PnMutRef ref) noexcept { return ref.cast<pattern::PnTypedIdxSLC>(); }
+		inline auto range(const    pattern::PnRef ref) noexcept { return ref.cast<pattern::PnTypedIdxSLC>(); }
 
 	} //namespace vc
 
