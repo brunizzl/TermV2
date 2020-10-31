@@ -155,6 +155,11 @@ namespace bmath::intern {
 			return this->ref->values[this->array_idx]; 
 		}
 
+		constexpr [[nodiscard]] auto* operator->()
+		{ 
+			return &this->ref->values[this->array_idx]; 
+		}
+
 		constexpr bool operator==(const Iterator& other) const noexcept
 		{
 			assert(this->ref.store == other.ref.store && "only comparison between iterators in same term makes sense");

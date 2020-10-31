@@ -160,11 +160,10 @@ namespace bmath::intern {
 		};
 
 		//note: of Type, only sum, product, complex or variable may be used, as there is (currently)
-		//no need to differentiate between any of the functions of Fn and unknown_function.
+		//  no need to differentiate between any of the functions of Fn and unknown_function.
 		using Restriction = SumEnum<Restr, Type>; 
 
-		template<typename TypedIdx_T>
-		bool meets_restriction(const TypedIdx_T head, const Restriction restr);
+		bool meets_restriction(const Type type, const Restriction restr);
 
 		//in a valid pattern, all TreeMatchVariables of same name share the same restr and the same match_data_idx.
 		//it is allowed to have multiple instances of the same TreeMatchVariable per side.
@@ -266,12 +265,24 @@ namespace bmath::intern {
 		{
 			TypedIdx match_idx = TypedIdx{}; //indexes in Term to simplify
 			PnTypedIdx responsible = PnTypedIdx{}; //the instance of TreeMatchVariable that was setting match_idx
+
+			constexpr bool is_set() const noexcept
+			{
+				assert((this->match_idx != TypedIdx{}) == (this->responsible != PnTypedIdx{}));
+				return  this->responsible != PnTypedIdx{};
+			}
 		};
 
 		struct SharedValueDatum
 		{
-			double value = {};
+			double value = 0.0;
 			PnTypedIdx responsible = PnTypedIdx{}; //the instance of ValueMatchVariable that was setting value
+
+			constexpr bool is_set() const noexcept
+			{
+				assert((this->value != 0.0) == (this->responsible != PnTypedIdx{}));
+				return  this->responsible != PnTypedIdx{};
+			}
 		};
 
 		//to allow a constant PnTerm to be matched against, all match info is stored here
@@ -280,8 +291,22 @@ namespace bmath::intern {
 			static constexpr std::size_t max_value_match_count = 4u; //maximal number of unrelated ValueMatchVariables allowed per pattern
 			static constexpr std::size_t max_tree_match_count = 8u;	 //maximal number of unrelated TreeMatchVariables allowed per pattern
 
-			std::array<SharedValueDatum, max_value_match_count> value_match_data;
-			std::array<SharedTreeDatum, max_tree_match_count> tree_match_data;
+			std::array<SharedValueDatum, max_value_match_count> value_match_data = {};
+			std::array<SharedTreeDatum, max_tree_match_count> tree_match_data = {};
+
+			constexpr void reset() noexcept { *this = MatchData(); }
+
+			constexpr SharedTreeDatum& info(const TreeMatchVariable& var) noexcept 
+			{ 
+				assert(var.match_data_idx <= max_tree_match_count);
+				return this->tree_match_data[var.match_data_idx];
+			}
+
+			constexpr SharedValueDatum& info(const ValueMatchVariable& var) noexcept 
+			{ 
+				assert(var.match_data_idx <= max_value_match_count);
+				return this->value_match_data[var.match_data_idx];
+			}
 		};
 
 		struct PnTerm
@@ -296,8 +321,8 @@ namespace bmath::intern {
 			std::string lhs_memory_layout() const;
 			std::string rhs_memory_layout() const;
 
-			PnMutRef lhs_ref() noexcept { return PnMutRef(this->lhs_store, this->lhs_head); }
-			PnMutRef rhs_ref() noexcept { return PnMutRef(this->rhs_store, this->rhs_head); }
+			PnMutRef lhs_mut_ref() noexcept { return PnMutRef(this->lhs_store, this->lhs_head); }
+			PnMutRef rhs_mut_ref() noexcept { return PnMutRef(this->rhs_store, this->rhs_head); }
 			PnRef lhs_ref() const noexcept { return PnRef(this->lhs_store, this->lhs_head); }
 			PnRef rhs_ref() const noexcept { return PnRef(this->rhs_store, this->rhs_head); }
 		};
@@ -320,6 +345,10 @@ namespace bmath::intern {
 			//(possible other subtrees identical to to_isolate are not considered, thus the name prefix)
 			//currently only used in rearrange_value_match, thus quite specialized
 			[[nodiscard]] Equation stupid_solve_for(PnStore& store, Equation eq, const PnTypedIdx to_isolate);
+
+			//mostly stripped down version of tree::combine_values_exact to find calculate SharedValueDatum.value
+			// from the start_val taken out of matched term
+			OptComplex eval_value_match(const PnRef ref, const Complex& start_val);
 
 		} //namespace pn_tree
 
@@ -530,20 +559,22 @@ namespace bmath {
 		intern::TypedIdx head;
 
 	public:
-		Term(std::string& name);
+		Term(std::string& name); //allows whitespace and implicit product
+		Term(const std::string_view simple_name); //simple_name may not contain any whitespace
 		Term() = default;
 
 		void combine_layers() noexcept;
 		void combine_values_inexact() noexcept;
 		void combine_values_exact() noexcept;
 		void sort() noexcept;
+		void standardize() noexcept; 
 
 		std::string to_memory_layout() const;
 		std::string to_string() const;
-		std::string to_pretty_string(); //will tidy up term first
+		std::string to_pretty_string(); //will call standardize first
 		std::string to_pretty_string() const; //assumes sorted term
 
-		intern::MutRef ref() noexcept;
+		intern::MutRef mut_ref() noexcept;
 		intern::Ref ref() const noexcept;
 	};	//class Term
 

@@ -11,6 +11,60 @@
 #include "parseTerm.hpp"
 #include "ioArithmetic.hpp"
 
+namespace bmath::intern::debug {
+
+	void enumerate_pn_type()
+	{
+		using namespace pattern;
+		static_assert(unsigned(Type::COUNT) == unsigned(PnType(Type::COUNT)), "else at least a second version of this function is needed");
+		std::cout
+			<< "PnType(Op::sum)                 = " << unsigned(PnType(Op::sum))                 << "\n"
+			<< "PnType(Op::product)             = " << unsigned(PnType(Op::product))             << "\n"
+			<< "PnType(Op::named_fn)            = " << unsigned(PnType(Op::named_fn))            << "\n"
+			<< "PnType(Op::COUNT)               = " << unsigned(PnType(Op::COUNT))               << "\n"
+			                                                                                     << "\n"
+			<< "PnType(Leaf::variable)          = " << unsigned(PnType(Leaf::variable))          << "\n"
+			<< "PnType(Leaf::complex)           = " << unsigned(PnType(Leaf::complex))           << "\n"
+			<< "PnType(Leaf::COUNT)             = " << unsigned(PnType(Leaf::COUNT))             << "\n"
+			                                                                                     << "\n"
+			<< "PnType(Fn::pow)                 = " << unsigned(PnType(Fn::pow))                 << "\n"
+			<< "PnType(Fn::log)                 = " << unsigned(PnType(Fn::log))                 << "\n"
+			<< "PnType(Fn::exp)                 = " << unsigned(PnType(Fn::exp))                 << "\n"
+			<< "PnType(Fn::sqrt)                = " << unsigned(PnType(Fn::sqrt))                << "\n"
+			<< "PnType(Fn::asinh)               = " << unsigned(PnType(Fn::asinh))               << "\n"
+			<< "PnType(Fn::acosh)               = " << unsigned(PnType(Fn::acosh))               << "\n"
+			<< "PnType(Fn::atanh)               = " << unsigned(PnType(Fn::atanh))               << "\n"
+			<< "PnType(Fn::asin)                = " << unsigned(PnType(Fn::asin))                << "\n"
+			<< "PnType(Fn::acos)                = " << unsigned(PnType(Fn::acos))                << "\n"
+			<< "PnType(Fn::atan)                = " << unsigned(PnType(Fn::atan))                << "\n"
+			<< "PnType(Fn::sinh)                = " << unsigned(PnType(Fn::sinh))                << "\n"
+			<< "PnType(Fn::cosh)                = " << unsigned(PnType(Fn::cosh))                << "\n"
+			<< "PnType(Fn::tanh)                = " << unsigned(PnType(Fn::tanh))                << "\n"
+			<< "PnType(Fn::sin)                 = " << unsigned(PnType(Fn::sin))                 << "\n"
+			<< "PnType(Fn::cos)                 = " << unsigned(PnType(Fn::cos))                 << "\n"
+			<< "PnType(Fn::tan)                 = " << unsigned(PnType(Fn::tan))                 << "\n"
+			<< "PnType(Fn::abs)                 = " << unsigned(PnType(Fn::abs))                 << "\n"
+			<< "PnType(Fn::arg)                 = " << unsigned(PnType(Fn::arg))                 << "\n"
+			<< "PnType(Fn::ln)                  = " << unsigned(PnType(Fn::ln))                  << "\n"
+			<< "PnType(Fn::re)                  = " << unsigned(PnType(Fn::re))                  << "\n"
+			<< "PnType(Fn::im)                  = " << unsigned(PnType(Fn::im))                  << "\n"
+			<< "PnType(Fn::COUNT)               = " << unsigned(PnType(Fn::COUNT))               << "\n"
+			                                                                                     << "\n"
+			<< "PnType(Type::COUNT)             = " << unsigned(PnType(Type::COUNT))             << "\n"
+			                                                                                     << "\n"
+			<< "PnType(PnVariable::tree_match)  = " << unsigned(PnType(PnVariable::tree_match))  << "\n"
+			<< "PnType(PnVariable::value_match) = " << unsigned(PnType(PnVariable::value_match)) << "\n"
+			<< "PnType(PnVariable::value_proxy) = " << unsigned(PnType(PnVariable::value_proxy)) << "\n"
+			<< "PnType(PnVariable::COUNT)       = " << unsigned(PnType(PnVariable::COUNT))       << "\n"
+			                                                                                     << "\n"
+			<< "PnType::COUNT                   = " << unsigned(PnType::COUNT)                   << "\n"
+			                                                                                     << "\n"
+			                                                                                     << "\n"
+			;
+	} //enumerate_pn_type
+
+} //namespace bmath::intern::debug
+
 namespace bmath::intern::test {
 
 	namespace sum_enum_detail {
@@ -102,6 +156,7 @@ namespace bmath::intern::test {
 	void arithmetic_term()
 	{
 		std::vector<std::string> term_names = {
+			"sqrt(100)",
 			"2-a*b",
 			"sin(-a*b)",
 			" -(b'+c)*2*i-5*(a+3 e 2 weinachtsmannVomNordpolUnterWasserWeilKlimawandel)",
@@ -138,9 +193,7 @@ namespace bmath::intern::test {
 				std::cout << "nach bau: \n" << term.to_string() << "\n\n";
 				//std::cout << "speicher nach bau:\n" << term.to_memory_layout() << "\n\n";
 
-				term.combine_layers();
-				term.combine_values_exact();
-				term.sort();
+				term.standardize();
 
 				std::cout << "nach vereinfachen in huebsch: \n" << term.to_pretty_string() << "\n\n";
 				//std::cout << "speicher nach vereinfachen:\n" << term.to_memory_layout() << "\n\n\n";
@@ -227,6 +280,17 @@ namespace bmath::intern::test {
 		print::append_to_string(ref, term_2_str);
 		std::cout << "term_2: " << term_2_str << "\n";
 		std::cout << print::to_memory_layout(*ref.store, { ref.typed_idx(), head_2 }) << "\n";
+	}
+
+	void match()
+	{
+		std::string p_name = "a:real, b | (a^2 + b)^a = 1";
+		auto p = pattern::PnTerm(p_name);
+		std::string t_name = "(100 + jochen)^10";
+		auto t = Term(t_name);
+		t.standardize();
+		auto m = pattern::MatchData{};
+		std::cout << "match lhs of \"" << p.to_string() << "\" with \"" << t.to_string() << ": " << tree::match(p.lhs_ref(), t.ref(), m) << "\n";
 	}
 
 } //namespace bmath::intern::test

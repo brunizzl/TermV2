@@ -57,8 +57,8 @@ namespace bmath::intern {
 	struct [[nodiscard]] TokenView :std::string_view
 	{
 		using std::string_view::basic_string_view;
-		constexpr explicit TokenView(const std::string_view& other) noexcept :std::string_view(other) {}
-		constexpr explicit TokenView(std::string_view&& other) noexcept :std::string_view(other) {}
+		constexpr explicit TokenView(const std::string_view other) noexcept :std::string_view(other) {}
+		TokenView(const TokenString& str) noexcept :std::string_view(str) {}
 	};
 
 	struct [[nodiscard]] ParseString
@@ -66,7 +66,7 @@ namespace bmath::intern {
 		TokenString tokens;
 		std::string& name;
 
-		ParseString(std::string& new_name) noexcept;
+		ParseString(std::string& new_name);
 
 		//converts spaces to multiplication operator if appropriate
 		void allow_implicit_product() noexcept;

@@ -103,8 +103,8 @@ namespace bmath::intern {
 	namespace pattern {
 
 		constexpr auto form_name_table = std::to_array<std::pair<ParseRestriction, std::string_view>>({
-			{ Type(Op::sum     ), "sum"           },
-			{ Type(Op::product ), "product"       },
+			{ Type(Op::sum       ), "sum"           },
+			{ Type(Op::product   ), "product"       },
 			{ Type(Leaf::variable), "variable"      },
 			{ Type(Leaf::complex ), "complex"       },
 			{ Restr::function     , "fn"            },
@@ -129,36 +129,37 @@ namespace bmath::intern {
 
 		//operator precedence (used to decide if parentheses are nessecary in out string)
 		constexpr auto infixr_table = std::to_array<std::pair<pattern::PnType, int>>({
-			{ Type(Fn::asinh          )     , 0 },	
-			{ Type(Fn::acosh          )     , 0 },
-			{ Type(Fn::atanh          )     , 0 },	
-			{ Type(Fn::asin           )     , 0 },	
-			{ Type(Fn::acos           )     , 0 },	
-			{ Type(Fn::atan           )     , 0 },	
-			{ Type(Fn::sinh           )     , 0 },	
-			{ Type(Fn::cosh           )     , 0 },	
-			{ Type(Fn::tanh           )     , 0 },	
-			{ Type(Fn::sqrt           )     , 0 },
-			{ Type(Fn::log            )     , 0 }, 
-			{ Type(Fn::exp            )     , 0 },
-			{ Type(Fn::sin            )     , 0 },	
-			{ Type(Fn::cos            )     , 0 },	
-			{ Type(Fn::tan            )     , 0 },	
-			{ Type(Fn::abs            )     , 0 },	
-			{ Type(Fn::arg            )     , 0 },	
-			{ Type(Fn::ln             )     , 0 },	
-			{ Type(Fn::re             )     , 0 },	
-			{ Type(Fn::im             )     , 0 },	
-			{ Type(Op::named_fn )     , 0 },
-			{ Type(Op::sum              )     , 2 },
-			{ Type(Op::product          )     , 4 },	
-			{ Type(Fn::pow            )     , 5 }, //not between other function types -> assumed to be printed with '^'  
-			{ Type(Leaf::variable         )     , 6 },
-			{ Type(Leaf::complex          )     , 6 }, //may be printed as sum/product itself, then (maybe) has to add parentheses on its own
-			{ pattern::PnVariable::tree_match   , 6 },
-			{ pattern::PnVariable::value_match  , 6 },
-			{ pattern::PnVariable::value_proxy  , 6 },
-			});
+			{ Type(Fn::asinh     )            , 0 },	
+			{ Type(Fn::acosh     )            , 0 },
+			{ Type(Fn::atanh     )            , 0 },	
+			{ Type(Fn::asin      )            , 0 },	
+			{ Type(Fn::acos      )            , 0 },	
+			{ Type(Fn::atan      )            , 0 },	
+			{ Type(Fn::sinh      )            , 0 },	
+			{ Type(Fn::cosh      )            , 0 },	
+			{ Type(Fn::tanh      )            , 0 },	
+			{ Type(Fn::sqrt      )            , 0 },
+			{ Type(Fn::log       )            , 0 }, 
+			{ Type(Fn::exp       )            , 0 },
+			{ Type(Fn::sin       )            , 0 },	
+			{ Type(Fn::cos       )            , 0 },	
+			{ Type(Fn::tan       )            , 0 },	
+			{ Type(Fn::abs       )            , 0 },	
+			{ Type(Fn::arg       )            , 0 },	
+			{ Type(Fn::ln        )            , 0 },	
+			{ Type(Fn::re        )            , 0 },	
+			{ Type(Fn::im        )            , 0 },	
+			{ Type(Op::named_fn  )            , 0 },
+			{ Type(Op::sum       )            , 2 },
+			{ Type(Op::product   )            , 4 },	
+			{ Type(Fn::pow       )            , 5 }, //not between other function types -> assumed to be printed with '^'  
+			{ Type(Leaf::variable)            , 6 },
+			{ Type(Leaf::complex )            , 6 }, //may be printed as sum/product itself, then (maybe) has to add parentheses on its own
+			{ pattern::PnVariable::tree_match , 6 },
+			{ pattern::PnVariable::value_match, 6 },
+			{ pattern::PnVariable::value_proxy, 6 },
+		});
+		static_assert(std::is_sorted(infixr_table.begin(), infixr_table.end(), [](auto a, auto b) { return a.second < b.second; }));
 		constexpr int infixr(pattern::PnType type) { return find_snd(infixr_table, type); }
 
 		void append_complex(const std::complex<double> val, std::string& dest, int parent_operator_precedence)
@@ -503,6 +504,7 @@ namespace bmath::intern {
 			for (auto& param : fn::range(result, type)) {
 				throw_if<ParseFailure>(param_view.size() == 0u, input.offset, "too few function parameters");
 				param = build_any(store, param_view);
+				input.remove_prefix(1u); // remove comma
 				comma = find_first_of_skip_pars(input.tokens, token::comma);
 				param_view = input.steal_prefix(comma);
 			}

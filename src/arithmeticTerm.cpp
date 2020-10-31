@@ -71,36 +71,37 @@ namespace bmath::intern {
 
 	//more unique (meaning harder to match) is smaller
 	constexpr auto uniqueness_table = std::to_array<std::pair<pattern::PnType, int>>({
-		{ Type(Fn::asinh           )  ,  0 }, //order of parameters is given -> most unique
-		{ Type(Fn::acosh           )  ,  2 }, //order of parameters is given -> most unique
-		{ Type(Fn::atanh           )  ,  4 }, //order of parameters is given -> most unique
-		{ Type(Fn::asin            )  ,  6 }, //order of parameters is given -> most unique
-		{ Type(Fn::acos            )  ,  8 }, //order of parameters is given -> most unique
-		{ Type(Fn::atan            )  , 10 }, //order of parameters is given -> most unique
-		{ Type(Fn::sinh            )  , 12 }, //order of parameters is given -> most unique
-		{ Type(Fn::cosh            )  , 14 }, //order of parameters is given -> most unique
-		{ Type(Fn::tanh            )  , 16 }, //order of parameters is given -> most unique
-		{ Type(Fn::sqrt            )  , 18 }, //order of parameters is given -> most unique
-		{ Type(Fn::pow             )  , 20 }, //order of parameters is given -> most unique
-		{ Type(Fn::log             )  , 22 }, //order of parameters is given -> most unique
-		{ Type(Fn::exp             )  , 24 }, //order of parameters is given -> most unique
-		{ Type(Fn::sin             )  , 26 }, //order of parameters is given -> most unique
-		{ Type(Fn::cos             )  , 28 }, //order of parameters is given -> most unique
-		{ Type(Fn::tan             )  , 30 }, //order of parameters is given -> most unique
-		{ Type(Fn::abs             )  , 32 }, //order of parameters is given -> most unique
-		{ Type(Fn::arg             )  , 34 }, //order of parameters is given -> most unique
-		{ Type(Fn::ln              )  , 36 }, //order of parameters is given -> most unique
-		{ Type(Fn::re              )  , 38 }, //order of parameters is given -> most unique
-		{ Type(Fn::im              )  , 40 }, //order of parameters is given -> most unique
-		{ Type(Op::named_fn)  , 50 }, //order of parameters is given -> most unique
-		{ Type(Op::product         )  , 55 }, //order of operands my vary -> second most unique
-		{ Type(Op::sum             )  , 60 }, //order of operands my vary -> second most unique
-		{ pattern::PnVariable::value_match, 65 }, //a bit more unique than complex
-		{ pattern::PnVariable::value_proxy, 70 }, //a bit more unique than complex
-		{ Type(Leaf::variable        )  , 75 }, //quite not unique
-		{ Type(Leaf::complex         )  , 80 }, //quite not unique
+		{ Type(Fn::asinh     )            ,  0 }, //order of parameters is given -> most unique
+		{ Type(Fn::acosh     )            ,  2 }, //order of parameters is given -> most unique
+		{ Type(Fn::atanh     )            ,  4 }, //order of parameters is given -> most unique
+		{ Type(Fn::asin      )            ,  6 }, //order of parameters is given -> most unique
+		{ Type(Fn::acos      )            ,  8 }, //order of parameters is given -> most unique
+		{ Type(Fn::atan      )            , 10 }, //order of parameters is given -> most unique
+		{ Type(Fn::sinh      )            , 12 }, //order of parameters is given -> most unique
+		{ Type(Fn::cosh      )            , 14 }, //order of parameters is given -> most unique
+		{ Type(Fn::tanh      )            , 16 }, //order of parameters is given -> most unique
+		{ Type(Fn::sqrt      )            , 18 }, //order of parameters is given -> most unique
+		{ Type(Fn::pow       )            , 20 }, //order of parameters is given -> most unique
+		{ Type(Fn::log       )            , 22 }, //order of parameters is given -> most unique
+		{ Type(Fn::exp       )            , 24 }, //order of parameters is given -> most unique
+		{ Type(Fn::sin       )            , 26 }, //order of parameters is given -> most unique
+		{ Type(Fn::cos       )            , 28 }, //order of parameters is given -> most unique
+		{ Type(Fn::tan       )            , 30 }, //order of parameters is given -> most unique
+		{ Type(Fn::abs       )            , 32 }, //order of parameters is given -> most unique
+		{ Type(Fn::arg       )            , 34 }, //order of parameters is given -> most unique
+		{ Type(Fn::ln        )            , 36 }, //order of parameters is given -> most unique
+		{ Type(Fn::re        )            , 38 }, //order of parameters is given -> most unique
+		{ Type(Fn::im        )            , 40 }, //order of parameters is given -> most unique
+		{ Type(Op::named_fn  )            , 50 }, //order of parameters is given -> most unique
+		{ Type(Op::product   )            , 55 }, //order of operands my vary -> second most unique
+		{ Type(Op::sum       )            , 60 }, //order of operands my vary -> second most unique
+		{ Type(Leaf::complex )            , 65 }, //quite not unique
+		{ Type(Leaf::variable)            , 70 }, //quite not unique
+		{ pattern::PnVariable::value_match, 75 }, //as unique as complex, but advantageous to have all match variables at end
+		{ pattern::PnVariable::value_proxy, 80 }, //as unique as complex, but advantageous to have all match variables at end
 		{ pattern::PnVariable::tree_match , 85 }, //can match anything (in princible) -> least unique
 	});
+	static_assert(std::is_sorted(uniqueness_table.begin(), uniqueness_table.end(), [](auto a, auto b) { return a.second < b.second; }));
 	constexpr int uniqueness(pattern::PnType type) noexcept { return find_snd(uniqueness_table, type); }
 
 	//utility for both Function and NamedFn
@@ -205,19 +206,16 @@ namespace bmath::intern {
 
 	namespace pattern {
 		
-		template<typename TypedIdx_T>
-		bool meets_restriction(const TypedIdx_T head, const Restriction restr)
+		bool meets_restriction(const Type type, const Restriction restr)
 		{
 			if (restr == Restr::any) {
 				return true;
 			}
 			else if (restr.is<Type>()) {
-				const Type type = head.get_type();
 				return restr == type;
 			}
 			else if (restr == Restr::function) {
-				const Type type = head.get_type();
-				return type == Type::named_fn || type.is<Fn>();
+				return type == Op::named_fn || type.is<Fn>();
 			}
 			else {
 				assert(false);
@@ -265,8 +263,8 @@ namespace bmath::intern {
 			table.build_lhs = false;
 			this->rhs_head = build_function(this->rhs_store, parts.rhs);
 
-			this->lhs_head = tree::establish_basic_order(this->lhs_ref());
-			this->rhs_head = tree::establish_basic_order(this->rhs_ref());
+			this->lhs_head = tree::establish_basic_order(this->lhs_mut_ref());
+			this->rhs_head = tree::establish_basic_order(this->rhs_mut_ref());
 
 			for (const auto& value_match : table.value_table) {
 				for (const auto lhs_instance : value_match.lhs_instances) {
@@ -472,17 +470,25 @@ namespace bmath::intern {
 						assert(false); break;
 					case PnType(Fn::pow): {
 						FnParams<PnTypedIdx>* params = &store.at(lhs_index).fn_params;
-						if (tree::contains(PnRef(store, (*params)[0]), to_isolate)) { //case <contains var>^<computable>
-							eq.lhs_head = (*params)[0u];
-							(*params)[0u] = eq.rhs_head;	
-							const PnTypedIdx inverse_expo = build_inverted<PnStore, PnTypedIdx>(store, (*params)[1u]);
-							params = &store.at(lhs_index).fn_params;
-							(*params)[1u] = inverse_expo;
-							eq.rhs_head = PnTypedIdx(lhs_index, PnType(Fn::pow));
+						if (tree::contains(PnRef(store, (*params)[0u]), to_isolate)) { //case <contains var>^<computable>
+							if ((*params)[1u].get_type() == Leaf::complex && PnMutRef(store, (*params)[1u])->complex == 2.0) { //special case <contains var>^2 -> use sqrt, not <...>^0.5
+								tree::free(PnMutRef(store, (*params)[1u]));
+								(*params)[1u] = PnTypedIdx();
+								eq.lhs_head = (*params)[0u];
+								eq.rhs_head = PnTypedIdx(lhs_index, PnType(Fn::sqrt));
+							}
+							else {
+								eq.lhs_head = (*params)[0u];
+								(*params)[0u] = eq.rhs_head;	
+								const PnTypedIdx inverse_expo = build_inverted<PnStore, PnTypedIdx>(store, (*params)[1u]);
+								params = &store.at(lhs_index).fn_params;
+								(*params)[1u] = inverse_expo;
+								eq.rhs_head = PnTypedIdx(lhs_index, PnType(Fn::pow));
+							}
 						}
-						else { //case <cumputable>^<contains var>
+						else { //case <computable>^<contains var>
 							eq.lhs_head = (*params)[1u];
-							(*params)[0u] = eq.rhs_head;	
+							(*params)[0u] = eq.rhs_head;
 							eq.rhs_head = PnTypedIdx(lhs_index, PnType(Fn::log));
 						}
 					} break;
@@ -501,6 +507,89 @@ namespace bmath::intern {
 				}
 				return eq;
 			} //stupid_solve_for
+
+			OptComplex eval_value_match(const PnRef ref, const Complex& start_val)
+			{
+				const auto get_divisor = [](const PnRef ref) -> std::optional<PnTypedIdx> {
+					if (ref.type == Fn::pow) {
+						const FnParams<PnTypedIdx>& params = *ref;
+						if (params[1].get_type() == Leaf::complex) {
+							if (ref.new_at(params[1])->complex == -1.0) {
+								return { params[0] }; //return just base
+							}
+						}
+					}
+					return {}; //return nothing
+				};
+
+				const auto compute_exact = [](auto operate) -> OptComplex {
+					std::feclearexcept(FE_ALL_EXCEPT);
+					const OptComplex result = operate();
+					return (!std::fetestexcept(FE_ALL_EXCEPT)) ? result : OptComplex();
+				};
+
+				switch (ref.type) {
+				case PnType(Op::sum): {
+					OptComplex result_val = 0.0;
+					for (auto& summand : vc::range(ref)) {
+						if (const OptComplex summand_val = eval_value_match(ref.new_at(summand), start_val)) {
+							if (const OptComplex res = compute_exact([&] {return result_val + summand_val; })) {
+								result_val = res;
+								continue;
+							}
+						}
+						return {};
+					}
+					return result_val;
+				} break;
+				case Type(Op::product): {
+					OptComplex result_factor = 1.0;
+					OptComplex result_divisor = 1.0;
+					for (auto& factor : vc::range(ref)) {
+						if (const std::optional<PnTypedIdx> divisor = get_divisor(ref.new_at(factor))) {
+							if (const OptComplex divisor_val = eval_value_match(ref.new_at(*divisor), start_val)) {
+								if (const OptComplex res = compute_exact([&] { return result_divisor * divisor_val; })) {
+									result_divisor = res;
+									continue;
+								}
+							}
+						}
+						if (const OptComplex factor_val = eval_value_match(ref.new_at(factor), start_val)) {
+							if (const OptComplex res = compute_exact([&] {return result_factor * factor_val; })) {
+								result_factor = res;
+								continue;
+							}
+						}
+						return {};
+					}
+					return compute_exact([&] { return result_factor / result_divisor; });
+				} break;
+				default: {
+					assert(ref.type.is<Fn>()); 
+					if (const std::optional<PnTypedIdx> divisor = get_divisor(ref)) {
+						if (const OptComplex divisor_val = eval_value_match(ref.new_at(*divisor), start_val)) {
+							return compute_exact([&] { return 1.0 / *divisor_val; });
+						}
+						else {
+							return {};
+						}
+					}
+					const FnParams<PnTypedIdx>& params = *ref;
+					std::array<OptComplex, 4> res_vals;
+					for (std::size_t i = 0; i < fn::param_count(ref.type); i++) {
+						res_vals[i] = eval_value_match(ref.new_at(params[i]), start_val);
+						if (!res_vals[i]) {
+							return {};
+						}
+					}
+					return compute_exact([&] { return fn::eval(ref.type.to<Fn>(), res_vals); });
+				} break;
+				case PnType(Leaf::complex): 
+					return ref->complex;
+				case PnType(PnVariable::value_proxy): 
+					return start_val;
+				}
+			} //eval_value_match
 
 		} //namespace pn_tree
 		
@@ -757,6 +846,8 @@ namespace bmath::intern {
 			using TypedIdxSLC_T = TermSLC<TypedIdx_T>;
 			constexpr bool pattern = std::is_same_v<Type_T, pattern::PnType>;
 
+			//if function is pow and the exponent is -1, the more promising way to compute this is to just divide by the base.
+			//thus this helper figures out if the case is present and if so, returns the base to divide through.
 			const auto get_divisor = [](BasicMutRef<Union_T, Type_T> ref) -> std::optional<TypedIdx_T> {
 				if (ref.type == Fn::pow) {
 					const FnParams<TypedIdx_T>& params = *ref;
@@ -857,6 +948,14 @@ namespace bmath::intern {
 			} break;
 			default: {
 				assert(ref.type.is<Fn>()); //if this assert hits, the switch above needs more cases.
+				if (const std::optional<TypedIdx_T> divisor = get_divisor(ref)) {
+					if (const OptComplex divisor_val = tree::combine_values_exact(ref.new_at(*divisor))) {
+						return compute_exact([&] { return 1.0 / *divisor_val; });
+					}
+					else {
+						return {};
+					}
+				}
 				FnParams<TypedIdx_T>& params = *ref;
 				std::array<OptComplex, 4> res_vals;
 				bool only_exact = true;
@@ -886,10 +985,10 @@ namespace bmath::intern {
 				pattern::ValueMatchVariable& var = *ref;
 				const OptComplex match_res = tree::combine_values_exact(ref.new_at(var.match_idx));
 				const OptComplex copy_res = tree::combine_values_exact(ref.new_at(var.copy_idx));
-				assert(!match_res); //pattern variable can not decay to value
-				assert(!copy_res);  //pattern variable can not decay to value
+				assert(!match_res); //subtree always contains value_proxy, thus should never be evaluatable    
+				assert(!copy_res);  //subtree always contains value_proxy, thus should never be evaluatable    
 			} break;
-			case Type_T(pattern::_value_proxy):
+			case Type_T(pattern::_value_proxy): 
 				break;
 			}
 			return {};
@@ -1138,7 +1237,7 @@ namespace bmath::intern {
 				ref.set(tree::combine_layers(ref));
 				if (const OptComplex val = tree::combine_values_exact(ref)) {
 					tree::free(ref);
-					ref.set(TypedIdx_T(ref.store->insert(*val), Type(Leaf::complex)));
+					ref.set(TypedIdx_T(ref.store->insert(*val), Type_T(Leaf::complex)));
 				}
 				tree::sort(ref);
 			}
@@ -1232,6 +1331,9 @@ namespace bmath::intern {
 
 		bool match(const pattern::PnRef pn_ref, const Ref ref, pattern::MatchData& match_data)
 		{
+			using namespace pattern;
+
+			//currently unused, may allow to also rematch elements of sum / product in pattern not directly beeing pattern variables
 			const auto contains_match_var = [](const pattern::PnRef ref) -> bool {
 				return fold::simple_fold<fold::FindBool>(ref, [](pattern::PnRef ref) -> fold::FindBool { return ref.type.is<pattern::PnVariable>(); });
 			};
@@ -1241,20 +1343,43 @@ namespace bmath::intern {
 					return false;
 				}
 				else {
-					switch (ref.type) {
-					case Type(Op::sum): 
+					switch (pn_ref.type) {
+					case PnType(Op::sum): 
 						[[fallthrough]];
-					case Type(Op::product): {
-						assert(false);
+					case PnType(Op::product): {
+						auto pn_range = vc::range(pn_ref);
+						auto range = vc::range(ref);
+						auto pn_iter = begin(pn_range);
+						auto iter = begin(range);
+						for (; iter != end(range) && pn_iter != end(pn_range); ++iter, ++pn_iter) {
+							if (pn_iter->get_type().is<PnVariable>()) {
+								goto match_against_pattern_variables; //this is considered harmful >:) hehehe
+							}
+							else if (!tree::match(pn_ref.new_at(*pn_iter), ref.new_at(*iter), match_data)) {
+								return false;
+							}
+						}
+						return iter == end(range) && pn_iter == end(pn_range);
+
+						//if we get here, we know all further elements in pn_range to be of a match_variable type, as these are sorted to the end
+						//because the pattern variables may not be sorted in the order a match requires, each pattern variable is matched against 
+						//  all (at this point remaining) elements in tail
+						match_against_pattern_variables:
+						for (; pn_iter != end(pn_range); ++pn_iter) {
+							for (auto tail_iter = iter; tail_iter != end(range); ++tail_iter) {
+								__debugbreak(); //hier muss noch inhalt hin. (warscheinlich koennen die schleifen hier so nicht bleiben)
+							}
+						}
+						return false;
 					} break;
-					case Type(Op::named_fn): {
+					case PnType(Op::named_fn): {
 						if (fn::compare_name(ref, pn_ref) != std::strong_ordering::equal) {
 							return false;
 						}
-						auto range = fn::range(ref);
 						auto pn_range = fn::range(pn_ref);
-						auto iter = begin(range);
+						auto range = fn::range(ref);
 						auto pn_iter = begin(pn_range);
+						auto iter = begin(range);
 						for (; iter != end(range) && pn_iter != end(pn_range); ++iter, ++pn_iter) {
 							if (!tree::match(pn_ref.new_at(*pn_iter), ref.new_at(*iter), match_data)) {
 								return false;
@@ -1275,9 +1400,9 @@ namespace bmath::intern {
 						}
 						return true;
 					} break;
-					case Type(Leaf::variable):
+					case PnType(Leaf::variable):
 						return str_slc::compare(pn_ref.cast<StringSLC>(), ref.cast<StringSLC>()) == std::strong_ordering::equal;
-					case Type(Leaf::complex): {
+					case PnType(Leaf::complex): {
 						const Complex& complex = *ref;
 						const Complex& pn_complex = *pn_ref;
 						return compare_complex(complex, pn_complex) == std::strong_ordering::equal;
@@ -1285,7 +1410,52 @@ namespace bmath::intern {
 					}
 				}
 			}
-			return false;
+			else {
+				assert(pn_ref.type.is<PnVariable>());
+
+				switch (pn_ref.type) {
+				case PnType(PnVariable::tree_match): {
+					const TreeMatchVariable& var = *pn_ref;
+					if (!meets_restriction(ref.type, var.restr)) {
+						return false;
+					}
+					auto& match_info = match_data.info(var);
+					if (match_info.is_set()) {
+						return tree::compare(ref, ref.new_at(match_info.match_idx)) == std::strong_ordering::equal;
+					}
+					else {
+						match_info.match_idx = ref.typed_idx();
+						match_info.responsible = pn_ref.typed_idx();
+						return true;
+					}
+				} break;
+				case PnType(PnVariable::value_match): {
+					if (ref.type != Leaf::complex) { //only this test allows us to pass *ref to evaluate this_value
+						return false;
+					}
+					const ValueMatchVariable& var = *pn_ref;
+					auto& match_info = match_data.info(var);
+					const OptComplex this_value = pn_tree::eval_value_match(pn_ref.new_at(var.match_idx), *ref); 
+					if (!this_value || this_value.val.imag() != 0.0 || !has_form(*this_value, var.form)) {
+						return false;
+					}
+					else if (match_info.is_set()) {
+						return this_value.val == match_info.value;
+					}
+					else {
+						static_assert(std::is_same_v<decltype(match_info.value), double>, "else not only transfer real");
+						match_info.value = this_value->real();
+						match_info.responsible = pn_ref.typed_idx();
+						return true;
+					}
+				} break;
+				case PnType(PnVariable::value_proxy): 
+					[[fallthrough]];
+				default:
+					assert(false);
+					return false;
+				}
+			}
 			
 		} //match
 
@@ -1402,28 +1572,37 @@ namespace bmath {
 		auto parse_string = ParseString(name);
 		parse_string.allow_implicit_product();
 		parse_string.remove_space();
-		const std::size_t error_pos = find_first_not_arithmetic(TokenView(parse_string.tokens));
+		const std::size_t error_pos = find_first_not_arithmetic(parse_string.tokens);
 		intern::throw_if<ParseFailure>(error_pos != TokenView::npos, error_pos, "illegal character");
 		this->head = build(this->store, parse_string);
 		name = std::move(parse_string.name); //give content of name back to name
 	} //Term
 
+	Term::Term(const std::string_view simple_name)
+		:store(simple_name.size() / 2)
+	{
+		const auto tokens = TokenString(simple_name);
+		const std::size_t error_pos = find_first_not_arithmetic(tokens);
+		intern::throw_if<ParseFailure>(error_pos != TokenView::npos, error_pos, "illegal character");
+		this->head = build(this->store, ParseView(tokens, simple_name.data(), 0u));
+	} //Term
+
 	void Term::combine_layers() noexcept
 	{
-		this->head = tree::combine_layers(MutRef(this->store, this->head));
+		this->head = tree::combine_layers(this->mut_ref());
 	}
 
 	void Term::combine_values_inexact() noexcept
 	{
-		if (const OptComplex val = tree::combine_values_inexact(this->ref())) {
-			tree::free(this->ref());
+		if (const OptComplex val = tree::combine_values_inexact(this->mut_ref())) {
+			tree::free(this->mut_ref());
 			this->head = TypedIdx(this->store.insert(*val), Leaf::complex);
 		}	
 	}
 
 	void Term::combine_values_exact() noexcept
 	{
-		if (const OptComplex val = tree::combine_values_exact(this->ref())) {
+		if (const OptComplex val = tree::combine_values_exact(this->mut_ref())) {
 			tree::free(MutRef(this->store, this->head));
 			this->head = TypedIdx(this->store.insert(*val), Leaf::complex);
 		}
@@ -1431,36 +1610,39 @@ namespace bmath {
 
 	void Term::sort() noexcept
 	{
-		tree::sort(this->ref());
+		tree::sort(this->mut_ref());
+	}
+
+	void Term::standardize() noexcept
+	{
+		this->head = tree::establish_basic_order(this->mut_ref());
 	}
 
 	std::string bmath::Term::to_memory_layout() const
 	{
 		return print::to_memory_layout(this->store, { this->head });
-	} //to_memory_layout
+	}
 
 	std::string Term::to_string() const
 	{
 		std::string result;
 		result.reserve(this->store.size() * 2);
-		print::append_to_string(static_cast<const Term*>(this)->ref(), result);
+		print::append_to_string(this->ref(), result);
 		return result;
 	}
 
 	std::string Term::to_pretty_string()
 	{
-		this->combine_layers();
-		this->combine_values_exact();
-		this->sort();
-		return print::to_pretty_string(static_cast<const Term*>(this)->ref());
+		this->standardize();
+		return print::to_pretty_string(this->ref());
 	}
 
 	std::string Term::to_pretty_string() const
 	{
-		return print::to_pretty_string(static_cast<const Term*>(this)->ref());
+		return print::to_pretty_string(this->ref());
 	}
 
-	MutRef Term::ref() noexcept
+	MutRef Term::mut_ref() noexcept
 	{
 		return MutRef(this->store, this->head);
 	}
