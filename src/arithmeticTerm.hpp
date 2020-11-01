@@ -297,13 +297,25 @@ namespace bmath::intern {
 
 			constexpr void reset() noexcept { *this = MatchData(); }
 
-			constexpr SharedTreeDatum& info(const TreeMatchVariable& var) noexcept 
+			constexpr auto& info(const TreeMatchVariable& var) noexcept 
 			{ 
 				assert(var.match_data_idx <= max_tree_match_count);
 				return this->tree_match_data[var.match_data_idx];
 			}
 
-			constexpr SharedValueDatum& info(const ValueMatchVariable& var) noexcept 
+			constexpr auto& info(const TreeMatchVariable& var) const noexcept 
+			{ 
+				assert(var.match_data_idx <= max_tree_match_count);
+				return this->tree_match_data[var.match_data_idx];
+			}
+
+			constexpr auto& info(const ValueMatchVariable& var) noexcept 
+			{ 
+				assert(var.match_data_idx <= max_value_match_count);
+				return this->value_match_data[var.match_data_idx];
+			}
+
+			constexpr auto& info(const ValueMatchVariable& var) const noexcept 
 			{ 
 				assert(var.match_data_idx <= max_value_match_count);
 				return this->value_match_data[var.match_data_idx];
@@ -424,7 +436,7 @@ namespace bmath::intern {
 
 	} //namespace vc
 
-	//recursive tree traversal (some of these traversal functions are also found in namespace print)
+	//general purpose recursive tree traversal
 	namespace tree {
 
 		//removes subtree starting at ref from store
@@ -487,10 +499,15 @@ namespace bmath::intern {
 		template<typename Union_T, typename TypedIdx_T>
 		TypedIdx_T* find_subtree_owner(BasicStore<Union_T>& store, TypedIdx_T& head, const TypedIdx_T subtree);
 
+	} //namespace tree
+
+	//algorithms to compare pattern to usual term and find match
+	namespace match {
+
 		//compares term starting at ref.index in ref.store with pattern starting at pn_ref.index in pn_ref.store
 		//if match is succsessfull, match_data stores what pattern's match variables matched and true is returned.
 		//if match was not succsessfull, match_data is NOT reset and false is returned
-		bool match(const pattern::PnRef pn_ref, const Ref ref, pattern::MatchData& match_data);
+		bool recursive_match(const pattern::PnRef pn_ref, const Ref ref, pattern::MatchData& match_data);
 
 
 		struct VariadicMatchResult
@@ -505,7 +522,17 @@ namespace bmath::intern {
 		//  not_matched will contain the leftovers.
 		VariadicMatchResult variadic_match(const pattern::PnRef pn_ref, const Ref ref, pattern::MatchData& match_data);
 
-	} //namespace tree
+		//copies pn_ref with match_data into store, returns head of copied result.
+		[[nodiscard]] TypedIdx copy(const pattern::PnRef pn_ref, const pattern::MatchData& match_data, Store& store);
+
+		//this function is the primary function designed to be called from outside of this namespace.
+		//the function will try to match the head of in with the head of ref and if so, replace the matched part with out.
+		//if a transformation happened, Just the new subterm is returned to replace the TypedIdx of the old subterm in its parent,
+		//  else nothing.
+		//if the result contains something, ref is no longer valid.
+		[[nodiscard]] std::optional<TypedIdx> match_and_replace(const pattern::PnRef in, const pattern::PnRef out, const MutRef ref);
+
+	} //namespace match
 
 	namespace fold {
 

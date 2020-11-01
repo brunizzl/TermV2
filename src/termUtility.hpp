@@ -41,7 +41,7 @@ namespace bmath::intern {
 	constexpr bool equivalent(const bool x, const bool y, const Bool... xs)
 	{
 		if  constexpr (!sizeof...(xs)) { return x == y; }
-		else                           { return x == y && equivalent(y, xs...); }
+		else                           { return x == y && equivalent(x, xs...); }
 	}
 
 

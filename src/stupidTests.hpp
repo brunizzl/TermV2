@@ -269,7 +269,7 @@ namespace bmath::intern::test {
 
 	void copy()
 	{
-		std::string term_name = "1+2-a*(4+6)^2";
+		std::string term_name = "1+2-a(4+6)^2";
 		Term term_1(term_name);
 		std::cout << "term_1: " << term_1.to_string() << "\n";
 
@@ -290,7 +290,7 @@ namespace bmath::intern::test {
 		auto t = Term(t_name);
 		t.standardize();
 		auto m = pattern::MatchData{};
-		std::cout << "match lhs of \"" << p.to_string() << "\" with \"" << t.to_string() << ": " << tree::match(p.lhs_ref(), t.ref(), m) << "\n";
+		std::cout << "match lhs of \"" << p.to_string() << "\" with \"" << t.to_string() << ": " << match::recursive_match(p.lhs_ref(), t.ref(), m) << "\n";
 	}
 
 } //namespace bmath::intern::test

@@ -292,6 +292,9 @@ namespace bmath::intern {
 		constexpr BasicRef(Store_T& new_store, const std::uint32_t new_index) noexcept
 			:store(&new_store), index(new_index), type(Type_T::COUNT) {}
 
+		constexpr BasicRef(const BasicRef<Union_T, Type_T, Const::no>& ref) noexcept 
+			:store(ref.store), index(ref.index), type(ref.type) {} //allow both const and mut to be initialized from mut
+
 		constexpr auto& operator*() const { return store->at(index); }
 		constexpr auto* operator->() const { return &store->at(index); }
 

@@ -1163,13 +1163,14 @@ namespace bmath::intern {
 					const TypedIdx_T dst_param = tree::copy(src_ref.new_at(src_param), dst_store);
 					last_node_idx = TypedIdxSLC_T::insert_new(dst_store, last_node_idx, dst_param);
 				}
-				std::string src_name; //in most cases the small string optimisation works, else dont care
-				str_slc::read(src_ref.cast<StringSLC>(), src_name);
-				if (src_name.size() <= NamedFn::short_name_max) [[likely]] {
-					std::copy(src_name.begin(), src_name.end(), dst_function.short_name);
-					dst_function.name_size = NamedFn::NameSize::small;
+
+				if (src_function.name_size == NamedFn::NameSize::small) [[likely]] {
+					//   + 1u to directly set dst_function.name_size as well (layed out directly after short_name)
+					std::copy(src_function.short_name, src_function.short_name + NamedFn::short_name_max + 1u, dst_function.short_name);
 				}
 				else {
+					std::string src_name; //in most cases the small string optimisation works, else dont care
+					str_slc::read(src_ref.new_as<StringSLC>(src_function.long_name_idx), src_name);
 					dst_function.long_name_idx = str_slc::insert(dst_store, src_name);
 					dst_function.name_size = NamedFn::NameSize::longer;
 				}
@@ -1326,7 +1327,13 @@ namespace bmath::intern {
 			return *fold::simple_fold<fold::Find<TypedIdx>>(ref, test_for_name);
 		} //search_variable
 
-		bool match(const pattern::PnRef pn_ref, const Ref ref, pattern::MatchData& match_data)
+		
+
+	} //namespace tree
+
+	namespace match {
+
+		bool recursive_match(const pattern::PnRef pn_ref, const Ref ref, pattern::MatchData& match_data)
 		{
 			using namespace pattern;
 
@@ -1344,7 +1351,7 @@ namespace bmath::intern {
 						auto pn_iter = begin(pn_range);
 						auto iter = begin(range);
 						for (; pn_iter != end(pn_range) && iter != end(range); ++pn_iter, ++iter) {
-							if (!tree::match(pn_ref.new_at(*pn_iter), ref.new_at(*iter), match_data)) {
+							if (!match::recursive_match(pn_ref.new_at(*pn_iter), ref.new_at(*iter), match_data)) {
 								return false;
 							}
 						}
@@ -1359,7 +1366,7 @@ namespace bmath::intern {
 						auto pn_iter = begin(pn_range);
 						auto iter = begin(range);
 						for (; pn_iter != end(pn_range) && iter != end(range); ++pn_iter, ++iter) {
-							if (!tree::match(pn_ref.new_at(*pn_iter), ref.new_at(*iter), match_data)) {
+							if (!match::recursive_match(pn_ref.new_at(*pn_iter), ref.new_at(*iter), match_data)) {
 								return false;
 							}
 						}
@@ -1372,7 +1379,7 @@ namespace bmath::intern {
 						auto iter = range.begin();
 						auto pn_iter = pn_range.begin();
 						for (; pn_iter != pn_range.end(); ++pn_iter, ++iter) { //iter and pn_iter both go over same number of params
-							if (!tree::match(pn_ref.new_at(*pn_iter), ref.new_at(*iter), match_data)) {
+							if (!match::recursive_match(pn_ref.new_at(*pn_iter), ref.new_at(*iter), match_data)) {
 								return false;
 							}
 						}
@@ -1428,15 +1435,15 @@ namespace bmath::intern {
 						return true;
 					}
 				} break;
-				case PnType(PnVariable::value_proxy): //may only occur in in pn_tree::eval_value_match
+				case PnType(PnVariable::value_proxy): //may only be encountered in pn_tree::eval_value_match (as value_match does no recursive_match call)
 					[[fallthrough]];
 				default:
 					assert(false);
 					return false;
 				}
 			}
-			
-		} //match
+
+		} //recursive_match
 
 		//this function currently has complexity O(m^n) where m is count of ref's elements and n is count of pn_ref's elements.
 		//in principle it could be turend to O(m*n), but i have not yet turned this into a working algorithm.
@@ -1496,7 +1503,7 @@ namespace bmath::intern {
 					if (elem_k == null_value) {
 						continue; //this elem is currently matched by some other pattern variable -> ignore it
 					}
-					else if (tree::match(pn_elem_i_ref, ref.new_at(elem_k), match_data)) {
+					else if (match::recursive_match(pn_elem_i_ref, ref.new_at(elem_k), match_data)) {
 						result.matched.push_back(elem_k);
 						pn_elements[pn_i].result_idx = k;
 						result.not_matched[k] = null_value;
@@ -1521,7 +1528,7 @@ namespace bmath::intern {
 					return result;
 				}
 
-				found_match:
+			found_match:
 				pn_i++;
 			}
 
@@ -1530,9 +1537,110 @@ namespace bmath::intern {
 			return result;
 		} //variadic_match
 
-		
+		TypedIdx copy(const pattern::PnRef pn_ref, const pattern::MatchData& match_data, Store& store)
+		{
+			using namespace pattern;
 
-	} //namespace tree
+			switch (pn_ref.type) {
+			case PnType(Op::sum): 
+				[[fallthrough]];
+			case PnType(Op::product): {
+				const std::uint32_t res_idx = store.insert(TypedIdxSLC());
+				std::uint32_t last_node_idx = res_idx;
+				for (const PnTypedIdx elem : vc::range(pn_ref)) {
+					const TypedIdx dst_elem = match::copy(pn_ref.new_at(elem), match_data, store);
+					last_node_idx = TypedIdxSLC::insert_new(store, last_node_idx, dst_elem);
+				}
+				return TypedIdx(res_idx, pn_ref.type.to<Type>());
+			} break;
+			case PnType(Op::named_fn): {
+				const NamedFn& src_function = *pn_ref;
+				NamedFn dst_function;
+				std::uint32_t last_node_idx = store.insert(TypedIdxSLC());
+				dst_function.params_idx = last_node_idx;
+				for (const auto param : fn::range(pn_ref)) {
+					const TypedIdx dst_param = match::copy(pn_ref.new_at(param), match_data, store);
+					last_node_idx = TypedIdxSLC::insert_new(store, last_node_idx, dst_param);
+				}
+
+				if (src_function.name_size == NamedFn::NameSize::small) [[likely]] {
+					//   + 1u to directly set dst_function.name_size as well (layed out directly after short_name)
+					std::copy(src_function.short_name, src_function.short_name + NamedFn::short_name_max + 1u, dst_function.short_name);
+				}
+				else {
+					std::string src_name; //in most cases the small string optimisation works, else dont care
+					str_slc::read(pn_ref.new_as<StringSLC>(src_function.long_name_idx), src_name);
+					dst_function.long_name_idx = str_slc::insert(store, src_name);
+					dst_function.name_size = NamedFn::NameSize::longer;
+				}
+				return TypedIdx(store.insert(dst_function), pn_ref.type.to<Type>());
+			} break;
+			default: {
+				assert(pn_ref.type.is<Fn>());
+				const FnParams<PnTypedIdx>& pn_params = *pn_ref;
+				auto dst_params = FnParams<TypedIdx>();
+				for (std::size_t i = 0u; i < fn::param_count(pn_ref.type); i++) {
+					dst_params[i] = match::copy(pn_ref.new_at(pn_params[i]), match_data, store);
+				}
+				return TypedIdx(store.insert(dst_params), pn_ref.type.to<Type>());
+			} break;
+			case PnType(Leaf::variable): {
+				std::string src_name; //in most cases the small string optimisation works, else dont care
+				str_slc::read(pn_ref.cast<StringSLC>(), src_name);
+				const std::size_t dst_index = str_slc::insert(store, src_name);
+				return TypedIdx(dst_index, pn_ref.type.to<Type>());
+			} break;
+			case PnType(Leaf::complex): 
+				return TypedIdx(store.insert(pn_ref->complex), pn_ref.type.to<Type>());
+			case PnType(PnVariable::tree_match): {
+				const SharedTreeDatum& info = match_data.info(pn_ref->tree_match);
+				return tree::copy(Ref(store, info.match_idx), store);
+			} break;
+			case PnType(PnVariable::value_match): {
+				const ValueMatchVariable& var = *pn_ref;
+				return match::copy(pn_ref.new_at(var.copy_idx), match_data, store);				
+			} break;
+			case PnType(PnVariable::value_proxy): {
+				const auto& val = match_data.value_match_data[pn_ref.index].value;
+				return TypedIdx(store.insert(Complex(val)), pn_ref.type.to<Type>());
+			} break;
+			}
+		} //copy
+
+		std::optional<TypedIdx> match_and_replace(const pattern::PnRef in, const pattern::PnRef out, const MutRef ref)
+		{
+
+			pattern::MatchData match_data;
+			if (match::recursive_match(in, ref, match_data)) {
+				const TypedIdx copied_out = match::copy(out, match_data, *ref.store);
+				//same idea as below may also be applied here.
+				tree::free(ref);
+				return { copied_out };
+			}
+			else if ((in.type == Op::sum || in.type == Op::product) && (in.type == ref.type)) {
+				match_data.reset();
+				const auto [matched_elems, remaining_elems] = variadic_match(in, ref, match_data);
+				if (matched_elems.size() > 0u) {
+					free_slc(ref.cast<TypedIdxSLC>());
+					const TypedIdx copied_out = match::copy(out, match_data, *ref.store);
+					//idea for future: maybe buffer copy in third store first and then delete matched elems bevore inserting copy?
+					//would result in ref.store having fewer free slots and might even avoid reallocation in ref.store
+					//perhaps only sensible, if buffer itself most likely would not allocate.
+					for (const TypedIdx elem : matched_elems) { //delete each summand / factor occuring in match
+						tree::free(ref.new_at(elem));
+					}
+					const std::uint32_t res_idx = ref.store->insert(TypedIdxSLC({ copied_out }));
+					std::uint32_t last_node_idx = res_idx;
+					for (const TypedIdx elem : remaining_elems) { //copy back all summands / factors not part of match
+						last_node_idx = TypedIdxSLC::insert_new(*ref.store, last_node_idx, elem);
+					}
+					return { TypedIdx(res_idx, ref.type) };
+				}
+			}
+			return {};
+		} //match_and_replace
+
+	} //namespace match
 
 	namespace fold {
 
