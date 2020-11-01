@@ -1333,11 +1333,6 @@ namespace bmath::intern {
 		{
 			using namespace pattern;
 
-			//currently unused, may allow to also rematch elements of sum / product in pattern not directly beeing pattern variables
-			const auto contains_match_var = [](const pattern::PnRef ref) -> bool {
-				return fold::simple_fold<fold::FindBool>(ref, [](pattern::PnRef ref) -> fold::FindBool { return ref.type.is<pattern::PnVariable>(); });
-			};
-
 			if (pn_ref.type.is<Type>()) {
 				if (pn_ref.type != ref.type) [[likely]] {
 					return false;
@@ -1351,26 +1346,12 @@ namespace bmath::intern {
 						auto range = vc::range(ref);
 						auto pn_iter = begin(pn_range);
 						auto iter = begin(range);
-						for (; iter != end(range) && pn_iter != end(pn_range); ++iter, ++pn_iter) {
-							if (pn_iter->get_type().is<PnVariable>()) {
-								goto match_against_pattern_variables; //this is considered harmful >:) hehehe
-							}
-							else if (!tree::match(pn_ref.new_at(*pn_iter), ref.new_at(*iter), match_data)) {
+						for (; pn_iter != end(pn_range) && iter != end(range); ++pn_iter, ++iter) {
+							if (!tree::match(pn_ref.new_at(*pn_iter), ref.new_at(*iter), match_data)) {
 								return false;
 							}
 						}
 						return iter == end(range) && pn_iter == end(pn_range);
-
-						//if we get here, we know all further elements in pn_range to be of a match_variable type, as these are sorted to the end
-						//because the pattern variables may not be sorted in the order a match requires, each pattern variable is matched against 
-						//  all (at this point remaining) elements in tail
-						match_against_pattern_variables:
-						for (; pn_iter != end(pn_range); ++pn_iter) {
-							for (auto tail_iter = iter; tail_iter != end(range); ++tail_iter) {
-								__debugbreak(); //hier muss noch inhalt hin. (warscheinlich koennen die schleifen hier so nicht bleiben)
-							}
-						}
-						return false;
 					} break;
 					case PnType(Op::named_fn): {
 						if (fn::compare_name(ref, pn_ref) != std::strong_ordering::equal) {
@@ -1380,7 +1361,7 @@ namespace bmath::intern {
 						auto range = fn::range(ref);
 						auto pn_iter = begin(pn_range);
 						auto iter = begin(range);
-						for (; iter != end(range) && pn_iter != end(pn_range); ++iter, ++pn_iter) {
+						for (; pn_iter != end(pn_range) && iter != end(range); ++pn_iter, ++iter) {
 							if (!tree::match(pn_ref.new_at(*pn_iter), ref.new_at(*iter), match_data)) {
 								return false;
 							}
@@ -1388,12 +1369,12 @@ namespace bmath::intern {
 						return iter == end(range) && pn_iter == end(pn_range);
 					} break;
 					default: {
-						assert(ref.type.is<Fn>()); //if this assert hits, the switch above needs more cases.
+						assert(pn_ref.type.is<Fn>());
 						auto range = fn::range(ref->fn_params, ref.type);
 						auto pn_range = fn::range(pn_ref->fn_params, pn_ref.type);
 						auto iter = range.begin();
 						auto pn_iter = pn_range.begin();
-						for (; iter != range.end(); ++iter, ++pn_iter) { //iter and pn_iter both go over same number of params
+						for (; pn_iter != pn_range.end(); ++pn_iter, ++iter) { //iter and pn_iter both go over same number of params
 							if (!tree::match(pn_ref.new_at(*pn_iter), ref.new_at(*iter), match_data)) {
 								return false;
 							}
@@ -1449,7 +1430,7 @@ namespace bmath::intern {
 						return true;
 					}
 				} break;
-				case PnType(PnVariable::value_proxy): 
+				case PnType(PnVariable::value_proxy): //may only occur in in pn_tree::eval_value_match
 					[[fallthrough]];
 				default:
 					assert(false);

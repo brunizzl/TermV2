@@ -532,8 +532,8 @@ namespace bmath::intern {
 
 		//calls apply with every node (postorder), parameter is (BasicRef<Union_T, Type_T, Const> ref), apply returns Res_T
 		//Res_T might have nonstatic member return_early, to indicate if the fold may be stopped early, as the result is already known
-		//not really a fold function in the classical sense, as there is no information accumulated. 
-		//  eighter you have the final result or not. (or dont return a result at all)
+		//not really a fold function in the classical sense, as there is no information accumulated - 
+		//  eighter you have the final result or not. (or you only mutate the term and not return any result at all)
 		template<typename Res_T, typename Union_T, typename Type_T, Const is_const, typename Apply>
 		Res_T simple_fold(const BasicRef<Union_T, Type_T, is_const> ref, Apply apply);
 
