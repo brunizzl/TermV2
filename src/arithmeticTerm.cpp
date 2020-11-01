@@ -1346,16 +1346,8 @@ namespace bmath::intern {
 					case PnType(Op::sum): 
 						[[fallthrough]];
 					case PnType(Op::product): {
-						auto pn_range = vc::range(pn_ref);
-						auto range = vc::range(ref);
-						auto pn_iter = begin(pn_range);
-						auto iter = begin(range);
-						for (; pn_iter != end(pn_range) && iter != end(range); ++pn_iter, ++iter) {
-							if (!match::recursive_match(pn_ref.new_at(*pn_iter), ref.new_at(*iter), match_data)) {
-								return false;
-							}
-						}
-						return iter == end(range) && pn_iter == end(pn_range);
+						const auto [matched_elems, remaining_elems] = match::variadic_match(pn_ref, ref, match_data);
+						return matched_elems.size() > 0u && remaining_elems.size() == 0u;
 					} break;
 					case PnType(Op::named_fn): {
 						if (fn::compare_name(ref, pn_ref) != std::strong_ordering::equal) {
@@ -1609,16 +1601,8 @@ namespace bmath::intern {
 
 		std::optional<TypedIdx> match_and_replace(const pattern::PnRef in, const pattern::PnRef out, const MutRef ref)
 		{
-
-			pattern::MatchData match_data;
-			if (match::recursive_match(in, ref, match_data)) {
-				const TypedIdx copied_out = match::copy(out, match_data, *ref.store);
-				//same idea as below may also be applied here.
-				tree::free(ref);
-				return { copied_out };
-			}
-			else if ((in.type == Op::sum || in.type == Op::product) && (in.type == ref.type)) {
-				match_data.reset();
+			if ((in.type == Op::sum || in.type == Op::product) && (in.type == ref.type)) {
+				pattern::MatchData match_data;
 				const auto [matched_elems, remaining_elems] = variadic_match(in, ref, match_data);
 				if (matched_elems.size() > 0u) {
 					free_slc(ref.cast<TypedIdxSLC>());
@@ -1635,6 +1619,15 @@ namespace bmath::intern {
 						last_node_idx = TypedIdxSLC::insert_new(*ref.store, last_node_idx, elem);
 					}
 					return { TypedIdx(res_idx, ref.type) };
+				}
+			}
+			else {
+				pattern::MatchData match_data;
+				if (match::recursive_match(in, ref, match_data)) {
+					const TypedIdx copied_out = match::copy(out, match_data, *ref.store);
+					//same idea as below may also be applied here.
+					tree::free(ref);
+					return { copied_out };
 				}
 			}
 			return {};
