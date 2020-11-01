@@ -205,21 +205,19 @@ namespace bmath::intern {
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	namespace pattern {
-		
-		bool meets_restriction(const Type type, const Restriction restr)
+
+		bool meets_restriction(const Ref ref, const Restriction restr)
 		{
-			if (restr == Restr::any) {
+			switch (restr) {
+			case Restriction(Restr::any):
 				return true;
-			}
-			else if (restr.is<Type>()) {
-				return restr == type;
-			}
-			else if (restr == Restr::function) {
-				return type == Op::named_fn || type.is<Fn>();
-			}
-			else {
-				assert(false);
-				return false;
+			case Restriction(Restr::nn1):
+				return (ref.type != Leaf::complex) || (ref->complex != -1.0);
+			case Restriction(Restr::function):
+				return (ref.type == Op::named_fn) || ref.type.is<Fn>();
+			default:
+				assert(restr.is<Type>());
+				return restr == ref.type;
 			}
 		} //meets_restriction
 
@@ -242,7 +240,6 @@ namespace bmath::intern {
 			case Form::positive:      return re >   0.0 && im == 0.0;
 			case Form::not_negative:  return re >=  0.0 && im == 0.0;
 			case Form::not_positive:  return re <=  0.0 && im == 0.0;
-			case Form::not_minus_one: return re != -1.0 || im != 0.0;
 			default:
 				assert(false);
 				return false;
@@ -690,7 +687,7 @@ namespace bmath::intern {
 				[[fallthrough]];
 			case Type_T(Op::product): {
 				std::uint32_t elem_count = 0u;       
-				TypedIdx_T last_elem = TypedIdx_T(); 
+				TypedIdx_T last_elem = TypedIdx_T(); //only relevant if it is the only element. taking the last element saves an if in the loop.
 
 				std::uint32_t current_append_node = ref.index;
 				for (auto& elem : vc::range(ref)) {
@@ -708,7 +705,7 @@ namespace bmath::intern {
 				}
 
 				if (elem_count == 1u) { //sum / product is redundant, if there only is a single summand / factor
-					free_slc(ref.cast<TypedIdxSLC_T>());
+					free_slc(ref.cast<TypedIdxSLC_T>()); //dont call tree::free, as that would also free last_elem (witch is the only offspring anyway)
 					return last_elem;
 				}
 			} break;
@@ -1397,7 +1394,7 @@ namespace bmath::intern {
 				switch (pn_ref.type) {
 				case PnType(PnVariable::tree_match): {
 					const TreeMatchVariable& var = *pn_ref;
-					if (!meets_restriction(ref.type, var.restr)) {
+					if (!meets_restriction(ref, var.restr)) {
 						return false;
 					}
 					auto& match_info = match_data.info(var);
@@ -1426,6 +1423,7 @@ namespace bmath::intern {
 					else {
 						static_assert(std::is_same_v<decltype(match_info.value), double>, "else not only transfer real");
 						match_info.value = this_value->real();
+						match_info.match_idx = ref.typed_idx();
 						match_info.responsible = pn_ref.typed_idx();
 						return true;
 					}
@@ -1439,6 +1437,100 @@ namespace bmath::intern {
 			}
 			
 		} //match
+
+		//this function currently has complexity O(m^n) where m is count of ref's elements and n is count of pn_ref's elements.
+		//in principle it could be turend to O(m*n), but i have not yet turned this into a working algorithm.
+		//the tricky part is to ensure, that one will never 
+		VariadicMatchResult variadic_match(const pattern::PnRef pn_ref, const Ref ref, pattern::MatchData& match_data)
+		{
+			using namespace pattern;
+			assert(pn_ref.type == ref.type && (ref.type == Op::sum || ref.type == Op::product));
+
+			const auto reset_own_matches = [&match_data](const PnRef pn_ref) {
+				const auto reset_variable = [&match_data](const PnRef ref) -> fold::Void {
+					switch (ref.type) {
+					case PnType(PnVariable::tree_match):
+					{
+						SharedTreeDatum& info = match_data.info(ref->tree_match);
+						if (info.responsible == ref.typed_idx()) {
+							info = SharedTreeDatum();
+						}
+					} break;
+					case PnType(PnVariable::value_match):
+					{
+						SharedValueDatum& info = match_data.info(ref->value_match);
+						if (info.responsible == ref.typed_idx()) {
+							info = SharedValueDatum();
+						}
+					} break;
+					}
+					return fold::Void{};
+				};
+				fold::simple_fold<fold::Void>(pn_ref, reset_variable);
+			};
+
+			VariadicMatchResult result;
+			for (const TypedIdx elem : vc::range(ref)) {
+				result.not_matched.push_back(elem);
+			}
+
+			struct PnElemData
+			{
+				PnTypedIdx elem;
+				std::uint32_t result_idx;
+			};
+			StupidBufferVector<PnElemData, 8> pn_elements;
+			for (const PnTypedIdx elem : vc::range(pn_ref)) {
+				pn_elements.emplace_back(elem, -1u);
+			}
+
+			constexpr auto null_value = TypedIdx();
+
+			std::uint32_t pn_i = 0u;
+			std::uint32_t start_k = 0u;
+			while (pn_i < pn_elements.size()) {
+				const PnRef pn_elem_i_ref = pn_ref.new_at(pn_elements[pn_i].elem);
+
+				for (std::uint32_t k = start_k; k < result.not_matched.size(); k++) {
+					const TypedIdx elem_k = result.not_matched[k];
+					if (elem_k == null_value) {
+						continue; //this elem is currently matched by some other pattern variable -> ignore it
+					}
+					else if (tree::match(pn_elem_i_ref, ref.new_at(elem_k), match_data)) {
+						result.matched.push_back(elem_k);
+						pn_elements[pn_i].result_idx = k;
+						result.not_matched[k] = null_value;
+						goto found_match; //this is considered harmful >:) hehehehe
+					}
+					else {
+						reset_own_matches(pn_elem_i_ref);
+					}
+				}
+				//if we get here, no match for pn_elem_i_ref was found in all of result.not_matched. 
+				//now we need to rematch previous pn_elem's and test if this frees some spot for our current pn_elem_i_ref
+				if (pn_i > 0u) {
+					pn_i--;
+					const std::uint32_t matched_at_idx = std::exchange(pn_elements[pn_i].result_idx, -1u);
+					result.not_matched[matched_at_idx] = result.matched.pop_back();
+					start_k = matched_at_idx + 1u;
+					continue;
+				}
+				else {
+					result.matched.clear();
+					result.not_matched.clear();
+					return result;
+				}
+
+				found_match:
+				pn_i++;
+			}
+
+			//if we get here, all off pattern has been matched. as we are nice people, we condense result.not_matched to not contain any null_value
+			result.not_matched.shorten_to(std::remove(result.not_matched.begin(), result.not_matched.end(), null_value));
+			return result;
+		} //variadic_match
+
+		
 
 	} //namespace tree
 

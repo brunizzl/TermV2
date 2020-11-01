@@ -37,6 +37,14 @@ namespace bmath::intern {
 		else                          { return x == y || is_one_of<xs...>(y); }
 	}	
 
+	template<typename... Bool>
+	constexpr bool equivalent(const bool x, const bool y, const Bool... xs)
+	{
+		if  constexpr (!sizeof...(xs)) { return x == y; }
+		else                           { return x == y && equivalent(y, xs...); }
+	}
+
+
 	template <typename Fst_T, typename Snd_T, std::size_t Size>
 	[[nodiscard]] constexpr Snd_T find_snd(
 		const std::array<std::pair<Fst_T, Snd_T>, Size>& data, const Fst_T key) noexcept
@@ -109,7 +117,7 @@ namespace bmath::intern {
 
 		~StupidBufferVector() noexcept
 		{
-			if (this->size_ > BufferSize) {
+			if (this->data_ != this->local_data) {
 				delete[] this->data_; //only works for frivially destructible Value_T
 			}
 		}
@@ -155,7 +163,7 @@ namespace bmath::intern {
 			}
 
 			Value_T* const addr = &this->data_[this->size_++];
-			new (addr) Value_T(args...);
+			new (addr) Value_T{ args... };
 			return  *addr;
 		}
 
@@ -164,11 +172,20 @@ namespace bmath::intern {
 			return this->emplace_back(elem);
 		}
 
-		constexpr void pop_back() noexcept
+		constexpr Value_T pop_back() noexcept
 		{ 
 			assert(this->size_ > 0u && "tried popping on empty vector");
-			this->size_--; //only works for frivially destructible Value_T
+			return this->data_[--this->size_]; //only works for frivially destructible Value_T
 		}
+
+		constexpr void shorten_to(Value_T* const new_end) noexcept
+		{
+			const std::size_t new_size = new_end - this->data_;
+			assert(new_size <= this->size_);
+			this->size_ = new_size; //only works for frivially destructible Value_T
+		}
+
+		constexpr void clear() noexcept { this->size_ = 0u; }
 
 		constexpr const Value_T& operator[](std::size_t where) const noexcept { return this->data_[where]; }
 		constexpr Value_T& operator[](std::size_t where) noexcept { return this->data_[where]; }
@@ -228,6 +245,8 @@ namespace bmath::intern {
 			assert(this->size_ > 0u && "tried popping on empty vector");
 			this->data_[--this->size_].~Value_T();
 		}
+
+		constexpr void clear() noexcept { this->size_ = 0u; }
 
 		constexpr const Value_T& operator[](const std::size_t where) const noexcept { return this->data_[where]; }
 		constexpr Value_T& operator[](const std::size_t where) noexcept { return this->data_[where]; }
@@ -511,6 +530,8 @@ namespace bmath::intern {
 			return Bits;
 		}
 	}; //class BitSet
+
+
 
 
 	//can be used like std::optional<double>, but with extra double operations

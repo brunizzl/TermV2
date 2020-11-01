@@ -210,7 +210,7 @@ namespace bmath::intern::test {
 		using namespace bmath::intern::pattern;
 
 		std::vector<std::string> term_names = {
-			"a :any, k :int | a^(2 k + 1) = a a^(2 k)",
+			"a :any, k :nn1 | a^(2 k + 1) = a a^(2 k)",
 			"a:real, b, c:complex | (a b)^c = a^c b^c",
 			"a, b | a^2 + 2 a b + b^2 = (a + b)^2",
 			"cos('pi') = -1",

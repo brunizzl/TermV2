@@ -156,6 +156,7 @@ namespace bmath::intern {
 			function, //packs named_fn and any in Fn together
 			any,    
 			unknown, //used only as error value
+			nn1, //compact for "not negative one"  
 			COUNT
 		};
 
@@ -163,7 +164,7 @@ namespace bmath::intern {
 		//  no need to differentiate between any of the functions of Fn and unknown_function.
 		using Restriction = SumEnum<Restr, Type>; 
 
-		bool meets_restriction(const Type type, const Restriction restr);
+		bool meets_restriction(const Ref ref, const Restriction restr);
 
 		//in a valid pattern, all TreeMatchVariables of same name share the same restr and the same match_data_idx.
 		//it is allowed to have multiple instances of the same TreeMatchVariable per side.
@@ -185,7 +186,6 @@ namespace bmath::intern {
 			positive,     //implies real     	
 			not_negative, //implies real  
 			not_positive, //implies real 
-			not_minus_one,  
 			COUNT
 		};
 
@@ -268,7 +268,7 @@ namespace bmath::intern {
 
 			constexpr bool is_set() const noexcept
 			{
-				assert((this->match_idx != TypedIdx{}) == (this->responsible != PnTypedIdx{}));
+				assert(equivalent(this->responsible != PnTypedIdx{}, this->match_idx != TypedIdx{}));
 				return  this->responsible != PnTypedIdx{};
 			}
 		};
@@ -276,11 +276,12 @@ namespace bmath::intern {
 		struct SharedValueDatum
 		{
 			double value = 0.0;
+			TypedIdx match_idx = TypedIdx{}; //indexes in Term to simplify (only usefull during rematch to only match later elements)
 			PnTypedIdx responsible = PnTypedIdx{}; //the instance of ValueMatchVariable that was setting value
 
 			constexpr bool is_set() const noexcept
 			{
-				assert((this->value != 0.0) == (this->responsible != PnTypedIdx{}));
+				assert(equivalent(this->value != 0.0, this->responsible != PnTypedIdx{}, this->match_idx != TypedIdx{}));
 				return  this->responsible != PnTypedIdx{};
 			}
 		};
@@ -443,7 +444,7 @@ namespace bmath::intern {
 		template<typename Union_T, typename Type_T>
 		[[nodiscard]] OptComplex combine_values_inexact(const BasicMutRef<Union_T, Type_T> ref);
 
-		//if evaluation of subtree was inexact / impossible, returns Complex(NAN, undefined), else returns result.
+		//if evaluation of subtree was inexact / impossible, returns Nothing, else returns Just result.
 		//if an exact value is returned, the state of the subtree is unspecified but valid (from a storage perspective) 
 		//and is expected to be deleted and replaced with the result. (equivalent behavior to combine_values_inexact)
 		template<typename Union_T, typename Type_T>
@@ -457,7 +458,7 @@ namespace bmath::intern {
 		template<typename Union_T, typename Type_T>
 		void sort(const BasicMutRef<Union_T, Type_T> ref);
 
-		//counts number of logical nodes of subtree
+		//counts number of logical nodes of subtree (note: logical nodes might be fewer than used slots in store)
 		template<typename Union_T, typename Type_T>
 		std::size_t count(const BasicRef<Union_T, Type_T> ref);
 
@@ -481,13 +482,28 @@ namespace bmath::intern {
 		[[nodiscard]] BasicTypedIdx<Type_T> establish_basic_order(BasicMutRef<Union_T, Type_T> ref);
 
 		//returns pointer to field of parent of subtree, where subtree is held
+		//only the non-const return value requires this function to not take a const store, 
+		//  else handing in a reference as head might not be desired.
 		template<typename Union_T, typename TypedIdx_T>
 		TypedIdx_T* find_subtree_owner(BasicStore<Union_T>& store, TypedIdx_T& head, const TypedIdx_T subtree);
 
-		//compares term starting at head in store with pattern starting at pn_head in pn_store
+		//compares term starting at ref.index in ref.store with pattern starting at pn_ref.index in pn_ref.store
 		//if match is succsessfull, match_data stores what pattern's match variables matched and true is returned.
 		//if match was not succsessfull, match_data is NOT reset and false is returned
 		bool match(const pattern::PnRef pn_ref, const Ref ref, pattern::MatchData& match_data);
+
+
+		struct VariadicMatchResult
+		{
+			StupidBufferVector<TypedIdx, 8> matched;
+			StupidBufferVector<TypedIdx, 16> not_matched;
+		};
+
+		//this function allows to match a sum / product pattern in a sum / product with more elements than elements in the pattern.
+		//if no match was found, both VariadicMatchResult.matched and VariadicMatchResult.not_matched will be empty, 
+		//  else matched will contain the elements in term where a corrensponding part in pattern was found and
+		//  not_matched will contain the leftovers.
+		VariadicMatchResult variadic_match(const pattern::PnRef pn_ref, const Ref ref, pattern::MatchData& match_data);
 
 	} //namespace tree
 
