@@ -153,10 +153,11 @@ namespace bmath::intern {
 
 		enum class Restr
 		{
+			any,
+			nn1, //compact for "not negative one" (basically any, but the exact term "-1" will not be accepted)
+			no_val, //basically any, but Leaf::complex is forbidden    
 			function, //packs named_fn and any in Fn together
-			any,    
 			unknown, //used only as error value
-			nn1, //compact for "not negative one"  
 			COUNT
 		};
 

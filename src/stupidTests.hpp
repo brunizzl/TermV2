@@ -73,9 +73,11 @@ namespace bmath::intern::debug {
 			//pattern::PnTerm{"x | sin(x) / cos(x) = tan(x)"}, 
 			//pattern::PnTerm{"a :complex, b :complex, x | (a x)^b = a^b x^b"}, 
 			pattern::PnTerm{"a, b | a b + a = a (b + 1)"}, 
-			pattern::PnTerm{"a, b | a b + b = b (a + 1)"}, 
+			pattern::PnTerm{"b, a | a b + a = a (b + 1)"}, 
+			pattern::PnTerm{"a :no_val, b, c | a b + a c = a (b + c)"}, 
+			pattern::PnTerm{"b, a :no_val, c | a b + a c = a (b + c)"}, 
 			pattern::PnTerm{"a, b, c | a b + a c = a (b + c)"}, 
-			pattern::PnTerm{"a, b, c | a b + b c = a (b + c)"}, 
+			pattern::PnTerm{"b, a, c | a b + a c = a (b + c)"}, 
 		});
 
 		while (true) {

@@ -211,6 +211,8 @@ namespace bmath::intern {
 			switch (restr) {
 			case Restriction(Restr::any):
 				return true;
+			case Restriction(Restr::no_val):
+				return ref.type != Leaf::complex;
 			case Restriction(Restr::nn1):
 				return (ref.type != Leaf::complex) || (ref->complex != -1.0);
 			case Restriction(Restr::function):
@@ -1489,7 +1491,6 @@ namespace bmath::intern {
 			std::uint32_t start_k = 0u;
 			while (pn_i < pn_elements.size()) {
 				const PnRef pn_elem_i_ref = pn_ref.new_at(pn_elements[pn_i].elem);
-				reset_own_matches(pn_elem_i_ref);
 
 				for (std::uint32_t k = start_k; k < result.not_matched.size(); k++) {
 					const TypedIdx elem_k = result.not_matched[k];
@@ -1513,6 +1514,9 @@ namespace bmath::intern {
 					const std::uint32_t matched_at_idx = std::exchange(pn_elements[pn_i].result_idx, -1u);
 					result.not_matched[matched_at_idx] = result.matched.pop_back();
 					start_k = matched_at_idx + 1u;
+
+					const PnRef pn_elem_i_ref = pn_ref.new_at(pn_elements[pn_i].elem);
+					reset_own_matches(pn_elem_i_ref);
 					continue;
 				}
 				else {

@@ -118,6 +118,7 @@ namespace bmath::intern {
 			{ Form::not_positive  , "not_positive"  },
 			{ Restr::any          , "any"           },
 			{ Restr::nn1          , "nn1"           },
+			{ Restr::no_val       , "no_val"        },
 		});
 
 		constexpr std::string_view name_of(const ParseRestriction r) noexcept { return find_snd(form_name_table, r); }
