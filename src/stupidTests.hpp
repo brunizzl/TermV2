@@ -63,6 +63,53 @@ namespace bmath::intern::debug {
 			;
 	} //enumerate_pn_type
 
+
+	void test_rechner() 
+	{
+		const auto patterns = std::to_array({ 
+			//pattern::PnTerm{"x | sin(x)^2 + cos(x)^2 = 1"}, 
+			//pattern::PnTerm{"a, b | a^2 + 2 a b + b^2 = (a + b)^2"}, 
+			//pattern::PnTerm{"a, b | a^2 - 2 a b + b^2 = (a - b)^2"}, 
+			//pattern::PnTerm{"x | sin(x) / cos(x) = tan(x)"}, 
+			//pattern::PnTerm{"a :complex, b :complex, x | (a x)^b = a^b x^b"}, 
+			pattern::PnTerm{"a, b | a b + a = a (b + 1)"}, 
+			pattern::PnTerm{"a, b | a b + b = b (a + 1)"}, 
+			pattern::PnTerm{"a, b, c | a b + a c = a (b + c)"}, 
+			pattern::PnTerm{"a, b, c | a b + b c = a (b + c)"}, 
+		});
+
+		while (true) {
+			std::cout << "> ";
+			std::string name;
+			std::cin >> name;
+			try {
+				bmath::Term test(name); 
+				std::cout << "input:  " << test.to_string() << "\n";
+				test.standardize();
+				std::cout << "sorted: " << test.to_string() << "\n";
+				bool changed;
+				do {
+					changed = false;
+					for (const auto& p : patterns) {
+						if (test.match_and_replace(p)) {
+							changed = true;
+							test.standardize();
+							break;
+						}
+					}
+				} while (changed);
+				std::cout << "done:   " << test.to_string() << "\n";
+				std::cout << "\n";
+			}
+			catch (bmath::ParseFailure failure) {
+				std::cout << "parse failure: " << failure.what << '\n';
+				std::cout << name << '\n';
+				std::cout << std::string(failure.where, ' ') << "^\n\n";
+			}
+			std::cin.get();
+		}
+	} //test_rechner
+
 } //namespace bmath::intern::debug
 
 namespace bmath::intern::test {
@@ -164,6 +211,7 @@ namespace bmath::intern::test {
 			"sin(1) + 3 + sin(3) + fred + 1 + sin(7) - hans + jens + herbert + 7 + anneliese + fred + sin(3) + marco + 3 + bernd",
 			"a+ln(b^2)+ln(c)+2-b^2-c*a",
 			"c*d+g*f+g",
+			"c*d+g*f+f",
 			"12*herbert+herbert+4",
 			"(3*x-2*y)/5",
 			"(1*[2i^(-2)*3*(4*(a^5))])",
@@ -290,7 +338,7 @@ namespace bmath::intern::test {
 		auto t = Term(t_name);
 		t.standardize();
 		auto m = pattern::MatchData{};
-		std::cout << "match lhs of \"" << p.to_string() << "\" with \"" << t.to_string() << ": " << match::recursive_match(p.lhs_ref(), t.ref(), m) << "\n";
+		std::cout << "match lhs of \"" << p.to_string() << "\" with \"" << t.to_string() << ": " << match::equals(p.lhs_ref(), t.ref(), m) << "\n";
 	}
 
 } //namespace bmath::intern::test

@@ -301,7 +301,7 @@ namespace bmath::intern {
 		constexpr void set(const BasicTypedIdx<Type_T> elem) noexcept 
 		{ 
 			this->index = elem.get_index(); 
-			this->type = elem.get_type(); 		
+			this->type = elem.get_type(); 
 		}
 
 		constexpr BasicRef new_at(const BasicTypedIdx<Type_T> elem) const noexcept { return BasicRef(*this->store, elem); }

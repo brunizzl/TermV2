@@ -329,7 +329,7 @@ namespace bmath::intern {
 			PnStore lhs_store;
 			PnStore rhs_store;
 
-			PnTerm(std::string& name);
+			PnTerm(std::string name);
 			std::string to_string() const;
 			std::string lhs_memory_layout() const;
 			std::string rhs_memory_layout() const;
@@ -507,7 +507,7 @@ namespace bmath::intern {
 		//compares term starting at ref.index in ref.store with pattern starting at pn_ref.index in pn_ref.store
 		//if match is succsessfull, match_data stores what pattern's match variables matched and true is returned.
 		//if match was not succsessfull, match_data is NOT reset and false is returned
-		bool recursive_match(const pattern::PnRef pn_ref, const Ref ref, pattern::MatchData& match_data);
+		bool equals(const pattern::PnRef pn_ref, const Ref ref, pattern::MatchData& match_data);
 
 
 		struct VariadicMatchResult
@@ -520,7 +520,8 @@ namespace bmath::intern {
 		//if no match was found, both VariadicMatchResult.matched and VariadicMatchResult.not_matched will be empty, 
 		//  else matched will contain the elements in term where a corrensponding part in pattern was found and
 		//  not_matched will contain the leftovers.
-		VariadicMatchResult variadic_match(const pattern::PnRef pn_ref, const Ref ref, pattern::MatchData& match_data);
+		//it is assumed, that pn_ref and ref are both the same variadic type (eighter sum and sum or product and product)
+		VariadicMatchResult variadic_equals(const pattern::PnRef pn_ref, const Ref ref, pattern::MatchData& match_data);
 
 		//copies pn_ref with match_data into store, returns head of copied result.
 		[[nodiscard]] TypedIdx copy(const pattern::PnRef pn_ref, const pattern::MatchData& match_data, Store& store);
@@ -531,6 +532,13 @@ namespace bmath::intern {
 		//  else nothing.
 		//if the result contains something, ref is no longer valid.
 		[[nodiscard]] std::optional<TypedIdx> match_and_replace(const pattern::PnRef in, const pattern::PnRef out, const MutRef ref);
+
+		//tries to match in (in postoreder) against every subterm of ref and finally ref itself. if a deeper match was found, 
+		// snd of return value is true. 
+		//if fst of return value is valid, ref could be matched and got replaced by *fst of return value, meaning ref is no longer valid
+		// and caller needs to replace ref with *return_value.first  
+		[[nodiscard]] std::pair<std::optional<TypedIdx>, bool> recursive_match_and_replace(
+			const pattern::PnRef in, const pattern::PnRef out, const MutRef ref);
 
 	} //namespace match
 
@@ -619,6 +627,7 @@ namespace bmath {
 
 		intern::MutRef mut_ref() noexcept;
 		intern::Ref ref() const noexcept;
+		bool match_and_replace(const intern::pattern::PnTerm& p) noexcept; //returns true if match was found 
 	};	//class Term
 
 }	//namespace bmath

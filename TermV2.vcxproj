@@ -122,6 +122,7 @@
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\ioArithmetic.cpp" />
     <ClCompile Include="src\parseTerm.cpp" />
+    <ClCompile Include="src\transform.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\arithmeticTerm.hpp" />
@@ -130,6 +131,7 @@
     <ClInclude Include="src\stupidTests.hpp" />
     <ClInclude Include="src\termColony.hpp" />
     <ClInclude Include="src\termStore.hpp" />
+    <ClInclude Include="src\transform.hpp" />
     <ClInclude Include="src\typedIndex.hpp" />
     <ClInclude Include="src\termUtility.hpp" />
   </ItemGroup>

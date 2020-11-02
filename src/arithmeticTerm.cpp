@@ -95,8 +95,8 @@ namespace bmath::intern {
 		{ Type(Op::named_fn  )            , 50 }, //order of parameters is given -> most unique
 		{ Type(Op::product   )            , 55 }, //order of operands my vary -> second most unique
 		{ Type(Op::sum       )            , 60 }, //order of operands my vary -> second most unique
-		{ Type(Leaf::complex )            , 65 }, //quite not unique
-		{ Type(Leaf::variable)            , 70 }, //quite not unique
+		{ Type(Leaf::variable)            , 65 }, //quite not unique
+		{ Type(Leaf::complex )            , 70 }, //quite not unique
 		{ pattern::PnVariable::value_match, 75 }, //as unique as complex, but advantageous to have all match variables at end
 		{ pattern::PnVariable::value_proxy, 80 }, //as unique as complex, but advantageous to have all match variables at end
 		{ pattern::PnVariable::tree_match , 85 }, //can match anything (in princible) -> least unique
@@ -246,7 +246,7 @@ namespace bmath::intern {
 			}
 		} //has_form
 
-		PnTerm::PnTerm(std::string& name) 
+		PnTerm::PnTerm(std::string name) 
 		{
 			auto parse_string = ParseString(name);
 			parse_string.allow_implicit_product();
@@ -1333,7 +1333,7 @@ namespace bmath::intern {
 
 	namespace match {
 
-		bool recursive_match(const pattern::PnRef pn_ref, const Ref ref, pattern::MatchData& match_data)
+		bool equals(const pattern::PnRef pn_ref, const Ref ref, pattern::MatchData& match_data)
 		{
 			using namespace pattern;
 
@@ -1346,7 +1346,7 @@ namespace bmath::intern {
 					case PnType(Op::sum): 
 						[[fallthrough]];
 					case PnType(Op::product): {
-						const auto [matched_elems, remaining_elems] = match::variadic_match(pn_ref, ref, match_data);
+						const auto [matched_elems, remaining_elems] = match::variadic_equals(pn_ref, ref, match_data);
 						return matched_elems.size() > 0u && remaining_elems.size() == 0u;
 					} break;
 					case PnType(Op::named_fn): {
@@ -1358,7 +1358,7 @@ namespace bmath::intern {
 						auto pn_iter = begin(pn_range);
 						auto iter = begin(range);
 						for (; pn_iter != end(pn_range) && iter != end(range); ++pn_iter, ++iter) {
-							if (!match::recursive_match(pn_ref.new_at(*pn_iter), ref.new_at(*iter), match_data)) {
+							if (!match::equals(pn_ref.new_at(*pn_iter), ref.new_at(*iter), match_data)) {
 								return false;
 							}
 						}
@@ -1371,7 +1371,7 @@ namespace bmath::intern {
 						auto iter = range.begin();
 						auto pn_iter = pn_range.begin();
 						for (; pn_iter != pn_range.end(); ++pn_iter, ++iter) { //iter and pn_iter both go over same number of params
-							if (!match::recursive_match(pn_ref.new_at(*pn_iter), ref.new_at(*iter), match_data)) {
+							if (!match::equals(pn_ref.new_at(*pn_iter), ref.new_at(*iter), match_data)) {
 								return false;
 							}
 						}
@@ -1427,7 +1427,7 @@ namespace bmath::intern {
 						return true;
 					}
 				} break;
-				case PnType(PnVariable::value_proxy): //may only be encountered in pn_tree::eval_value_match (as value_match does no recursive_match call)
+				case PnType(PnVariable::value_proxy): //may only be encountered in pn_tree::eval_value_match (as value_match does no equals call)
 					[[fallthrough]];
 				default:
 					assert(false);
@@ -1435,12 +1435,12 @@ namespace bmath::intern {
 				}
 			}
 
-		} //recursive_match
+		} //equals
 
 		//this function currently has complexity O(m^n) where m is count of ref's elements and n is count of pn_ref's elements.
 		//in principle it could be turend to O(m*n), but i have not yet turned this into a working algorithm.
 		//the tricky part is to ensure, that one will never 
-		VariadicMatchResult variadic_match(const pattern::PnRef pn_ref, const Ref ref, pattern::MatchData& match_data)
+		VariadicMatchResult variadic_equals(const pattern::PnRef pn_ref, const Ref ref, pattern::MatchData& match_data)
 		{
 			using namespace pattern;
 			assert(pn_ref.type == ref.type && (ref.type == Op::sum || ref.type == Op::product));
@@ -1489,13 +1489,14 @@ namespace bmath::intern {
 			std::uint32_t start_k = 0u;
 			while (pn_i < pn_elements.size()) {
 				const PnRef pn_elem_i_ref = pn_ref.new_at(pn_elements[pn_i].elem);
+				reset_own_matches(pn_elem_i_ref);
 
 				for (std::uint32_t k = start_k; k < result.not_matched.size(); k++) {
 					const TypedIdx elem_k = result.not_matched[k];
 					if (elem_k == null_value) {
 						continue; //this elem is currently matched by some other pattern variable -> ignore it
 					}
-					else if (match::recursive_match(pn_elem_i_ref, ref.new_at(elem_k), match_data)) {
+					else if (match::equals(pn_elem_i_ref, ref.new_at(elem_k), match_data)) {
 						result.matched.push_back(elem_k);
 						pn_elements[pn_i].result_idx = k;
 						result.not_matched[k] = null_value;
@@ -1527,7 +1528,7 @@ namespace bmath::intern {
 			//if we get here, all off pattern has been matched. as we are nice people, we condense result.not_matched to not contain any null_value
 			result.not_matched.shorten_to(std::remove(result.not_matched.begin(), result.not_matched.end(), null_value));
 			return result;
-		} //variadic_match
+		} //variadic_equals
 
 		TypedIdx copy(const pattern::PnRef pn_ref, const pattern::MatchData& match_data, Store& store)
 		{
@@ -1603,7 +1604,7 @@ namespace bmath::intern {
 		{
 			if ((in.type == Op::sum || in.type == Op::product) && (in.type == ref.type)) {
 				pattern::MatchData match_data;
-				const auto [matched_elems, remaining_elems] = variadic_match(in, ref, match_data);
+				const auto [matched_elems, remaining_elems] = variadic_equals(in, ref, match_data);
 				if (matched_elems.size() > 0u) {
 					free_slc(ref.cast<TypedIdxSLC>());
 					const TypedIdx copied_out = match::copy(out, match_data, *ref.store);
@@ -1623,7 +1624,7 @@ namespace bmath::intern {
 			}
 			else {
 				pattern::MatchData match_data;
-				if (match::recursive_match(in, ref, match_data)) {
+				if (match::equals(in, ref, match_data)) {
 					const TypedIdx copied_out = match::copy(out, match_data, *ref.store);
 					//same idea as below may also be applied here.
 					tree::free(ref);
@@ -1632,6 +1633,56 @@ namespace bmath::intern {
 			}
 			return {};
 		} //match_and_replace
+
+		std::pair<std::optional<TypedIdx>, bool> recursive_match_and_replace(const pattern::PnRef in, const pattern::PnRef out, const MutRef ref)
+		{
+			switch (ref.type) {
+			case Type(Op::sum): 
+				[[fallthrough]];
+			case Type(Op::product): {
+				for (TypedIdx& elem : vc::range(ref)) {
+					const auto [new_elem, matched_deeper] = recursive_match_and_replace(in, out, ref.new_at(elem));
+					if (new_elem) {
+						elem = *new_elem;
+						return std::make_pair(std::nullopt, true);
+					}
+					else if (matched_deeper) {
+						return std::make_pair(std::nullopt, true);
+					}
+				}
+			} break;
+			case Type(Op::named_fn): {
+				for (TypedIdx& param : fn::range(ref)) {
+					const auto [new_param, matched_deeper] = recursive_match_and_replace(in, out, ref.new_at(param));
+					if (new_param) {
+						param = *new_param;
+						return std::make_pair(std::nullopt, true);
+					}
+					else if (matched_deeper) {
+						return std::make_pair(std::nullopt, true);
+					}
+				}
+			} break;
+			default: {
+				assert(ref.type.is<Fn>());
+				for (TypedIdx& param : fn::range(ref->fn_params, ref.type)) {
+					const auto [new_param, matched_deeper] = recursive_match_and_replace(in, out, ref.new_at(param));
+					if (new_param) {
+						param = *new_param;
+						return std::make_pair(std::nullopt, true);
+					}
+					else if (matched_deeper) {
+						return std::make_pair(std::nullopt, true);
+					}
+				}
+			} break;
+			case Type(Leaf::variable): 
+				break;
+			case Type(Leaf::complex): 
+				break;
+			}
+			return std::make_pair(match_and_replace(in, out, ref), false);
+		}
 
 	} //namespace match
 
@@ -1824,6 +1875,15 @@ namespace bmath {
 	Ref Term::ref() const noexcept
 	{
 		return Ref(this->store, this->head);
+	}
+
+	bool Term::match_and_replace(const intern::pattern::PnTerm& p) noexcept
+	{
+		const auto [head_match, deeper_match] = match::recursive_match_and_replace(p.lhs_ref(), p.rhs_ref(), this->mut_ref());
+		if (head_match) {
+			this->head = *head_match;
+		}
+		return head_match || deeper_match;
 	}
 
 } //namespace bmath
