@@ -134,18 +134,20 @@ namespace bmath::intern {
 			tree_match, 
 			value_match,
 			value_proxy, //not actual node in tree, just "end" indicator
-			multi_match, //not actual node in tree, as all match info is stored in MultiMatchDatum in MatchData
+			summands, //not actual node in tree, as all match info is stored in MultiMatchDatum in MatchData
+			factors,  //not actual node in tree, as all match info is stored in MultiMatchDatum in MatchData
 			COUNT 
 		};
 
 		using PnType = SumEnum<PnVariable, Type>; //dont list all enums making up Type directly, to allow converion to Type
 
-		//as the usual Term does not know special pattern elements, these constants serve as placeholders
-		//for the actual PnType instances to also allow them beeing used in templates compiled to both pattern and normal term.
+		//as the usual Term does not know special pattern elements, these constants serve as placeholders for
+		//  the actual PnType instances to also allow them beeing used in templates compiled to both pattern and normal term.
 		static constexpr unsigned _tree_match  = unsigned(PnType(PnVariable::tree_match));
 		static constexpr unsigned _value_match = unsigned(PnType(PnVariable::value_match));
 		static constexpr unsigned _value_proxy = unsigned(PnType(PnVariable::value_proxy));
-		static constexpr unsigned _multi_match = unsigned(PnType(PnVariable::multi_match));
+		static constexpr unsigned _summands    = unsigned(PnType(PnVariable::summands));
+		static constexpr unsigned _factors     = unsigned(PnType(PnVariable::factors));
 
 		using PnTypedIdx = BasicTypedIdx<PnType>;
 		using PnTypedIdxSLC = TermSLC<PnTypedIdx>;
@@ -177,9 +179,10 @@ namespace bmath::intern {
 			Restriction restr = Restr::any;
 		};
 
-		//although the type MultiMatchVariable does not exist as type of node in term, oder nodes may reference it.
-		//Meaning: if some PnTypedIdx has .get_type() == PnVariable::multi_match, all data of this node are stored in MatchData at
-		//  .get_index(), not in the pattern tree.
+		//although the type MultiMatchVariable does not exist as type of node in term, oder nodes may reference it
+		// (now called PnVariable::summands or PnVariable::factors)
+		//Meaning: if some PnTypedIdx has .get_type() == PnVariable::summands, all data of this node are stored in MatchData at
+		//  .get_index(), not in the pattern tree (same goes for .get_type() == PnVariable::factors).
 		//The concept of a (imagined) MultiMatchVariable is quite similar to TreeMatchVariable with Restr::any, 
 		//but it can match multiple summands / factors in same sum / product, not only a single one.
 		//This behavor can kinda be simulated by TreeMatchVariable, if all matched elements of MultiMatchVariable are packaged 

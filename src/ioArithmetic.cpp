@@ -102,7 +102,6 @@ namespace bmath::intern {
 
 	namespace pattern {
 
-		LONE_ENUM(Multi);
 		LONE_ENUM(Unknown);
 
 		using PnVariablesType = SumEnum<Restriction, Form, Multi, Unknown>;
@@ -124,7 +123,8 @@ namespace bmath::intern {
 			{ Restr::any          , "any"           },
 			{ Restr::nn1          , "nn1"           },
 			{ Restr::no_val       , "no_val"        },
-			{ Multi{}             , "multi"         },
+			{ Multi::summands     , "summands"      },
+			{ Multi::factors      , "factors"       },
 		});
 
 		constexpr std::string_view name_of(const PnVariablesType r) noexcept { return find_snd(type_table, r); }
@@ -165,7 +165,8 @@ namespace bmath::intern {
 			{ pattern::PnVariable::tree_match , 6 },
 			{ pattern::PnVariable::value_match, 6 },
 			{ pattern::PnVariable::value_proxy, 6 },
-			{ pattern::PnVariable::multi_match, 6 },
+			{ pattern::PnVariable::summands   , 6 },
+			{ pattern::PnVariable::factors    , 6 },
 		});
 		static_assert(std::is_sorted(infixr_table.begin(), infixr_table.end(), [](auto a, auto b) { return a.second < b.second; }));
 		constexpr int infixr(pattern::PnType type) { return find_snd(infixr_table, type); }
@@ -555,7 +556,7 @@ namespace bmath::intern {
 						this->value_table.emplace_back(var_view.to_string_view(0, colon), type.to<Form>());
 					}
 					else if (type.is<Multi>()) {
-						this->multi_table.emplace_back(var_view.to_string_view(0, colon));
+						this->multi_table.emplace_back(var_view.to_string_view(0, colon), type.to<Multi>());
 					}
 					else {
 						assert(type.is<Restriction>());
@@ -600,7 +601,7 @@ namespace bmath::intern {
 			}
 			else if (const auto iter = search_name(this->multi_table); iter != this->multi_table.end()) {
 				const std::uint32_t match_data_idx = std::distance(this->multi_table.begin(), iter);
-				var_idx = PnTypedIdx(match_data_idx, PnVariable::multi_match);
+				var_idx = PnTypedIdx(match_data_idx, iter->type == Multi::summands ? PnVariable::summands : PnVariable::factors);
 			}
 			throw_if<ParseFailure>(var_idx == PnTypedIdx(), input.offset, "match variable has not been declared");
 			return var_idx;
@@ -755,8 +756,13 @@ namespace bmath::intern {
 			case Type_T(pattern::_value_proxy): if constexpr (pattern) {
 				str.push_back('P');
 			} break;
-			case Type_T(pattern::_multi_match): if constexpr (pattern) {
-				str.push_back('M');
+			case Type_T(pattern::_summands): if constexpr (pattern) {
+				str.push_back('S');
+				str.append(std::to_string(ref.index));
+				str.append("...");
+			} break;
+			case Type_T(pattern::_factors): if constexpr (pattern) {
+				str.push_back('F');
 				str.append(std::to_string(ref.index));
 				str.append("...");
 			} break;
@@ -1039,7 +1045,9 @@ namespace bmath::intern {
 			} break;
 			case Type_T(pattern::_value_proxy): 
 				[[fallthrough]];
-			case Type_T(pattern::_multi_match): 
+			case Type_T(pattern::_summands):
+				[[fallthrough]];
+			case Type_T(pattern::_factors):
 				return;
 			}
 
