@@ -52,12 +52,14 @@ namespace bmath::intern::debug {
 			                                                                                     << "\n"
 			<< "PnType(Type::COUNT)             = " << unsigned(PnType(Type::COUNT))             << "\n"
 			                                                                                     << "\n"
-			<< "PnType(PnVariable::tree_match)  = " << unsigned(PnType(PnVariable::tree_match))  << "\n"
-			<< "PnType(PnVariable::value_match) = " << unsigned(PnType(PnVariable::value_match)) << "\n"
-			<< "PnType(PnVariable::value_proxy) = " << unsigned(PnType(PnVariable::value_proxy)) << "\n"
-			<< "PnType(PnVariable::summands)    = " << unsigned(PnType(PnVariable::summands))    << "\n"
-			<< "PnType(PnVariable::factors)     = " << unsigned(PnType(PnVariable::factors))     << "\n"
-			<< "PnType(PnVariable::COUNT)       = " << unsigned(PnType(PnVariable::COUNT))       << "\n"
+			<< "PnType(PnVar::tree_match)       = " << unsigned(PnType(PnVar::tree_match))       << "\n"
+			<< "PnType(PnVar::value_match)      = " << unsigned(PnType(PnVar::value_match))      << "\n"
+			<< "PnType(PnVar::value_proxy)      = " << unsigned(PnType(PnVar::value_proxy))      << "\n"
+			<< "PnType(PnVar::COUNT)            = " << unsigned(PnType(PnVar::COUNT))            << "\n"
+			                                                                                     << "\n"
+			<< "PnType(MultiVar::summands)      = " << unsigned(PnType(MultiVar::summands))      << "\n"
+			<< "PnType(MultiVar::factors)       = " << unsigned(PnType(MultiVar::factors))       << "\n"
+			<< "PnType(MultiVar::COUNT)         = " << unsigned(PnType(MultiVar::COUNT))         << "\n"
 			                                                                                     << "\n"
 			<< "PnType::COUNT                   = " << unsigned(PnType::COUNT)                   << "\n"
 			                                                                                     << "\n"
@@ -146,20 +148,6 @@ namespace bmath::intern::test {
 			std::cout << (hit ? "\n" : "upsi!\n");
 		}
 
-		enum class B1 { a, b, c, COUNT };
-		enum class B2 { a, b, c, COUNT };
-		using BB1 = SumEnum<B1>;
-		using B12B1 = SumEnum<BB1, B2, B1>;
-
-		void g1(B12B1 e)
-		{
-			bool hit = false;
-			if (e.is<B1>())  { std::cout << "B1 \t";  hit = true; }
-			if (e.is<B2>())  { std::cout << "B2 \t";  hit = true; }
-			if (e.is<BB1>()) { std::cout << "BB1 \t"; hit = true; }
-			std::cout << (hit ? "\n" : "upsi!\n");
-		}
-
 	} //namespace sum_enum_detail
 
 	void sum_enum()
@@ -181,16 +169,6 @@ namespace bmath::intern::test {
 		f2(A3::a);
 		f2(A3::b);
 		f2(A3::c);
-		std::cout << "\n";
-		g1(B1::a);
-		g1(B1::b);
-		g1(B1::c);
-		g1(B2::a);
-		g1(B2::b);
-		g1(B2::c);
-		g1(BB1(B1::a));
-		g1(BB1(B1::b));
-		g1(BB1(B1::c));
 		std::cout << "\n";
 	} //sum_enum
 

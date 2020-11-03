@@ -129,25 +129,26 @@ namespace bmath::intern {
 
 	namespace pattern {
 
-		enum class PnVariable 
+		enum class PnVar 
 		{ 
 			tree_match, 
 			value_match,
 			value_proxy, //not actual node in tree, just "end" indicator
-			summands, //not actual node in tree, as all match info is stored in MultiMatchDatum in MatchData
-			factors,  //not actual node in tree, as all match info is stored in MultiMatchDatum in MatchData
 			COUNT 
 		};
 
-		using PnType = SumEnum<PnVariable, Type>; //dont list all enums making up Type directly, to allow converion to Type
+		//not actual node in tree, as all match info is stored in MultiMatchDatum in MatchData		
+		enum class MultiVar { summands, factors, COUNT };
+
+		using PnType = SumEnum<MultiVar, PnVar, Type>; //dont list all enums making up Type directly, to allow converion to Type
 
 		//as the usual Term does not know special pattern elements, these constants serve as placeholders for
 		//  the actual PnType instances to also allow them beeing used in templates compiled to both pattern and normal term.
-		static constexpr unsigned _tree_match  = unsigned(PnType(PnVariable::tree_match));
-		static constexpr unsigned _value_match = unsigned(PnType(PnVariable::value_match));
-		static constexpr unsigned _value_proxy = unsigned(PnType(PnVariable::value_proxy));
-		static constexpr unsigned _summands    = unsigned(PnType(PnVariable::summands));
-		static constexpr unsigned _factors     = unsigned(PnType(PnVariable::factors));
+		static constexpr unsigned _tree_match  = unsigned(PnType(PnVar::tree_match));
+		static constexpr unsigned _value_match = unsigned(PnType(PnVar::value_match));
+		static constexpr unsigned _value_proxy = unsigned(PnType(PnVar::value_proxy));
+		static constexpr unsigned _summands    = unsigned(PnType(MultiVar::summands));
+		static constexpr unsigned _factors     = unsigned(PnType(MultiVar::factors));
 
 		using PnTypedIdx = BasicTypedIdx<PnType>;
 		using PnTypedIdxSLC = TermSLC<PnTypedIdx>;
@@ -228,8 +229,8 @@ namespace bmath::intern {
 			Form form = Form::real;
 
 			ValueMatchVariable(std::uint32_t new_match_data_idx, Form new_form)
-				:match_idx(PnTypedIdx(new_match_data_idx, PnVariable::value_proxy)),
-				copy_idx(PnTypedIdx(new_match_data_idx, PnVariable::value_proxy)),
+				:match_idx(PnTypedIdx(new_match_data_idx, PnVar::value_proxy)),
+				copy_idx(PnTypedIdx(new_match_data_idx, PnVar::value_proxy)),
 				match_data_idx(new_match_data_idx), form(new_form)
 			{}
 		};

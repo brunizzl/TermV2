@@ -298,8 +298,45 @@ namespace bmath::intern {
 
 
 
+
 	template<typename... Enums>
 	class [[nodiscard]] SumEnum;
+
+	template<typename E, E Count>
+	struct [[nodiscard]] WrapEnum //allows to use SumEnum with enums not having their last member named COUNT
+	{
+		static_assert(std::is_enum_v<E>);
+
+		E value;
+		constexpr WrapEnum(const E e) noexcept :value(e) {}
+		explicit constexpr WrapEnum(const unsigned u) noexcept :value(static_cast<E>(u)) {}
+		constexpr operator E() const noexcept { return this->value; }
+		explicit constexpr operator unsigned() const noexcept { return static_cast<unsigned>(this->value); }
+
+		constexpr friend std::strong_ordering operator<=>(const WrapEnum&, const WrapEnum&) noexcept = default;
+		constexpr friend bool operator==(const WrapEnum&, const WrapEnum&) noexcept = default;
+		static constexpr E COUNT = Count;
+	}; //struct WrapEnum 
+
+	namespace enum_detail {
+
+		template<typename Needle, typename Haystack>
+		struct Contains :std::false_type {};
+
+		template<typename Needle, typename Haystack>
+		constexpr bool contains_v = Contains<Needle, Haystack>::value;
+
+		template<typename Needle>
+		struct Contains<Needle, Needle> :std::true_type {};
+
+		template<typename Needle, auto Count>
+		struct Contains<Needle, WrapEnum<Needle, Count>> :std::true_type {};
+
+		template<typename Needle, typename Hay0, typename... HayTail>
+		struct Contains<Needle, SumEnum<Hay0, HayTail...>> :std::bool_constant<
+			contains_v<Needle, Hay0> || contains_v<Needle, SumEnum<HayTail...>>
+		> {};
+	} //namespace enum_detail
 
 	template<>
 	class [[nodiscard]] SumEnum<>
@@ -313,12 +350,6 @@ namespace bmath::intern {
 		constexpr operator Value() const noexcept { return this->value; } //implicit conversion allows use in switch
 		explicit constexpr SumEnum(const unsigned u) noexcept :value(static_cast<Value>(u)) {}
 		explicit constexpr operator unsigned() const noexcept { return static_cast<unsigned>(this->value); }
-
-		template<typename E> constexpr E to() const noexcept
-		{ static_assert(false, "method to<E>(): requested type E not part of SumEnum"); return E(-1); }
-
-		template<typename E> constexpr bool is() const noexcept
-		{ static_assert(false, "method is<E>(): requested type E not part of SumEnum"); return false; }
 	}; //class SumEnum<>
 
 
@@ -345,14 +376,14 @@ namespace bmath::intern {
 		constexpr SumEnum(const E e) noexcept : Base(static_cast<unsigned>(static_cast<Enum>(e)) + this_offset) {}
 
 
-		template<typename E, std::enable_if_t<!std::is_convertible_v<E, Enum> && !std::is_same_v<E, Enum>, void*> = nullptr>
+		template<typename E, std::enable_if_t<enum_detail::contains_v<E, Base> && !std::is_same_v<E, Enum>, void*> = nullptr>
 		constexpr E to() const noexcept //default case: search in parent types
 		{ 
 			static_assert(!std::is_integral_v<E>);
 			return static_cast<const Base>(*this).to<E>(); 
 		}
 
-		template<typename E, std::enable_if_t<std::is_convertible_v<E, Enum> && !std::is_same_v<E, Enum>, void*> = nullptr>
+		template<typename E, std::enable_if_t<enum_detail::contains_v<E, Enum> && !std::is_same_v<E, Enum>, void*> = nullptr>
 		constexpr E to() const noexcept //assumes Enum itself is SumEnum<...> and can be build from E -> hand over to Enum
 		{ 
 			static_assert(!std::is_integral_v<E>);
@@ -366,14 +397,14 @@ namespace bmath::intern {
 		}
 
 
-		template<typename E, std::enable_if_t<std::is_convertible_v<E, Base> && !std::is_same_v<E, Enum>, void*> = nullptr> 
+		template<typename E, std::enable_if_t<enum_detail::contains_v<E, Base> && !std::is_same_v<E, Enum>, void*> = nullptr> 
 		constexpr bool is() const noexcept //default case: search in parent types
 		{
 			static_assert(!std::is_integral_v<E>);
 			return static_cast<const Base>(*this).is<E>(); 
 		}
 
-		template<typename E, std::enable_if_t<!std::is_convertible_v<E, Base> && !std::is_same_v<E, Enum>, void*> = nullptr> 
+		template<typename E, std::enable_if_t<enum_detail::contains_v<E, Enum> && !std::is_same_v<E, Enum>, void*> = nullptr> 
 		constexpr bool is() const noexcept //assumes Enum itself is SumEnum<...> and can be build from E -> hand over to Enum
 		{
 			static_assert(!std::is_integral_v<E>);
@@ -391,22 +422,6 @@ namespace bmath::intern {
 		constexpr friend bool operator==(const SumEnum&, const SumEnum&) noexcept = default;
 		static constexpr Value COUNT = static_cast<Value>(next_offset); //only relevant for outhermost instanciation
 	}; //class SumEnum<Enum, TailEnums...>
-
-	template<typename E, E Count>
-	struct [[nodiscard]] WrapEnum //allows to use SumEnum with enums not having their last member named COUNT
-	{
-		static_assert(std::is_enum_v<E>);
-
-		E value;
-		constexpr WrapEnum(const E e) noexcept :value(e) {}
-		explicit constexpr WrapEnum(const unsigned u) noexcept :value(static_cast<E>(u)) {}
-		constexpr operator E() const noexcept { return this->value; }
-		explicit constexpr operator unsigned() const noexcept { return static_cast<unsigned>(this->value); }
-
-		constexpr friend std::strong_ordering operator<=>(const WrapEnum&, const WrapEnum&) noexcept = default;
-		constexpr friend bool operator==(const WrapEnum&, const WrapEnum&) noexcept = default;
-		static constexpr E COUNT = Count;
-	}; //struct WrapEnum 
 
 	//if a member of SumEnum only has a single state itself, this may be used
 #define LONE_ENUM(NAME)\

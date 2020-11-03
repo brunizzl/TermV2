@@ -104,7 +104,7 @@ namespace bmath::intern {
 
 		LONE_ENUM(Unknown);
 
-		using PnVariablesType = SumEnum<Restriction, Form, Multi, Unknown>;
+		using PnVariablesType = SumEnum<Restriction, Form, MultiVar, Unknown>;
 
 		constexpr auto type_table = std::to_array<std::pair<PnVariablesType, std::string_view>>({
 			{ Type(Op::sum       ), "sum"           },
@@ -123,8 +123,8 @@ namespace bmath::intern {
 			{ Restr::any          , "any"           },
 			{ Restr::nn1          , "nn1"           },
 			{ Restr::no_val       , "no_val"        },
-			{ Multi::summands     , "summands"      },
-			{ Multi::factors      , "factors"       },
+			{ MultiVar::summands     , "summands"      },
+			{ MultiVar::factors      , "factors"       },
 		});
 
 		constexpr std::string_view name_of(const PnVariablesType r) noexcept { return find_snd(type_table, r); }
@@ -162,11 +162,11 @@ namespace bmath::intern {
 			{ Type(Fn::pow       )            , 5 }, //not between other function types -> assumed to be printed with '^'  
 			{ Type(Leaf::variable)            , 6 },
 			{ Type(Leaf::complex )            , 6 }, //may be printed as sum/product itself, then (maybe) has to add parentheses on its own
-			{ pattern::PnVariable::tree_match , 6 },
-			{ pattern::PnVariable::value_match, 6 },
-			{ pattern::PnVariable::value_proxy, 6 },
-			{ pattern::PnVariable::summands   , 6 },
-			{ pattern::PnVariable::factors    , 6 },
+			{ pattern::PnVar::tree_match      , 6 },
+			{ pattern::PnVar::value_match     , 6 },
+			{ pattern::PnVar::value_proxy     , 6 },
+			{ pattern::MultiVar::summands     , 6 },
+			{ pattern::MultiVar::factors      , 6 },
 		});
 		static_assert(std::is_sorted(infixr_table.begin(), infixr_table.end(), [](auto a, auto b) { return a.second < b.second; }));
 		constexpr int infixr(pattern::PnType type) { return find_snd(infixr_table, type); }
@@ -555,8 +555,8 @@ namespace bmath::intern {
 					if (type.is<Form>()) {
 						this->value_table.emplace_back(var_view.to_string_view(0, colon), type.to<Form>());
 					}
-					else if (type.is<Multi>()) {
-						this->multi_table.emplace_back(var_view.to_string_view(0, colon), type.to<Multi>());
+					else if (type.is<MultiVar>()) {
+						this->multi_table.emplace_back(var_view.to_string_view(0, colon), type.to<MultiVar>());
 					}
 					else {
 						assert(type.is<Restriction>());
@@ -590,18 +590,18 @@ namespace bmath::intern {
 			if (const auto iter = search_name(this->tree_table); iter != this->tree_table.end()) {
 				const std::uint32_t match_data_idx = std::distance(this->tree_table.begin(), iter);
 				const TreeMatchVariable var = { match_data_idx, iter->restr };
-				var_idx = PnTypedIdx(store.insert(var), PnVariable::tree_match);
+				var_idx = PnTypedIdx(store.insert(var), PnVar::tree_match);
 				(this->build_lhs ? iter->lhs_instances : iter->rhs_instances).push_back(var_idx);
 			}
 			else if (const auto iter = search_name(this->value_table); iter != this->value_table.end()) {
 				const std::uint32_t match_data_idx = std::distance(this->value_table.begin(), iter);
 				const ValueMatchVariable var(match_data_idx, iter->form);
-				var_idx = PnTypedIdx(store.insert(var), PnVariable::value_match);
+				var_idx = PnTypedIdx(store.insert(var), PnVar::value_match);
 				(this->build_lhs ? iter->lhs_instances : iter->rhs_instances).push_back(var_idx);
 			}
 			else if (const auto iter = search_name(this->multi_table); iter != this->multi_table.end()) {
 				const std::uint32_t match_data_idx = std::distance(this->multi_table.begin(), iter);
-				var_idx = PnTypedIdx(match_data_idx, iter->type == Multi::summands ? PnVariable::summands : PnVariable::factors);
+				var_idx = PnTypedIdx(match_data_idx, iter->type);
 			}
 			throw_if<ParseFailure>(var_idx == PnTypedIdx(), input.offset, "match variable has not been declared");
 			return var_idx;

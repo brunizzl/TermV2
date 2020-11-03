@@ -77,37 +77,37 @@ namespace bmath::intern {
 
 	//more unique (meaning harder to match) is smaller
 	constexpr auto uniqueness_table = std::to_array<std::pair<pattern::PnType, int>>({
-		{ Type(Fn::asinh     )            ,  0 }, //order of parameters is given -> most unique
-		{ Type(Fn::acosh     )            ,  2 }, //order of parameters is given -> most unique
-		{ Type(Fn::atanh     )            ,  4 }, //order of parameters is given -> most unique
-		{ Type(Fn::asin      )            ,  6 }, //order of parameters is given -> most unique
-		{ Type(Fn::acos      )            ,  8 }, //order of parameters is given -> most unique
-		{ Type(Fn::atan      )            , 10 }, //order of parameters is given -> most unique
-		{ Type(Fn::sinh      )            , 12 }, //order of parameters is given -> most unique
-		{ Type(Fn::cosh      )            , 14 }, //order of parameters is given -> most unique
-		{ Type(Fn::tanh      )            , 16 }, //order of parameters is given -> most unique
-		{ Type(Fn::sqrt      )            , 18 }, //order of parameters is given -> most unique
-		{ Type(Fn::pow       )            , 20 }, //order of parameters is given -> most unique
-		{ Type(Fn::log       )            , 22 }, //order of parameters is given -> most unique
-		{ Type(Fn::exp       )            , 24 }, //order of parameters is given -> most unique
-		{ Type(Fn::sin       )            , 26 }, //order of parameters is given -> most unique
-		{ Type(Fn::cos       )            , 28 }, //order of parameters is given -> most unique
-		{ Type(Fn::tan       )            , 30 }, //order of parameters is given -> most unique
-		{ Type(Fn::abs       )            , 32 }, //order of parameters is given -> most unique
-		{ Type(Fn::arg       )            , 34 }, //order of parameters is given -> most unique
-		{ Type(Fn::ln        )            , 36 }, //order of parameters is given -> most unique
-		{ Type(Fn::re        )            , 38 }, //order of parameters is given -> most unique
-		{ Type(Fn::im        )            , 40 }, //order of parameters is given -> most unique
-		{ Type(Op::named_fn  )            , 50 }, //order of parameters is given -> most unique
-		{ Type(Op::product   )            , 55 }, //order of operands my vary -> second most unique
-		{ Type(Op::sum       )            , 60 }, //order of operands my vary -> second most unique
-		{ Type(Leaf::variable)            , 65 }, //quite not unique
-		{ Type(Leaf::complex )            , 70 }, //quite not unique
-		{ pattern::PnVariable::value_match, 75 }, //as unique as complex, but advantageous to have all match variables at end
-		{ pattern::PnVariable::value_proxy, 80 }, //as unique as complex, but advantageous to have all match variables at end (also not really part of order anyway, as it only occurs in value_match)
-		{ pattern::PnVariable::tree_match , 85 }, //can match anything (in princible) -> very not unique
-		{ pattern::PnVariable::summands   , 90 }, //can match anything and even any number of anything -> least unique
-		{ pattern::PnVariable::factors    , 95 }, //can match anything and even any number of anything -> least unique
+		{ Type(Fn::asinh     )        ,  0 }, //order of parameters is given -> most unique
+		{ Type(Fn::acosh     )        ,  2 }, //order of parameters is given -> most unique
+		{ Type(Fn::atanh     )        ,  4 }, //order of parameters is given -> most unique
+		{ Type(Fn::asin      )        ,  6 }, //order of parameters is given -> most unique
+		{ Type(Fn::acos      )        ,  8 }, //order of parameters is given -> most unique
+		{ Type(Fn::atan      )        , 10 }, //order of parameters is given -> most unique
+		{ Type(Fn::sinh      )        , 12 }, //order of parameters is given -> most unique
+		{ Type(Fn::cosh      )        , 14 }, //order of parameters is given -> most unique
+		{ Type(Fn::tanh      )        , 16 }, //order of parameters is given -> most unique
+		{ Type(Fn::sqrt      )        , 18 }, //order of parameters is given -> most unique
+		{ Type(Fn::pow       )        , 20 }, //order of parameters is given -> most unique
+		{ Type(Fn::log       )        , 22 }, //order of parameters is given -> most unique
+		{ Type(Fn::exp       )        , 24 }, //order of parameters is given -> most unique
+		{ Type(Fn::sin       )        , 26 }, //order of parameters is given -> most unique
+		{ Type(Fn::cos       )        , 28 }, //order of parameters is given -> most unique
+		{ Type(Fn::tan       )        , 30 }, //order of parameters is given -> most unique
+		{ Type(Fn::abs       )        , 32 }, //order of parameters is given -> most unique
+		{ Type(Fn::arg       )        , 34 }, //order of parameters is given -> most unique
+		{ Type(Fn::ln        )        , 36 }, //order of parameters is given -> most unique
+		{ Type(Fn::re        )        , 38 }, //order of parameters is given -> most unique
+		{ Type(Fn::im        )        , 40 }, //order of parameters is given -> most unique
+		{ Type(Op::named_fn  )        , 50 }, //order of parameters is given -> most unique
+		{ Type(Op::product   )        , 55 }, //order of operands my vary -> second most unique
+		{ Type(Op::sum       )        , 60 }, //order of operands my vary -> second most unique
+		{ Type(Leaf::variable)        , 65 }, //quite not unique
+		{ Type(Leaf::complex )        , 70 }, //quite not unique
+		{ pattern::PnVar::value_match , 75 }, //as unique as complex, but advantageous to have all match variables at end
+		{ pattern::PnVar::value_proxy , 80 }, //as unique as complex, but advantageous to have all match variables at end (also not really part of order anyway, as it only occurs in value_match)
+		{ pattern::PnVar::tree_match  , 85 }, //can match anything (in princible) -> very not unique
+		{ pattern::MultiVar::summands , 90 }, //can match anything and even any number of anything -> least unique
+		{ pattern::MultiVar::factors  , 95 }, //can match anything and even any number of anything -> least unique
 	});
 	static_assert(std::is_sorted(uniqueness_table.begin(), uniqueness_table.end(), [](auto a, auto b) { return a.second < b.second; }));
 	constexpr int uniqueness(pattern::PnType type) noexcept { return find_snd(uniqueness_table, type); }
@@ -344,7 +344,7 @@ namespace bmath::intern {
 							case PnType(Op::named_fn):
 								this->acc = MatchTraits{ .has_match = false, .computable = false };
 								break;
-							case PnType(PnVariable::value_match): {
+							case PnType(PnVar::value_match): {
 								const bool is_right_match = PnTypedIdx(ref.index, ref.type) == value_match;
 								this->acc = MatchTraits{ .has_match = is_right_match, .computable = is_right_match };
 								break;
@@ -357,7 +357,7 @@ namespace bmath::intern {
 					}; //struct OpAccumulator
 
 					const auto leaf_apply = [](const PnRef ref) -> MatchTraits {
-						return MatchTraits{ false, is_one_of<Leaf::complex, PnVariable::value_proxy>(ref.type) };
+						return MatchTraits{ false, is_one_of<Leaf::complex, PnVar::value_proxy>(ref.type) };
 					};
 
 					const ValueMatchVariable& var = store.at(value_match.get_index()).value_match;
@@ -407,15 +407,15 @@ namespace bmath::intern {
 					break;
 				case PnType(Leaf::complex): 
 					break;
-				case PnType(PnVariable::tree_match): 
+				case PnType(PnVar::tree_match): 
 					break;
-				case PnType(PnVariable::value_match): 
+				case PnType(PnVar::value_match): 
 					break;
-				case PnType(PnVariable::value_proxy):
+				case PnType(PnVar::value_proxy):
 					break;
-				case PnType(PnVariable::summands):
+				case PnType(MultiVar::summands):
 					break;
-				case PnType(PnVariable::factors):
+				case PnType(MultiVar::factors):
 					break;
 				}
 				return nullptr;
@@ -479,15 +479,15 @@ namespace bmath::intern {
 						assert(false); break;
 					case PnType(Leaf::complex): 
 						assert(false); break;
-					case PnType(PnVariable::tree_match): 
+					case PnType(PnVar::tree_match): 
 						assert(false); break;
-					case PnType(PnVariable::value_match): 
+					case PnType(PnVar::value_match): 
 						assert(false); break;
-					case PnType(PnVariable::value_proxy):
+					case PnType(PnVar::value_proxy):
 						assert(false); break;
-					case PnType(PnVariable::summands):
+					case PnType(MultiVar::summands):
 						assert(false); break;
-					case PnType(PnVariable::factors):
+					case PnType(MultiVar::factors):
 						assert(false); break;
 					case PnType(Fn::pow): {
 						FnParams<PnTypedIdx>* params = &store.at(lhs_index).fn_params;
@@ -607,7 +607,7 @@ namespace bmath::intern {
 				} break;
 				case PnType(Leaf::complex): 
 					return ref->complex;
-				case PnType(PnVariable::value_proxy): 
+				case PnType(PnVar::value_proxy): 
 					return start_val;
 				}
 			} //eval_value_match
@@ -1366,7 +1366,7 @@ namespace bmath::intern {
 		{
 			using namespace pattern;
 			const auto test_for_variables = [](pattern::PnRef ref) -> fold::FindBool {
-				return ref.type == Leaf::variable || ref.type.is<PnVariable>();
+				return ref.type == Leaf::variable || ref.type.is<PnVar>();
 			};
 			return fold::simple_fold<fold::FindBool>(ref, test_for_variables);
 		} //contains_variables
@@ -1441,10 +1441,10 @@ namespace bmath::intern {
 				}
 			}
 			else {
-				assert(pn_ref.type.is<PnVariable>());
+				assert(pn_ref.type.is<PnVar>());
 
 				switch (pn_ref.type) {
-				case PnType(PnVariable::tree_match): {
+				case PnType(PnVar::tree_match): {
 					const TreeMatchVariable& var = *pn_ref;
 					if (!meets_restriction(ref, var.restr)) {
 						return false;
@@ -1459,7 +1459,7 @@ namespace bmath::intern {
 						return true;
 					}
 				} break;
-				case PnType(PnVariable::value_match): {
+				case PnType(PnVar::value_match): {
 					if (ref.type != Leaf::complex) { //only this test allows us to pass *ref to evaluate this_value
 						return false;
 					}
@@ -1480,10 +1480,10 @@ namespace bmath::intern {
 						return true;
 					}
 				} break;
-				case PnType(PnVariable::value_proxy): //may only be encountered in pn_tree::eval_value_match (as value_match does no equals call)
+				case PnType(PnVar::value_proxy): //may only be encountered in pn_tree::eval_value_match (as value_match does no equals call)
 					assert(false);
 					return false;
-				case PnType(PnVariable::summands):
+				case PnType(MultiVar::summands):
 					if (ref.type == Op::sum) {
 						SharedMultiDatum& info = match_data.multi_info(pn_ref.index);
 						assert(info.match_indices.size() == 0u);
@@ -1493,7 +1493,7 @@ namespace bmath::intern {
 						return true;
 					}
 					return false;
-				case PnType(PnVariable::factors):
+				case PnType(MultiVar::factors):
 					if (ref.type == Op::product) {
 						SharedMultiDatum& info = match_data.multi_info(pn_ref.index);
 						assert(info.match_indices.size() == 0u);
@@ -1522,13 +1522,13 @@ namespace bmath::intern {
 			const auto reset_own_matches = [&match_data](const PnRef pn_ref) {
 				const auto reset_single = [&match_data](const PnRef ref) -> fold::Void {
 					switch (ref.type) {
-					case PnType(PnVariable::tree_match): {
+					case PnType(PnVar::tree_match): {
 						SharedTreeDatum& info = match_data.info(ref->tree_match);
 						if (info.responsible == ref.typed_idx()) {
 							info = SharedTreeDatum();
 						}
 					} break;
-					case PnType(PnVariable::value_match): {
+					case PnType(PnVar::value_match): {
 						SharedValueDatum& info = match_data.info(ref->value_match);
 						if (info.responsible == ref.typed_idx()) {
 							info = SharedValueDatum();
@@ -1562,8 +1562,8 @@ namespace bmath::intern {
 			std::uint32_t start_k = 0u; //all elements in not_matched bevore index start_k are ignored
 			while (pn_i < pn_elements.size()) {
 				const PnElemData pn_data_i = pn_elements[pn_i];
-				if (ref.type == Op::sum     && pn_data_i.elem.get_type() == PnVariable::summands ||
-					ref.type == Op::product && pn_data_i.elem.get_type() == PnVariable::factors ) [[unlikely]]
+				if (ref.type == Op::sum     && pn_data_i.elem.get_type() == MultiVar::summands ||
+					ref.type == Op::product && pn_data_i.elem.get_type() == MultiVar::factors ) [[unlikely]]
 				{
 					//take null_value's out of not_matched and put the rest into corresponding vector in match_data
 					not_matched.shorten_to(std::remove(not_matched.begin(), not_matched.end(), null_value));
@@ -1668,21 +1668,21 @@ namespace bmath::intern {
 			} break;
 			case PnType(Leaf::complex): 
 				return TypedIdx(store.insert(pn_ref->complex), pn_ref.type.to<Type>());
-			case PnType(PnVariable::tree_match): {
+			case PnType(PnVar::tree_match): {
 				const SharedTreeDatum& info = match_data.info(pn_ref->tree_match);
 				return tree::copy(Ref(store, info.match_idx), store);
 			} break;
-			case PnType(PnVariable::value_match): {
+			case PnType(PnVar::value_match): {
 				const ValueMatchVariable& var = *pn_ref;
 				return match::copy(pn_ref.new_at(var.copy_idx), match_data, store);				
 			} break;
-			case PnType(PnVariable::value_proxy): {
+			case PnType(PnVar::value_proxy): {
 				const auto& val = match_data.value_match_data[pn_ref.index].value;
 				return TypedIdx(store.insert(Complex(val)), pn_ref.type.to<Type>());
 			} break;
-			case PnType(PnVariable::summands):
+			case PnType(MultiVar::summands):
 				[[fallthrough]];
-			case PnType(PnVariable::factors): {
+			case PnType(MultiVar::factors): {
 				const std::uint32_t res_idx = store.insert(TypedIdxSLC());
 				std::uint32_t last_node_idx = res_idx;
 				const SharedMultiDatum& info = match_data.multi_info(pn_ref.index);
@@ -1690,7 +1690,7 @@ namespace bmath::intern {
 					const TypedIdx dst_elem = tree::copy(Ref(store, elem), store);
 					last_node_idx = TypedIdxSLC::insert_new(store, last_node_idx, dst_elem);
 				}
-				return TypedIdx(res_idx, pn_ref.type == PnVariable::summands ? Op::sum : Op::product);			
+				return TypedIdx(res_idx, pn_ref.type == MultiVar::summands ? Op::sum : Op::product);			
 			} break;
 			}
 		} //copy

@@ -112,16 +112,14 @@ namespace bmath::intern {
 				:name(new_name), form(new_form) {}
 		};
 
-		enum class Multi { summands, factors, COUNT };
-
 		struct [[nodiscard]] MultiNameLookup
 		{
 			std::string_view name;
 			std::size_t lhs_count; //(only used to throw error if multiple instances exist in lhs)
 			std::size_t rhs_count; //(only used to throw error if multiple instances exist in rhs)
-			Multi type;
+			MultiVar type;
 
-			MultiNameLookup(std::string_view new_name, const Multi new_type) noexcept 
+			MultiNameLookup(std::string_view new_name, const MultiVar new_type) noexcept 
 				:name(new_name), lhs_count(0u), rhs_count(0u), type(new_type) {}
 		};
 
