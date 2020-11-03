@@ -104,7 +104,7 @@ namespace bmath::intern {
 		constexpr const Value_T* data() const noexcept { return this->data_; }
 		constexpr Value_T* data() noexcept { return this->data_; }
 
-		constexpr StupidBufferVector() noexcept {}
+		constexpr StupidBufferVector() noexcept :size_(0u) {}
 
 		constexpr StupidBufferVector(const std::initializer_list<Value_T> init) noexcept :size_(init.size())
 		{
@@ -126,7 +126,7 @@ namespace bmath::intern {
 		StupidBufferVector& operator=(const StupidBufferVector&) = delete;
 		StupidBufferVector& operator=(StupidBufferVector&&) = delete;
 
-		constexpr StupidBufferVector(StupidBufferVector&& snd) noexcept :size_(std::exchange(snd.size_, 0u)), data_(local_data)
+		constexpr StupidBufferVector(StupidBufferVector&& snd) noexcept :size_(std::exchange(snd.size_, 0u))
 		{
 			if (snd.data_ != snd.local_data) {
 				this->data_ = std::exchange(snd.data_, nullptr);
@@ -223,6 +223,11 @@ namespace bmath::intern {
 			std::copy(init.begin(), init.end(), this->data_);
 		}
 
+		ShortVector(const ShortVector&) = delete;
+		ShortVector& operator=(const ShortVector&) = delete;
+		ShortVector& operator=(ShortVector&&) = delete;
+		ShortVector(ShortVector&& snd) = delete;
+
 		template<typename... Args>
 		constexpr Value_T& emplace_back(Args&&... args) noexcept
 		{
@@ -240,7 +245,14 @@ namespace bmath::intern {
 			this->data_[--this->size_].~Value_T();
 		}
 
-		constexpr void clear() noexcept { this->size_ = 0u; }
+		constexpr void clear() noexcept { 
+			if constexpr (std::is_trivially_destructible_v<Value_T>) { 
+				this->size_ = 0u; 
+			}
+			else { 
+				while (this->size_) { this->pop_back(); } 
+			}
+		}
 
 		constexpr const Value_T& operator[](const std::size_t where) const noexcept { return this->data_[where]; }
 		constexpr Value_T& operator[](const std::size_t where) noexcept { return this->data_[where]; }
