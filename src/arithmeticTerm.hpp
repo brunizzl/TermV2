@@ -134,6 +134,7 @@ namespace bmath::intern {
 			tree_match, 
 			value_match,
 			value_proxy, //not actual node in tree, just "end" indicator
+			multi_match, //not actual node in tree, as all match info is stored in MultiMatchDatum in MatchData
 			COUNT 
 		};
 
@@ -144,6 +145,7 @@ namespace bmath::intern {
 		static constexpr unsigned _tree_match  = unsigned(PnType(PnVariable::tree_match));
 		static constexpr unsigned _value_match = unsigned(PnType(PnVariable::value_match));
 		static constexpr unsigned _value_proxy = unsigned(PnType(PnVariable::value_proxy));
+		static constexpr unsigned _multi_match = unsigned(PnType(PnVariable::multi_match));
 
 		using PnTypedIdx = BasicTypedIdx<PnType>;
 		using PnTypedIdxSLC = TermSLC<PnTypedIdx>;
@@ -157,7 +159,6 @@ namespace bmath::intern {
 			nn1, //compact for "not negative one" (basically any, but the exact term "-1" will not be accepted)
 			no_val, //basically any, but Leaf::complex is forbidden    
 			function, //packs named_fn and any in Fn together
-			unknown, //used only as error value
 			COUNT
 		};
 
@@ -176,6 +177,17 @@ namespace bmath::intern {
 			Restriction restr = Restr::any;
 		};
 
+		//although the type MultiMatchVariable does not exist as type of node in term, oder nodes may reference it.
+		//Meaning: if some PnTypedIdx has .get_type() == PnVariable::multi_match, all data of this node are stored in MatchData at
+		//  .get_index(), not in the pattern tree.
+		//The concept of a (imagined) MultiMatchVariable is quite similar to TreeMatchVariable with Restr::any, 
+		//but it can match multiple summands / factors in same sum / product, not only a single one.
+		//This behavor can kinda be simulated by TreeMatchVariable, if all matched elements of MultiMatchVariable are packaged 
+		//  together in an extra sum / product.
+		//as match::equals takes a Ref, not a MutRef however, this approach can not be realized here (and is stupid anyway)
+		//struct MultiMatchVariable {}; //<- just to help your imagination out a bit.
+		//Note: there may be only a single instance of a given MultiMatchVariable with given name per pattern per side.
+
 		//specifies more constraints on a value
 		enum class Form :std::uint32_t
 		{
@@ -192,7 +204,7 @@ namespace bmath::intern {
 
 		bool has_form(const Complex& nr, const Form form);
 
-		//in a valid pattern, all ValueMatchVariables of same name (thrown away after building) 
+		//in a valid pattern, all ValueMatchVariables of same name (although that is thrown away after building) 
 		//share the same form and the same MatchData index
 		//it is allowed to have multiple instances of the same ValueMatchVariable per side.
 		//this variation of the match variable can match a value of specific form occuring in a term,
@@ -203,6 +215,8 @@ namespace bmath::intern {
 		//  to indicate the original position of k.
 		//to still allow to copy "2*k+1", the copy_idx of k contains a copy of the original suroundings of k, but again with a "p"
 		//  in there: "2*p+1". this "p" is required to also store ValueMatchVariable::match_data_idx as it's index.
+		//in praxis a PnTypedIdx with .get_type() == PnVariable::value_proxy works similar to (imagined) MultiMatchVariable, as
+		//  .get_index() also does not point in store of pattern, but in an array of MatchData.
 		struct ValueMatchVariable
 		{
 			PnTypedIdx match_idx;
@@ -260,6 +274,8 @@ namespace bmath::intern {
 		using PnMutRef = BasicMutRef<PnTypesUnion, PnType>;
 		using PnRef = BasicRef<PnTypesUnion, PnType>;
 
+
+
 		//all MatchVariables of same name in pattern (e.g. "a" in pattern "a*b+a" share the same SharedTreeDatum to know 
 		//whitch actually matched, and if the name "a" is already matched, even if the current instance is not.
 		struct SharedTreeDatum
@@ -272,6 +288,11 @@ namespace bmath::intern {
 				assert(equivalent(this->responsible != PnTypedIdx{}, this->match_idx != TypedIdx{}));
 				return  this->responsible != PnTypedIdx{};
 			}
+		};
+
+		struct SharedMultiDatum
+		{
+			StupidBufferVector<TypedIdx, 8> match_indices; //indexes in Term to simplify
 		};
 
 		struct SharedValueDatum
@@ -290,37 +311,21 @@ namespace bmath::intern {
 		//to allow a constant PnTerm to be matched against, all match info is stored here
 		struct MatchData
 		{
-			static constexpr std::size_t max_value_match_count = 4u; //maximal number of unrelated ValueMatchVariables allowed per pattern
-			static constexpr std::size_t max_tree_match_count = 8u;	 //maximal number of unrelated TreeMatchVariables allowed per pattern
+			static constexpr std::size_t max_value_match_count = 2u; //maximal number of unrelated ValueMatchVariables allowed per pattern
+			static constexpr std::size_t max_tree_match_count = 4u;	 //maximal number of unrelated TreeMatchVariables allowed per pattern
+			static constexpr std::size_t max_multi_match_count = 2u; //maximal number of unrelated MultiMatchVariables allowed per pattern
 
 			std::array<SharedValueDatum, max_value_match_count> value_match_data = {};
 			std::array<SharedTreeDatum, max_tree_match_count> tree_match_data = {};
+			std::array<SharedMultiDatum, max_multi_match_count> multi_match_data = {};
 
-			constexpr void reset() noexcept { *this = MatchData(); }
+			constexpr auto& info(const TreeMatchVariable& var) noexcept { return this->tree_match_data[var.match_data_idx]; }
+			constexpr auto& info(const ValueMatchVariable& var) noexcept { return this->value_match_data[var.match_data_idx]; }
+			constexpr auto& info(const TreeMatchVariable& var) const noexcept { return this->tree_match_data[var.match_data_idx]; }
+			constexpr auto& info(const ValueMatchVariable& var) const noexcept { return this->value_match_data[var.match_data_idx]; }
 
-			constexpr auto& info(const TreeMatchVariable& var) noexcept 
-			{ 
-				assert(var.match_data_idx <= max_tree_match_count);
-				return this->tree_match_data[var.match_data_idx];
-			}
-
-			constexpr auto& info(const TreeMatchVariable& var) const noexcept 
-			{ 
-				assert(var.match_data_idx <= max_tree_match_count);
-				return this->tree_match_data[var.match_data_idx];
-			}
-
-			constexpr auto& info(const ValueMatchVariable& var) noexcept 
-			{ 
-				assert(var.match_data_idx <= max_value_match_count);
-				return this->value_match_data[var.match_data_idx];
-			}
-
-			constexpr auto& info(const ValueMatchVariable& var) const noexcept 
-			{ 
-				assert(var.match_data_idx <= max_value_match_count);
-				return this->value_match_data[var.match_data_idx];
-			}
+			constexpr auto& multi_info(const std::uint32_t idx) noexcept { return this->multi_match_data[idx]; }
+			constexpr auto& multi_info(const std::uint32_t idx) const noexcept { return this->multi_match_data[idx]; }
 		};
 
 		struct PnTerm
@@ -510,19 +515,8 @@ namespace bmath::intern {
 		//if match was not succsessfull, match_data is NOT reset and false is returned
 		bool equals(const pattern::PnRef pn_ref, const Ref ref, pattern::MatchData& match_data);
 
-
-		struct VariadicEqualsResult
-		{
-			StupidBufferVector<TypedIdx, 8> matched;
-			StupidBufferVector<TypedIdx, 16> not_matched;
-		};
-
-		//this function allows to match a sum / product pattern in a sum / product with more elements than elements in the pattern.
-		//if no match was found, both VariadicEqualsResult.matched and VariadicEqualsResult.not_matched will be empty, 
-		//  else matched will contain the elements in term where a corrensponding part in pattern was found and
-		//  not_matched will contain the leftovers.
-		//it is assumed, that pn_ref and ref are both the same variadic type (eighter sum and sum or product and product)
-		VariadicEqualsResult variadic_equals(const pattern::PnRef pn_ref, const Ref ref, pattern::MatchData& match_data);
+		//allows to match a sum / product pattern in a sum / product with more elements than elements in the pattern.
+		bool variadic_equals(const pattern::PnRef pn_ref, const Ref ref, pattern::MatchData& match_data);
 
 		//copies pn_ref with match_data into store, returns head of copied result.
 		[[nodiscard]] TypedIdx copy(const pattern::PnRef pn_ref, const pattern::MatchData& match_data, Store& store);

@@ -57,6 +57,9 @@
 		case Type_T(pattern::_value_proxy):
 			assert(false);
 			break;
+		case Type_T(pattern::_multi_match):
+			assert(false);
+			break;
 		}
 		assert(false);
 		return;
@@ -98,8 +101,9 @@ namespace bmath::intern {
 		{ Type(Leaf::variable)            , 65 }, //quite not unique
 		{ Type(Leaf::complex )            , 70 }, //quite not unique
 		{ pattern::PnVariable::value_match, 75 }, //as unique as complex, but advantageous to have all match variables at end
-		{ pattern::PnVariable::value_proxy, 80 }, //as unique as complex, but advantageous to have all match variables at end
-		{ pattern::PnVariable::tree_match , 85 }, //can match anything (in princible) -> least unique
+		{ pattern::PnVariable::value_proxy, 80 }, //as unique as complex, but advantageous to have all match variables at end (also not really part of order anyway, as it only occurs in value_match)
+		{ pattern::PnVariable::tree_match , 85 }, //can match anything (in princible) -> very not unique
+		{ pattern::PnVariable::multi_match, 90 }, //can match anything and even any number of anything -> least unique
 	});
 	static_assert(std::is_sorted(uniqueness_table.begin(), uniqueness_table.end(), [](auto a, auto b) { return a.second < b.second; }));
 	constexpr int uniqueness(pattern::PnType type) noexcept { return find_snd(uniqueness_table, type); }
@@ -253,10 +257,11 @@ namespace bmath::intern {
 			auto parse_string = ParseString(name);
 			parse_string.allow_implicit_product();
 			parse_string.remove_space();
-			const auto parts = split(parse_string);
-			NameLookupTable table = parse_declarations(parts.declarations);
+			const auto parts = PatternParts(parse_string);
+			auto table = NameLookupTable(parts.declarations);
 			throw_if(table.tree_table.size() > MatchData::max_tree_match_count, "too many tree match variables declared");
 			throw_if(table.value_table.size() > MatchData::max_value_match_count, "too many value match variables declared");
+			throw_if(table.multi_table.size() > MatchData::max_multi_match_count, "too many multi match variables declared");
 			PatternBuildFunction build_function = { table };
 			this->lhs_head = build_function(this->lhs_store, parts.lhs);
 			table.build_lhs = false;
@@ -272,6 +277,11 @@ namespace bmath::intern {
 				for (const auto rhs_instance : value_match.rhs_instances) {
 					pn_tree::rearrange_value_match(this->rhs_store, this->rhs_head, rhs_instance);
 				}
+			}
+
+			for (const auto& multi_match : table.multi_table) {
+				throw_if(multi_match.lhs_count > 1u, "pattern only allows single use of each Multimatch in lhs.");
+				throw_if(multi_match.rhs_count > 1u, "pattern only allows single use of each Multimatch in rhs.");
 			}
 		}
 
@@ -395,9 +405,11 @@ namespace bmath::intern {
 					break;
 				case PnType(Leaf::complex): 
 					break;
-				case PnType(pattern::_tree_match): 
+				case PnType(PnVariable::tree_match): 
 					break;
-				case PnType(pattern::_value_proxy):
+				case PnType(PnVariable::value_proxy):
+					break;
+				case PnType(PnVariable::multi_match):
 					break;
 				}
 				return nullptr;
@@ -466,6 +478,8 @@ namespace bmath::intern {
 					case PnType(pattern::_value_match): 
 						assert(false); break;
 					case PnType(pattern::_value_proxy):
+						assert(false); break;
+					case PnType(pattern::_multi_match): 
 						assert(false); break;
 					case PnType(Fn::pow): {
 						FnParams<PnTypedIdx>* params = &store.at(lhs_index).fn_params;
@@ -674,6 +688,8 @@ namespace bmath::intern {
 			} break;
 			case Type_T(pattern::_value_proxy):
 				break;
+			case Type_T(pattern::_multi_match):
+				break;
 			}
 		} //free
 
@@ -736,6 +752,8 @@ namespace bmath::intern {
 				var.copy_idx = tree::combine_layers(ref.new_at(var.copy_idx));
 			} break;
 			case Type_T(pattern::_value_proxy):
+				break;
+			case Type_T(pattern::_multi_match):
 				break;
 			}
 			return ref.typed_idx(); //as default the nodes position or type does not change.
@@ -833,6 +851,8 @@ namespace bmath::intern {
 				assert(!is_valid(copy_res));  //pattern variable can not decay to value
 			} break; 
 			case Type_T(pattern::_value_proxy):
+				break;
+			case Type_T(pattern::_multi_match):
 				break;
 			}
 			return {};
@@ -989,6 +1009,8 @@ namespace bmath::intern {
 			} break;
 			case Type_T(pattern::_value_proxy): 
 				break;
+			case Type_T(pattern::_multi_match):
+				break;
 			}
 			return {};
 		} //combine_values_exact
@@ -1093,6 +1115,9 @@ namespace bmath::intern {
 				return tree::compare(ref_1.new_at(var_1.copy_idx), ref_2.new_at(var_2.copy_idx));
 			} break;
 			case Type_T1(pattern::_value_proxy): if constexpr (pattern) {
+				return ref_1.index <=> ref_2.index;
+			} break;
+			case Type_T1(pattern::_multi_match): if constexpr (pattern) {
 				return ref_1.index <=> ref_2.index;
 			} break;
 			}
@@ -1211,6 +1236,8 @@ namespace bmath::intern {
 			} break;
 			case Type_T(pattern::_value_proxy):
 				return src_ref.typed_idx(); //return same ref, as proxy does not own any nodes in src_store anyway (index has different meaning)
+			case Type_T(pattern::_multi_match):
+				return src_ref.typed_idx(); //return same ref, as multi_match does not own any nodes in src_store anyway (index has different meaning)
 			}
 			assert(false); 
 			return TypedIdx_T();
@@ -1299,6 +1326,8 @@ namespace bmath::intern {
 				} break;
 				case Type_T(pattern::_value_proxy):
 					break;
+				case Type_T(pattern::_multi_match):
+					break;
 				}
 				return nullptr;
 			}
@@ -1348,8 +1377,7 @@ namespace bmath::intern {
 					case PnType(Op::sum): 
 						[[fallthrough]];
 					case PnType(Op::product): {
-						const auto [matched_elems, remaining_elems] = match::variadic_equals(pn_ref, ref, match_data);
-						return matched_elems.size() > 0u && remaining_elems.size() == 0u;
+						return match::variadic_equals(pn_ref, ref, match_data);
 					} break;
 					case PnType(Op::named_fn): {
 						if (fn::compare_name(ref, pn_ref) != std::strong_ordering::equal) {
@@ -1431,6 +1459,8 @@ namespace bmath::intern {
 				} break;
 				case PnType(PnVariable::value_proxy): //may only be encountered in pn_tree::eval_value_match (as value_match does no equals call)
 					[[fallthrough]];
+				case PnType(PnVariable::multi_match): //only valid as direct offspring of sum / product and already handeled in variadic_equals
+					[[fallthrough]];
 				default:
 					assert(false);
 					return false;
@@ -1442,10 +1472,10 @@ namespace bmath::intern {
 		//this function currently has complexity O(m^n) where m is count of ref's elements and n is count of pn_ref's elements.
 		//in principle it could be turend to O(m*n), but i have not yet turned this into a working algorithm.
 		//the tricky part is to ensure, that one will never 
-		VariadicEqualsResult variadic_equals(const pattern::PnRef pn_ref, const Ref ref, pattern::MatchData& match_data)
+		bool variadic_equals(const pattern::PnRef pn_ref, const Ref ref, pattern::MatchData& match_data)
 		{
 			using namespace pattern;
-			assert(pn_ref.type == ref.type && (ref.type == Op::sum || ref.type == Op::product));
+			assert(pn_ref.type == ref.type && (is_one_of<Op::sum, Op::product>(ref.type)));
 
 			const auto reset_own_matches = [&match_data](const PnRef pn_ref) {
 				const auto reset_single = [&match_data](const PnRef ref) -> fold::Void {
@@ -1468,15 +1498,16 @@ namespace bmath::intern {
 				fold::simple_fold<fold::Void>(pn_ref, reset_single);
 			};
 
-			VariadicEqualsResult result;
+			StupidBufferVector<TypedIdx, 16> matched;
+			StupidBufferVector<TypedIdx, 16> not_matched;
 			for (const TypedIdx elem : vc::range(ref)) {
-				result.not_matched.push_back(elem);
+				not_matched.push_back(elem);
 			}
 
 			struct PnElemData
 			{
 				PnTypedIdx elem;
-				std::uint32_t result_idx = -1u;
+				std::uint32_t result_idx = -1u; //index in not_matched where current match used to reside (if current match exists, it is stored in matched)
 			};
 			StupidBufferVector<PnElemData, 8> pn_elements;
 			for (const PnTypedIdx elem : vc::range(pn_ref)) {
@@ -1485,32 +1516,42 @@ namespace bmath::intern {
 
 			constexpr auto null_value = TypedIdx();
 
-			std::uint32_t pn_i = 0u;
-			std::uint32_t start_k = 0u;
+			std::uint32_t pn_i = 0u; //index in pn_elements
+			std::uint32_t start_k = 0u; //all elements in not_matched bevore index start_k are ignored
 			while (pn_i < pn_elements.size()) {
-				const PnRef pn_elem_i_ref = pn_ref.new_at(pn_elements[pn_i].elem);
+				const PnElemData pn_data_i = pn_elements[pn_i];
+				if (pn_data_i.elem.get_type() == PnVariable::multi_match) {
+					//take null_value's out of not_matched and put the rest into corresponding vector in match_data
+					not_matched.shorten_to(std::remove(not_matched.begin(), not_matched.end(), null_value));
+					SharedMultiDatum& info = match_data.multi_info(pn_data_i.elem.get_index());
+					info.match_indices = std::move(not_matched);
+					return true;
+				}
 
-				for (std::uint32_t k = start_k; k < result.not_matched.size(); k++) {
-					const TypedIdx elem_k = result.not_matched[k];
+				const PnRef pn_elem_i_ref = pn_ref.new_at(pn_data_i.elem);
+
+				for (std::uint32_t k = start_k; k < not_matched.size(); k++) {
+					const TypedIdx elem_k = not_matched[k];
 					if (elem_k == null_value) {
-						continue; //this elem is currently matched by some other pattern variable -> ignore it
+						continue; //elem_k is currently matched by some other pattern variable -> ignore it for now
 					}
 					else if (match::equals(pn_elem_i_ref, ref.new_at(elem_k), match_data)) {
-						result.matched.push_back(elem_k);
+						matched.push_back(elem_k);
 						pn_elements[pn_i].result_idx = k;
-						result.not_matched[k] = null_value;
+						not_matched[k] = null_value;
 						goto found_match; //this is considered harmful >:) hehehehe
 					}
 					else {
 						reset_own_matches(pn_elem_i_ref);
 					}
 				}
-				//if we get here, no match for pn_elem_i_ref was found in all of result.not_matched. 
+
+				//if we get here, no match for pn_elem_i_ref was found in all of not_matched. 
 				//now we need to rematch previous pn_elem's and test if this frees some spot for our current pn_elem_i_ref
 				if (pn_i > 0u) {
 					pn_i--;
 					const std::uint32_t matched_at_idx = std::exchange(pn_elements[pn_i].result_idx, -1u);
-					result.not_matched[matched_at_idx] = result.matched.pop_back();
+					not_matched[matched_at_idx] = matched.pop_back();
 					start_k = matched_at_idx + 1u;
 
 					const PnRef pn_elem_i_ref = pn_ref.new_at(pn_elements[pn_i].elem);
@@ -1518,18 +1559,14 @@ namespace bmath::intern {
 					continue;
 				}
 				else {
-					result.matched.clear();
-					result.not_matched.clear();
-					return result;
+					return false;
 				}
 
 			found_match:
 				pn_i++;
 			}
 
-			//if we get here, all off pattern has been matched. as we are nice people, we condense result.not_matched to not contain any null_value
-			result.not_matched.shorten_to(std::remove(result.not_matched.begin(), result.not_matched.end(), null_value));
-			return result;
+			return true;
 		} //variadic_equals
 
 		TypedIdx copy(const pattern::PnRef pn_ref, const pattern::MatchData& match_data, Store& store)
@@ -1543,8 +1580,17 @@ namespace bmath::intern {
 				const std::uint32_t res_idx = store.insert(TypedIdxSLC());
 				std::uint32_t last_node_idx = res_idx;
 				for (const PnTypedIdx elem : vc::range(pn_ref)) {
-					const TypedIdx dst_elem = match::copy(pn_ref.new_at(elem), match_data, store);
-					last_node_idx = TypedIdxSLC::insert_new(store, last_node_idx, dst_elem);
+					if (elem.get_type() == PnVariable::multi_match) [[unlikely]] {
+						const SharedMultiDatum & info = match_data.multi_info(elem.get_index());
+						for (const TypedIdx multi_elem : info.match_indices) {
+							const TypedIdx dst_elem = tree::copy(Ref(store, multi_elem), store);
+							last_node_idx = TypedIdxSLC::insert_new(store, last_node_idx, dst_elem);
+						}
+					}
+					else {
+						const TypedIdx dst_elem = match::copy(pn_ref.new_at(elem), match_data, store);
+						last_node_idx = TypedIdxSLC::insert_new(store, last_node_idx, dst_elem);
+					}
 				}
 				return TypedIdx(res_idx, pn_ref.type.to<Type>());
 			} break;
@@ -1599,39 +1645,22 @@ namespace bmath::intern {
 				const auto& val = match_data.value_match_data[pn_ref.index].value;
 				return TypedIdx(store.insert(Complex(val)), pn_ref.type.to<Type>());
 			} break;
+			case PnType(PnVariable::multi_match):
+				assert(false); //multi_match is assumed to be direct offspring of sum / product and is handeled there.
+				return TypedIdx();
 			}
 		} //copy
 
 		std::optional<TypedIdx> match_and_replace(const pattern::PnRef in, const pattern::PnRef out, const MutRef ref)
-		{
-			if ((in.type == Op::sum || in.type == Op::product) && (in.type == ref.type)) {
-				pattern::MatchData match_data;
-				const auto [matched_elems, remaining_elems] = variadic_equals(in, ref, match_data);
-				if (matched_elems.size() > 0u) {
-					free_slc(ref.cast<TypedIdxSLC>());
-					const TypedIdx copied_out = match::copy(out, match_data, *ref.store);
-					//idea for future: maybe buffer copy in third store first and then delete matched elems bevore inserting copy?
-					//would result in ref.store having fewer free slots and might even avoid reallocation in ref.store
-					//perhaps only sensible, if buffer itself most likely would not allocate.
-					for (const TypedIdx elem : matched_elems) { //delete each summand / factor occuring in match
-						tree::free(ref.new_at(elem));
-					}
-					const std::uint32_t res_idx = ref.store->insert(TypedIdxSLC({ copied_out }));
-					std::uint32_t last_node_idx = res_idx;
-					for (const TypedIdx elem : remaining_elems) { //copy back all summands / factors not part of match
-						last_node_idx = TypedIdxSLC::insert_new(*ref.store, last_node_idx, elem);
-					}
-					return { TypedIdx(res_idx, ref.type) };
-				}
-			}
-			else {
-				pattern::MatchData match_data;
-				if (match::equals(in, ref, match_data)) {
-					const TypedIdx copied_out = match::copy(out, match_data, *ref.store);
-					//same idea as below may also be applied here.
-					tree::free(ref);
-					return { copied_out };
-				}
+		{			
+			pattern::MatchData match_data;
+			if (match::equals(in, ref, match_data)) {
+				const TypedIdx copied_out = match::copy(out, match_data, *ref.store);
+				//idea for future: maybe buffer copy in third store first and then delete matched elems bevore inserting copy?
+				//would result in ref.store having fewer free slots and might even avoid reallocation in ref.store
+				//perhaps only sensible, if buffer itself most likely would not allocate.
+				tree::free(ref);
+				return { copied_out };
 			}
 			return {};
 		} //match_and_replace
@@ -1733,6 +1762,8 @@ namespace bmath::intern {
 			} break;
 			case Type_T(pattern::_value_proxy):
 				break;
+			case Type_T(pattern::_multi_match):
+				break;
 			}
 			return apply(ref); 
 		} //simple_fold
@@ -1781,6 +1812,8 @@ namespace bmath::intern {
 			case Type_T(pattern::_tree_match): 
 				[[fallthrough]];
 			case Type_T(pattern::_value_proxy):
+				[[fallthrough]];
+			case Type_T(pattern::_multi_match):
 				return leaf_apply(ref);
 			}
 		} //tree_fold

@@ -82,22 +82,21 @@ namespace bmath::intern {
 			ParseView declarations;
 			ParseView lhs;
 			ParseView rhs;
+
+			//input is assumed to be of form "<declarations> | <lhs> = <rhs>"
+			//or, if no MatchVariables occur, of form "<lhs> = <rhs>"
+			PatternParts(const ParseView input);
 		};
 
-		//input is assumed to be of form "<declarations> | <lhs> = <rhs>"
-		//or, if no MatchVariables occur, of restr "<lhs> = <rhs>"
-		PatternParts split(const ParseView input);
-
-		using ParseRestriction = SumEnum<Restriction, Form>;
 		//data belonging to one TreeMatchVariable relevant while constructing pattern
-		struct [[nodiscard]] MultiNameLookup 
+		struct [[nodiscard]] TreeNameLookup 
 		{
 			std::string_view name;
 			Restriction restr;
-			StupidBufferVector<PnTypedIdx, 3u> lhs_instances;
-			StupidBufferVector<PnTypedIdx, 3u> rhs_instances;
+			StupidBufferVector<PnTypedIdx, 4u> lhs_instances;
+			StupidBufferVector<PnTypedIdx, 4u> rhs_instances;
 
-			MultiNameLookup(std::string_view new_name, Restriction new_restr) noexcept
+			TreeNameLookup(std::string_view new_name, Restriction new_restr) noexcept
 				:name(new_name), restr(new_restr) {}
 		};
 		
@@ -106,24 +105,36 @@ namespace bmath::intern {
 		{
 			std::string_view name;
 			Form form;
-			StupidBufferVector<PnTypedIdx, 3u> lhs_instances;
-			StupidBufferVector<PnTypedIdx, 3u> rhs_instances;
+			StupidBufferVector<PnTypedIdx, 4u> lhs_instances;
+			StupidBufferVector<PnTypedIdx, 4u> rhs_instances;
 
 			ValueNameLookup(std::string_view new_name, Form new_form) noexcept
 				:name(new_name), form(new_form) {}
 		};
 
+		struct [[nodiscard]] MultiNameLookup
+		{
+			std::string_view name;
+			std::size_t lhs_count; //(only used to throw error if multiple instances exist in lhs)
+			std::size_t rhs_count; //(only used to throw error if multiple instances exist in rhs)
+
+			MultiNameLookup(std::string_view new_name) noexcept 
+				:name(new_name), lhs_count(0u), rhs_count(0u) {}
+		};
+
 		//only exists during construction of pattern
 		struct NameLookupTable
 		{
-			std::vector<MultiNameLookup> tree_table;
+			std::vector<TreeNameLookup> tree_table;
 			std::vector<ValueNameLookup> value_table;
+			std::vector<MultiNameLookup> multi_table;
 			bool build_lhs = true; //false -> currently building rhs
+
+			//assumes to only get declarations part of pattern
+			NameLookupTable(ParseView declarations);
 
 			PnTypedIdx insert_instance(PnStore& store, const ParseView input);
 		};
-
-		NameLookupTable parse_declarations(ParseView declarations);
 
 		struct PatternBuildFunction
 		{

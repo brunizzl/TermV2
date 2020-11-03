@@ -99,6 +99,9 @@ namespace bmath::intern {
 			Value_T local_data[BufferSize];
 		};
 
+		template<typename SndValue_T, std::size_t SndBuffer, std::size_t SndFirstHeapSize>
+		friend class StupidBufferVector;
+
 	public:
 		constexpr std::size_t size() const noexcept { return this->size_; }
 		constexpr const Value_T* data() const noexcept { return this->data_; }
@@ -118,13 +121,31 @@ namespace bmath::intern {
 		~StupidBufferVector() noexcept
 		{
 			if (this->data_ != this->local_data) {
-				delete[] this->data_; //only works for frivially destructible Value_T
+				delete[] this->data_; //only works for trivially destructible Value_T
 			}
 		}
 
 		StupidBufferVector(const StupidBufferVector&) = delete;
 		StupidBufferVector& operator=(const StupidBufferVector&) = delete;
-		StupidBufferVector& operator=(StupidBufferVector&&) = delete;
+
+		template<std::size_t SndBuffer, std::size_t SndFirstHeapSize>
+		StupidBufferVector& operator=(StupidBufferVector<Value_T, SndBuffer, SndFirstHeapSize>&& snd) noexcept
+		{
+			this->~StupidBufferVector();
+			new (this) StupidBufferVector();
+
+			if (snd.data_ != snd.local_data) { //only works for trivially destructible Value_T
+				this->data_ = std::exchange(snd.data_, nullptr);
+				this->capacity = std::exchange(snd.capacity, 0u);
+				this->size_ = std::exchange(snd.size_, 0u);
+			}
+			else {
+				this->reserve(snd.size_);
+				this->size_ = snd.size_;
+				std::copy(snd.data_, snd.data_ + snd.size_, this->data_);
+			} 
+			return *this;
+		}
 
 		constexpr StupidBufferVector(StupidBufferVector&& snd) noexcept :size_(std::exchange(snd.size_, 0u))
 		{
@@ -143,7 +164,7 @@ namespace bmath::intern {
 				Value_T* const new_data = new Value_T[new_capacity];
 				std::copy(this->data_, this->data_ + this->capacity, new_data);
 				if (this->data_ != this->local_data) {
-					delete[] this->data_; //only works for frivially destructible Value_T
+					delete[] this->data_; //only works for trivially destructible Value_T
 				}
 				this->data_ = new_data;
 				this->capacity = new_capacity;
@@ -172,14 +193,14 @@ namespace bmath::intern {
 		constexpr Value_T pop_back() noexcept
 		{ 
 			assert(this->size_ > 0u && "tried popping on empty vector");
-			return this->data_[--this->size_]; //only works for frivially destructible Value_T
+			return this->data_[--this->size_]; //only works for trivially destructible Value_T
 		}
 
 		constexpr void shorten_to(Value_T* const new_end) noexcept
 		{
 			const std::size_t new_size = new_end - this->data_;
 			assert(new_size <= this->size_);
-			this->size_ = new_size; //only works for frivially destructible Value_T
+			this->size_ = new_size; //only works for trivially destructible Value_T
 		}
 
 		constexpr void clear() noexcept { this->size_ = 0u; }
@@ -387,6 +408,16 @@ namespace bmath::intern {
 		static constexpr E COUNT = Count;
 	}; //struct WrapEnum 
 
+	//if a member of SumEnum only has a single state itself, this may be used
+#define LONE_ENUM(NAME)\
+	struct NAME\
+	{\
+		constexpr operator unsigned() const noexcept { return 0u; }\
+		constexpr friend std::strong_ordering operator<=>(const NAME&, const NAME&) noexcept = default;\
+		constexpr friend bool operator==(const NAME&, const NAME&) noexcept = default;\
+		static constexpr unsigned COUNT = 0u;\
+	}
+
 
 
 	//remove if c++20 libraries have catched up
@@ -424,7 +455,7 @@ namespace bmath::intern {
 	class [[nodiscard]] IntBitSet
 	{
 		static_assert(std::is_unsigned_v<UInt_T>);
-		static constexpr std::size_t size = sizeof(UInt_T) * 8u;
+		static constexpr std::uint32_t size = sizeof(UInt_T) * 8u;
 
 	public:
 		UInt_T data;
@@ -433,40 +464,40 @@ namespace bmath::intern {
 		constexpr IntBitSet(const UInt_T new_data) noexcept :data(new_data) {}
 		constexpr operator UInt_T() const noexcept { return this->data; }
 
-		constexpr void  flip(const std::size_t pos) noexcept { this->data ^=  (UInt_T(1) << pos); }
-		constexpr void reset(const std::size_t pos) noexcept { this->data &= ~(UInt_T(1) << pos); }
-		constexpr void   set(const std::size_t pos) noexcept { this->data |=  (UInt_T(1) << pos); }
-		constexpr void   set(const std::size_t pos, const bool val) noexcept { val ? this->set(pos) : this->reset(pos); }
+		constexpr void  flip(const std::uint32_t pos) noexcept { this->data ^=  (UInt_T(1) << pos); }
+		constexpr void reset(const std::uint32_t pos) noexcept { this->data &= ~(UInt_T(1) << pos); }
+		constexpr void   set(const std::uint32_t pos) noexcept { this->data |=  (UInt_T(1) << pos); }
+		constexpr void   set(const std::uint32_t pos, const bool val) noexcept { val ? this->set(pos) : this->reset(pos); }
 
-		constexpr bool  test(const std::size_t pos) const noexcept { return this->data & (UInt_T(1) << pos); }
+		constexpr bool  test(const std::uint32_t pos) const noexcept { return this->data & (UInt_T(1) << pos); }
 		constexpr bool none() const noexcept { return !this->data; }
 		constexpr bool  any() const noexcept { return  this->data; }
 		constexpr bool  all() const noexcept { return !(~this->data); }
 		constexpr bool not_all() const noexcept { return ~this->data; }
 
-		constexpr std::size_t count() const noexcept
+		constexpr std::uint32_t count() const noexcept
 		{
 			//return std::popcount(this->data);
-			std::size_t result = 0u;
-			for (std::size_t i = 0u; i < size; i++) {
+			std::uint32_t result = 0u;
+			for (std::uint32_t i = 0u; i < size; i++) {
 				result += this->test(i);
 			}
 			return result;
 		}
 
-		constexpr std::size_t find_first_true() const noexcept
+		constexpr std::uint32_t find_first_true() const noexcept
 		{
 			//return std::countr_zero(this->data);
-			for (std::size_t i = 0u; i < size; i++) {
+			for (std::uint32_t i = 0u; i < size; i++) {
 				if (this->test(i)) { return i; }
 			}
 			return size;
 		}
 
-		constexpr std::size_t find_first_false() const noexcept
+		constexpr std::uint32_t find_first_false() const noexcept
 		{
 			//return std::countr_one(this->data);
-			for (std::size_t i = 0u; i < size; i++) {
+			for (std::uint32_t i = 0u; i < size; i++) {
 				if (!this->test(i)) { return i; }
 			}
 			return size;

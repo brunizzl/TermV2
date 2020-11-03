@@ -102,7 +102,12 @@ namespace bmath::intern {
 
 	namespace pattern {
 
-		constexpr auto form_name_table = std::to_array<std::pair<ParseRestriction, std::string_view>>({
+		LONE_ENUM(Multi);
+		LONE_ENUM(Unknown);
+
+		using PnVariablesType = SumEnum<Restriction, Form, Multi, Unknown>;
+
+		constexpr auto type_table = std::to_array<std::pair<PnVariablesType, std::string_view>>({
 			{ Type(Op::sum       ), "sum"           },
 			{ Type(Op::product   ), "product"       },
 			{ Type(Leaf::variable), "variable"      },
@@ -119,10 +124,11 @@ namespace bmath::intern {
 			{ Restr::any          , "any"           },
 			{ Restr::nn1          , "nn1"           },
 			{ Restr::no_val       , "no_val"        },
+			{ Multi{}             , "multi"         },
 		});
 
-		constexpr std::string_view name_of(const ParseRestriction r) noexcept { return find_snd(form_name_table, r); }
-		constexpr ParseRestriction form_type(const std::string_view s) noexcept { return search_fst(form_name_table, s, ParseRestriction(Restr::unknown)); }
+		constexpr std::string_view name_of(const PnVariablesType r) noexcept { return find_snd(type_table, r); }
+		constexpr PnVariablesType type_of(const std::string_view s) noexcept { return search_fst(type_table, s, PnVariablesType(Unknown{})); }
 
 	} //namespace pattern
 
@@ -159,6 +165,7 @@ namespace bmath::intern {
 			{ pattern::PnVariable::tree_match , 6 },
 			{ pattern::PnVariable::value_match, 6 },
 			{ pattern::PnVariable::value_proxy, 6 },
+			{ pattern::PnVariable::multi_match, 6 },
 		});
 		static_assert(std::is_sorted(infixr_table.begin(), infixr_table.end(), [](auto a, auto b) { return a.second < b.second; }));
 		constexpr int infixr(pattern::PnType type) { return find_snd(infixr_table, type); }
@@ -516,7 +523,7 @@ namespace bmath::intern {
 
 	namespace pattern {
 
-		PatternParts split(const ParseView input)
+		PatternParts::PatternParts(const ParseView input)
 		{
 			const std::size_t bar = find_first_of_skip_pars(input.tokens, token::bar);
 			throw_if<ParseFailure>(count_skip_pars(input.tokens, token::bar) > 1u, input.offset + bar, "expected only this '|', no further ones at top grouping level");
@@ -525,56 +532,38 @@ namespace bmath::intern {
 			throw_if<ParseFailure>(equals == TokenView::npos, input.size() - 1u, "expected '=' at top grouping level");
 
 			if (bar != TokenView::npos) {
-				return PatternParts{ input.substr(0u, bar), input.substr(bar + 1u, equals - bar - 1u), input.substr(equals + 1u) };
+				this->declarations = input.substr(0u, bar);
+				this->lhs          = input.substr(bar + 1u, equals - bar - 1u);
+				this->rhs          = input.substr(equals + 1u);
 			}
 			else {
-				return PatternParts{ input.substr(0u, 0u), input.substr(0u, equals), input.substr(equals + 1u) };
+				this->declarations = input.substr(0u, 0u);
+				this->lhs          = input.substr(0u, equals);
+				this->rhs          = input.substr(equals + 1u);
 			}
-		}
+		} //PatternParts::PatternParts
 
-		PnTypedIdx NameLookupTable::insert_instance(PnStore& store, const ParseView input)
+		NameLookupTable::NameLookupTable(ParseView declarations)
 		{
-			const auto name = input.to_string_view();
-			auto var_idx = PnTypedIdx();
-			if (const auto iter = std::find_if(this->tree_table.begin(), this->tree_table.end(), [name](const auto& x) { return x.name == name; }); 
-				iter != this->tree_table.end()) 
-			{
-				const std::uint32_t match_data_idx = std::distance(this->tree_table.begin(), iter);
-				const TreeMatchVariable var = { match_data_idx, iter->restr };
-				var_idx = PnTypedIdx(store.insert(var), PnVariable::tree_match);
-				(this->build_lhs ? iter->lhs_instances : iter->rhs_instances).push_back(var_idx);
-			}
-			if (const auto iter = std::find_if(this->value_table.begin(), this->value_table.end(), [name](const auto& x) { return x.name == name; }); 
-				iter != this->value_table.end()) 
-			{
-				const std::uint32_t match_data_idx = std::distance(this->value_table.begin(), iter);
-				const ValueMatchVariable var(match_data_idx, iter->form);
-				var_idx = PnTypedIdx(store.insert(var), PnVariable::value_match);
-				(this->build_lhs ? iter->lhs_instances : iter->rhs_instances).push_back(var_idx);
-			}
-			throw_if<ParseFailure>(var_idx == PnTypedIdx(), input.offset, "match variable has not been declared");
-			return var_idx;
-		} //NameLookupTable::insert_instance
-
-		NameLookupTable parse_declarations(ParseView declarations)
-		{
-			NameLookupTable result;
-
-			const auto parse_declaration = [&result](ParseView var_view) {
+			const auto parse_declaration = [this](ParseView var_view) {
 				const std::size_t colon = find_first_of_skip_pars(var_view.tokens, token::colon);
 				if (colon != TokenView::npos) {
-					const ParseRestriction restr = form_type(var_view.to_string_view(colon + 1u));
-					throw_if<ParseFailure>(restr == Restr::unknown, var_view.offset + colon + 1u, "unknown restriction");
-					if (restr.is<Form>()) {
-						result.value_table.emplace_back(var_view.to_string_view(0, colon), restr.to<Form>());
+					const PnVariablesType type = type_of(var_view.to_string_view(colon + 1u));
+					throw_if<ParseFailure>(type.is<Unknown>(), var_view.offset + colon + 1u, "unknown restriction");
+
+					if (type.is<Form>()) {
+						this->value_table.emplace_back(var_view.to_string_view(0, colon), type.to<Form>());
+					}
+					else if (type.is<Multi>()) {
+						this->multi_table.emplace_back(var_view.to_string_view(0, colon));
 					}
 					else {
-						assert(restr.is<Restriction>());
-						result.tree_table.emplace_back(var_view.to_string_view(0, colon), restr.to<Restriction>());
+						assert(type.is<Restriction>());
+						this->tree_table.emplace_back(var_view.to_string_view(0, colon), type.to<Restriction>());
 					}
 				}
 				else {
-					result.tree_table.emplace_back(var_view.to_string_view(), Restriction(Restr::any));
+					this->tree_table.emplace_back(var_view.to_string_view(), Restriction(Restr::any));
 				}
 			};
 
@@ -587,8 +576,36 @@ namespace bmath::intern {
 				const std::size_t comma = find_first_of_skip_pars(declarations.tokens, token::comma);
 				parse_declaration(declarations.steal_prefix(comma));
 			}
-			return result;
-		} //parse_declarations
+		} //NameLookupTable::NameLookupTable
+
+		PnTypedIdx NameLookupTable::insert_instance(PnStore& store, const ParseView input)
+		{
+			const auto name = input.to_string_view();
+			const auto search_name = [name](auto& vec) { 
+				return std::find_if(vec.begin(), vec.end(), [name](const auto& x) { return x.name == name; });
+			};
+
+			auto var_idx = PnTypedIdx();
+			if (const auto iter = search_name(this->tree_table); iter != this->tree_table.end()) {
+				const std::uint32_t match_data_idx = std::distance(this->tree_table.begin(), iter);
+				const TreeMatchVariable var = { match_data_idx, iter->restr };
+				var_idx = PnTypedIdx(store.insert(var), PnVariable::tree_match);
+				(this->build_lhs ? iter->lhs_instances : iter->rhs_instances).push_back(var_idx);
+			}
+			else if (const auto iter = search_name(this->value_table); iter != this->value_table.end()) {
+				const std::uint32_t match_data_idx = std::distance(this->value_table.begin(), iter);
+				const ValueMatchVariable var(match_data_idx, iter->form);
+				var_idx = PnTypedIdx(store.insert(var), PnVariable::value_match);
+				(this->build_lhs ? iter->lhs_instances : iter->rhs_instances).push_back(var_idx);
+			}
+			else if (const auto iter = search_name(this->multi_table); iter != this->multi_table.end()) {
+				const std::uint32_t match_data_idx = std::distance(this->multi_table.begin(), iter);
+				var_idx = PnTypedIdx(match_data_idx, PnVariable::multi_match);
+			}
+			throw_if<ParseFailure>(var_idx == PnTypedIdx(), input.offset, "match variable has not been declared");
+			return var_idx;
+		} //NameLookupTable::insert_instance
+
 
 		PnTypedIdx PatternBuildFunction::operator()(PnStore& store, ParseView input)
 		{
@@ -737,6 +754,11 @@ namespace bmath::intern {
 			} break;
 			case Type_T(pattern::_value_proxy): if constexpr (pattern) {
 				str.push_back('P');
+			} break;
+			case Type_T(pattern::_multi_match): if constexpr (pattern) {
+				str.push_back('M');
+				str.append(std::to_string(ref.index));
+				str.append("...");
 			} break;
 			}
 
@@ -1016,6 +1038,8 @@ namespace bmath::intern {
 				print::append_memory_row(ref.new_at(var.copy_idx), rows);
 			} break;
 			case Type_T(pattern::_value_proxy): 
+				[[fallthrough]];
+			case Type_T(pattern::_multi_match): 
 				return;
 			}
 

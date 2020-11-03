@@ -55,6 +55,7 @@ namespace bmath::intern::debug {
 			<< "PnType(PnVariable::tree_match)  = " << unsigned(PnType(PnVariable::tree_match))  << "\n"
 			<< "PnType(PnVariable::value_match) = " << unsigned(PnType(PnVariable::value_match)) << "\n"
 			<< "PnType(PnVariable::value_proxy) = " << unsigned(PnType(PnVariable::value_proxy)) << "\n"
+			<< "PnType(PnVariable::multi_match) = " << unsigned(PnType(PnVariable::multi_match)) << "\n"
 			<< "PnType(PnVariable::COUNT)       = " << unsigned(PnType(PnVariable::COUNT))       << "\n"
 			                                                                                     << "\n"
 			<< "PnType::COUNT                   = " << unsigned(PnType::COUNT)                   << "\n"
@@ -73,13 +74,13 @@ namespace bmath::intern::debug {
 			//{"x | sin(x) / cos(x) = tan(x)"}, 
 			//{"a :complex, b :complex, x | (a x)^b = a^b x^b"}, 
 			//{"x | 0 x = 0"}, 
-			{"a | a + a = 2 a"}, 
-			{"a, b | a b + a = a (b + 1)"}, 
-			{"b, a | a b + a = a (b + 1)"}, 
-			{"a :no_val, b, c | a b + a c = a (b + c)"}, 
-			{"b, a :no_val, c | a b + a c = a (b + c)"}, 
-			{"a, b, c | a b + a c = a (b + c)"}, 
-			{"b, a, c | a b + a c = a (b + c)"}, 
+			//{"a | a + a = 2 a"}, 
+			{"a, b :multi | a b + a = a (b + 1)"}, 
+			//{"b, a | a b + a = a (b + 1)"}, 
+			//{"a :no_val, b, c | a b + a c = a (b + c)"}, 
+			//{"b, a :no_val, c | a b + a c = a (b + c)"}, 
+			//{"a, b, c | a b + a c = a (b + c)"}, 
+			//{"b, a, c | a b + a c = a (b + c)"}, 
 		});
 
 		while (true) {
@@ -266,6 +267,8 @@ namespace bmath::intern::test {
 			"a:real, b, c:complex | (a b)^c = a^c b^c",
 			"a, b | a^2 + 2 a b + b^2 = (a + b)^2",
 			"cos('pi') = -1",
+			"cos('pi') = -1",
+			"a, b :multi | a b + a = a (b + 1)",
 		};
 		for (auto& s : term_names) {
 			std::cout << "-------------------------------------------------------------------------------------\n";

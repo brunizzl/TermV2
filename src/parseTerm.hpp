@@ -82,11 +82,13 @@ namespace bmath::intern {
 	struct [[nodiscard]] ParseView
 	{
 		TokenView tokens;
-		const char* chars;
-		std::size_t offset; //distance to actual beginning of string(s)
+		const char* chars = nullptr;
+		std::size_t offset = 0u; //distance to actual beginning of string(s)
+
+		constexpr ParseView() noexcept = default;
 
 		ParseView(const ParseString& str) noexcept 
-			:tokens(str.tokens), chars(str.name.data()), offset(0)
+			:tokens(str.tokens), chars(str.name.data())
 		{
 			assert(str.name.size() == str.tokens.size() && "expected both views to represent same data -> have same length");
 		}
