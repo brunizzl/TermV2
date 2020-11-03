@@ -91,11 +91,11 @@ namespace bmath::intern {
 		static_assert(std::is_trivially_copyable_v<Value_T>);     //thus the "Stupid" in the name
 		static_assert(std::is_trivially_destructible_v<Value_T>); //thus the "Stupid" in the name
 
-		std::size_t size_;
-		Value_T* data_;
+		std::size_t size_ = 0u;
+		Value_T* data_ = &local_data[0];
 		union
 		{
-			std::size_t capacity;
+			std::size_t capacity = 0u;
 			Value_T local_data[BufferSize];
 		};
 
@@ -104,9 +104,9 @@ namespace bmath::intern {
 		constexpr const Value_T* data() const noexcept { return this->data_; }
 		constexpr Value_T* data() noexcept { return this->data_; }
 
-		constexpr StupidBufferVector() noexcept :size_(0), data_(local_data) {}
+		constexpr StupidBufferVector() noexcept {}
 
-		constexpr StupidBufferVector(const std::initializer_list<Value_T> init) noexcept :size_(init.size()), data_(local_data)
+		constexpr StupidBufferVector(const std::initializer_list<Value_T> init) noexcept :size_(init.size())
 		{
 			if (init.size() > BufferSize) [[unlikely]] {
 				this->data_ = new Value_T[init.size()];
@@ -167,10 +167,7 @@ namespace bmath::intern {
 			return  *addr;
 		}
 
-		constexpr Value_T& push_back(const Value_T& elem) noexcept
-		{
-			return this->emplace_back(elem);
-		}
+		constexpr Value_T& push_back(const Value_T& elem) noexcept { return this->emplace_back(elem); }
 
 		constexpr Value_T pop_back() noexcept
 		{ 
@@ -231,14 +228,11 @@ namespace bmath::intern {
 		{
 			assert(this->size_ < MaxSize && "tried pushing on full vector");
 			Value_T* const addr = &this->data_[this->size_++];
-			new (addr) Value_T(args...);
+			new (addr) Value_T{ args... };
 			return *addr;
 		}
 
-		constexpr Value_T& push_back(const Value_T& elem) noexcept
-		{
-			return this->emplace_back(elem);
-		}
+		constexpr Value_T& push_back(const Value_T& elem) noexcept { return this->emplace_back(elem); }
 
 		constexpr void pop_back() noexcept
 		{ 

@@ -511,18 +511,18 @@ namespace bmath::intern {
 		bool equals(const pattern::PnRef pn_ref, const Ref ref, pattern::MatchData& match_data);
 
 
-		struct VariadicMatchResult
+		struct VariadicEqualsResult
 		{
 			StupidBufferVector<TypedIdx, 8> matched;
 			StupidBufferVector<TypedIdx, 16> not_matched;
 		};
 
 		//this function allows to match a sum / product pattern in a sum / product with more elements than elements in the pattern.
-		//if no match was found, both VariadicMatchResult.matched and VariadicMatchResult.not_matched will be empty, 
+		//if no match was found, both VariadicEqualsResult.matched and VariadicEqualsResult.not_matched will be empty, 
 		//  else matched will contain the elements in term where a corrensponding part in pattern was found and
 		//  not_matched will contain the leftovers.
 		//it is assumed, that pn_ref and ref are both the same variadic type (eighter sum and sum or product and product)
-		VariadicMatchResult variadic_equals(const pattern::PnRef pn_ref, const Ref ref, pattern::MatchData& match_data);
+		VariadicEqualsResult variadic_equals(const pattern::PnRef pn_ref, const Ref ref, pattern::MatchData& match_data);
 
 		//copies pn_ref with match_data into store, returns head of copied result.
 		[[nodiscard]] TypedIdx copy(const pattern::PnRef pn_ref, const pattern::MatchData& match_data, Store& store);

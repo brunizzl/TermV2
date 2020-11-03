@@ -66,18 +66,20 @@ namespace bmath::intern::debug {
 
 	void test_rechner() 
 	{
-		const auto patterns = std::to_array({ 
-			//pattern::PnTerm{"x | sin(x)^2 + cos(x)^2 = 1"}, 
-			//pattern::PnTerm{"a, b | a^2 + 2 a b + b^2 = (a + b)^2"}, 
-			//pattern::PnTerm{"a, b | a^2 - 2 a b + b^2 = (a - b)^2"}, 
-			//pattern::PnTerm{"x | sin(x) / cos(x) = tan(x)"}, 
-			//pattern::PnTerm{"a :complex, b :complex, x | (a x)^b = a^b x^b"}, 
-			pattern::PnTerm{"a, b | a b + a = a (b + 1)"}, 
-			pattern::PnTerm{"b, a | a b + a = a (b + 1)"}, 
-			pattern::PnTerm{"a :no_val, b, c | a b + a c = a (b + c)"}, 
-			pattern::PnTerm{"b, a :no_val, c | a b + a c = a (b + c)"}, 
-			pattern::PnTerm{"a, b, c | a b + a c = a (b + c)"}, 
-			pattern::PnTerm{"b, a, c | a b + a c = a (b + c)"}, 
+		const auto patterns = std::to_array<pattern::PnTerm>({ 
+			//{"x | sin(x)^2 + cos(x)^2 = 1"}, 
+			//{"a, b | a^2 + 2 a b + b^2 = (a + b)^2"}, 
+			//{"a, b | a^2 - 2 a b + b^2 = (a - b)^2"}, 
+			//{"x | sin(x) / cos(x) = tan(x)"}, 
+			//{"a :complex, b :complex, x | (a x)^b = a^b x^b"}, 
+			//{"x | 0 x = 0"}, 
+			{"a | a + a = 2 a"}, 
+			{"a, b | a b + a = a (b + 1)"}, 
+			{"b, a | a b + a = a (b + 1)"}, 
+			{"a :no_val, b, c | a b + a c = a (b + c)"}, 
+			{"b, a :no_val, c | a b + a c = a (b + c)"}, 
+			{"a, b, c | a b + a c = a (b + c)"}, 
+			{"b, a, c | a b + a c = a (b + c)"}, 
 		});
 
 		while (true) {

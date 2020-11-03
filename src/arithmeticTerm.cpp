@@ -1442,23 +1442,21 @@ namespace bmath::intern {
 		//this function currently has complexity O(m^n) where m is count of ref's elements and n is count of pn_ref's elements.
 		//in principle it could be turend to O(m*n), but i have not yet turned this into a working algorithm.
 		//the tricky part is to ensure, that one will never 
-		VariadicMatchResult variadic_equals(const pattern::PnRef pn_ref, const Ref ref, pattern::MatchData& match_data)
+		VariadicEqualsResult variadic_equals(const pattern::PnRef pn_ref, const Ref ref, pattern::MatchData& match_data)
 		{
 			using namespace pattern;
 			assert(pn_ref.type == ref.type && (ref.type == Op::sum || ref.type == Op::product));
 
 			const auto reset_own_matches = [&match_data](const PnRef pn_ref) {
-				const auto reset_variable = [&match_data](const PnRef ref) -> fold::Void {
+				const auto reset_single = [&match_data](const PnRef ref) -> fold::Void {
 					switch (ref.type) {
-					case PnType(PnVariable::tree_match):
-					{
+					case PnType(PnVariable::tree_match): {
 						SharedTreeDatum& info = match_data.info(ref->tree_match);
 						if (info.responsible == ref.typed_idx()) {
 							info = SharedTreeDatum();
 						}
 					} break;
-					case PnType(PnVariable::value_match):
-					{
+					case PnType(PnVariable::value_match): {
 						SharedValueDatum& info = match_data.info(ref->value_match);
 						if (info.responsible == ref.typed_idx()) {
 							info = SharedValueDatum();
@@ -1467,10 +1465,10 @@ namespace bmath::intern {
 					}
 					return fold::Void{};
 				};
-				fold::simple_fold<fold::Void>(pn_ref, reset_variable);
+				fold::simple_fold<fold::Void>(pn_ref, reset_single);
 			};
 
-			VariadicMatchResult result;
+			VariadicEqualsResult result;
 			for (const TypedIdx elem : vc::range(ref)) {
 				result.not_matched.push_back(elem);
 			}
@@ -1478,7 +1476,7 @@ namespace bmath::intern {
 			struct PnElemData
 			{
 				PnTypedIdx elem;
-				std::uint32_t result_idx;
+				std::uint32_t result_idx = -1u;
 			};
 			StupidBufferVector<PnElemData, 8> pn_elements;
 			for (const PnTypedIdx elem : vc::range(pn_ref)) {
