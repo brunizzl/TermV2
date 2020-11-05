@@ -325,11 +325,11 @@ namespace bmath::intern {
 		template<typename Needle, typename Haystack>
 		constexpr bool contains_v = Contains<Needle, Haystack>::value;
 
-		template<typename Needle>
-		struct Contains<Needle, Needle> :std::true_type {};
-
 		template<typename Needle, auto Count>
 		struct Contains<Needle, WrapEnum<Needle, Count>> :std::true_type {};
+
+		template<typename Needle, typename... HayTail>
+		struct Contains<Needle, SumEnum<Needle, HayTail...>> :std::true_type {};
 
 		template<typename Needle, typename HayHead, typename... HayTail>
 		struct Contains<Needle, SumEnum<HayHead, HayTail...>> :std::bool_constant<
@@ -349,7 +349,7 @@ namespace bmath::intern {
 	class [[nodiscard]] SumEnum<>
 	{
 	protected:
-		//why dont i have to uncomment these and why cant i uncomment these? sometimes this language is beyond me.
+		//why dont i have to comment out these and why cant i uncomment these? sometimes this language is beyond me.
 		//constexpr std::strong_ordering operator<=>(const SumEnum&) const noexcept = default;
 		//constexpr bool operator==(const SumEnum&) const noexcept = default;
 
@@ -393,7 +393,7 @@ namespace bmath::intern {
 			return static_cast<const Base>(*this).is<E>(); 
 		}
 
-		template<typename E, std::enable_if_t<enum_detail::contains_v<E, Enum> && !std::is_same_v<E, Enum>, void*> = nullptr> 
+		template<typename E, std::enable_if_t<enum_detail::contains_v<E, Enum>, void*> = nullptr> 
 		constexpr bool is() const noexcept //assumes Enum itself is SumEnum<...> and can be build from E -> hand over to Enum
 		{
 			static_assert(!std::is_integral_v<E>);
@@ -414,7 +414,7 @@ namespace bmath::intern {
 			return static_cast<const Base>(*this).to<E>(); 
 		}
 
-		template<typename E, std::enable_if_t<enum_detail::contains_v<E, Enum> && !std::is_same_v<E, Enum>, void*> = nullptr>
+		template<typename E, std::enable_if_t<enum_detail::contains_v<E, Enum>, void*> = nullptr>
 		constexpr E to() const noexcept //assumes Enum itself is SumEnum<...> and can be build from E -> hand over to Enum
 		{ 
 			static_assert(!std::is_integral_v<E>);
@@ -455,22 +455,21 @@ namespace bmath::intern {
 		return *lhs <=> *rhs;
 	}
 
-	constexpr std::strong_ordering compare_complex(const std::complex<double>& lhs, const std::complex<double>& rhs)
+	constexpr std::strong_ordering compare_double(const double lhs, const double rhs)
 	{
 		if (lhs == 0.0 && rhs == 0.0) [[unlikely]] { //different zero signs are ignored
 			return std::strong_ordering::equal; 
 		}
-		else {
-			static_assert(sizeof(double) == sizeof(std::uint64_t), "bit_cast may cast to something of doubles size.");
-			constexpr auto bits = [](const double val) -> std::uint64_t { return std::bit_cast<std::uint64_t>(val); };
+		static_assert(sizeof(double) == sizeof(std::uint64_t)); //bit_cast may cast to something of doubles size.
+		return std::bit_cast<std::uint64_t>(lhs) <=> std::bit_cast<std::uint64_t>(rhs);
+	}
 
-			if (const std::strong_ordering cmp = bits(lhs.real()) <=> bits(rhs.real()); cmp != std::strong_ordering::equal) {
-				return cmp; 
-			}
-			else {
-				return bits(lhs.imag()) <=> bits(rhs.imag()); 
-			}
+	constexpr std::strong_ordering compare_complex(const std::complex<double>& lhs, const std::complex<double>& rhs)
+	{
+		if (const auto cmp = compare_double(lhs.real(), rhs.real()); cmp != std::strong_ordering::equal) {
+			return cmp;
 		}
+		return compare_double(lhs.imag(), rhs.imag());
 	}
 
 
