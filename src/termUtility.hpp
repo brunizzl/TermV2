@@ -343,6 +343,40 @@ namespace bmath::intern {
 		template<typename E> 
 		struct HasCOUNT<E, std::void_t<decltype(E::COUNT)>> :std::true_type {};
 
+
+		template<typename... Elems> struct List;
+
+
+		template<typename List_1, typename List_2>
+		struct Concat;
+
+		template<typename... Elems_1, typename... Elems_2>
+		struct Concat<List<Elems_1...>, List<Elems_2...>> { using type = List<Elems_1..., Elems_2...>; };
+
+		static_assert(std::is_same_v<Concat<List<int, int>, List<double, nullptr_t>>::type, List<int, int, double, nullptr_t>>);
+
+
+		template<typename Head, typename... Tail>
+		struct ListMembers { using type = typename Concat<typename ListMembers<Head>::type, typename ListMembers<Tail...>>::type; };
+
+		template<typename... Enums>
+		struct ListMembers<SumEnum<Enums...>> { using type = typename ListMembers<Enums...>::type; };
+
+		template<typename Enum>
+		struct ListMembers<Enum> { using type = typename List<Enum>; };
+
+
+		template<typename Needle, typename Haystack>
+		struct InList :std::false_type {};
+
+		template<typename Needle, typename Elem_0, typename... Elems>
+		struct InList<Needle, List<Elem_0, Elems...>> :std::bool_constant<
+			std::is_same_v<Needle, Elem_0> || InList<Needle, List<Elems...>>::value
+		> {};
+
+		static_assert(!InList<char, List<double, int, int, void>>::value);
+		static_assert(InList<char, List<double, char, int, void>>::value);
+
 	} //namespace enum_detail
 
 	template<>
