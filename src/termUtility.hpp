@@ -10,6 +10,7 @@
 #include <bit>
 #include <complex>
 #include <concepts>
+#include <compare>
 
 namespace bmath::intern {
 
@@ -302,20 +303,18 @@ namespace bmath::intern {
 	template<typename... Enums>
 	class [[nodiscard]] SumEnum;
 
-	template<typename E, E Count>
+	template<typename Enum, Enum Count>
 	struct [[nodiscard]] WrapEnum //allows to use SumEnum with enums not having their last member named COUNT
 	{
-		static_assert(std::is_enum_v<E>);
+		static_assert(std::is_enum_v<Enum>);
 
-		E value;
-		constexpr WrapEnum(const E e) noexcept :value(e) {}
-		explicit constexpr WrapEnum(const unsigned u) noexcept :value(static_cast<E>(u)) {}
-		constexpr operator E() const noexcept { return this->value; }
+		Enum value;
+		constexpr WrapEnum(const Enum e) noexcept :value(e) {}
+
+		explicit constexpr WrapEnum(const unsigned u) noexcept :value(static_cast<Enum>(u)) {}
 		explicit constexpr operator unsigned() const noexcept { return static_cast<unsigned>(this->value); }
 
-		constexpr friend std::strong_ordering operator<=>(const WrapEnum&, const WrapEnum&) noexcept = default;
-		constexpr friend bool operator==(const WrapEnum&, const WrapEnum&) noexcept = default;
-		static constexpr E COUNT = Count;
+		static constexpr Enum COUNT = Count; //this is the only reason for WrapEnum to exist.
 	}; //struct WrapEnum 
 
 	namespace enum_detail {
@@ -332,22 +331,35 @@ namespace bmath::intern {
 		template<typename Needle, auto Count>
 		struct Contains<Needle, WrapEnum<Needle, Count>> :std::true_type {};
 
-		template<typename Needle, typename Hay0, typename... HayTail>
-		struct Contains<Needle, SumEnum<Hay0, HayTail...>> :std::bool_constant<
-			contains_v<Needle, Hay0> || contains_v<Needle, SumEnum<HayTail...>>
+		template<typename Needle, typename HayHead, typename... HayTail>
+		struct Contains<Needle, SumEnum<HayHead, HayTail...>> :std::bool_constant<
+			contains_v<Needle, HayHead> || contains_v<Needle, SumEnum<HayTail...>>
 		> {};
+
+
+		template<typename E, typename = void> 
+		struct HasCOUNT :std::false_type {};
+
+		template<typename E> 
+		struct HasCOUNT<E, std::void_t<decltype(E::COUNT)>> :std::true_type {};
+
 	} //namespace enum_detail
 
 	template<>
 	class [[nodiscard]] SumEnum<>
 	{
 	protected:
+		//why dont i have to uncomment these and why cant i uncomment these? sometimes this language is beyond me.
+		//constexpr std::strong_ordering operator<=>(const SumEnum&) const noexcept = default;
+		//constexpr bool operator==(const SumEnum&) const noexcept = default;
+
 		enum class Value :unsigned {} value; //only data held by all of SumEnum
 		static constexpr unsigned next_offset = 0u;
 
 	public:
 		constexpr SumEnum(const Value e) noexcept :value(e) {}
 		constexpr operator Value() const noexcept { return this->value; } //implicit conversion allows use in switch
+
 		explicit constexpr SumEnum(const unsigned u) noexcept :value(static_cast<Value>(u)) {}
 		explicit constexpr operator unsigned() const noexcept { return static_cast<unsigned>(this->value); }
 	}; //class SumEnum<>
@@ -356,9 +368,7 @@ namespace bmath::intern {
 	template<typename Enum, typename... TailEnums>
 	class [[nodiscard]] SumEnum<Enum, TailEnums...> :public SumEnum<TailEnums...>
 	{
-		template<typename E, typename = void> struct HasCOUNT :std::false_type {};
-		template<typename E> struct HasCOUNT<E, std::void_t<decltype(Enum::COUNT)>> :std::true_type {};
-		static_assert(HasCOUNT<Enum>::value, "Enum part of SumEnum must name last member COUNT (or be wrapped in WrapEnum)");
+		static_assert(enum_detail::HasCOUNT<Enum>::value, "enum part of SumEnum must name last member COUNT (or be wrapped in WrapEnum)");
 
 		using Base = SumEnum<TailEnums...>;
 		static constexpr unsigned this_offset = Base::next_offset;
@@ -369,35 +379,14 @@ namespace bmath::intern {
 
 	public:
 		using Base::Base;
-		constexpr SumEnum(const Enum e) noexcept :Base(static_cast<Value>(static_cast<unsigned>(e) + this_offset)) {}
+		constexpr SumEnum(const Enum e) noexcept :Base(static_cast<unsigned>(e) + this_offset) {}
 
 		//this constructor applies if Enum itself is WrapEnum<E> or SumEnum<...> that can be build from E
 		template<typename E, std::enable_if_t<std::is_convertible_v<E, Enum> && !std::is_same_v<E, Enum>, void*> = nullptr>
 		constexpr SumEnum(const E e) noexcept : Base(static_cast<unsigned>(static_cast<Enum>(e)) + this_offset) {}
 
 
-		template<typename E, std::enable_if_t<enum_detail::contains_v<E, Base> && !std::is_same_v<E, Enum>, void*> = nullptr>
-		constexpr E to() const noexcept //default case: search in parent types
-		{ 
-			static_assert(!std::is_integral_v<E>);
-			return static_cast<const Base>(*this).to<E>(); 
-		}
-
-		template<typename E, std::enable_if_t<enum_detail::contains_v<E, Enum> && !std::is_same_v<E, Enum>, void*> = nullptr>
-		constexpr E to() const noexcept //assumes Enum itself is SumEnum<...> and can be build from E -> hand over to Enum
-		{ 
-			static_assert(!std::is_integral_v<E>);
-			return this->to<Enum>().to<E>(); 
-		}
-
-		template<typename E, std::enable_if_t<std::is_same_v<E, Enum>, void*> = nullptr>
-		constexpr E to() const noexcept //E is same as Enum -> just undo the offset
-		{
-			return Enum(static_cast<unsigned>(this->value) - this_offset);
-		}
-
-
-		template<typename E, std::enable_if_t<enum_detail::contains_v<E, Base> && !std::is_same_v<E, Enum>, void*> = nullptr> 
+		template<typename E, std::enable_if_t<enum_detail::contains_v<E, Base>, void*> = nullptr> 
 		constexpr bool is() const noexcept //default case: search in parent types
 		{
 			static_assert(!std::is_integral_v<E>);
@@ -418,6 +407,28 @@ namespace bmath::intern {
 		}
 
 
+		template<typename E, std::enable_if_t<enum_detail::contains_v<E, Base>, void*> = nullptr>
+		constexpr E to() const noexcept //default case: search in parent types
+		{ 
+			static_assert(!std::is_integral_v<E>);
+			return static_cast<const Base>(*this).to<E>(); 
+		}
+
+		template<typename E, std::enable_if_t<enum_detail::contains_v<E, Enum> && !std::is_same_v<E, Enum>, void*> = nullptr>
+		constexpr E to() const noexcept //assumes Enum itself is SumEnum<...> and can be build from E -> hand over to Enum
+		{ 
+			static_assert(!std::is_integral_v<E>);
+			return this->to<Enum>().to<E>(); 
+		}
+
+		template<typename E, std::enable_if_t<std::is_same_v<E, Enum>, void*> = nullptr>
+		constexpr E to() const noexcept //E is same as Enum -> just undo the offset
+		{
+			assert(this->is<Enum>());
+			return Enum(static_cast<unsigned>(this->value) - this_offset);
+		}
+
+
 		constexpr friend std::strong_ordering operator<=>(const SumEnum&, const SumEnum&) noexcept = default;
 		constexpr friend bool operator==(const SumEnum&, const SumEnum&) noexcept = default;
 		static constexpr Value COUNT = static_cast<Value>(next_offset); //only relevant for outhermost instanciation
@@ -427,9 +438,7 @@ namespace bmath::intern {
 #define LONE_ENUM(NAME)\
 	struct NAME\
 	{\
-		constexpr operator unsigned() const noexcept { return 0u; }\
-		constexpr friend std::strong_ordering operator<=>(const NAME&, const NAME&) noexcept = default;\
-		constexpr friend bool operator==(const NAME&, const NAME&) noexcept = default;\
+		explicit constexpr operator unsigned() const noexcept { return 0u; }\
 		static constexpr unsigned COUNT = 0u;\
 	}
 
@@ -448,17 +457,19 @@ namespace bmath::intern {
 
 	constexpr std::strong_ordering compare_complex(const std::complex<double>& lhs, const std::complex<double>& rhs)
 	{
-		static_assert(sizeof(double) == sizeof(std::uint64_t), "bit_cast may cast to something of doubles size.");
-		//with not actually comparing the doubles as such, strong ordering is possible
-		const auto lhs_re = std::bit_cast<std::uint64_t>(lhs.real()); 
-		const auto rhs_re = std::bit_cast<std::uint64_t>(rhs.real());
-		const auto lhs_im = std::bit_cast<std::uint64_t>(lhs.imag());
-		const auto rhs_im = std::bit_cast<std::uint64_t>(rhs.imag());
-		if (lhs_re != rhs_re) {
-			return lhs_re <=> rhs_re; 
+		if (lhs == 0.0 && rhs == 0.0) [[unlikely]] { //different zero signs are ignored
+			return std::strong_ordering::equal; 
 		}
 		else {
-			return lhs_im <=> rhs_im; 
+			static_assert(sizeof(double) == sizeof(std::uint64_t), "bit_cast may cast to something of doubles size.");
+			constexpr auto bits = [](const double val) -> std::uint64_t { return std::bit_cast<std::uint64_t>(val); };
+
+			if (const std::strong_ordering cmp = bits(lhs.real()) <=> bits(rhs.real()); cmp != std::strong_ordering::equal) {
+				return cmp; 
+			}
+			else {
+				return bits(lhs.imag()) <=> bits(rhs.imag()); 
+			}
 		}
 	}
 

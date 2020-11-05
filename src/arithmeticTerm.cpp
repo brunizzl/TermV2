@@ -1534,6 +1534,12 @@ namespace bmath::intern {
 							info = SharedValueDatum();
 						}
 					} break;
+					case PnType(MultiVar::summands):
+						[[fallthrough]];
+					case PnType(MultiVar::factors): {
+						SharedMultiDatum& info = match_data.multi_info(ref.index);
+						info.match_indices.clear();
+					} break;
 					}
 					return fold::Void{};
 				};
@@ -1599,7 +1605,7 @@ namespace bmath::intern {
 					start_k = matched_at_idx + 1u;
 
 					const PnRef pn_elem_i_ref = pn_ref.new_at(pn_elements[pn_i].elem);
-					reset_own_matches(pn_elem_i_ref);
+					reset_own_matches(pn_elem_i_ref); //here could a call to equals_another_way be happening
 					continue;
 				}
 				else {
@@ -1612,6 +1618,81 @@ namespace bmath::intern {
 
 			return true;
 		} //variadic_equals
+
+		RematchResult equals_another_way(const pattern::PnRef pn_ref, const Ref ref, pattern::MatchData& match_data)
+		{
+			using namespace pattern;
+
+			assert(pn_ref.type == ref.type);
+			switch (pn_ref.type) {
+			case PnType(Op::sum): 
+				[[fallthrough]];
+			case PnType(Op::product): {
+				assert(false); //TODO
+				return { .success = false, .reset = false };
+			} break;
+			case PnType(Op::named_fn): {
+				assert(fn::compare_name(ref, pn_ref) != std::strong_ordering::equal);
+				auto pn_range = fn::range(pn_ref);
+				auto range = fn::range(ref);
+				auto pn_iter = begin(pn_range);
+				auto iter = begin(range);
+				RematchResult acc = { .success = false, .reset = false };
+				for (; pn_iter != end(pn_range) && iter != end(range); ++pn_iter, ++iter) {
+					acc.combine(match::equals_another_way(pn_ref.new_at(*pn_iter), ref.new_at(*iter), match_data));
+					if (acc.success) {
+						return acc;
+					}
+				}
+				assert(iter == end(range) && pn_iter == end(pn_range));
+				return acc;
+			} break;
+			default: {
+				assert(pn_ref.type.is<Fn>());
+				auto range = fn::range(ref->fn_params, ref.type);
+				auto pn_range = fn::range(pn_ref->fn_params, pn_ref.type);
+				auto iter = range.begin();
+				auto pn_iter = pn_range.begin();
+				RematchResult acc = { .success = false, .reset = false };
+				for (; pn_iter != pn_range.end(); ++pn_iter, ++iter) { //iter and pn_iter both go over same number of params
+					acc.combine(match::equals_another_way(pn_ref.new_at(*pn_iter), ref.new_at(*iter), match_data));
+					if (acc.success) {
+						return acc;
+					}
+				}
+				return acc;
+			} break;
+			case PnType(Leaf::variable):
+				return { .success = false, .reset = false };
+			case PnType(Leaf::complex):
+				return { .success = false, .reset = false };
+			case PnType(PnVar::tree_match): {
+				SharedTreeDatum& info = match_data.info(pn_ref->tree_match);
+				if (info.responsible == pn_ref.typed_idx()) {
+					info = SharedTreeDatum();
+					return { .success = false, .reset = true };
+				}
+			} break;
+			case PnType(PnVar::value_match): {
+				SharedValueDatum& info = match_data.info(pn_ref->value_match);
+				if (info.responsible == pn_ref.typed_idx()) {
+					info = SharedValueDatum();
+					return { .success = false, .reset = true };
+				}
+			} break;
+			case PnType(MultiVar::summands):
+				[[fallthrough]];
+			case PnType(MultiVar::factors): {
+				SharedMultiDatum& info = match_data.multi_info(pn_ref.index);
+				info.match_indices.clear();
+				return { .success = false, .reset = true };
+			} break;
+			case PnType(PnVar::value_proxy): //may only be encountered in pn_tree::eval_value_match (as value_match does no equals call)
+				assert(false);
+				break;
+			}
+			return { .success = false, .reset = false };
+		} //equals_another_way
 
 		TypedIdx copy(const pattern::PnRef pn_ref, const pattern::MatchData& match_data, Store& store)
 		{
@@ -1757,7 +1838,7 @@ namespace bmath::intern {
 				break;
 			}
 			return std::make_pair(match_and_replace(in, out, ref), false);
-		}
+		} //recursive_match_and_replace
 
 	} //namespace match
 

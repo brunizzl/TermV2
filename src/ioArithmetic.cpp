@@ -123,8 +123,8 @@ namespace bmath::intern {
 			{ Restr::any          , "any"           },
 			{ Restr::nn1          , "nn1"           },
 			{ Restr::no_val       , "no_val"        },
-			{ MultiVar::summands     , "summands"      },
-			{ MultiVar::factors      , "factors"       },
+			{ MultiVar::summands  , "summands"      },
+			{ MultiVar::factors   , "factors"       },
 		});
 
 		constexpr std::string_view name_of(const PnVariablesType r) noexcept { return find_snd(type_table, r); }
@@ -568,7 +568,7 @@ namespace bmath::intern {
 				}
 			};
 
-			{
+			if (declarations.size()){
 				const std::size_t comma = find_first_of_skip_pars(declarations.tokens, token::comma);
 				parse_declaration(declarations.steal_prefix(comma));
 			}

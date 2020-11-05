@@ -137,8 +137,9 @@ namespace bmath::intern {
 			COUNT 
 		};
 
-		//not actual node in tree, as all match info is stored in MultiMatchDatum in MatchData		
+		//represent not actual node in pattern tree, as all match info is stored in MultiMatchDatum in MatchData		
 		enum class MultiVar { summands, factors, COUNT };
+
 
 		using PnType = SumEnum<MultiVar, PnVar, Type>; //dont list all enums making up Type directly, to allow converion to Type
 
@@ -161,7 +162,7 @@ namespace bmath::intern {
 			any,
 			nn1, //compact for "not negative one" (basically any, but the exact term "-1" will not be accepted)
 			no_val, //basically any, but Leaf::complex is forbidden    
-			function, //packs named_fn and any in Fn together
+			function, //packs named_fn and all in Fn together
 			COUNT
 		};
 
@@ -521,6 +522,19 @@ namespace bmath::intern {
 
 		//allows to match a sum / product pattern in a sum / product with more elements than elements in the pattern.
 		bool variadic_equals(const pattern::PnRef pn_ref, const Ref ref, pattern::MatchData& match_data);
+
+		struct RematchResult
+		{
+			bool success, reset;
+			constexpr void combine(const RematchResult snd) { this->success |= snd.success; this->reset |= snd.reset; }
+		};
+
+		//assumes to have all pattern variables contained in pn_ref already set and currently match ref.
+		//if some pattern variables where set by the instance(s) containded in pn_ref, this function tries to match them to ref again,
+		//  but arranged differently.
+		//if no other match on ref was found, this function resets all pattern variables set by pn_ref.
+		//if another match was found, the corresponding entries in match_data are set.
+		RematchResult equals_another_way(const pattern::PnRef pn_ref, const Ref ref, pattern::MatchData& match_data);
 
 		//copies pn_ref with match_data into store, returns head of copied result.
 		[[nodiscard]] TypedIdx copy(const pattern::PnRef pn_ref, const pattern::MatchData& match_data, Store& store);
