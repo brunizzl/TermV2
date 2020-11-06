@@ -344,11 +344,17 @@ namespace bmath::intern {
 		struct HasCOUNT<E, std::void_t<decltype(E::COUNT)>> :std::true_type {};
 
 
-		template<typename... Elems> struct List;
 
 
-		template<typename List_1, typename List_2>
-		struct Concat;
+		template<typename...> struct List;
+
+		template<typename...> struct IsEmpty;
+		template<typename... Elems> struct IsEmpty<List<Elems...>> :std::bool_constant<sizeof...(Elems) == 0> {};
+
+		static_assert(IsEmpty<List<>>::value && !IsEmpty<List<int, double>>::value);
+
+
+		template<typename, typename> struct Concat;
 
 		template<typename... Elems_1, typename... Elems_2>
 		struct Concat<List<Elems_1...>, List<Elems_2...>> { using type = List<Elems_1..., Elems_2...>; };
@@ -356,26 +362,66 @@ namespace bmath::intern {
 		static_assert(std::is_same_v<Concat<List<int, int>, List<double, nullptr_t>>::type, List<int, int, double, nullptr_t>>);
 
 
+
+		template<typename...> struct ListMembers;
+
 		template<typename Head, typename... Tail>
-		struct ListMembers { using type = typename Concat<typename ListMembers<Head>::type, typename ListMembers<Tail...>>::type; };
+		struct ListMembers<Head, Tail...> 
+		{ using type = typename Concat<typename ListMembers<Head>::type, typename ListMembers<Tail...>::type>::type; };
 
 		template<typename... Enums>
 		struct ListMembers<SumEnum<Enums...>> { using type = typename ListMembers<Enums...>::type; };
 
+		template<typename Enum, auto Count>
+		struct ListMembers<WrapEnum<Enum, Count>> { using type = List<Enum>; };
+
 		template<typename Enum>
-		struct ListMembers<Enum> { using type = typename List<Enum>; };
+		struct ListMembers<Enum> { using type = List<Enum>; };
+
+		template<> struct ListMembers<> { using type = List<>; };
+
+		static_assert(std::is_same_v<ListMembers<SumEnum<int, SumEnum<float, bool>>>::type, List<int, float, bool>>);
 
 
-		template<typename Needle, typename Haystack>
-		struct InList :std::false_type {};
+		template<typename, typename> struct InList;
 
 		template<typename Needle, typename Elem_0, typename... Elems>
 		struct InList<Needle, List<Elem_0, Elems...>> :std::bool_constant<
 			std::is_same_v<Needle, Elem_0> || InList<Needle, List<Elems...>>::value
 		> {};
 
+		template<typename Needle> struct InList<Needle, List<>> :std::false_type {};
+
 		static_assert(!InList<char, List<double, int, int, void>>::value);
 		static_assert(InList<char, List<double, char, int, void>>::value);
+
+
+		template<typename, typename> struct Intersection;
+
+		template<typename Lhs_1, typename... Lhs_Tail, typename... Rhs>
+		struct Intersection<List<Lhs_1, Lhs_Tail...>, List<Rhs...>> 
+		{ 
+			using type = typename std::conditional_t<InList<Lhs_1, List<Rhs...>>::value,
+				typename Concat<List<Lhs_1>, typename Intersection<List<Lhs_Tail...>, List<Rhs...>>::type>::type,
+				typename                              Intersection<List<Lhs_Tail...>, List<Rhs...>>::type
+			>;
+		};
+
+		template<typename... Rhs> struct Intersection<List<>, List<Rhs...>> { using type = List<>; };
+
+
+		template<typename, typename> struct Disjoint;
+
+		template<typename... Lhs, typename... Rhs> 
+		struct Disjoint<List<Lhs...>, List<Rhs...>> :std::bool_constant<
+			IsEmpty<typename Intersection<List<Lhs...>, List<Rhs...>>::type>::value
+		> {};
+
+		template<typename List_1, typename List_2> 
+		constexpr bool disjoint_v = Disjoint<List_1, List_2>::value;
+				
+		static_assert(disjoint_v<List<bool, int, char>, List<float, double>>);
+		static_assert(!disjoint_v<List<bool, int, char>, List<float, double, int>>);
 
 	} //namespace enum_detail
 
@@ -383,9 +429,6 @@ namespace bmath::intern {
 	class [[nodiscard]] SumEnum<>
 	{
 	protected:
-		//why dont i have to comment out these and why cant i uncomment these? sometimes this language is beyond me.
-		//constexpr std::strong_ordering operator<=>(const SumEnum&) const noexcept = default;
-		//constexpr bool operator==(const SumEnum&) const noexcept = default;
 
 		enum class Value :unsigned {} value; //only data held by all of SumEnum
 		static constexpr unsigned next_offset = 0u;
@@ -402,7 +445,10 @@ namespace bmath::intern {
 	template<typename Enum, typename... TailEnums>
 	class [[nodiscard]] SumEnum<Enum, TailEnums...> :public SumEnum<TailEnums...>
 	{
-		static_assert(enum_detail::HasCOUNT<Enum>::value, "enum part of SumEnum must name last member COUNT (or be wrapped in WrapEnum)");
+		static_assert(enum_detail::HasCOUNT<Enum>::value, 
+			"enum part of SumEnum must name last member COUNT (or be wrapped in WrapEnum)");
+		static_assert(enum_detail::disjoint_v<enum_detail::ListMembers<Enum>::type, enum_detail::ListMembers<TailEnums...>::type>, 
+			"No two parameters of SumEnum's parameter pack may contain the same type within (or be equal).");
 
 		using Base = SumEnum<TailEnums...>;
 		static constexpr unsigned this_offset = Base::next_offset;
@@ -415,51 +461,37 @@ namespace bmath::intern {
 		using Base::Base;
 		constexpr SumEnum(const Enum e) noexcept :Base(static_cast<unsigned>(e) + this_offset) {}
 
-		//this constructor applies if Enum itself is WrapEnum<E> or SumEnum<...> that can be build from E
-		template<typename E, std::enable_if_t<std::is_convertible_v<E, Enum> && !std::is_same_v<E, Enum>, void*> = nullptr>
+		//this constructor applies if Enum itself is WrapEnum<E> or SumEnum<...> that contains E (directly or deeper within)
+		template<typename E, std::enable_if_t<enum_detail::contains_v<E, Enum>, void*> = nullptr>
 		constexpr SumEnum(const E e) noexcept : Base(static_cast<unsigned>(static_cast<Enum>(e)) + this_offset) {}
 
 
+		//E is contained in Base -> hand over to Base
+		template<typename E, std::enable_if_t<enum_detail::contains_v<E, Base>, void*> = nullptr>
+		constexpr E to() const noexcept { return static_cast<const Base>(*this).to<E>(); }
+
+		//Enum itself is SumEnum<...> and contains E -> hand over to Enum
+		template<typename E, std::enable_if_t<enum_detail::contains_v<E, Enum>, void*> = nullptr>
+		constexpr E to() const noexcept { return this->to<Enum>().to<E>(); }
+
+		//E is same as Enum -> just undo the offset
+		template<typename E, std::enable_if_t<std::is_same_v<E, Enum>, void*> = nullptr>
+		constexpr E to() const noexcept { return Enum(static_cast<unsigned>(this->value) - this_offset); }
+
+
+		//default case: search in parent types
 		template<typename E, std::enable_if_t<enum_detail::contains_v<E, Base>, void*> = nullptr> 
-		constexpr bool is() const noexcept //default case: search in parent types
-		{
-			static_assert(!std::is_integral_v<E>);
-			return static_cast<const Base>(*this).is<E>(); 
-		}
+		constexpr bool is() const noexcept { return static_cast<const Base>(*this).is<E>(); }
 
+		//Enum itself is SumEnum<...> and contains E -> hand over to Enum
 		template<typename E, std::enable_if_t<enum_detail::contains_v<E, Enum>, void*> = nullptr> 
-		constexpr bool is() const noexcept //assumes Enum itself is SumEnum<...> and can be build from E -> hand over to Enum
-		{
-			static_assert(!std::is_integral_v<E>);
-			return this->to<Enum>().is<E>(); 
-		}
+		constexpr bool is() const noexcept { return this->to<Enum>().is<E>(); }
 
+		//E is same as Enum -> check if current value is between offsets
 		template<typename E, std::enable_if_t<std::is_same_v<E, Enum>, void*> = nullptr> 
-		constexpr bool is() const noexcept //E is same as Enum -> just check if value is between offsets
+		constexpr bool is() const noexcept 
 		{ 
 			return static_cast<unsigned>(this->value) >= this_offset && static_cast<unsigned>(this->value) < next_offset; 
-		}
-
-
-		template<typename E, std::enable_if_t<enum_detail::contains_v<E, Base>, void*> = nullptr>
-		constexpr E to() const noexcept //default case: search in parent types
-		{ 
-			static_assert(!std::is_integral_v<E>);
-			return static_cast<const Base>(*this).to<E>(); 
-		}
-
-		template<typename E, std::enable_if_t<enum_detail::contains_v<E, Enum>, void*> = nullptr>
-		constexpr E to() const noexcept //assumes Enum itself is SumEnum<...> and can be build from E -> hand over to Enum
-		{ 
-			static_assert(!std::is_integral_v<E>);
-			return this->to<Enum>().to<E>(); 
-		}
-
-		template<typename E, std::enable_if_t<std::is_same_v<E, Enum>, void*> = nullptr>
-		constexpr E to() const noexcept //E is same as Enum -> just undo the offset
-		{
-			assert(this->is<Enum>());
-			return Enum(static_cast<unsigned>(this->value) - this_offset);
 		}
 
 
@@ -469,6 +501,7 @@ namespace bmath::intern {
 	}; //class SumEnum<Enum, TailEnums...>
 
 	//if a member of SumEnum only has a single state itself, this may be used
+	//this is the only place where COUNT does not occupy any extra value!
 #define LONE_ENUM(NAME)\
 	struct NAME\
 	{\
