@@ -337,7 +337,7 @@ namespace bmath::intern {
 		> {};
 
 
-		template<typename E, typename = void> 
+		template<typename, typename = void> 
 		struct HasCOUNT :std::false_type {};
 
 		template<typename E> 
@@ -350,8 +350,9 @@ namespace bmath::intern {
 
 		template<typename...> struct IsEmpty;
 		template<typename... Elems> struct IsEmpty<List<Elems...>> :std::bool_constant<sizeof...(Elems) == 0> {};
+		template<typename... Elems> constexpr bool is_empty_v = IsEmpty<Elems...>::value;
 
-		static_assert(IsEmpty<List<>>::value && !IsEmpty<List<int, double>>::value);
+		static_assert(is_empty_v<List<>> && !is_empty_v<List<int, double>>);
 
 
 		template<typename, typename> struct Concat;
@@ -384,16 +385,17 @@ namespace bmath::intern {
 
 
 		template<typename, typename> struct InList;
+		template<typename Needle, typename List_> constexpr bool in_list_v = InList<Needle, List_>::value;
 
 		template<typename Needle, typename Elem_0, typename... Elems>
 		struct InList<Needle, List<Elem_0, Elems...>> :std::bool_constant<
-			std::is_same_v<Needle, Elem_0> || InList<Needle, List<Elems...>>::value
+			std::is_same_v<Needle, Elem_0> || in_list_v<Needle, List<Elems...>>
 		> {};
 
 		template<typename Needle> struct InList<Needle, List<>> :std::false_type {};
 
-		static_assert(!InList<char, List<double, int, int, void>>::value);
-		static_assert(InList<char, List<double, char, int, void>>::value);
+		static_assert(!in_list_v<char, List<double, int, int, void>>);
+		static_assert(in_list_v<char, List<double, char, int, void>>);
 
 
 		template<typename, typename> struct Intersection;
@@ -401,20 +403,22 @@ namespace bmath::intern {
 		template<typename Lhs_1, typename... Lhs_Tail, typename... Rhs>
 		struct Intersection<List<Lhs_1, Lhs_Tail...>, List<Rhs...>> 
 		{ 
-			using type = typename std::conditional_t<InList<Lhs_1, List<Rhs...>>::value,
+			using type = typename std::conditional_t<in_list_v<Lhs_1, List<Rhs...>>,
 				typename Concat<List<Lhs_1>, typename Intersection<List<Lhs_Tail...>, List<Rhs...>>::type>::type,
-				typename                              Intersection<List<Lhs_Tail...>, List<Rhs...>>::type
+				typename Intersection<List<Lhs_Tail...>, List<Rhs...>>::type
 			>;
 		};
 
 		template<typename... Rhs> struct Intersection<List<>, List<Rhs...>> { using type = List<>; };
+
+		static_assert(std::is_same_v<Intersection<List<bool, int, char>, List<float, double, bool>>::type, List<bool>>);
 
 
 		template<typename, typename> struct Disjoint;
 
 		template<typename... Lhs, typename... Rhs> 
 		struct Disjoint<List<Lhs...>, List<Rhs...>> :std::bool_constant<
-			IsEmpty<typename Intersection<List<Lhs...>, List<Rhs...>>::type>::value
+			is_empty_v<typename Intersection<List<Lhs...>, List<Rhs...>>::type>
 		> {};
 
 		template<typename List_1, typename List_2> 
