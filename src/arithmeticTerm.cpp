@@ -2031,6 +2031,11 @@ namespace bmath {
 		return print::to_pretty_string(this->ref());
 	}
 
+	std::string Term::to_tree() const
+	{
+		return print::to_tree(this->ref());
+	}
+
 	MutRef Term::mut_ref() noexcept
 	{
 		return MutRef(this->store, this->head);

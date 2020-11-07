@@ -160,6 +160,11 @@ namespace bmath::intern {
 		std::string to_memory_layout(const BasicStore<Union_T>& store, 
 			const std::initializer_list<const BasicTypedIdx<Type_T>> heads);
 
+		//returns tree representation of ref
+		//offset specifies how far the whole tree is shifted to the right
+		template<typename Union_T, typename Type_T>
+		std::string to_tree(const BasicRef<Union_T, Type_T> ref, const std::size_t offset = 0u);
+
 	} //namespace print
 
 } //namespace bmath::intern

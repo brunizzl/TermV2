@@ -637,6 +637,7 @@ namespace bmath {
 		std::string to_string() const;
 		std::string to_pretty_string(); //will call standardize first
 		std::string to_pretty_string() const; //assumes sorted term
+		std::string to_tree() const;
 
 		intern::MutRef mut_ref() noexcept;
 		intern::Ref ref() const noexcept;

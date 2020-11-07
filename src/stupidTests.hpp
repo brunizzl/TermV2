@@ -224,11 +224,13 @@ namespace bmath::intern::test {
 
 				std::cout << "nach bau: \n" << term.to_string() << "\n\n";
 				//std::cout << "speicher nach bau:\n" << term.to_memory_layout() << "\n\n";
+				std::cout << "baum nach bau:\n" << term.to_tree() << "\n\n";
 
 				term.standardize();
 
 				std::cout << "nach vereinfachen in huebsch: \n" << term.to_pretty_string() << "\n\n";
 				//std::cout << "speicher nach vereinfachen:\n" << term.to_memory_layout() << "\n\n\n";
+				std::cout << "baum nach vereinfachen:\n" << term.to_tree() << "\n\n";
 			}
 			catch (ParseFailure failure) {
 				std::cout << failure.what << '\n';

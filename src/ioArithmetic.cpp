@@ -1093,6 +1093,111 @@ namespace bmath::intern {
 		template std::string to_memory_layout<TypesUnion, Type>(const Store& store, const std::initializer_list<const TypedIdx> head);
 		template std::string to_memory_layout<pattern::PnTypesUnion, pattern::PnType>(const pattern::PnStore& store, const std::initializer_list<const pattern::PnTypedIdx> head);
 
+		//line name assumes '\0' as last character
+		template<typename Union_T, typename Type_T>
+		void append_tree_row(const BasicRef<Union_T, Type_T> ref, std::vector<std::string>& rows, const std::size_t offset)
+		{
+			using TypedIdx_T = BasicTypedIdx<Type_T>;
+			using TypedIdxSLC_T = TermSLC<TypedIdx_T>;
+			constexpr bool pattern = std::is_same_v<Type_T, pattern::PnType>;
+
+			constexpr std::size_t tab_width = 3u; //specifies how may more characters the subtrees of ref are shifted right, compared to ref
+
+			rows.push_back(std::string(offset, ' '));
+			std::string& current_str = rows.back();
+
+			//appending current_str to previously inserted parts of tree visually
+			{
+				constexpr signed char bar_up_down = -77;		//(179)
+				constexpr signed char bar_up_right = -64;		//(192)
+				constexpr signed char bar_up_right_down = -61;	//(195)
+				constexpr signed char bar_left_right = -60;	    //(196)
+
+				{
+					assert(rows.size() > 1u); //"head" is first row
+					std::size_t bar_row_i = rows.size() - 2u; //start one row above current_str
+					for (; rows[bar_row_i][offset] == ' '; bar_row_i--) {
+						rows[bar_row_i][offset] = bar_up_down;
+					}
+					if (rows[bar_row_i][offset] == bar_up_right) {
+						rows[bar_row_i][offset] = bar_up_right_down;
+					}
+				}
+
+				current_str += bar_up_right;
+				static_assert(tab_width >= 2u);
+				current_str += std::string(tab_width - 2u, bar_left_right);
+			}
+
+			switch (ref.type) {
+			case Type_T(Op::sum): {
+				current_str += "sum";
+				for (const TypedIdx_T summand : vc::range(ref)) {
+					print::append_tree_row(ref.new_at(summand), rows, offset + tab_width);
+				}
+			} break;
+			case Type_T(Op::product): {
+				current_str += "product";
+				for (const TypedIdx_T factor : vc::range(ref)) {
+					print::append_tree_row(ref.new_at(factor), rows, offset + tab_width);
+				}
+			} break;
+			case Type_T(Op::named_fn): {
+				fn::append_name(ref.cast<NamedFn>(), current_str);
+				for (const TypedIdx_T param : fn::range(ref)) {
+					print::append_tree_row(ref.new_at(param), rows, offset + tab_width);
+				}
+			} break;
+			default: {
+				assert(ref.type.is<Fn>());
+				current_str += fn::name_of(ref.type.to<Fn>());
+				for (const TypedIdx_T param : fn::range(ref->fn_params, ref.type)) {
+					print::append_tree_row(ref.new_at(param), rows, offset + tab_width);
+				}
+			} break;
+			case Type_T(Leaf::variable): {
+				str_slc::read(ref.cast<StringSLC>(), current_str);
+			} break;
+			case Type_T(Leaf::complex): {
+				print::append_complex(*ref, current_str, 0u);
+			} break;
+			case Type_T(pattern::_tree_match): if constexpr (pattern) {
+				assert(false);
+			} break;
+			case Type_T(pattern::_value_match): if constexpr (pattern) {
+				//pattern::ValueMatchVariable& var = *ref;
+				assert(false);
+			} break;
+			case Type_T(pattern::_value_proxy):
+				assert(false);
+				break;
+			case Type_T(pattern::_summands):
+				assert(false);
+				break;
+			case Type_T(pattern::_factors):
+				assert(false);
+				break;
+			}
+		} //append_tree_row
+
+		template<typename Union_T, typename Type_T>
+		std::string to_tree(const BasicRef<Union_T, Type_T> ref, const std::size_t offset)
+		{
+			std::vector<std::string> rows;
+			rows.push_back(std::string(offset, ' ') + "head");
+			print::append_tree_row(ref, rows, offset);
+
+			std::string result;
+			for (const auto& row : rows) {
+				result.append(row);
+				result.push_back('\n');
+			}
+
+			return result;
+		} //to_tree
+		template std::string to_tree<TypesUnion, Type>(const Ref ref, const std::size_t offset);
+		template std::string to_tree<pattern::PnTypesUnion, pattern::PnType>(const pattern::PnRef ref, const std::size_t offset);
+
 	} //namespace print
 
 } //namespace bmath::intern
