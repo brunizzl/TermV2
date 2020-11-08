@@ -201,6 +201,7 @@ namespace bmath::intern {
 		using SLC_T = TermSLC<BasicTypedIdx<Type_T>>;
 
 		StupidBufferVector<BasicTypedIdx<Type_T>, 16> all_values;
+		//std::vector<BasicTypedIdx<Type_T>> all_values;
 		for (const auto elem : range) {
 			all_values.push_back(elem);
 		}

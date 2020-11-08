@@ -344,6 +344,8 @@ namespace bmath::intern {
 			std::string to_string() const;
 			std::string lhs_memory_layout() const;
 			std::string rhs_memory_layout() const;
+			std::string lhs_tree(const std::size_t offset = 0u) const;
+			std::string rhs_tree(const std::size_t offset = 0u) const;
 
 			PnMutRef lhs_mut_ref() noexcept { return PnMutRef(this->lhs_store, this->lhs_head); }
 			PnMutRef rhs_mut_ref() noexcept { return PnMutRef(this->rhs_store, this->rhs_head); }
@@ -456,7 +458,7 @@ namespace bmath::intern {
 
 		//flatten sums holding sums as summands and products holding products as factors
 		//also eliminates unessecary indirections like sums with a single summand or products with a single factor
-		//  to enable this second behavior, the index and type of ref may change, thus this is returned.
+		//  to enable this second behavior, the index and type of ref may change, thus that is returned.
 		template<typename Union_T, typename Type_T>
 		[[nodiscard]] BasicTypedIdx<Type_T> combine_layers(const BasicMutRef<Union_T, Type_T> ref);
 
@@ -521,7 +523,7 @@ namespace bmath::intern {
 		bool equals(const pattern::PnRef pn_ref, const Ref ref, pattern::MatchData& match_data);
 
 		//allows to match a sum / product pattern in a sum / product with more elements than elements in the pattern.
-		bool variadic_equals(const pattern::PnRef pn_ref, const Ref ref, pattern::MatchData& match_data);
+		bool permutation_equals(const pattern::PnRef pn_ref, const Ref ref, pattern::MatchData& match_data);
 
 		struct RematchResult
 		{
@@ -625,7 +627,6 @@ namespace bmath {
 	public:
 		Term(std::string& name); //allows whitespace and implicit product
 		Term(const std::string_view simple_name); //simple_name may not contain any whitespace
-		Term() = default;
 
 		void combine_layers() noexcept;
 		void combine_values_inexact() noexcept;
@@ -633,11 +634,11 @@ namespace bmath {
 		void sort() noexcept;
 		void standardize() noexcept; 
 
-		std::string to_memory_layout() const;
-		std::string to_string() const;
-		std::string to_pretty_string(); //will call standardize first
-		std::string to_pretty_string() const; //assumes sorted term
-		std::string to_tree() const;
+		std::string to_memory_layout() const noexcept;
+		std::string to_string() const noexcept;
+		std::string to_pretty_string() noexcept; //will call standardize first
+		std::string to_pretty_string() const noexcept; //assumes sorted term
+		std::string to_tree() const noexcept;
 
 		intern::MutRef mut_ref() noexcept;
 		intern::Ref ref() const noexcept;

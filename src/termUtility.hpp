@@ -84,11 +84,10 @@ namespace bmath::intern {
 
 
 
-	template<typename Value_T, std::size_t BufferSize, std::size_t FirstHeapSize = BufferSize * 2>
+	template<typename Value_T, std::size_t BufferSize>
 	class [[nodiscard]] StupidBufferVector
 	{
 		static_assert(BufferSize > 0u);
-		static_assert(FirstHeapSize > BufferSize);
 		static_assert(std::is_trivially_copyable_v<Value_T>);     //thus the "Stupid" in the name
 		static_assert(std::is_trivially_destructible_v<Value_T>); //thus the "Stupid" in the name
 
@@ -100,8 +99,22 @@ namespace bmath::intern {
 			Value_T local_data[BufferSize];
 		};
 
-		template<typename SndValue_T, std::size_t SndBuffer, std::size_t SndFirstHeapSize>
+		template<typename SndValue_T, std::size_t SndBuffer>
 		friend class StupidBufferVector;
+
+		constexpr void unsave_reallocate(const std::size_t new_capacity) noexcept
+		{
+			assert(new_capacity > BufferSize && (this->data_ == this->local_data || new_capacity > this->capacity) && 
+				"else no reallocation neccesairy");
+
+			Value_T* const new_data = new Value_T[new_capacity];
+			std::move(this->data_, this->data_ + this->size_, new_data);
+			if (this->data_ != this->local_data) {
+				delete[] this->data_; //only works for trivially destructible Value_T
+			}
+			this->data_ = new_data;
+			this->capacity = new_capacity;
+		}
 
 	public:
 		constexpr std::size_t size() const noexcept { return this->size_; }
@@ -126,11 +139,20 @@ namespace bmath::intern {
 			}
 		}
 
+		constexpr void reserve(const std::size_t new_capacity) noexcept
+		{
+			if (new_capacity > BufferSize && 
+				(this->data_ == this->local_data || new_capacity > this->capacity)) 
+			{
+				this->unsave_reallocate(new_capacity);
+			}
+		}
+
 		StupidBufferVector(const StupidBufferVector&) = delete;
 		StupidBufferVector& operator=(const StupidBufferVector&) = delete;
 
-		template<std::size_t SndBuffer, std::size_t SndFirstHeapSize>
-		StupidBufferVector& operator=(StupidBufferVector<Value_T, SndBuffer, SndFirstHeapSize>&& snd) noexcept
+		template<std::size_t SndBuffer>
+		StupidBufferVector& operator=(StupidBufferVector<Value_T, SndBuffer>&& snd) noexcept
 		{
 			this->~StupidBufferVector();
 			new (this) StupidBufferVector();
@@ -143,7 +165,8 @@ namespace bmath::intern {
 			else {
 				this->reserve(snd.size_);
 				this->size_ = snd.size_;
-				std::copy(snd.data_, snd.data_ + snd.size_, this->data_);
+				std::move(snd.data_, snd.data_ + snd.size_, this->data_);
+				snd.clear();
 			} 
 			return *this;
 		}
@@ -155,20 +178,7 @@ namespace bmath::intern {
 				this->capacity = std::exchange(snd.capacity, 0u);
 			}
 			else {
-				std::copy(snd.data_, snd.data_ + this->size_, this->data_);
-			}
-		}
-
-		constexpr void reserve(const std::size_t new_capacity) noexcept
-		{
-			if (new_capacity > BufferSize && new_capacity > this->capacity) {
-				Value_T* const new_data = new Value_T[new_capacity];
-				std::copy(this->data_, this->data_ + this->capacity, new_data);
-				if (this->data_ != this->local_data) {
-					delete[] this->data_; //only works for trivially destructible Value_T
-				}
-				this->data_ = new_data;
-				this->capacity = new_capacity;
+				std::move(snd.data_, snd.data_ + this->size_, this->data_);
 			}
 		}
 
@@ -177,11 +187,11 @@ namespace bmath::intern {
 		{
 			if (this->size_ > BufferSize) {
 				if (this->size_ == this->capacity) [[unlikely]] {
-					this->reserve(this->capacity * 2u);
+					this->unsave_reallocate(this->capacity * 2u);
 				}
 			}
 			else if (this->size_ == BufferSize) [[unlikely]] {
-				this->reserve(FirstHeapSize);
+				this->unsave_reallocate(BufferSize * 2u);
 			}
 
 			Value_T* const addr = &this->data_[this->size_++];

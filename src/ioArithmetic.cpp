@@ -1156,27 +1156,44 @@ namespace bmath::intern {
 				}
 			} break;
 			case Type_T(Leaf::variable): {
+				current_str += ' ';
 				str_slc::read(ref.cast<StringSLC>(), current_str);
 			} break;
 			case Type_T(Leaf::complex): {
+				current_str += ' ';
 				print::append_complex(*ref, current_str, 0u);
 			} break;
 			case Type_T(pattern::_tree_match): if constexpr (pattern) {
-				assert(false);
+				const pattern::TreeMatchVariable& var = *ref;
+				current_str += "T";
+				current_str += std::to_string(var.match_data_idx);
+				if (var.restr != pattern::Restr::any) {
+					current_str += " :";
+					current_str += name_of(var.restr);
+				}
 			} break;
 			case Type_T(pattern::_value_match): if constexpr (pattern) {
-				//pattern::ValueMatchVariable& var = *ref;
-				assert(false);
+				const pattern::ValueMatchVariable& var = *ref;
+				current_str += 'V';
+				current_str += std::to_string(var.match_data_idx);
+				current_str += " :";
+				current_str += name_of(var.form);
+				print::append_tree_row(ref.new_at(var.match_idx), rows, offset + tab_width);
+				print::append_tree_row(ref.new_at(var.copy_idx), rows, offset + tab_width);
 			} break;
-			case Type_T(pattern::_value_proxy):
-				assert(false);
-				break;
-			case Type_T(pattern::_summands):
-				assert(false);
-				break;
-			case Type_T(pattern::_factors):
-				assert(false);
-				break;
+			case Type_T(pattern::_value_proxy): if constexpr (pattern) {
+				current_str += 'P';			
+			} break;
+			case Type_T(pattern::_summands): if constexpr (pattern) {
+				current_str += 'S';		
+				current_str += std::to_string(ref.index);
+				current_str += "...";
+			} break;
+			case Type_T(pattern::_factors): if constexpr (pattern) {
+				current_str += 'F';		
+				current_str += std::to_string(ref.index);
+				current_str += "...";
+			} break;
 			}
 		} //append_tree_row
 

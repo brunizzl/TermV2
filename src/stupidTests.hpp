@@ -78,13 +78,22 @@ namespace bmath::intern::debug {
 			//{"a :complex, b :complex, x | (a x)^b = a^b x^b"}, 
 			//{"x | 0 x = 0"}, 
 			//{"a | a + a = 2 a"}, 
-			{"a, bs :factors | a bs + a = a (bs + 1)"}, 
+			//{"a, bs :factors | a bs + a = a (bs + 1)"}, 
 			//{"b, a | a b + a = a (b + 1)"}, 
 			//{"a :no_val, b, c | a b + a c = a (b + c)"}, 
 			//{"b, a :no_val, c | a b + a c = a (b + c)"}, 
 			//{"a, b, c | a b + a c = a (b + c)"}, 
 			//{"b, a, c | a b + a c = a (b + c)"}, 
+			{ "fib(0) = 0" },
+			{ "fib(1) = 1" },
+			{ "n | fib(n) = fib(n - 1) + fib(n - 2)" },
 		});
+
+		for (const auto& p : patterns) {
+			std::cout << p.to_string() << "\n";
+			std::cout << "lhs:\n" << p.lhs_tree() << "\n";
+			std::cout << "rhs:\n" << p.rhs_tree() << "\n\n\n";
+		}
 
 		while (true) {
 			std::cout << "> ";
@@ -96,12 +105,14 @@ namespace bmath::intern::debug {
 				test.standardize();
 				std::cout << "sorted: " << test.to_string() << "\n";
 				bool changed;
+				std::size_t change_nr = 0;
 				do {
 					changed = false;
 					for (const auto& p : patterns) {
 						if (test.match_and_replace(p)) {
 							changed = true;
 							test.standardize();
+							//std::cout << " " << ++change_nr << "\t-> " << test.to_string() << "\n";
 							break;
 						}
 					}
@@ -223,13 +234,13 @@ namespace bmath::intern::test {
 				bmath::Term term(term_name);
 
 				std::cout << "nach bau: \n" << term.to_string() << "\n\n";
-				//std::cout << "speicher nach bau:\n" << term.to_memory_layout() << "\n\n";
+				std::cout << "speicher nach bau:\n" << term.to_memory_layout() << "\n\n";
 				std::cout << "baum nach bau:\n" << term.to_tree() << "\n\n";
 
 				term.standardize();
 
 				std::cout << "nach vereinfachen in huebsch: \n" << term.to_pretty_string() << "\n\n";
-				//std::cout << "speicher nach vereinfachen:\n" << term.to_memory_layout() << "\n\n\n";
+				std::cout << "speicher nach vereinfachen:\n" << term.to_memory_layout() << "\n\n\n";
 				std::cout << "baum nach vereinfachen:\n" << term.to_tree() << "\n\n";
 			}
 			catch (ParseFailure failure) {

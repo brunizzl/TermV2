@@ -308,6 +308,16 @@ namespace bmath::intern {
 			return print::to_memory_layout(this->rhs_store, { this->rhs_head });
 		}
 
+		std::string PnTerm::lhs_tree(const std::size_t offset) const
+		{
+			return print::to_tree(this->lhs_ref(), offset);
+		}
+
+		std::string PnTerm::rhs_tree(const std::size_t offset) const
+		{
+			return print::to_tree(this->rhs_ref(), offset);
+		}
+
 		namespace pn_tree {
 
 			PnTypedIdx* find_value_match_subtree(PnStore& store, PnTypedIdx& head, const PnTypedIdx value_match)
@@ -1109,7 +1119,7 @@ namespace bmath::intern {
 			case Type_T1(Leaf::complex): {
 				const Complex& complex_1 = *ref_1;
 				const Complex& complex_2 = *ref_2;
-				return compare_complex(complex_2, complex_1); //reverse order, as to_pretty_string reverses again
+				return compare_complex(complex_2, complex_1);
 			} break;
 			case Type_T1(pattern::_tree_match): if constexpr (pattern) {
 				const pattern::TreeMatchVariable& var_1 = *ref_1;
@@ -1400,30 +1410,33 @@ namespace bmath::intern {
 					case PnType(Op::sum): 
 						[[fallthrough]];
 					case PnType(Op::product): {
-						return match::variadic_equals(pn_ref, ref, match_data);
+						return match::permutation_equals(pn_ref, ref, match_data);
 					} break;
 					case PnType(Op::named_fn): {
 						if (fn::compare_name(ref, pn_ref) != std::strong_ordering::equal) {
 							return false;
 						}
 						auto pn_range = fn::range(pn_ref);
-						auto range = fn::range(ref);
 						auto pn_iter = begin(pn_range);
+						const auto pn_stop = end(pn_range);
+						auto range = fn::range(ref);
 						auto iter = begin(range);
-						for (; pn_iter != end(pn_range) && iter != end(range); ++pn_iter, ++iter) {
+						const auto stop = end(range);
+						for (; pn_iter != pn_stop && iter != stop; ++pn_iter, ++iter) {
 							if (!match::equals(pn_ref.new_at(*pn_iter), ref.new_at(*iter), match_data)) {
 								return false;
 							}
 						}
-						return iter == end(range) && pn_iter == end(pn_range);
+						return pn_iter == pn_stop && iter == stop;
 					} break;
 					default: {
 						assert(pn_ref.type.is<Fn>());
-						auto range = fn::range(ref->fn_params, ref.type);
 						auto pn_range = fn::range(pn_ref->fn_params, pn_ref.type);
-						auto iter = range.begin();
 						auto pn_iter = pn_range.begin();
-						for (; pn_iter != pn_range.end(); ++pn_iter, ++iter) { //iter and pn_iter both go over same number of params
+						const auto pn_stop = end(pn_range);
+						auto range = fn::range(ref->fn_params, ref.type);
+						auto iter = range.begin();
+						for (; pn_iter != pn_stop; ++pn_iter, ++iter) { //iter and pn_iter both go over same number of params
 							if (!match::equals(pn_ref.new_at(*pn_iter), ref.new_at(*iter), match_data)) {
 								return false;
 							}
@@ -1514,7 +1527,7 @@ namespace bmath::intern {
 		//this function currently has complexity O(m^n) where m is count of ref's elements and n is count of pn_ref's elements.
 		//in principle it could be turend to O(m*n), but i have not yet turned this into a working algorithm.
 		//the tricky part is to ensure, that one will never 
-		bool variadic_equals(const pattern::PnRef pn_ref, const Ref ref, pattern::MatchData& match_data)
+		bool permutation_equals(const pattern::PnRef pn_ref, const Ref ref, pattern::MatchData& match_data)
 		{
 			using namespace pattern;
 			assert(pn_ref.type == ref.type && (is_one_of<Op::sum, Op::product>(ref.type)));
@@ -1616,8 +1629,8 @@ namespace bmath::intern {
 				pn_i++;
 			}
 
-			return true;
-		} //variadic_equals
+			return std::find_if(not_matched.begin(), not_matched.end(), [null_value](const auto val) { return val != null_value; }) == not_matched.end();
+		} //permutation_equals
 
 		RematchResult equals_another_way(const pattern::PnRef pn_ref, const Ref ref, pattern::MatchData& match_data)
 		{
@@ -1634,27 +1647,30 @@ namespace bmath::intern {
 			case PnType(Op::named_fn): {
 				assert(fn::compare_name(ref, pn_ref) != std::strong_ordering::equal);
 				auto pn_range = fn::range(pn_ref);
-				auto range = fn::range(ref);
 				auto pn_iter = begin(pn_range);
+				const auto pn_stop = end(pn_range);
+				auto range = fn::range(ref);
 				auto iter = begin(range);
+				const auto stop = end(range);
 				RematchResult acc = { .success = false, .reset = false };
-				for (; pn_iter != end(pn_range) && iter != end(range); ++pn_iter, ++iter) {
+				for (; pn_iter != pn_stop && iter != stop; ++pn_iter, ++iter) {
 					acc.combine(match::equals_another_way(pn_ref.new_at(*pn_iter), ref.new_at(*iter), match_data));
 					if (acc.success) {
 						return acc;
 					}
 				}
-				assert(iter == end(range) && pn_iter == end(pn_range));
+				assert(pn_iter == pn_stop && iter == stop);
 				return acc;
 			} break;
 			default: {
 				assert(pn_ref.type.is<Fn>());
-				auto range = fn::range(ref->fn_params, ref.type);
 				auto pn_range = fn::range(pn_ref->fn_params, pn_ref.type);
-				auto iter = range.begin();
 				auto pn_iter = pn_range.begin();
+				const auto pn_stop = end(pn_range);
+				auto range = fn::range(ref->fn_params, ref.type);
+				auto iter = range.begin();
 				RematchResult acc = { .success = false, .reset = false };
-				for (; pn_iter != pn_range.end(); ++pn_iter, ++iter) { //iter and pn_iter both go over same number of params
+				for (; pn_iter != pn_stop; ++pn_iter, ++iter) { //iter and pn_iter both go over same number of params
 					acc.combine(match::equals_another_way(pn_ref.new_at(*pn_iter), ref.new_at(*iter), match_data));
 					if (acc.success) {
 						return acc;
@@ -1777,7 +1793,8 @@ namespace bmath::intern {
 		} //copy
 
 		std::optional<TypedIdx> match_and_replace(const pattern::PnRef in, const pattern::PnRef out, const MutRef ref)
-		{			
+		{		
+
 			pattern::MatchData match_data;
 			if (match::equals(in, ref, match_data)) {
 				const TypedIdx copied_out = match::copy(out, match_data, *ref.store);
@@ -1796,10 +1813,13 @@ namespace bmath::intern {
 			case Type(Op::sum): 
 				[[fallthrough]];
 			case Type(Op::product): {
-				for (TypedIdx& elem : vc::range(ref)) {
-					const auto [new_elem, matched_deeper] = recursive_match_and_replace(in, out, ref.new_at(elem));
+				auto range = vc::range(ref);
+				auto iter = begin(range);
+				const auto stop = end(range);
+				for (; iter != stop; ++iter) {
+					const auto [new_elem, matched_deeper] = recursive_match_and_replace(in, out, ref.new_at(*iter));
 					if (new_elem) {
-						elem = *new_elem;
+						*iter = *new_elem;
 						return std::make_pair(std::nullopt, true);
 					}
 					else if (matched_deeper) {
@@ -1808,10 +1828,13 @@ namespace bmath::intern {
 				}
 			} break;
 			case Type(Op::named_fn): {
-				for (TypedIdx& param : fn::range(ref)) {
-					const auto [new_param, matched_deeper] = recursive_match_and_replace(in, out, ref.new_at(param));
+				auto range = fn::range(ref);
+				auto iter = begin(range);
+				const auto stop = end(range);
+				for (; iter != stop; ++iter) {
+					const auto [new_param, matched_deeper] = recursive_match_and_replace(in, out, ref.new_at(*iter));
 					if (new_param) {
-						param = *new_param;
+						*iter = *new_param;
 						return std::make_pair(std::nullopt, true);
 					}
 					else if (matched_deeper) {
@@ -1821,10 +1844,13 @@ namespace bmath::intern {
 			} break;
 			default: {
 				assert(ref.type.is<Fn>());
-				for (TypedIdx& param : fn::range(ref->fn_params, ref.type)) {
-					const auto [new_param, matched_deeper] = recursive_match_and_replace(in, out, ref.new_at(param));
+				auto range = fn::range(ref->fn_params, ref.type);
+				auto iter = begin(range);
+				const auto stop = end(range);
+				for (; iter != stop; ++iter) {
+					const auto [new_param, matched_deeper] = recursive_match_and_replace(in, out, ref.new_at(*iter));
 					if (new_param) {
-						param = *new_param;
+						*iter = *new_param;
 						return std::make_pair(std::nullopt, true);
 					}
 					else if (matched_deeper) {
@@ -2007,12 +2033,12 @@ namespace bmath {
 		this->head = tree::establish_basic_order(this->mut_ref());
 	}
 
-	std::string bmath::Term::to_memory_layout() const
+	std::string bmath::Term::to_memory_layout() const noexcept
 	{
 		return print::to_memory_layout(this->store, { this->head });
 	}
 
-	std::string Term::to_string() const
+	std::string Term::to_string() const noexcept
 	{
 		std::string result;
 		result.reserve(this->store.size() * 2);
@@ -2020,18 +2046,18 @@ namespace bmath {
 		return result;
 	}
 
-	std::string Term::to_pretty_string()
+	std::string Term::to_pretty_string() noexcept
 	{
 		this->standardize();
 		return print::to_pretty_string(this->ref());
 	}
 
-	std::string Term::to_pretty_string() const
+	std::string Term::to_pretty_string() const noexcept
 	{
 		return print::to_pretty_string(this->ref());
 	}
 
-	std::string Term::to_tree() const
+	std::string Term::to_tree() const noexcept
 	{
 		return print::to_tree(this->ref());
 	}
