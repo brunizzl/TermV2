@@ -271,9 +271,6 @@ namespace bmath::intern {
 			table.build_lhs = false;
 			this->rhs_head = build_function(this->rhs_store, parts.rhs);
 
-			this->lhs_head = tree::establish_basic_order(this->lhs_mut_ref());
-			this->rhs_head = tree::establish_basic_order(this->rhs_mut_ref());
-
 			for (const auto& value_match : table.value_table) {
 				for (const auto lhs_instance : value_match.lhs_instances) {
 					pn_tree::rearrange_value_match(this->lhs_store, this->lhs_head, lhs_instance);
@@ -282,6 +279,10 @@ namespace bmath::intern {
 					pn_tree::rearrange_value_match(this->rhs_store, this->rhs_head, rhs_instance);
 				}
 			}
+			//establish basic order after rearanging value match to allow constructs 
+			//  like "a :real, b | (a+2)+b = ..." to take summands / factors into their value match part
+			this->lhs_head = tree::establish_basic_order(this->lhs_mut_ref());
+			this->rhs_head = tree::establish_basic_order(this->rhs_mut_ref());
 
 			for (const auto& multi_match : table.multi_table) {
 				throw_if(multi_match.lhs_count > 1u, "pattern only allows single use of each Multimatch in lhs.");
