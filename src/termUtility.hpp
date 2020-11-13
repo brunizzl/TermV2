@@ -558,12 +558,10 @@ namespace bmath::intern {
 
 
 	template<typename UInt_T>
-	class [[nodiscard]] IntBitSet
+	struct [[nodiscard]] IntBitSet
 	{
 		static_assert(std::is_unsigned_v<UInt_T>);
-		static constexpr std::uint32_t size = sizeof(UInt_T) * 8u;
 
-	public:
 		UInt_T data;
 
 		constexpr IntBitSet() noexcept :data(0u) {}
@@ -581,33 +579,9 @@ namespace bmath::intern {
 		constexpr bool  all() const noexcept { return !(~this->data); }
 		constexpr bool not_all() const noexcept { return ~this->data; }
 
-		constexpr std::uint32_t count() const noexcept
-		{
-			//return std::popcount(this->data);
-			std::uint32_t result = 0u;
-			for (std::uint32_t i = 0u; i < size; i++) {
-				result += this->test(i);
-			}
-			return result;
-		}
-
-		constexpr std::uint32_t find_first_true() const noexcept
-		{
-			//return std::countr_zero(this->data);
-			for (std::uint32_t i = 0u; i < size; i++) {
-				if (this->test(i)) { return i; }
-			}
-			return size;
-		}
-
-		constexpr std::uint32_t find_first_false() const noexcept
-		{
-			//return std::countr_one(this->data);
-			for (std::uint32_t i = 0u; i < size; i++) {
-				if (!this->test(i)) { return i; }
-			}
-			return size;
-		}
+		constexpr std::uint32_t count() const noexcept { return std::popcount(this->data); }
+		constexpr std::uint32_t find_first_true() const noexcept { return std::countr_zero(this->data); }
+		constexpr std::uint32_t find_first_false() const noexcept { return std::countr_one(this->data); }
 	}; //class IntBitSet
 
 	using BitSet8  = IntBitSet<std::uint8_t >;
@@ -621,7 +595,7 @@ namespace bmath::intern {
 		static constexpr std::size_t array_size = Bits / 64u;
 
 		template<typename Pred>
-		constexpr bool test_all(Pred pred) const noexcept { return std::all_of(this->data, this->data + array_size, pred); }
+		constexpr bool test_all(const Pred pred) const noexcept { return std::all_of(this->data, this->data + array_size, pred); }
 
 	public:
 		BitSet64 data[array_size];
@@ -710,6 +684,7 @@ namespace bmath::intern {
 		std::complex<double> val = std::numeric_limits<double>::quiet_NaN(); //default initialize to invalid state
 
 		constexpr OptComplex(const std::complex<double>& new_val) noexcept :val(new_val) {}
+		constexpr OptComplex(const double new_val) noexcept :val(new_val) {}
 		constexpr OptComplex() noexcept = default;
 
 		bool has_value() const noexcept { return !std::isnan(this->val.real()); }

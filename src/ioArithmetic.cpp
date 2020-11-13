@@ -409,7 +409,7 @@ namespace bmath::intern {
 			input.remove_prefix(1u); //remove hat
 			const TypedIdx base = build(store, base_view);
 			const TypedIdx expo = build(store, input);
-			return TypedIdx(store.insert(FnParams<TypedIdx>{ base, expo}), Fn::pow);
+			return TypedIdx(store.insert(FnParams<TypedIdx>{ base, expo, TypedIdx(), TypedIdx() }), Fn::pow);
 		} break;
 		case Head::Type::complex_computable: {
 			return build_value<TypedIdx>(store, compute::eval_complex(input));
@@ -439,7 +439,7 @@ namespace bmath::intern {
 	template<typename VariadicTraits, typename TypedIdx_T, typename Store_T, typename BuildInverse, typename BuildAny>
 	TypedIdx_T build_variadic(Store_T& store, ParseView input, std::size_t op_idx, BuildInverse build_inverse, BuildAny build_any)
 	{
-		using Result_T = VariadicTraits::Object_T;
+		using Result_T = typename VariadicTraits::Object_T;
 
 		const auto subterm_view = input.steal_prefix(op_idx);
 		const TypedIdx_T subterm = build_any(store, subterm_view);
@@ -634,7 +634,7 @@ namespace bmath::intern {
 				input.remove_prefix(1u); //remove hat
 				const PnTypedIdx base = this->operator()(store, base_view);
 				const PnTypedIdx expo = this->operator()(store, input);
-				return PnTypedIdx(store.insert(FnParams<PnTypedIdx>{ base, expo }), Type(Fn::pow));
+				return PnTypedIdx(store.insert(FnParams<PnTypedIdx>{ base, expo, PnTypedIdx(), PnTypedIdx() }), Type(Fn::pow));
 			} break;
 			case Head::Type::complex_computable: {
 				return build_value<PnTypedIdx>(store, compute::eval_complex(input));

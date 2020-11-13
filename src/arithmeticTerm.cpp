@@ -868,10 +868,10 @@ namespace bmath::intern {
 				break;
 			case Type_T(pattern::_value_match): if constexpr (pattern) {
 				pattern::ValueMatchVariable& var = *ref;
-				const Complex match_res = tree::combine_values_inexact(store);
-				const Complex copy_res = tree::combine_values_inexact(store);
-				assert(!is_valid(match_res)); //pattern variable can not decay to value
-				assert(!is_valid(copy_res));  //pattern variable can not decay to value
+				const OptComplex match_res = tree::combine_values_inexact(ref.new_at(var.match_idx));
+				const OptComplex copy_res = tree::combine_values_inexact(ref.new_at(var.copy_idx));
+				assert(!match_res); //pattern variable can not decay to value
+				assert(!copy_res);  //pattern variable can not decay to value
 			} break; 
 			case Type_T(pattern::_value_proxy):
 				break;
@@ -1306,7 +1306,7 @@ namespace bmath::intern {
 		template<typename Union_T, typename TypedIdx_T>
 		TypedIdx_T* find_subtree_owner(BasicStore<Union_T>& store, TypedIdx_T& head, const TypedIdx_T subtree)
 		{
-			using Type_T = TypedIdx_T::Enum_T;
+			using Type_T = typename TypedIdx_T::Enum_T;
 			using TypedIdxSLC_T = TermSLC<TypedIdx_T>;
 			constexpr bool pattern = std::is_same_v<Type_T, pattern::PnType>;
 
