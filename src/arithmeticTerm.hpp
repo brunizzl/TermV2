@@ -522,7 +522,7 @@ namespace bmath::intern {
 		//if match was not succsessfull, match_data is NOT reset and false is returned
 		bool equals(const pattern::PnRef pn_ref, const Ref ref, pattern::MatchData& match_data);
 
-		//allows to match a sum / product pattern in a sum / product with more elements than elements in the pattern.
+		//allows to match a sum / product pn_ref in a sum / product ref regardless of order
 		bool permutation_equals(const pattern::PnRef pn_ref, const Ref ref, pattern::MatchData& match_data);
 
 		struct RematchResult
