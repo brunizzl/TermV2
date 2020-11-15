@@ -110,7 +110,7 @@ namespace bmath::intern {
 		{ pattern::MultiVar::factors  , 95 }, //can match anything and even any number of anything -> least unique
 	});
 	static_assert(std::is_sorted(uniqueness_table.begin(), uniqueness_table.end(), [](auto a, auto b) { return a.second < b.second; }));
-	constexpr int uniqueness(pattern::PnType type) noexcept { return find_snd(uniqueness_table, type); }
+	constexpr int uniqueness(pattern::PnType type) noexcept { return find(uniqueness_table, &std::pair<pattern::PnType, int>::first, type).second; }
 
 	//utility for both Function and NamedFn
 	namespace fn {

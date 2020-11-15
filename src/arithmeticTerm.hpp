@@ -29,6 +29,9 @@ namespace bmath::intern {
 	};
 
 	//these are luped together, because they behave the same in most cases -> can be seperated easily from rest
+	//behavior for every specific element in Fn is defined at only two places:
+	//  1. function fn::eval specifies how (and if at all) to evaluate
+	//  2. array fn::props_table specifies name and parameter count
 	enum class Fn //short for Function (note that named_fn is not listed here, at it's behavior is more complicated)
 	{
 		pow,    //params[0] := base      params[1] := expo    
@@ -383,34 +386,52 @@ namespace bmath::intern {
 	//utility for both NamedFn and the types in Fn 
 	namespace fn {
 
-		constexpr auto param_count_table = std::to_array<std::pair<Fn, std::size_t>>({
-			{ Fn::asinh, 1 },	
-			{ Fn::acosh, 1 },
-			{ Fn::atanh, 1 },	
-			{ Fn::asin , 1 },	
-			{ Fn::acos , 1 },	
-			{ Fn::atan , 1 },	
-			{ Fn::sinh , 1 },	
-			{ Fn::cosh , 1 },	
-			{ Fn::tanh , 1 },	
-			{ Fn::sqrt , 1 },	
-			{ Fn::pow  , 2 }, //<- only for these two fuckers >:(  
-			{ Fn::log  , 2 }, //<- 
-			{ Fn::exp  , 1 },	
-			{ Fn::sin  , 1 },	
-			{ Fn::cos  , 1 },	
-			{ Fn::tan  , 1 },	
-			{ Fn::abs  , 1 },	
-			{ Fn::arg  , 1 },	
-			{ Fn::ln   , 1 },	
-			{ Fn::re   , 1 },	
-			{ Fn::im   , 1 },	
-		});
-		constexpr std::size_t param_count(Fn type) noexcept 
-		{ return find_snd(param_count_table, type); }
+		struct FnProps //short for Function Properties
+		{
+			Fn type = Fn::COUNT;
+			std::string_view name = "";
+			std::size_t param_count = 0u;
+		};
 
-		constexpr std::size_t param_count(pattern::PnType type) noexcept 
-		{ return find_snd(param_count_table, type.to<Fn>()); }
+		//every item enumerated in Fn (except COUNT) may be listed here in order of apperance in Fn
+		constexpr auto props_table = std::to_array<FnProps>({
+			{ Fn::pow  , "pow"  , 2 },   
+			{ Fn::log  , "log"  , 2 }, 	
+			{ Fn::exp  , "exp"  , 1 },	
+			{ Fn::sqrt , "sqrt" , 1 },
+			{ Fn::asinh, "asinh", 1 },	
+			{ Fn::acosh, "acosh", 1 },
+			{ Fn::atanh, "atanh", 1 },	
+			{ Fn::asin , "asin" , 1 },	
+			{ Fn::acos , "acos" , 1 },	
+			{ Fn::atan , "atan" , 1 },	
+			{ Fn::sinh , "sinh" , 1 },	
+			{ Fn::cosh , "cosh" , 1 },	
+			{ Fn::tanh , "tanh" , 1 },	
+			{ Fn::sin  , "sin"  , 1 },	
+			{ Fn::cos  , "cos"  , 1 },	
+			{ Fn::tan  , "tan"  , 1 },	
+			{ Fn::abs  , "abs"  , 1 },	
+			{ Fn::arg  , "arg"  , 1 },	
+			{ Fn::ln   , "ln"   , 1 },	
+			{ Fn::re   , "re"   , 1 },	
+			{ Fn::im   , "im"   , 1 },	
+		});
+		static_assert(static_cast<unsigned>(props_table.front().type) == 0);
+		static_assert(std::is_sorted(props_table.begin(), props_table.end(), [](auto lhs, auto rhs) { return lhs.type < rhs.type; }));
+		static_assert(props_table.size() == static_cast<unsigned>(Fn::COUNT));
+
+		constexpr std::string_view name_of(const Fn type) noexcept { return props_table[static_cast<unsigned>(type)].name; }
+
+		//returns Fn::COUNT if name was not found
+		constexpr Fn type_of(const std::string_view name) noexcept { return search(props_table, &FnProps::name, name).type; }
+
+		constexpr std::size_t param_count(const Fn type) noexcept 
+		{ return props_table[static_cast<unsigned>(type)].param_count; }
+
+		constexpr std::size_t param_count(const pattern::PnType type) noexcept 
+		{ return props_table[static_cast<unsigned>(type.to<Fn>())].param_count; }
+
 
 
 		template<typename TypedIdx_T, typename Type_T>

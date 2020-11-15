@@ -15,33 +15,6 @@ namespace bmath::intern {
 	//utility for both Function and NamedFn
 	namespace fn {
 
-		constexpr auto name_table = std::to_array<std::pair<Fn, std::string_view>>({
-			{ Fn::asinh, "asinh" },	
-			{ Fn::acosh, "acosh" },
-			{ Fn::atanh, "atanh" },	
-			{ Fn::asin , "asin"  },	
-			{ Fn::acos , "acos"  },	
-			{ Fn::atan , "atan"  },	
-			{ Fn::sinh , "sinh"  },	
-			{ Fn::cosh , "cosh"  },	
-			{ Fn::tanh , "tanh"  },	
-			{ Fn::sqrt , "sqrt"  },	
-			{ Fn::pow  , "pow"   },   
-			{ Fn::log  , "log"   },	
-			{ Fn::exp  , "exp"   },	
-			{ Fn::sin  , "sin"   },	
-			{ Fn::cos  , "cos"   },	
-			{ Fn::tan  , "tan"   },	
-			{ Fn::abs  , "abs"   },	
-			{ Fn::arg  , "arg"   },	
-			{ Fn::ln   , "ln"    },	
-			{ Fn::re   , "re"    },	
-			{ Fn::im   , "im"    },	
-		});
-
-		constexpr std::string_view name_of(const Fn type) noexcept { return find_snd(name_table, type); }
-		constexpr Fn type_of(const std::string_view name) noexcept { return search_fst(name_table, name, Fn::COUNT); }
-
 		//appends only name, no parentheses or anything fancy
 		template<typename Union_T>
 		void append_name(const BasicNodeRef<Union_T, NamedFn, Const::yes> fn, std::string& str)
@@ -106,11 +79,17 @@ namespace bmath::intern {
 
 		using PnVariablesType = SumEnum<Restriction, Form, MultiVar, Unknown>;
 
-		constexpr auto type_table = std::to_array<std::pair<PnVariablesType, std::string_view>>({
-			{ Type(Op::sum       ), "sum"           },
-			{ Type(Op::product   ), "product"       },
-			{ Type(Leaf::variable), "variable"      },
-			{ Type(Leaf::complex ), "complex"       },
+		struct TypeProps
+		{
+			PnVariablesType type = Unknown{};
+			std::string_view name = "";
+		};
+
+		constexpr auto type_table = std::to_array<TypeProps>({
+			{ Op::sum             , "sum"           },
+			{ Op::product         , "product"       },
+			{ Leaf::variable      , "variable"      },
+			{ Leaf::complex       , "complex"       },
 			{ Restr::function     , "fn"            },
 			{ Form::natural       , "nat"           },
 			{ Form::natural_0     , "nat0"          },
@@ -127,8 +106,8 @@ namespace bmath::intern {
 			{ MultiVar::factors   , "factors"       },
 		});
 
-		constexpr std::string_view name_of(const PnVariablesType r) noexcept { return find_snd(type_table, r); }
-		constexpr PnVariablesType type_of(const std::string_view s) noexcept { return search_fst(type_table, s, PnVariablesType(Unknown{})); }
+		constexpr std::string_view name_of(const PnVariablesType r) noexcept { return find(type_table, &TypeProps::type, r).name; }
+		constexpr PnVariablesType type_of(const std::string_view s) noexcept { return search(type_table, &TypeProps::name, s).type; }
 
 	} //namespace pattern
 
@@ -169,7 +148,7 @@ namespace bmath::intern {
 			{ pattern::MultiVar::factors      , 6 },
 		});
 		static_assert(std::is_sorted(infixr_table.begin(), infixr_table.end(), [](auto a, auto b) { return a.second < b.second; }));
-		constexpr int infixr(pattern::PnType type) { return find_snd(infixr_table, type); }
+		constexpr int infixr(pattern::PnType type) { return find(infixr_table, &std::pair<pattern::PnType, int>::first, type).second; }
 
 		void append_complex(const std::complex<double> val, std::string& dest, int parent_operator_precedence)
 		{

@@ -45,41 +45,22 @@ namespace bmath::intern {
 		else                           { return x == y && equivalent(x, xs...); }
 	}
 
-
-	template <typename Fst_T, typename Snd_T, std::size_t Size>
-	[[nodiscard]] constexpr Snd_T find_snd(
-		const std::array<std::pair<Fst_T, Snd_T>, Size>& data, const Fst_T key) noexcept
+	template <typename Struct_T, std::size_t Size, typename SearchMemberPtr_T, typename Search_T>
+	[[nodiscard]] constexpr const Struct_T& find(
+		const std::array<Struct_T, Size>& data, const SearchMemberPtr_T ptr, const Search_T key) noexcept
 	{
-		const auto itr = std::find_if(begin(data), end(data), [&key](const auto &v) { return v.first == key; });
+		const auto itr = std::find_if(begin(data), end(data), [key, ptr](const auto &v) { return v.*ptr == key; });
 		const bool valid = itr != end(data);
 		assert(valid);
-		return itr->second;
+		return *itr;
 	}
 
-	template <typename Fst_T, typename Snd_T, std::size_t Size>
-	[[nodiscard]] constexpr Snd_T search_snd(
-		const std::array<std::pair<Fst_T, Snd_T>, Size>& data, const Fst_T key, const Snd_T null_value) noexcept 
+	template <typename Struct_T, std::size_t Size, typename SearchMemberPtr_T, typename Search_T>
+	[[nodiscard]] constexpr const Struct_T& search(
+		const std::array<Struct_T, Size>& data, const SearchMemberPtr_T ptr, const Search_T key, const Struct_T& null_val = {}) noexcept
 	{
-		const auto itr = std::find_if(begin(data), end(data), [&key](const auto &v) { return v.first == key; });
-		return itr != end(data) ? itr->second : null_value;
-	}
-
-	template <typename Fst_T, typename Snd_T, std::size_t Size>
-	[[nodiscard]] constexpr Snd_T find_fst(
-		const std::array<std::pair<Fst_T, Snd_T>, Size>& data, const Snd_T key) noexcept
-	{
-		const auto itr = std::find_if(begin(data), end(data), [&key](const auto &v) { return v.second == key; });
-		const bool valid = itr != end(data);
-		assert(valid);
-		return itr->first;
-	}
-
-	template <typename Fst_T, typename Snd_T, std::size_t Size>
-	[[nodiscard]] constexpr Fst_T search_fst(
-		const std::array<std::pair<Fst_T, Snd_T>, Size>& data, const Snd_T key, const Fst_T null_value) noexcept 
-	{
-		const auto itr = std::find_if(begin(data), end(data), [&key](const auto &v) { return v.second == key; });
-		return itr != end(data) ? itr->first : null_value;
+		const auto itr = std::find_if(begin(data), end(data), [key, ptr](const auto &v) { return v.*ptr == key; });
+		return itr != end(data) ? *itr : null_val;
 	}
 
 
@@ -700,10 +681,10 @@ namespace bmath::intern {
 		constexpr OptComplex operator*(const OptComplex& snd) const noexcept { return this->val * snd.val; }
 		constexpr OptComplex operator/(const OptComplex& snd) const noexcept { return this->val / snd.val; }		
 
-		constexpr const OptComplex& operator+=(const OptComplex& snd) noexcept { this->val += snd.val; return *this; }
-		constexpr const OptComplex& operator-=(const OptComplex& snd) noexcept { this->val -= snd.val; return *this; }
-		constexpr const OptComplex& operator*=(const OptComplex& snd) noexcept { this->val *= snd.val; return *this; }
-		constexpr const OptComplex& operator/=(const OptComplex& snd) noexcept { this->val /= snd.val; return *this; }
+		constexpr OptComplex& operator+=(const OptComplex& snd) noexcept { this->val += snd.val; return *this; }
+		constexpr OptComplex& operator-=(const OptComplex& snd) noexcept { this->val -= snd.val; return *this; }
+		constexpr OptComplex& operator*=(const OptComplex& snd) noexcept { this->val *= snd.val; return *this; }
+		constexpr OptComplex& operator/=(const OptComplex& snd) noexcept { this->val /= snd.val; return *this; }
 	}; //struct OptComplex
 
 } //namespace bmath::intern
