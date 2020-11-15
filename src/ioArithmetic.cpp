@@ -442,11 +442,14 @@ namespace bmath::intern {
 			//writing parameters in result
 			input.remove_suffix(1u);            //"pow(2,4)" -> "pow(2,4"
 			input.remove_prefix(open_par + 1u); //"pow(2,4" ->      "2,4"
-			{
+			if (input.size()) { //else no parameters at all
 				const std::size_t comma = find_first_of_skip_pars(input.tokens, token::comma);
 				const auto param_view = input.steal_prefix(comma); //now input starts with comma
 				const TypedIdx_T param = build_any(store, param_view);
 				result.params_idx = store.insert(TypedIdxSLC_T({ param }));
+			}
+			else {
+				result.params_idx = store.insert(TypedIdxSLC_T({})); //insert empty params to allways assume valid params elsewhere
 			}
 			std::size_t last_node_idx = result.params_idx;
 			while (input.size()) {
