@@ -72,22 +72,13 @@ namespace bmath::intern {
 
 	struct NamedFn
 	{
-		static constexpr std::size_t short_name_max = 8 + 3; //plus '\0' at end, supplied by name_size
-
-		//if name_size == NameSize::small short_name is used, but as if would be of length 11
-		//this is perhaps undefined behavior, but im feeling unsave today >:)	
-		union
-		{
-			char short_name[8] = "";
-			std::uint32_t long_name_idx;	//points to StringSLC containing name (if active)
-		};
-	private:
-		char short_name_extension[3] = ""; //just implementation detail, no one needs to see this
-	public:
-		//if small is active, it doubles in purpose as '\0' character to end the name
-		enum class NameSize :char { small = '\0', longer } name_size = NameSize::small;
+		static constexpr std::size_t max_name_size = 12u; 
 
 		std::uint32_t params_idx = 0; //points to TypedIdxSLC containing the parameters
+		char name[max_name_size] = {}; //short name seems sufficient for internal purposes
+
+		constexpr std::size_t name_size() const noexcept { return std::min(std::strlen(this->name), max_name_size); }
+		constexpr std::string_view name_view() const noexcept { return { this->name, this->name_size() }; }
 	};
 
 	using  Variable = StringSLC;
@@ -98,8 +89,8 @@ namespace bmath::intern {
 		FnParams<TypedIdx> fn_params;
 		NamedFn named_fn;
 		Complex complex;
-		TypedIdxSLC index_slc; //representing NamedFn's extra parameters, Sum or Product 
-		StringSLC string;	//Variable is a string and NamedFn may allocate additional string nodes
+		TypedIdxSLC index_slc; //representing NamedFn's extra parameters and Sum and Product 
+		StringSLC string;	//Variable is a string
 
 		TypesUnion(const FnParams<TypedIdx>& val) :fn_params(val)        {}
 		TypesUnion(const NamedFn&            val) :named_fn(val)         {}
@@ -244,8 +235,8 @@ namespace bmath::intern {
 			FnParams<PnTypedIdx> fn_params;
 			NamedFn named_fn;
 			Complex complex;
-			PnTypedIdxSLC index_slc; //representing NamedFn's extra parameters, Sum or Product 
-			StringSLC string;	//PnVariable is a string and NamedFn may allocate additional string nodes
+			PnTypedIdxSLC index_slc; //representing NamedFn's extra parameters and Sum and Product 
+			StringSLC string;	//PnVariable is a string
 			TreeMatchVariable tree_match;
 			ValueMatchVariable value_match;
 

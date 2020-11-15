@@ -635,33 +635,6 @@ namespace bmath::intern {
 		
 	} //namespace pattern
 
-	namespace fn {
-
-		template<typename Union_T1, typename Type_T1, typename Union_T2, typename Type_T2>
-		std::strong_ordering compare_name(const BasicRef<Union_T1, Type_T1> ref_1, const BasicRef<Union_T2, Type_T2> ref_2)
-		{
-			assert(ref_1.type == Op::named_fn && ref_2.type == Op::named_fn);
-			const NamedFn& fn_1 = *ref_1;
-			const NamedFn& fn_2 = *ref_2;
-			if (fn_1.name_size == NamedFn::NameSize::small &&
-				fn_2.name_size == NamedFn::NameSize::small) 
-			{//change to comparison of std::string_view when they support <=>
-				return compare_arrays(fn_1.short_name, fn_2.short_name, NamedFn::short_name_max);				
-			}
-			else if (fn_1.name_size == NamedFn::NameSize::longer &&
-			         fn_2.name_size == NamedFn::NameSize::longer) 			
-			{
-				return str_slc::compare(ref_1.new_as<StringSLC>(fn_1.long_name_idx), ref_2.new_as<StringSLC>(fn_2.long_name_idx));
-			}
-			else {
-				return fn_1.name_size == NamedFn::NameSize::small ?
-					std::strong_ordering::less : 
-					std::strong_ordering::greater;
-			}
-		}
-
-	} //namespace fn
-
 	namespace tree {
 
 		template<typename Union_T, typename Type_T>
@@ -686,9 +659,6 @@ namespace bmath::intern {
 				}
 				const NamedFn& named_fn = *ref;
 				free_slc(ref.new_as<TypedIdxSLC_T>(named_fn.params_idx));
-				if (named_fn.name_size == NamedFn::NameSize::longer) {
-					free_slc(ref.new_as<StringSLC>(named_fn.long_name_idx));
-				}
 				ref.store->free(ref.index);
 			} break;
 			default: {
@@ -1087,7 +1057,7 @@ namespace bmath::intern {
 				}
 			} break;
 			case Type_T1(Op::named_fn): {
-				const auto name_cmp = fn::compare_name(ref_1, ref_2);
+				const auto name_cmp = compare_arrays(ref_1->named_fn.name, ref_2->named_fn.name, NamedFn::max_name_size);
 				if (name_cmp != std::strong_ordering::equal) {
 					return name_cmp;
 				}
@@ -1233,16 +1203,7 @@ namespace bmath::intern {
 					last_node_idx = TypedIdxSLC_T::insert_new(dst_store, last_node_idx, dst_param);
 				}
 
-				if (src_function.name_size == NamedFn::NameSize::small) [[likely]] {
-					//   + 1u to directly set dst_function.name_size as well (layed out directly after short_name)
-					std::copy(src_function.short_name, src_function.short_name + NamedFn::short_name_max + 1u, dst_function.short_name);
-				}
-				else {
-					std::string src_name; //in most cases the small string optimisation works, else dont care
-					str_slc::read(src_ref.new_as<StringSLC>(src_function.long_name_idx), src_name);
-					dst_function.long_name_idx = str_slc::insert(dst_store, src_name);
-					dst_function.name_size = NamedFn::NameSize::longer;
-				}
+				std::copy(src_function.name, src_function.name + NamedFn::max_name_size, dst_function.name);
 				return TypedIdx_T(dst_store.insert(dst_function), src_ref.type);
 			} break;
 			default: {
@@ -1427,7 +1388,7 @@ namespace bmath::intern {
 						return matched.size() > 0u && not_matched.size() == 0u;
 					} break;
 					case PnType(Op::named_fn): {
-						if (fn::compare_name(ref, pn_ref) != std::strong_ordering::equal) {
+						if (compare_arrays(ref->named_fn.name, pn_ref->named_fn.name, NamedFn::max_name_size) != std::strong_ordering::equal) {
 							return false;
 						}
 						auto pn_range = fn::range(pn_ref);
@@ -1677,16 +1638,7 @@ namespace bmath::intern {
 					last_node_idx = TypedIdxSLC::insert_new(store, last_node_idx, dst_param);
 				}
 
-				if (src_function.name_size == NamedFn::NameSize::small) [[likely]] {
-					//   + 1u to directly set dst_function.name_size as well (layed out directly after short_name)
-					std::copy(src_function.short_name, src_function.short_name + NamedFn::short_name_max + 1u, dst_function.short_name);
-				}
-				else {
-					std::string src_name; //in most cases the small string optimisation works, else dont care
-					str_slc::read(pn_ref.new_as<StringSLC>(src_function.long_name_idx), src_name);
-					dst_function.long_name_idx = str_slc::insert(store, src_name);
-					dst_function.name_size = NamedFn::NameSize::longer;
-				}
+				std::copy(src_function.name, src_function.name + NamedFn::max_name_size, dst_function.name);
 				return TypedIdx(store.insert(dst_function), pn_ref.type.to<Type>());
 			} break;
 			default: {

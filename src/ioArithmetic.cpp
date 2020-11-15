@@ -12,23 +12,6 @@ namespace bmath::intern {
 	/////////////////////////////////////////////////////////////////////local definitions//////////////////////////////////////////////////////////////////////////////////
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	//utility for both Function and NamedFn
-	namespace fn {
-
-		//appends only name, no parentheses or anything fancy
-		template<typename Union_T>
-		void append_name(const BasicNodeRef<Union_T, NamedFn, Const::yes> fn, std::string& str)
-		{
-			if (fn->name_size == NamedFn::NameSize::small) {
-				str.append(fn->short_name);
-			}
-			else {
-				str_slc::read(str_slc::StrRef<Union_T>(*fn.store, fn->long_name_idx), str);
-			}
-		} //append_name 
-
-	} //namespace fn
-
 	namespace vc {
 
 		struct BasicSumTraits
@@ -452,17 +435,9 @@ namespace bmath::intern {
 		if (type == Fn::COUNT) { //build generic function
 			NamedFn result;
 			{//writing name in result
-				const auto name = std::string_view(input.chars, open_par);
-				if (name.size() > NamedFn::short_name_max) [[unlikely]] {
-					result.name_size = NamedFn::NameSize::longer;
-					result.long_name_idx = str_slc::insert(store, name);
-				}
-				else {
-					result.name_size = NamedFn::NameSize::small;
-					for (std::size_t i = 0u; i < name.size(); i++) {
-						result.short_name[i] = name[i]; //maybe go over bound of short_name and into short_name_extension (undefined behavior oh wee!)
-					}
-				}
+				const auto new_name = std::string_view(input.chars, open_par);
+				throw_if<ParseFailure>(new_name.size() > NamedFn::max_name_size, input.offset, "named_fn name exceeds max length");
+				std::copy(new_name.begin(), new_name.end(), &result.name[0]);
 			}
 			//writing parameters in result
 			input.remove_suffix(1u);            //"pow(2,4)" -> "pow(2,4"
@@ -698,7 +673,7 @@ namespace bmath::intern {
 			case Type_T(Op::named_fn): {
 				const NamedFn& named_fn = *ref;
 				str.pop_back(); //pop open parenthesis
-				fn::append_name(ref.cast<NamedFn>(), str);
+				str.append(named_fn.name_view());
 				str.push_back('(');
 				const char* seperator = "";
 				for (const auto param : fn::range(ref)) {
@@ -885,7 +860,7 @@ namespace bmath::intern {
 			} break;
 			case Type(Op::named_fn): {
 				need_parentheses = false;
-				fn::append_name(ref.cast<NamedFn>(), str);
+				str.append(ref->named_fn.name_view());
 				str.push_back('(');
 				bool first = true;
 				for (const auto param : fn::range(ref)) {
@@ -997,9 +972,6 @@ namespace bmath::intern {
 				}
 				current_str.push_back('}');
 				show_typedidx_col_nodes(named_fn.params_idx, true);
-				if (named_fn.name_size == NamedFn::NameSize::longer) {
-					show_string_nodes(named_fn.long_name_idx, true);
-				}
 			} break;
 			default: {
 				assert(ref.type.is<Fn>());
@@ -1132,7 +1104,7 @@ namespace bmath::intern {
 				}
 			} break;
 			case Type_T(Op::named_fn): {
-				fn::append_name(ref.cast<NamedFn>(), current_str);
+				current_str.append(ref->named_fn.name_view());
 				for (const TypedIdx_T param : fn::range(ref)) {
 					print::append_tree_row(ref.new_at(param), rows, offset + tab_width);
 				}
