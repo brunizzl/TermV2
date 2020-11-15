@@ -44,15 +44,17 @@ namespace bmath::intern {
 
 		Vec_T vector;
 
-		//debugging function to ensure only valid accesses
-		void check_index_validity(const std::size_t idx) const
-		{
-			throw_if(this->vector.size() < idx + 1u, "BasicStore supposed to access/free unowned slot");
-			const Table& table = this->vector[idx / table_dist].table;
-			throw_if(!table.test(idx % table_dist), "BasicStore supposed to access/free already freed slot");
-		}
-
 	public:
+
+		//debugging function to ensure only valid accesses
+		bool valid_idx(const std::size_t idx) const noexcept
+		{
+			if (this->vector.size() < idx + 1u) return false; //index not currently owned by vector
+			if (idx % table_dist == 0u) return false; //index belongs not to value, but to table
+			const Table& table = this->vector[idx  - (idx % table_dist)].table;
+			if (!table.test(idx % table_dist)) return false; //index not currently populated
+			return true;
+		}
 
 		constexpr BasicStore_Table(const std::size_t reserve = 0) noexcept :vector() { vector.reserve(reserve); }
 
@@ -85,20 +87,20 @@ namespace bmath::intern {
 
 		void free(const std::size_t idx)
 		{
-			check_index_validity(idx);
-			Table& table = this->vector[idx / table_dist].table;
+			assert(this->valid_idx(idx));	
+			Table& table = this->vector[idx  - (idx % table_dist)].table;
 			table.reset(idx % table_dist);
 		}
 
 		[[nodiscard]] Union_T& at(const std::size_t idx)
 		{
-			check_index_validity(idx);	
+			assert(this->valid_idx(idx));	
 			return this->vector[idx].value;
 		}
 
 		[[nodiscard]] const Union_T& at(const std::size_t idx) const
 		{
-			check_index_validity(idx);		
+			assert(this->valid_idx(idx));		
 			return this->vector[idx].value;
 		}
 

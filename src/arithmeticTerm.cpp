@@ -75,42 +75,50 @@ namespace bmath::intern {
 	/////////////////////////////////////////////////////////////////////local definitions//////////////////////////////////////////////////////////////////////////////////
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	//more unique (meaning harder to match) is smaller
-	constexpr auto uniqueness_table = std::to_array<std::pair<pattern::PnType, int>>({
-		{ Type(Fn::asinh     )        ,  0 }, //order of parameters is given -> most unique
-		{ Type(Fn::acosh     )        ,  2 }, //order of parameters is given -> most unique
-		{ Type(Fn::atanh     )        ,  4 }, //order of parameters is given -> most unique
-		{ Type(Fn::asin      )        ,  6 }, //order of parameters is given -> most unique
-		{ Type(Fn::acos      )        ,  8 }, //order of parameters is given -> most unique
-		{ Type(Fn::atan      )        , 10 }, //order of parameters is given -> most unique
-		{ Type(Fn::sinh      )        , 12 }, //order of parameters is given -> most unique
-		{ Type(Fn::cosh      )        , 14 }, //order of parameters is given -> most unique
-		{ Type(Fn::tanh      )        , 16 }, //order of parameters is given -> most unique
-		{ Type(Fn::sqrt      )        , 18 }, //order of parameters is given -> most unique
-		{ Type(Fn::pow       )        , 20 }, //order of parameters is given -> most unique
-		{ Type(Fn::log       )        , 22 }, //order of parameters is given -> most unique
-		{ Type(Fn::exp       )        , 24 }, //order of parameters is given -> most unique
-		{ Type(Fn::sin       )        , 26 }, //order of parameters is given -> most unique
-		{ Type(Fn::cos       )        , 28 }, //order of parameters is given -> most unique
-		{ Type(Fn::tan       )        , 30 }, //order of parameters is given -> most unique
-		{ Type(Fn::abs       )        , 32 }, //order of parameters is given -> most unique
-		{ Type(Fn::arg       )        , 34 }, //order of parameters is given -> most unique
-		{ Type(Fn::ln        )        , 36 }, //order of parameters is given -> most unique
-		{ Type(Fn::re        )        , 38 }, //order of parameters is given -> most unique
-		{ Type(Fn::im        )        , 40 }, //order of parameters is given -> most unique
-		{ Type(Op::named_fn  )        , 50 }, //order of parameters is given -> most unique
-		{ Type(Op::product   )        , 55 }, //order of operands my vary -> second most unique
-		{ Type(Op::sum       )        , 60 }, //order of operands my vary -> second most unique
-		{ Type(Leaf::variable)        , 65 }, //quite not unique
-		{ Type(Leaf::complex )        , 70 }, //quite not unique
-		{ pattern::PnVar::value_match , 75 }, //as unique as complex, but advantageous to have all match variables at end
-		{ pattern::PnVar::value_proxy , 80 }, //as unique as complex, but advantageous to have all match variables at end (also not really part of order anyway, as it only occurs in value_match)
-		{ pattern::PnVar::tree_match  , 85 }, //can match anything (in princible) -> very not unique
-		{ pattern::MultiVar::summands , 90 }, //can match anything and even any number of anything -> least unique
-		{ pattern::MultiVar::factors  , 95 }, //can match anything and even any number of anything -> least unique
+	//if one pattern may compare equal to a term multiple ways (e.g. sum or product), it has high rematchability.
+	//there are only 3 real levels of rematchability:
+	//  - none    (value 1xx): pattern is not recursive 
+	//  - unknown (value 2xx): pattern is recursive, but has strong operands order (e.g. all in Fn), thus can not rematch on outhermost level, but may hold sum / product as operand
+	//  - likely  (value 3xx): pattern is sum or product and is rematchable, as long as two or more tree_match variables are held as operands directly
+	//by sorting sum and product to the end, they are matched last in match::permutation_equals, 
+	//  thus likely already having their tree_match operands assocciated with something and only permitting up to a single match.
+	//this approach guarantees a possible match to succeed, if a pattern has only up to a single sum / product one level below the root and none deeper.
+	//side note: as every type has a unique rematchability value, sorting by rematchability if types are different produces a strong order.
+	constexpr auto unique_rematchability_table = std::to_array<std::pair<pattern::PnType, int>>({
+		{ Type(Leaf::complex )        , 100 }, 
+		{ pattern::PnVar::value_match , 101 }, 
+		{ pattern::PnVar::value_proxy , 102 }, 
+		{ pattern::PnVar::tree_match  , 103 }, 
+		{ Type(Leaf::variable)        , 104 },
+		{ Type(Fn::pow       )        , 200 }, 
+		{ Type(Fn::log       )        , 201 }, 
+		{ Type(Fn::exp       )        , 202 }, 
+		{ Type(Fn::sqrt      )        , 203 },  
+		{ Type(Fn::asinh     )        , 204 }, 
+		{ Type(Fn::acosh     )        , 205 }, 
+		{ Type(Fn::atanh     )        , 206 }, 
+		{ Type(Fn::asin      )        , 207 }, 
+		{ Type(Fn::acos      )        , 208 }, 
+		{ Type(Fn::atan      )        , 209 }, 
+		{ Type(Fn::sinh      )        , 210 }, 
+		{ Type(Fn::cosh      )        , 211 }, 
+		{ Type(Fn::tanh      )        , 212 }, 
+		{ Type(Fn::sin       )        , 213 }, 
+		{ Type(Fn::cos       )        , 214 }, 
+		{ Type(Fn::tan       )        , 215 }, 
+		{ Type(Fn::abs       )        , 216 }, 
+		{ Type(Fn::arg       )        , 217 }, 
+		{ Type(Fn::ln        )        , 218 }, 
+		{ Type(Fn::re        )        , 219 }, 
+		{ Type(Fn::im        )        , 220 }, 
+		{ Type(Op::named_fn  )        , 221 },
+		{ Type(Op::sum       )        , 300 },  
+		{ Type(Op::product   )        , 301 }, 
+		{ pattern::MultiVar::summands , 302 }, //kinda special, as they always succeed in matching -> need to be matched last 
+		{ pattern::MultiVar::factors  , 303 }, //kinda special, as they always succeed in matching -> need to be matched last 
 	});
-	static_assert(std::is_sorted(uniqueness_table.begin(), uniqueness_table.end(), [](auto a, auto b) { return a.second < b.second; }));
-	constexpr int uniqueness(pattern::PnType type) noexcept { return find(uniqueness_table, &std::pair<pattern::PnType, int>::first, type).second; }
+	static_assert(std::is_sorted(unique_rematchability_table.begin(), unique_rematchability_table.end(), [](auto a, auto b) { return a.second < b.second; }));
+	constexpr int rematchability(pattern::PnType type) noexcept { return find(unique_rematchability_table, &std::pair<pattern::PnType, int>::first, type).second; }
 
 	//utility for both Function and NamedFn
 	namespace fn {
@@ -1049,8 +1057,8 @@ namespace bmath::intern {
 			constexpr bool pattern = std::is_same_v<Type_T1, pattern::PnType>;
 
 			if (ref_1.type != ref_2.type) [[likely]] {
-				static_assert((uniqueness(Type(Op::sum)) <=> uniqueness(Type(Op::sum))) == std::strong_ordering::equal); //dont wanna mix with std::strong_ordering::equivalent
-				return uniqueness(ref_1.type) <=> uniqueness(ref_2.type);
+				static_assert((rematchability(Type(Op::sum)) <=> rematchability(Type(Op::sum))) == std::strong_ordering::equal); //dont wanna mix with std::strong_ordering::equivalent
+				return rematchability(ref_1.type) <=> rematchability(ref_2.type);
 			}
 
 			switch (ref_1.type) {
@@ -1768,7 +1776,7 @@ namespace bmath::intern {
 				return TypedIdx(store.insert(pn_ref->complex), pn_ref.type.to<Type>());
 			case PnType(PnVar::tree_match): {
 				const SharedTreeDatum& info = match_data.info(pn_ref->tree_match);
-				return tree::copy(Ref(store, info.match_idx), store);
+				return tree::copy(Ref(store, info.match_idx), store); //call to different copy!
 			} break;
 			case PnType(PnVar::value_match): {
 				const ValueMatchVariable& var = *pn_ref;
@@ -1776,7 +1784,7 @@ namespace bmath::intern {
 			} break;
 			case PnType(PnVar::value_proxy): {
 				const auto& val = match_data.value_match_data[pn_ref.index].value;
-				return TypedIdx(store.insert(Complex(val)), pn_ref.type.to<Type>());
+				return TypedIdx(store.insert(Complex(val)), Leaf::complex);
 			} break;
 			case PnType(MultiVar::summands):
 				[[fallthrough]];

@@ -67,6 +67,51 @@ namespace bmath::intern::debug {
 			;
 	} //enumerate_pn_type
 
+	//output as of 15.11.2020:
+		//PnType(Op::sum)                 = 0
+		//PnType(Op::product)             = 1
+		//PnType(Op::named_fn)            = 2
+		//PnType(Op::COUNT)               = 3
+		//
+		//PnType(Leaf::variable)          = 4
+		//PnType(Leaf::complex)           = 5
+		//PnType(Leaf::COUNT)             = 6
+		//
+		//PnType(Fn::pow)                 = 7
+		//PnType(Fn::log)                 = 8
+		//PnType(Fn::exp)                 = 9
+		//PnType(Fn::sqrt)                = 10
+		//PnType(Fn::asinh)               = 11
+		//PnType(Fn::acosh)               = 12
+		//PnType(Fn::atanh)               = 13
+		//PnType(Fn::asin)                = 14
+		//PnType(Fn::acos)                = 15
+		//PnType(Fn::atan)                = 16
+		//PnType(Fn::sinh)                = 17
+		//PnType(Fn::cosh)                = 18
+		//PnType(Fn::tanh)                = 19
+		//PnType(Fn::sin)                 = 20
+		//PnType(Fn::cos)                 = 21
+		//PnType(Fn::tan)                 = 22
+		//PnType(Fn::abs)                 = 23
+		//PnType(Fn::arg)                 = 24
+		//PnType(Fn::ln)                  = 25
+		//PnType(Fn::re)                  = 26
+		//PnType(Fn::im)                  = 27
+		//PnType(Fn::COUNT)               = 28
+		//
+		//PnType(Type::COUNT)             = 29
+		//
+		//PnType(PnVar::tree_match)       = 30
+		//PnType(PnVar::value_match)      = 31
+		//PnType(PnVar::value_proxy)      = 32
+		//PnType(PnVar::COUNT)            = 33
+		//
+		//PnType(MultiVar::summands)      = 34
+		//PnType(MultiVar::factors)       = 35
+		//PnType(MultiVar::COUNT)         = 36
+		//
+		//PnType::COUNT                   = 37
 
 	void test_rechner() 
 	{
@@ -84,9 +129,11 @@ namespace bmath::intern::debug {
 			//{"b, a :no_val, c | a b + a c = a (b + c)"}, 
 			//{"a, b, c | a b + a c = a (b + c)"}, 
 			//{"b, a, c | a b + a c = a (b + c)"}, 
-			{ "fib(0) = 0" },
-			{ "fib(1) = 1" },
-			{ "n | fib(n) = fib(n - 1) + fib(n - 2)" },
+			//{ "fib(0) = 0" },
+			//{ "fib(1) = 1" },
+			//{ "n | fib(n) = fib(n - 1) + fib(n - 2)" },
+			{ "a :real, b | a^2 + (2 a) b + b^2 = (a + b)^2" }, 
+			//{ "a :int | 2 a + 1 = 'how_odd'" }, 
 		});
 
 		for (const auto& p : patterns) {
@@ -105,14 +152,15 @@ namespace bmath::intern::debug {
 				test.standardize();
 				std::cout << "sorted: " << test.to_string() << "\n";
 				bool changed;
-				std::size_t change_nr = 0;
 				do {
 					changed = false;
 					for (const auto& p : patterns) {
 						if (test.match_and_replace(p)) {
+							std::cout << test.to_memory_layout() << "\n";
 							changed = true;
+							std::cout << "replace -> " << test.to_string() << "\n";
 							test.standardize();
-							//std::cout << " " << ++change_nr << "\t-> " << test.to_string() << "\n";
+							std::cout << "sort    -> " << test.to_string() << "\n";
 							break;
 						}
 					}

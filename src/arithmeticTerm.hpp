@@ -395,35 +395,35 @@ namespace bmath::intern {
 
 		//every item enumerated in Fn (except COUNT) may be listed here in order of apperance in Fn
 		constexpr auto props_table = std::to_array<FnProps>({
-			{ Fn::pow  , "pow"  , 2 },   
-			{ Fn::log  , "log"  , 2 }, 	
-			{ Fn::exp  , "exp"  , 1 },	
-			{ Fn::sqrt , "sqrt" , 1 },
-			{ Fn::asinh, "asinh", 1 },	
-			{ Fn::acosh, "acosh", 1 },
-			{ Fn::atanh, "atanh", 1 },	
-			{ Fn::asin , "asin" , 1 },	
-			{ Fn::acos , "acos" , 1 },	
-			{ Fn::atan , "atan" , 1 },	
-			{ Fn::sinh , "sinh" , 1 },	
-			{ Fn::cosh , "cosh" , 1 },	
-			{ Fn::tanh , "tanh" , 1 },	
-			{ Fn::sin  , "sin"  , 1 },	
-			{ Fn::cos  , "cos"  , 1 },	
-			{ Fn::tan  , "tan"  , 1 },	
-			{ Fn::abs  , "abs"  , 1 },	
-			{ Fn::arg  , "arg"  , 1 },	
-			{ Fn::ln   , "ln"   , 1 },	
-			{ Fn::re   , "re"   , 1 },	
-			{ Fn::im   , "im"   , 1 },	
+			{ Fn::pow  , "pow"  , 2u },   
+			{ Fn::log  , "log"  , 2u }, 	
+			{ Fn::exp  , "exp"  , 1u },	
+			{ Fn::sqrt , "sqrt" , 1u },
+			{ Fn::asinh, "asinh", 1u },	
+			{ Fn::acosh, "acosh", 1u },
+			{ Fn::atanh, "atanh", 1u },	
+			{ Fn::asin , "asin" , 1u },	
+			{ Fn::acos , "acos" , 1u },	
+			{ Fn::atan , "atan" , 1u },	
+			{ Fn::sinh , "sinh" , 1u },	
+			{ Fn::cosh , "cosh" , 1u },	
+			{ Fn::tanh , "tanh" , 1u },	
+			{ Fn::sin  , "sin"  , 1u },	
+			{ Fn::cos  , "cos"  , 1u },	
+			{ Fn::tan  , "tan"  , 1u },	
+			{ Fn::abs  , "abs"  , 1u },	
+			{ Fn::arg  , "arg"  , 1u },	
+			{ Fn::ln   , "ln"   , 1u },	
+			{ Fn::re   , "re"   , 1u },	
+			{ Fn::im   , "im"   , 1u },	
 		});
-		static_assert(static_cast<unsigned>(props_table.front().type) == 0);
+		static_assert(static_cast<unsigned>(props_table.front().type) == 0u);
 		static_assert(std::is_sorted(props_table.begin(), props_table.end(), [](auto lhs, auto rhs) { return lhs.type < rhs.type; }));
 		static_assert(props_table.size() == static_cast<unsigned>(Fn::COUNT));
 
 		constexpr std::string_view name_of(const Fn type) noexcept { return props_table[static_cast<unsigned>(type)].name; }
 
-		//returns Fn::COUNT if name was not found
+		//returns Fn::COUNT if name is not in props_table
 		constexpr Fn type_of(const std::string_view name) noexcept { return search(props_table, &FnProps::name, name).type; }
 
 		constexpr std::size_t param_count(const Fn type) noexcept 

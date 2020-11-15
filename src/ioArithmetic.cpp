@@ -656,6 +656,19 @@ namespace bmath::intern {
 			using TypedIdx_T = BasicTypedIdx<Type_T>;
 			constexpr bool pattern = std::is_same_v<Type_T, pattern::PnType>;
 
+			if constexpr (pattern) {
+				if (!ref.store->valid_idx(ref.index) && ref.type != pattern::PnVar::value_proxy) [[unlikely]] {
+					str.append("ERROR");
+					return;
+				}
+			}
+			else {
+				if (!ref.store->valid_idx(ref.index)) [[unlikely]] {
+					str.append("ERROR");
+					return;
+				}
+			}
+
 			const int own_infixr = infixr(ref.type);
 			if (own_infixr <= parent_infixr) {
 				str.push_back('(');
@@ -754,6 +767,8 @@ namespace bmath::intern {
 		template void append_to_string<TypesUnion, Type>(const Ref ref, std::string& str, const int parent_infixr);
 		template void append_to_string<pattern::PnTypesUnion, pattern::PnType>(const pattern::PnRef ref, std::string& str, const int parent_infixr);
 
+
+
 		std::string print::to_pretty_string(const Ref ref, const int parent_infixr)
 		{
 			std::string str;
@@ -827,20 +842,11 @@ namespace bmath::intern {
 				}
 				assert(!first && "found product with only single factor -1 or zero factors");
 			}; //append_product
-			
-			const auto reverse_elems = [](auto range) {
-				StupidBufferVector<TypedIdx, 16> result;
-				for (const auto elem : range) {
-					result.push_back(elem);
-				}
-				std::reverse(result.begin(), result.end());
-				return result;
-			};
 
 			switch (ref.type) {
 			case Type(Op::sum): {
 				bool first = true;
-				for (const auto summand : reverse_elems(vc::range(ref))) {
+				for (const auto summand : vc::range(ref)) {
 					if (const auto val = get_negative_real(ref.new_at(summand))) {
 						//str += (first ? "" : " ");
 						append_real(*val, str);
@@ -856,7 +862,6 @@ namespace bmath::intern {
 							//str +=  (first ? "-" : " -");
 							str += "-";
 						}
-						std::reverse(product->other_factors.begin(), product->other_factors.end());
 						append_product(product->other_factors);
 					}
 					else {
@@ -869,7 +874,7 @@ namespace bmath::intern {
 				assert(!first && "found sum with zero summands");
 			} break;
 			case Type(Op::product): {
-				append_product(reverse_elems(vc::range(ref)));
+				append_product(vc::range(ref));
 			} break;
 			case Type(Fn::pow): {
 				const FnParams<TypedIdx>& params = *ref;
@@ -951,6 +956,11 @@ namespace bmath::intern {
 						+ std::string(str->data, StringSLC::array_size) + "\")");
 				}
 			};
+
+			if (!ref.store->valid_idx(ref.index)) [[unlikely]] {
+				rows.front().append(" ERROR");
+				return;
+			}
 
 			std::string& current_str = rows[ref.index];
 			switch (ref.type) {
