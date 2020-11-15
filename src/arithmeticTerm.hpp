@@ -546,19 +546,6 @@ namespace bmath::intern {
 		//allows to match a sum / product pn_ref in a sum / product ref regardless of order
 		bool permutation_equals(const pattern::PnRef pn_ref, const Ref ref, pattern::MatchData& match_data);
 
-		struct RematchResult
-		{
-			bool success, reset;
-			constexpr void combine(const RematchResult snd) { this->success |= snd.success; this->reset |= snd.reset; }
-		};
-
-		//assumes to have all pattern variables contained in pn_ref already set and currently match ref.
-		//if some pattern variables where set by the instance(s) containded in pn_ref, this function tries to match them to ref again,
-		//  but arranged differently.
-		//if no other match on ref was found, this function resets all pattern variables set by pn_ref.
-		//if another match was found, the corresponding entries in match_data are set.
-		RematchResult equals_another_way(const pattern::PnRef pn_ref, const Ref ref, pattern::MatchData& match_data);
-
 		//copies pn_ref with match_data into store, returns head of copied result.
 		[[nodiscard]] TypedIdx copy(const pattern::PnRef pn_ref, const pattern::MatchData& match_data, Store& store);
 

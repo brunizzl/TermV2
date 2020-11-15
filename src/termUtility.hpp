@@ -130,7 +130,14 @@ namespace bmath::intern {
 		}
 
 		StupidBufferVector(const StupidBufferVector&) = delete;
-		StupidBufferVector& operator=(const StupidBufferVector&) = delete;
+
+		template<std::size_t SndBuffer>
+		StupidBufferVector& operator=(const StupidBufferVector<Value_T, SndBuffer>& snd) noexcept
+		{
+			this->clear();
+			this->reserve(snd.size_);
+			std::copy(snd.data_, snd.data_ + snd.size_, this->data_);
+		}
 
 		template<std::size_t SndBuffer>
 		StupidBufferVector& operator=(StupidBufferVector<Value_T, SndBuffer>&& snd) noexcept
