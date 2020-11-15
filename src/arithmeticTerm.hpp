@@ -543,8 +543,18 @@ namespace bmath::intern {
 		//if match was not succsessfull, match_data is NOT reset and false is returned
 		bool equals(const pattern::PnRef pn_ref, const Ref ref, pattern::MatchData& match_data);
 
+		struct PermutationEqualsRes
+		{
+			StupidBufferVector<TypedIdx, 12> matched;
+			StupidBufferVector<TypedIdx, 12> not_matched;
+		};
+
 		//allows to match a sum / product pn_ref in a sum / product ref regardless of order
-		bool permutation_equals(const pattern::PnRef pn_ref, const Ref ref, pattern::MatchData& match_data);
+		//if no match was found, both PermutationEqualsRes.matched and PermutationEqualsRes.not_matched will be empty, 
+		//  else PermutationEqualsRes.matched will contain the elements in term where a corrensponding part in pattern was found and
+		//  PermutationEqualsRes.not_matched will contain the leftovers (-> empty if MultiVar paticipated).
+		//it is assumed, that pn_ref and ref are both the same variadic type (eighter sum and sum or product and product)
+		PermutationEqualsRes permutation_equals(const pattern::PnRef pn_ref, const Ref ref, pattern::MatchData& match_data);
 
 		//copies pn_ref with match_data into store, returns head of copied result.
 		[[nodiscard]] TypedIdx copy(const pattern::PnRef pn_ref, const pattern::MatchData& match_data, Store& store);

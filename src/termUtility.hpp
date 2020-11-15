@@ -134,6 +134,7 @@ namespace bmath::intern {
 		template<std::size_t SndBuffer>
 		StupidBufferVector& operator=(const StupidBufferVector<Value_T, SndBuffer>& snd) noexcept
 		{
+			assert(false && "please be aware this function is not yet tested");
 			this->clear();
 			this->reserve(snd.size_);
 			std::copy(snd.data_, snd.data_ + snd.size_, this->data_);

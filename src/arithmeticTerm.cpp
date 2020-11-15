@@ -1069,23 +1069,25 @@ namespace bmath::intern {
 				auto range_2 = vc::range(ref_2);
 				auto iter_1 = begin(range_1);
 				auto iter_2 = begin(range_2);
-				for (; iter_1 != end(range_1) && iter_2 != end(range_2); ++iter_1, ++iter_2) {
+				const auto end_1 = end(range_1);
+				const auto end_2 = end(range_2);
+				for (; iter_1 != end_1 && iter_2 != end_2; ++iter_1, ++iter_2) {
 					const auto iter_compare = tree::compare(ref_1.new_at(*iter_1), ref_2.new_at(*iter_2));
 					if (iter_compare != std::strong_ordering::equal) [[likely]] {
 						return iter_compare;
 					}
 				}
-				if (iter_1 == end(range_1) && iter_2 == end(range_2)) {
+				if (iter_1 == end_1 && iter_2 == end_2) {
 					return std::strong_ordering::equal;
 				}
 				else {
-					return iter_1 == end(range_1) ?
+					return iter_1 == end_1 ?
 						std::strong_ordering::less :
 						std::strong_ordering::greater;
 				}
 			} break;
 			case Type_T1(Op::named_fn): {
-				const auto name_cmp = fn::compare_name(ref_2, ref_1); //reverse order, as to_pretty_string reverses again
+				const auto name_cmp = fn::compare_name(ref_1, ref_2);
 				if (name_cmp != std::strong_ordering::equal) {
 					return name_cmp;
 				}
@@ -1093,28 +1095,30 @@ namespace bmath::intern {
 				auto range_2 = fn::range(ref_2);
 				auto iter_1 = begin(range_1);
 				auto iter_2 = begin(range_2);
-				for (; iter_1 != end(range_1) && iter_2 != end(range_2); ++iter_1, ++iter_2) {
+				const auto end_1 = end(range_1);
+				const auto end_2 = end(range_2);
+				for (; iter_1 != end_1 && iter_2 != end_2; ++iter_1, ++iter_2) {
 					const auto iter_compare = tree::compare(ref_1.new_at(*iter_1), ref_2.new_at(*iter_2));
 					if (iter_compare != std::strong_ordering::equal) [[likely]] {
 						return iter_compare;
 					}
 				}
-				if (iter_1 == end(range_1) && iter_2 == end(range_2)) {
+				if (iter_1 == end_1 && iter_2 == end_2) {
 					return std::strong_ordering::equal;
 				}
 				else {
-					return iter_1 == end(range_1) ?
+					return iter_1 == end_1 ?
 						std::strong_ordering::less :
 						std::strong_ordering::greater;
 				}
 			} break;
 			default: {
-				assert(ref_1.type.is<Fn>() && ref_2.type.is<Fn>()); //if this assert hits, the switch above needs more cases.
+				assert(ref_1.type.is<Fn>() && ref_2.type.is<Fn>());
 				auto range_1 = fn::range(ref_1->fn_params, ref_1.type);
 				auto range_2 = fn::range(ref_2->fn_params, ref_2.type);
 				auto iter_1 = range_1.begin();
 				auto iter_2 = range_2.begin();
-				for (; iter_1 != range_1.end(); ++iter_1, ++iter_2) { //iter_1 and iter_2 both go over same number of params
+				for (; iter_1 != range_1.end(); ++iter_1, ++iter_2) { //iter_1 and iter_2 both go over same number of params -> only test iter_1 for end
 					const auto iter_compare = tree::compare(ref_1.new_at(*iter_1), ref_2.new_at(*iter_2));
 					if (iter_compare != std::strong_ordering::equal) [[likely]] {
 						return iter_compare;
@@ -1123,7 +1127,7 @@ namespace bmath::intern {
 				return std::strong_ordering::equal;
 			} break;
 			case Type_T1(Leaf::variable): {
-				return str_slc::compare(ref_2.cast<StringSLC>(), ref_1.cast<StringSLC>()); //reverse order, as to_pretty_string reverses again
+				return str_slc::compare(ref_1.cast<StringSLC>(), ref_2.cast<StringSLC>());
 			} break;
 			case Type_T1(Leaf::complex): {
 				const Complex& complex_1 = *ref_1;
@@ -1133,7 +1137,7 @@ namespace bmath::intern {
 			case Type_T1(pattern::_tree_match): if constexpr (pattern) {
 				const pattern::TreeMatchVariable& var_1 = *ref_1;
 				const pattern::TreeMatchVariable& var_2 = *ref_2;
-				return var_1.match_data_idx <=> var_2.match_data_idx; //reverse to make pretty_string prettier
+				return var_1.match_data_idx <=> var_2.match_data_idx;
 			} break;
 			case Type_T1(pattern::_value_match): if constexpr (pattern) {
 				const pattern::ValueMatchVariable& var_1 = *ref_1;
@@ -1419,7 +1423,8 @@ namespace bmath::intern {
 					case PnType(Op::sum): 
 						[[fallthrough]];
 					case PnType(Op::product): {
-						return match::permutation_equals(pn_ref, ref, match_data);
+						const auto [matched, not_matched] = match::permutation_equals(pn_ref, ref, match_data);
+						return matched.size() > 0u && not_matched.size() == 0u;
 					} break;
 					case PnType(Op::named_fn): {
 						if (fn::compare_name(ref, pn_ref) != std::strong_ordering::equal) {
@@ -1536,7 +1541,7 @@ namespace bmath::intern {
 		//this function currently has complexity O(m^n) where m is count of ref's elements and n is count of pn_ref's elements.
 		//in principle it could be turend to O(m*n), but i have not yet turned this into a working algorithm.
 		//the tricky part is to ensure, that one will never 
-		bool permutation_equals(const pattern::PnRef pn_ref, const Ref ref, pattern::MatchData& match_data)
+		PermutationEqualsRes permutation_equals(const pattern::PnRef pn_ref, const Ref ref, pattern::MatchData& match_data)
 		{
 			using namespace pattern;
 			assert(pn_ref.type == ref.type && (is_one_of<Op::sum, Op::product>(ref.type)));
@@ -1568,8 +1573,8 @@ namespace bmath::intern {
 				fold::simple_fold<fold::Void>(pn_ref, reset_single);
 			};
 
-			StupidBufferVector<TypedIdx, 12> matched;
-			StupidBufferVector<TypedIdx, 12> not_matched;
+			PermutationEqualsRes result;
+			auto& [matched, not_matched] = result;
 			for (const TypedIdx elem : vc::range(ref)) {
 				not_matched.push_back(elem);
 			}
@@ -1593,11 +1598,13 @@ namespace bmath::intern {
 				if (ref.type == Op::sum     && pn_data_i.elem.get_type() == MultiVar::summands ||
 					ref.type == Op::product && pn_data_i.elem.get_type() == MultiVar::factors ) [[unlikely]]
 				{
-					//take null_value's out of not_matched and put the rest into corresponding vector in match_data
-					not_matched.shorten_to(std::remove(not_matched.begin(), not_matched.end(), null_value));
+					not_matched.shorten_to(std::remove(not_matched.begin(), not_matched.end(), null_value)); //remove null_value's from not_matched
+					for (const TypedIdx elem : not_matched) {
+						matched.emplace_back(elem);
+					}
 					SharedMultiDatum& info = match_data.multi_info(pn_data_i.elem.get_index());
 					info.match_indices = std::move(not_matched);
-					return true;
+					return result;
 				}
 
 				const PnRef pn_elem_i_ref = pn_ref.new_at(pn_data_i.elem);
@@ -1631,14 +1638,17 @@ namespace bmath::intern {
 					continue;
 				}
 				else {
-					return false;
+					matched.clear();
+					not_matched.clear();
+					return result;
 				}
 
 			found_match:
 				pn_i++;
 			}
 
-			return std::find_if(not_matched.begin(), not_matched.end(), [null_value](const auto val) { return val != null_value; }) == not_matched.end();
+			not_matched.shorten_to(std::remove(not_matched.begin(), not_matched.end(), null_value)); //remove null_value's from not_matched
+			return result;
 		} //permutation_equals
 
 		TypedIdx copy(const pattern::PnRef pn_ref, const pattern::MatchData& match_data, Store& store)
@@ -1723,17 +1733,37 @@ namespace bmath::intern {
 			}
 		} //copy
 
-		std::optional<TypedIdx> match_and_replace(const pattern::PnRef in, const pattern::PnRef out, const MutRef ref)
+		std::optional<TypedIdx> match_and_replace(const pattern::PnRef from, const pattern::PnRef to, const MutRef ref)
 		{		
 
-			pattern::MatchData match_data;
-			if (match::equals(in, ref, match_data)) {
-				const TypedIdx copied_out = match::copy(out, match_data, *ref.store);
-				//idea for future: maybe buffer copy in third store first and then delete matched elems bevore inserting copy?
-				//would result in ref.store having fewer free slots and might even avoid reallocation in ref.store
-				//perhaps only sensible, if buffer itself most likely would not allocate.
-				tree::free(ref);
-				return { copied_out };
+			if ((from.type == Op::sum || from.type == Op::product) && (from.type == ref.type)) {
+				pattern::MatchData match_data;
+				const auto [matched_elems, remaining_elems] = match::permutation_equals(from, ref, match_data);
+				if (matched_elems.size() > 0u) {
+					free_slc(ref.cast<TypedIdxSLC>()); //shallow deletion only of initial sum / product itself, not of its operands
+					const TypedIdx pattern_copy = match::copy(to, match_data, *ref.store);
+					//idea for future: maybe buffer copy in third store first and then delete matched elems bevore inserting copy?
+					//would result in ref.store having fewer free slots and might even avoid reallocation in ref.store
+					//makes most sense, if buffer itself most likely would not allocate.
+					for (const TypedIdx elem : matched_elems) { //delete each summand / factor occuring in match
+						tree::free(ref.new_at(elem));
+					}
+					const std::uint32_t res_idx = ref.store->insert(TypedIdxSLC({ pattern_copy }));
+					std::uint32_t last_node_idx = res_idx;
+					for (const TypedIdx elem : remaining_elems) { //copy back all summands / factors not part of match
+						last_node_idx = TypedIdxSLC::insert_new(*ref.store, last_node_idx, elem);
+					}
+					return { TypedIdx(res_idx, ref.type) };
+				}
+			}
+			else {
+				pattern::MatchData match_data;
+				if (match::equals(from, ref, match_data)) {
+					const TypedIdx pattern_copy = match::copy(to, match_data, *ref.store);
+					//same idea as above may also be applied here.
+					tree::free(ref);
+					return { pattern_copy };
+				}
 			}
 			return {};
 		} //match_and_replace
