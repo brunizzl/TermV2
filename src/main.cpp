@@ -14,6 +14,8 @@ TODO:
  - write data structure on abstraction layer above PnTerm to group multiple pattens
  - (perhaps?) let each PnTerm have a name in form of a constant c-string
  - enable rematch or write factorisation per hand (if from hand, perhaps introduce some way to call such routines as pattern?)
+ - add pattern::MultiVar::params for variadic patterns (idea: params can behave like summands or factors if occuring in sum / product)
+ - make complex value match, find new name for tree option perhaps?
 */
 
 
