@@ -50,7 +50,7 @@ namespace bmath::intern {
 		bool valid_idx(const std::size_t idx) const noexcept
 		{
 			if (this->vector.size() < idx + 1u) return false; //index not currently owned by vector
-			if (idx % table_dist == 0u) return false; //index belongs not to value, but to table
+			if (idx % table_dist == 0u) return false; //index is not value position, but points at table
 			const Table& table = this->vector[idx  - (idx % table_dist)].table;
 			if (!table.test(idx % table_dist)) return false; //index not currently populated
 			return true;
@@ -196,6 +196,7 @@ namespace bmath::intern {
 		}
 
 	public:
+		bool valid_idx(const std::size_t idx) const noexcept { return true; } //that boring testability is task of Table version
 
 		constexpr BasicStore_FreeList(std::size_t reserve = 0) :vector() { vector.reserve(reserve); }
 

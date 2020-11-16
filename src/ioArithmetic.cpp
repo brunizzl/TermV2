@@ -635,7 +635,7 @@ namespace bmath::intern {
 			constexpr bool pattern = std::is_same_v<Type_T, pattern::PnType>;
 
 			if constexpr (pattern) {
-				if (!ref.store->valid_idx(ref.index) && ref.type != pattern::PnVar::value_proxy) [[unlikely]] {
+				if (!ref.store->valid_idx(ref.index) && ref.type != pattern::PnVar::value_proxy && !ref.type.is<pattern::MultiVar>()) [[unlikely]] {
 					str.append("ERROR");
 					return;
 				}

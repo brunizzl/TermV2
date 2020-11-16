@@ -180,7 +180,7 @@ namespace bmath::intern {
 				tokenized[curr_idx] = token::number;
 			}
 			//change unary minus to token::unary_minus
-			else if (is_one_of<token::open_grouping, token::equals, token::comma>(last_nonspace_tn) && curr_ch == '-') {
+			else if (is_one_of<token::open_grouping, token::equals, token::comma, token::bar>(last_nonspace_tn) && curr_ch == '-') {
 				tokenized[curr_idx] = token::unary_minus;
 			}
 			// if it is, change token::unary_minus to part of number
