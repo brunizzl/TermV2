@@ -121,9 +121,9 @@ namespace bmath::intern::debug {
 			//{"a, b | a^2 - 2 a b + b^2 = (a - b)^2"}, 
 			//{"x | sin(x) / cos(x) = tan(x)"}, 
 			//{"x | 0 x = 0"}, 
-			{"a | a + a = 2 a"}, 
-			{"a, bs :factors | a bs + a = a (bs + 1)"}, 
-			{"a, bs :factors, cs :factors | a bs + a cs = a (bs + cs)"}, //will only work very few times for now (no rematch implemented yet)
+			//{"a | a + a = 2 a"}, 
+			//{"a, bs :factors | a bs + a = a (bs + 1)"}, 
+			//{"a, bs :factors, cs :factors | a bs + a cs = a (bs + cs)"}, //will only work very few times for now (no rematch implemented yet)
 			//{"b, a | a b + a = a (b + 1)"}, 
 			//{"a :no_val, b, c | a b + a c = a (b + c)"}, 
 			//{"b, a :no_val, c | a b + a c = a (b + c)"}, 
@@ -132,8 +132,10 @@ namespace bmath::intern::debug {
 			//{ "fib(0) = 0" },
 			//{ "fib(1) = 1" },
 			//{ "n | fib(n) = fib(n - 1) + fib(n - 2)" },
-			//{ "a :real, b | a^2 + (2 a) b + b^2 = (a + b)^2" }, 
+			//{ "a :complex, b | a^2 + (2 a) b + b^2 = (a + b)^2" }, 
 			//{ "a :int | 2 a + 1 = 'how_odd'" }, 
+			{ "a, as :params | drop(0, list(a, as)) = list(as)" },
+			{ "n :nat, a, as :params | drop(n, list(a, as)) = drop(n - 1, list(as))" },
 		});
 
 		for (const auto& p : patterns) {
@@ -156,11 +158,11 @@ namespace bmath::intern::debug {
 					changed = false;
 					for (const auto& p : patterns) {
 						if (test.match_and_replace(p)) {
-							std::cout << test.to_memory_layout() << "\n";
 							changed = true;
 							std::cout << "replace -> " << test.to_string() << "\n";
 							test.standardize();
 							std::cout << "sort    -> " << test.to_string() << "\n";
+							std::cout << test.to_memory_layout() << "\n";
 							break;
 						}
 					}

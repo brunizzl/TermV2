@@ -132,7 +132,7 @@ namespace bmath::intern {
 		};
 
 		//represent not actual node in pattern tree, as all match info is stored in MultiMatchDatum in MatchData		
-		enum class MultiVar { summands, factors, COUNT };
+		enum class MultiVar { summands, factors, params, COUNT };
 
 
 		using PnType = SumEnum<MultiVar, PnVar, Type>; //dont list all enums making up Type directly, to allow converion to Type
@@ -144,6 +144,7 @@ namespace bmath::intern {
 		static constexpr unsigned _value_proxy = unsigned(PnType(PnVar::value_proxy));
 		static constexpr unsigned _summands    = unsigned(PnType(MultiVar::summands));
 		static constexpr unsigned _factors     = unsigned(PnType(MultiVar::factors));
+		static constexpr unsigned _params      = unsigned(PnType(MultiVar::params));
 
 		using PnTypedIdx = BasicTypedIdx<PnType>;
 		using PnTypedIdxSLC = TermSLC<PnTypedIdx>;
@@ -194,6 +195,7 @@ namespace bmath::intern {
 			natural_0, //{0, 1, 2, ...}
 			integer,
 			real,
+			complex,
 			negative,     //implies real   
 			positive,     //implies real     	
 			not_negative, //implies real  
@@ -296,7 +298,7 @@ namespace bmath::intern {
 
 		struct SharedValueDatum
 		{
-			double value = 0.0;
+			Complex value = 0.0;
 			TypedIdx match_idx = TypedIdx{}; //indexes in Term to simplify (only usefull during rematch to only match later elements)
 			PnTypedIdx responsible = PnTypedIdx{}; //the instance of ValueMatchVariable that was setting value
 

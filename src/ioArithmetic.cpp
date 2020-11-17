@@ -72,12 +72,12 @@ namespace bmath::intern {
 			{ Op::sum             , "sum"           },
 			{ Op::product         , "product"       },
 			{ Leaf::variable      , "variable"      },
-			{ Leaf::complex       , "complex"       },
 			{ Restr::function     , "fn"            },
 			{ Form::natural       , "nat"           },
 			{ Form::natural_0     , "nat0"          },
 			{ Form::integer       , "int"           },
 			{ Form::real          , "real"          },
+			{ Form::complex       , "complex"       },
 			{ Form::negative      , "negative"      },
 			{ Form::not_negative  , "not_negative"  },
 			{ Form::positive      , "positive"      },
@@ -87,6 +87,7 @@ namespace bmath::intern {
 			{ Restr::no_val       , "no_val"        },
 			{ MultiVar::summands  , "summands"      },
 			{ MultiVar::factors   , "factors"       },
+			{ MultiVar::params    , "params"        },
 		});
 
 		constexpr std::string_view name_of(const PnVariablesType r) noexcept { return find(type_table, &TypeProps::type, r).name; }
@@ -736,6 +737,11 @@ namespace bmath::intern {
 				str.append(std::to_string(ref.index));
 				str.append("...");
 			} break;
+			case Type_T(pattern::_params): if constexpr (pattern) {
+				str.push_back('E');
+				str.append(std::to_string(ref.index));
+				str.append("...");
+			} break;
 			}
 
 			if (own_infixr <= parent_infixr) {
@@ -1012,6 +1018,8 @@ namespace bmath::intern {
 			case Type_T(pattern::_summands):
 				[[fallthrough]];
 			case Type_T(pattern::_factors):
+				[[fallthrough]];
+			case Type_T(pattern::_params):
 				return;
 			}
 

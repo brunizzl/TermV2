@@ -252,7 +252,8 @@ namespace bmath::intern {
 			case Form::natural_0: accept &= re >= 0.0;                      [[fallthrough]];
 			case Form::integer:   accept &= re - std::uint64_t(re) == 0.0; 
 			                      accept &= (std::abs(re) <= max_save_int); [[fallthrough]];
-			case Form::real:      accept &= im == 0.0;
+			case Form::real:      accept &= im == 0.0;                      [[fallthrough]];
+			case Form::complex:
 				return accept;
 			case Form::negative:      return re <   0.0 && im == 0.0;
 			case Form::positive:      return re >   0.0 && im == 0.0;
@@ -689,6 +690,8 @@ namespace bmath::intern {
 				break;
 			case Type_T(pattern::_factors):
 				break;
+			case Type_T(pattern::_params):
+				break;
 			}
 		} //free
 
@@ -755,6 +758,8 @@ namespace bmath::intern {
 			case Type_T(pattern::_summands):
 				break;
 			case Type_T(pattern::_factors):
+				break;
+			case Type_T(pattern::_params):
 				break;
 			}
 			return ref.typed_idx(); //as default the nodes position or type does not change.
@@ -856,6 +861,8 @@ namespace bmath::intern {
 			case Type_T(pattern::_summands):
 				break;
 			case Type_T(pattern::_factors):
+				break;
+			case Type_T(pattern::_params):
 				break;
 			}
 			return {};
@@ -1016,6 +1023,8 @@ namespace bmath::intern {
 				break;
 			case Type_T(pattern::_factors):
 				break;
+			case Type_T(pattern::_params):
+				break;
 			}
 			return {};
 		} //combine_values_exact
@@ -1132,6 +1141,9 @@ namespace bmath::intern {
 			case Type_T1(pattern::_factors): if constexpr (pattern) {
 				return ref_1.index <=> ref_2.index;
 			} break;
+			case Type_T1(pattern::_params): if constexpr (pattern) {
+				return ref_1.index <=> ref_2.index;
+			} break;
 			}
 			assert(false); 
 			return std::strong_ordering::equal;
@@ -1242,6 +1254,8 @@ namespace bmath::intern {
 			case Type_T(pattern::_summands):
 				[[fallthrough]];
 			case Type_T(pattern::_factors):	//return same ref, as multi_match does not own any nodes in src_store anyway (index has different meaning)
+				[[fallthrough]];
+			case Type_T(pattern::_params):
 				return src_ref.typed_idx(); 
 			}
 			assert(false); 
@@ -1335,6 +1349,8 @@ namespace bmath::intern {
 					break;
 				case Type_T(pattern::_factors):
 					break;
+				case Type_T(pattern::_params):
+					break;
 				}
 				return nullptr;
 			}
@@ -1398,11 +1414,25 @@ namespace bmath::intern {
 						auto iter = begin(range);
 						const auto stop = end(range);
 						for (; pn_iter != pn_stop && iter != stop; ++pn_iter, ++iter) {
-							if (!match::equals(pn_ref.new_at(*pn_iter), ref.new_at(*iter), match_data)) {
+							const auto pn_iter_ref = pn_ref.new_at(*pn_iter);
+							const auto iter_ref = ref.new_at(*iter);
+							if (pn_iter_ref.type == MultiVar::params) {
+								SharedMultiDatum& info = match_data.multi_info(pn_iter_ref.index);
+								assert(info.match_indices.size() == 0u);
+								while (iter != stop) {
+									info.match_indices.push_back(*iter);
+								}
+								return true;
+							}
+							if (!match::equals(pn_iter_ref, iter_ref, match_data)) {
 								return false;
 							}
 						}
-						return pn_iter == pn_stop && iter == stop;
+
+						if (iter == stop) {
+							return pn_iter == pn_stop || pn_iter->get_type() == MultiVar::params;
+						}
+						return false;
 					} break;
 					default: {
 						assert(pn_ref.type.is<Fn>());
@@ -1429,7 +1459,6 @@ namespace bmath::intern {
 				}
 			}
 			else {
-				assert(pn_ref.type.is<PnVar>());
 
 				switch (pn_ref.type) {
 				case PnType(PnVar::tree_match): {
@@ -1454,15 +1483,14 @@ namespace bmath::intern {
 					const ValueMatchVariable& var = *pn_ref;
 					auto& match_info = match_data.info(var);
 					const OptComplex this_value = pn_tree::eval_value_match(pn_ref.new_at(var.match_idx), *ref); 
-					if (!this_value || this_value.val.imag() != 0.0 || !has_form(*this_value, var.form)) {
+					if (!this_value || !has_form(*this_value, var.form)) {
 						return false;
 					}
 					else if (match_info.is_set()) {
 						return this_value.val == match_info.value;
 					}
 					else {
-						static_assert(std::is_same_v<decltype(match_info.value), double>, "else not only transfer real");
-						match_info.value = this_value->real();
+						match_info.value = *this_value;
 						match_info.match_idx = ref.typed_idx();
 						match_info.responsible = pn_ref.typed_idx();
 						return true;
@@ -1491,6 +1519,8 @@ namespace bmath::intern {
 						return true;
 					}
 					return false;
+				case PnType(MultiVar::params): //assumed to be handeled only as param in named_fn
+					[[fallthrough]];
 				default:
 					assert(false);
 					return false;
