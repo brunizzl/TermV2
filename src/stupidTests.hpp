@@ -134,8 +134,8 @@ namespace bmath::intern::debug {
 			//{ "n | fib(n) = fib(n - 1) + fib(n - 2)" },
 			//{ "a :complex, b | a^2 + (2 a) b + b^2 = (a + b)^2" }, 
 			//{ "a :int | 2 a + 1 = 'how_odd'" }, 
-			{ "a, as :params | drop(0, list(a, as)) = list(as)" },
-			{ "n :nat, a, as :params | drop(n, list(a, as)) = drop(n - 1, list(as))" },
+			{ "as :params | drop(0, list(as)) = list(as)" },
+			{ "n :nat, a :any, as :params | drop(n, list(a, as)) = drop(n - 1, list(as))" },
 		});
 
 		for (const auto& p : patterns) {

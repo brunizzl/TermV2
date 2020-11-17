@@ -437,6 +437,8 @@ namespace bmath::intern {
 					break;
 				case PnType(MultiVar::factors):
 					break;
+				case PnType(MultiVar::params):
+					break;
 				}
 				return nullptr;
 			} //find_value_match_subtree
@@ -508,6 +510,8 @@ namespace bmath::intern {
 					case PnType(MultiVar::summands):
 						assert(false); break;
 					case PnType(MultiVar::factors):
+						assert(false); break;
+					case PnType(MultiVar::params):
 						assert(false); break;
 					case PnType(Fn::pow): {
 						FnParams<PnTypedIdx>* params = &store.at(lhs_index).fn_params;
@@ -1132,15 +1136,12 @@ namespace bmath::intern {
 				}
 				return tree::compare(ref_1.new_at(var_1.copy_idx), ref_2.new_at(var_2.copy_idx));
 			} break;
-			case Type_T1(pattern::_value_proxy): if constexpr (pattern) {
-				return ref_1.index <=> ref_2.index;
-			} break;
-			case Type_T1(pattern::_summands): if constexpr (pattern) {
-				return ref_1.index <=> ref_2.index;
-			} break;
-			case Type_T1(pattern::_factors): if constexpr (pattern) {
-				return ref_1.index <=> ref_2.index;
-			} break;
+			case Type_T1(pattern::_value_proxy): 
+				[[fallthrough]];
+			case Type_T1(pattern::_summands): 
+				[[fallthrough]];
+			case Type_T1(pattern::_factors): 
+				[[fallthrough]];
 			case Type_T1(pattern::_params): if constexpr (pattern) {
 				return ref_1.index <=> ref_2.index;
 			} break;
@@ -1255,8 +1256,9 @@ namespace bmath::intern {
 				[[fallthrough]];
 			case Type_T(pattern::_factors):	//return same ref, as multi_match does not own any nodes in src_store anyway (index has different meaning)
 				[[fallthrough]];
-			case Type_T(pattern::_params):
-				return src_ref.typed_idx(); 
+			case Type_T(pattern::_params): if constexpr (src_pattern) {
+					return src_ref.typed_idx();
+			} break;
 			}
 			assert(false); 
 			return TypedIdx_T();
@@ -1421,6 +1423,7 @@ namespace bmath::intern {
 								assert(info.match_indices.size() == 0u);
 								while (iter != stop) {
 									info.match_indices.push_back(*iter);
+									++iter;
 								}
 								return true;
 							}
@@ -1663,8 +1666,16 @@ namespace bmath::intern {
 				NamedFn dst_function;
 				std::uint32_t last_node_idx = store.insert(TypedIdxSLC());
 				dst_function.params_idx = last_node_idx;
-				for (const auto param : fn::range(pn_ref)) {
-					const TypedIdx dst_param = match::copy(pn_ref.new_at(param), match_data, store);
+				for (const PnTypedIdx param : fn::range(pn_ref)) {
+					const auto param_ref = pn_ref.new_at(param);
+					if (param_ref.type == MultiVar::params) {
+						for (const TypedIdx matched_param : match_data.multi_info(param_ref.index).match_indices) {
+							const TypedIdx dst_param = tree::copy(Ref(store, matched_param), store); //call normal copy!
+							last_node_idx = TypedIdxSLC::insert_new(store, last_node_idx, dst_param);
+						}
+						break;
+					}
+					const TypedIdx dst_param = match::copy(param_ref, match_data, store);
 					last_node_idx = TypedIdxSLC::insert_new(store, last_node_idx, dst_param);
 				}
 
@@ -1707,11 +1718,14 @@ namespace bmath::intern {
 				std::uint32_t last_node_idx = res_idx;
 				const SharedMultiDatum& info = match_data.multi_info(pn_ref.index);
 				for (const TypedIdx elem : info.match_indices) {
-					const TypedIdx dst_elem = tree::copy(Ref(store, elem), store);
+					const TypedIdx dst_elem = tree::copy(Ref(store, elem), store); //call to different copy!
 					last_node_idx = TypedIdxSLC::insert_new(store, last_node_idx, dst_elem);
 				}
 				return TypedIdx(res_idx, pn_ref.type == MultiVar::summands ? Op::sum : Op::product);			
 			} break;
+			case PnType(MultiVar::params):  //already handeled in named_fn
+				assert(false);
+				return TypedIdx();
 			}
 		} //copy
 
@@ -1860,6 +1874,8 @@ namespace bmath::intern {
 				break;
 			case Type_T(pattern::_factors):
 				break;
+			case Type_T(pattern::_params):
+				break;
 			}
 			return apply(ref); 
 		} //simple_fold
@@ -1912,6 +1928,8 @@ namespace bmath::intern {
 			case Type_T(pattern::_summands):
 				[[fallthrough]];
 			case Type_T(pattern::_factors):
+				[[fallthrough]];
+			case Type_T(pattern::_params):
 				return leaf_apply(ref);
 			}
 		} //tree_fold

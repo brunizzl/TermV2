@@ -130,6 +130,7 @@ namespace bmath::intern {
 			{ pattern::PnVar::value_proxy     , 6 },
 			{ pattern::MultiVar::summands     , 6 },
 			{ pattern::MultiVar::factors      , 6 },
+			{ pattern::MultiVar::params       , 6 },
 		});
 		static_assert(std::is_sorted(infixr_table.begin(), infixr_table.end(), [](auto a, auto b) { return a.second < b.second; }));
 		constexpr int infixr(pattern::PnType type) { return find(infixr_table, &std::pair<pattern::PnType, int>::first, type).second; }
@@ -1163,6 +1164,11 @@ namespace bmath::intern {
 			} break;
 			case Type_T(pattern::_factors): if constexpr (pattern) {
 				current_str += 'F';		
+				current_str += std::to_string(ref.index);
+				current_str += "...";
+			} break;
+			case Type_T(pattern::_params): if constexpr (pattern) {
+				current_str += 'E';		
 				current_str += std::to_string(ref.index);
 				current_str += "...";
 			} break;
