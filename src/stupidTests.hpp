@@ -21,11 +21,9 @@ namespace bmath::intern::debug {
 			<< "PnType(Op::sum)                 = " << unsigned(PnType(Op::sum))                 << "\n"
 			<< "PnType(Op::product)             = " << unsigned(PnType(Op::product))             << "\n"
 			<< "PnType(Op::named_fn)            = " << unsigned(PnType(Op::named_fn))            << "\n"
-			<< "PnType(Op::COUNT)               = " << unsigned(PnType(Op::COUNT))               << "\n"
 			                                                                                     << "\n"
 			<< "PnType(Leaf::variable)          = " << unsigned(PnType(Leaf::variable))          << "\n"
 			<< "PnType(Leaf::complex)           = " << unsigned(PnType(Leaf::complex))           << "\n"
-			<< "PnType(Leaf::COUNT)             = " << unsigned(PnType(Leaf::COUNT))             << "\n"
 			                                                                                     << "\n"
 			<< "PnType(Fn::pow)                 = " << unsigned(PnType(Fn::pow))                 << "\n"
 			<< "PnType(Fn::log)                 = " << unsigned(PnType(Fn::log))                 << "\n"
@@ -48,70 +46,56 @@ namespace bmath::intern::debug {
 			<< "PnType(Fn::ln)                  = " << unsigned(PnType(Fn::ln))                  << "\n"
 			<< "PnType(Fn::re)                  = " << unsigned(PnType(Fn::re))                  << "\n"
 			<< "PnType(Fn::im)                  = " << unsigned(PnType(Fn::im))                  << "\n"
-			<< "PnType(Fn::COUNT)               = " << unsigned(PnType(Fn::COUNT))               << "\n"
-			                                                                                     << "\n"
-			<< "PnType(Type::COUNT)             = " << unsigned(PnType(Type::COUNT))             << "\n"
 			                                                                                     << "\n"
 			<< "PnType(PnVar::tree_match)       = " << unsigned(PnType(PnVar::tree_match))       << "\n"
 			<< "PnType(PnVar::value_match)      = " << unsigned(PnType(PnVar::value_match))      << "\n"
 			<< "PnType(PnVar::value_proxy)      = " << unsigned(PnType(PnVar::value_proxy))      << "\n"
-			<< "PnType(PnVar::COUNT)            = " << unsigned(PnType(PnVar::COUNT))            << "\n"
 			                                                                                     << "\n"
 			<< "PnType(MultiVar::summands)      = " << unsigned(PnType(MultiVar::summands))      << "\n"
 			<< "PnType(MultiVar::factors)       = " << unsigned(PnType(MultiVar::factors))       << "\n"
-			<< "PnType(MultiVar::COUNT)         = " << unsigned(PnType(MultiVar::COUNT))         << "\n"
-			                                                                                     << "\n"
-			<< "PnType::COUNT                   = " << unsigned(PnType::COUNT)                   << "\n"
+			<< "PnType(MultiVar::params)        = " << unsigned(PnType(MultiVar::params))        << "\n"
 			                                                                                     << "\n"
 			                                                                                     << "\n"
 			;
 	} //enumerate_pn_type
 
-	//output as of 15.11.2020:
+	//output as of 18.11.2020:
 		//PnType(Op::sum)                 = 0
 		//PnType(Op::product)             = 1
 		//PnType(Op::named_fn)            = 2
-		//PnType(Op::COUNT)               = 3
 		//
-		//PnType(Leaf::variable)          = 4
-		//PnType(Leaf::complex)           = 5
-		//PnType(Leaf::COUNT)             = 6
+		//PnType(Leaf::variable)          = 3
+		//PnType(Leaf::complex)           = 4
 		//
-		//PnType(Fn::pow)                 = 7
-		//PnType(Fn::log)                 = 8
-		//PnType(Fn::exp)                 = 9
-		//PnType(Fn::sqrt)                = 10
-		//PnType(Fn::asinh)               = 11
-		//PnType(Fn::acosh)               = 12
-		//PnType(Fn::atanh)               = 13
-		//PnType(Fn::asin)                = 14
-		//PnType(Fn::acos)                = 15
-		//PnType(Fn::atan)                = 16
-		//PnType(Fn::sinh)                = 17
-		//PnType(Fn::cosh)                = 18
-		//PnType(Fn::tanh)                = 19
-		//PnType(Fn::sin)                 = 20
-		//PnType(Fn::cos)                 = 21
-		//PnType(Fn::tan)                 = 22
-		//PnType(Fn::abs)                 = 23
-		//PnType(Fn::arg)                 = 24
-		//PnType(Fn::ln)                  = 25
-		//PnType(Fn::re)                  = 26
-		//PnType(Fn::im)                  = 27
-		//PnType(Fn::COUNT)               = 28
+		//PnType(Fn::pow)                 = 5
+		//PnType(Fn::log)                 = 6
+		//PnType(Fn::exp)                 = 7
+		//PnType(Fn::sqrt)                = 8
+		//PnType(Fn::asinh)               = 9
+		//PnType(Fn::acosh)               = 10
+		//PnType(Fn::atanh)               = 11
+		//PnType(Fn::asin)                = 12
+		//PnType(Fn::acos)                = 13
+		//PnType(Fn::atan)                = 14
+		//PnType(Fn::sinh)                = 15
+		//PnType(Fn::cosh)                = 16
+		//PnType(Fn::tanh)                = 17
+		//PnType(Fn::sin)                 = 18
+		//PnType(Fn::cos)                 = 19
+		//PnType(Fn::tan)                 = 20
+		//PnType(Fn::abs)                 = 21
+		//PnType(Fn::arg)                 = 22
+		//PnType(Fn::ln)                  = 23
+		//PnType(Fn::re)                  = 24
+		//PnType(Fn::im)                  = 25
 		//
-		//PnType(Type::COUNT)             = 29
+		//PnType(PnVar::tree_match)       = 26
+		//PnType(PnVar::value_match)      = 27
+		//PnType(PnVar::value_proxy)      = 28
 		//
-		//PnType(PnVar::tree_match)       = 30
-		//PnType(PnVar::value_match)      = 31
-		//PnType(PnVar::value_proxy)      = 32
-		//PnType(PnVar::COUNT)            = 33
-		//
-		//PnType(MultiVar::summands)      = 34
-		//PnType(MultiVar::factors)       = 35
-		//PnType(MultiVar::COUNT)         = 36
-		//
-		//PnType::COUNT                   = 37
+		//PnType(MultiVar::summands)      = 29
+		//PnType(MultiVar::factors)       = 30
+		//PnType(MultiVar::params)        = 31
 
 	void test_rechner() 
 	{
@@ -135,7 +119,7 @@ namespace bmath::intern::debug {
 			//{ "a :complex, b | a^2 + (2 a) b + b^2 = (a + b)^2" }, 
 			//{ "a :int | 2 a + 1 = 'how_odd'" }, 
 			{ "as :params | drop(0, list(as)) = list(as)" },
-			{ "n :nat, a :any, as :params | drop(n, list(a, as)) = drop(n - 1, list(as))" },
+			{ "n :nat, a, as :params | drop(n, list(a, as)) = drop(n - 1, list(as))" },
 		});
 
 		for (const auto& p : patterns) {

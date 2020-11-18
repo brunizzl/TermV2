@@ -62,6 +62,15 @@ namespace bmath::intern {
 		const auto itr = std::find_if(begin(data), end(data), [key, ptr](const auto &v) { return v.*ptr == key; });
 		return itr != end(data) ? *itr : null_val;
 	}
+	
+	template<size_t N>
+		struct StringLiteral {
+		constexpr StringLiteral(const char (&str)[N]) {
+			std::copy_n(str, N, value);
+		}
+
+		char value[N];
+	};
 
 
 
@@ -313,8 +322,17 @@ namespace bmath::intern {
 		explicit constexpr WrapEnum(const unsigned u) noexcept :value(static_cast<Enum>(u)) {}
 		explicit constexpr operator unsigned() const noexcept { return static_cast<unsigned>(this->value); }
 
-		static constexpr Enum COUNT = Count; //this is the only reason for WrapEnum to exist.
+		//this is the only reason for WrapEnum to exist.
+		static constexpr Enum COUNT = static_cast<Enum>(static_cast<unsigned>(Count) + 1u);
 	}; //struct WrapEnum 
+
+	//if a member of SumEnum only has a single state itself, this may be used
+	template<StringLiteral name>
+	struct UnitEnum
+	{
+		explicit constexpr operator unsigned() const noexcept { return 0u; }
+		static constexpr unsigned COUNT = 1u;
+	};
 
 	namespace enum_detail {
 
@@ -458,43 +476,44 @@ namespace bmath::intern {
 
 	protected:
 		using Value = typename Base::Value;
-		static constexpr unsigned next_offset = static_cast<unsigned>(Enum::COUNT) + this_offset + 1u;
+		static constexpr unsigned next_offset = static_cast<unsigned>(Enum::COUNT) + this_offset;
 
 	public:
 		using Base::Base;
 		constexpr SumEnum(const Enum e) noexcept :Base(static_cast<unsigned>(e) + this_offset) {}
 
 		//this constructor applies if Enum itself is WrapEnum<E> or SumEnum<...> that contains E (directly or deeper within)
-		template<typename E, std::enable_if_t<enum_detail::contains_v<E, Enum>, void*> = nullptr>
+		template<typename E> requires enum_detail::contains_v<E, Enum>
 		constexpr SumEnum(const E e) noexcept : Base(static_cast<unsigned>(static_cast<Enum>(e)) + this_offset) {}
 
 
 		//E is contained in Base -> hand over to Base
-		template<typename E, std::enable_if_t<enum_detail::contains_v<E, Base>, void*> = nullptr>
+		template<typename E> requires enum_detail::contains_v<E, Base>
 		constexpr E to() const noexcept { return static_cast<const Base>(*this).to<E>(); }
 
 		//Enum itself is SumEnum<...> and contains E -> hand over to Enum
-		template<typename E, std::enable_if_t<enum_detail::contains_v<E, Enum>, void*> = nullptr>
+		template<typename E> requires enum_detail::contains_v<E, Enum>
 		constexpr E to() const noexcept { return this->to<Enum>().to<E>(); }
 
 		//E is same as Enum -> just undo the offset
-		template<typename E, std::enable_if_t<std::is_same_v<E, Enum>, void*> = nullptr>
+		template<typename E> requires std::is_same_v<E, Enum>
 		constexpr E to() const noexcept { return Enum(static_cast<unsigned>(this->value) - this_offset); }
 
 
 		//default case: search in parent types
-		template<typename E, std::enable_if_t<enum_detail::contains_v<E, Base>, void*> = nullptr> 
+		template<typename E> requires enum_detail::contains_v<E, Base>
 		constexpr bool is() const noexcept { return static_cast<const Base>(*this).is<E>(); }
 
 		//Enum itself is SumEnum<...> and contains E -> hand over to Enum
-		template<typename E, std::enable_if_t<enum_detail::contains_v<E, Enum>, void*> = nullptr> 
+		template<typename E> requires enum_detail::contains_v<E, Enum>
 		constexpr bool is() const noexcept { return this->to<Enum>().is<E>(); }
 
 		//E is same as Enum -> check if current value is between offsets
-		template<typename E, std::enable_if_t<std::is_same_v<E, Enum>, void*> = nullptr> 
+		template<typename E> requires std::is_same_v<E, Enum>
 		constexpr bool is() const noexcept 
 		{ 
-			return static_cast<unsigned>(this->value) >= this_offset && static_cast<unsigned>(this->value) < next_offset; 
+			return static_cast<unsigned>(this->value) >= this_offset && 
+				static_cast<unsigned>(this->value) < next_offset; 
 		}
 
 
@@ -502,17 +521,6 @@ namespace bmath::intern {
 		constexpr friend bool operator==(const SumEnum&, const SumEnum&) noexcept = default;
 		static constexpr Value COUNT = static_cast<Value>(next_offset); //only relevant for outhermost instanciation
 	}; //class SumEnum<Enum, TailEnums...>
-
-	//if a member of SumEnum only has a single state itself, this may be used
-	//this is the only place where COUNT does not occupy any extra value!
-#define LONE_ENUM(NAME)\
-	struct NAME\
-	{\
-		explicit constexpr operator unsigned() const noexcept { return 0u; }\
-		static constexpr unsigned COUNT = 0u;\
-	}
-
-
 
 	//remove if c++20 libraries have catched up
 	template<typename T>

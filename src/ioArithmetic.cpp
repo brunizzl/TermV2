@@ -58,7 +58,7 @@ namespace bmath::intern {
 
 	namespace pattern {
 
-		LONE_ENUM(Unknown);
+		using Unknown = UnitEnum<"Unknown">;
 
 		using PnVariablesType = SumEnum<Restriction, Form, MultiVar, Unknown>;
 
