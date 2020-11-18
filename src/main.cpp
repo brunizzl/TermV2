@@ -19,6 +19,7 @@ TODO:
  - allow pattern::MultiVar::params in sum / product, but convert to summands / factors
  - avoid copying pattern::MultiVar entries (needs to know original storage location of each entry, to steal it from there)
  - add (perhaps untyped?, perhaps only TypedIdx needed) Ref for sub-index references in store (needed to avoid copying pattern::MultiVar entries)
+ - brettify pattern::Multivar sytax to require (and allow) "..." after variable name 
 */
 
 enum class A { a, b, c };
