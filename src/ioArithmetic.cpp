@@ -439,6 +439,7 @@ namespace bmath::intern {
 
 		const auto type = fn::type_of(input.to_string_view(0u, open_par));
 		if (type == Fn::COUNT) { //build generic function
+			const std::size_t result_index = store.allocate(); //allocate function node first -> better positioning in store
 			NamedFn result;
 			{//writing name in result
 				const auto new_name = std::string_view(input.chars, open_par);
@@ -463,9 +464,11 @@ namespace bmath::intern {
 				const TypedIdx_T param = build_any(store, param_view);
 				last_node_idx = TypedIdxSLC_T::insert_new(store, last_node_idx, param);
 			}
-			return TypedIdx_T(store.insert(result), Type(Op::named_fn));
+			store.at(result_index) = result;
+			return TypedIdx_T(result_index, Type(Op::named_fn));
 		}
 		else { //build known function
+			const std::size_t result_index = store.allocate(); //allocate function node first -> better positioning in store
 			FnParams<TypedIdx_T> result{ TypedIdx_T(), TypedIdx_T(), TypedIdx_T(), TypedIdx_T() };
 			input.remove_suffix(1u);
 			input.remove_prefix(open_par + 1u);	//only arguments are left
@@ -479,7 +482,8 @@ namespace bmath::intern {
 				param_view = input.steal_prefix(comma);
 			}
 			throw_if<ParseFailure>(param_view.size() > 0u, input.offset, "too many function parameters");
-			return TypedIdx_T(store.insert(result), Type(type));
+			store.at(result_index) = result;
+			return TypedIdx_T(result_index, Type(type));
 		}
 	} //build_function
 

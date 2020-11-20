@@ -240,6 +240,8 @@ namespace bmath::intern {
 			first.next = idx;
 		}
 
+		[[nodiscard]] std::size_t allocate() noexcept { return this->insert(Union_T()); }
+
 		//no tests if a free_list is accessed, as only position of the first node is known anyway.
 		[[nodiscard]] Union_T& at(const std::size_t idx) noexcept { return this->vector[idx].value; }
 		[[nodiscard]] const Union_T& at(const std::size_t idx) const noexcept { return this->vector[idx].value; }

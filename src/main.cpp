@@ -27,13 +27,10 @@ idea status:
  - always keep -1 at index 1 in store and never allocate new -1 in build_negated and build_inverted (problem: identify bevore copy)
 */
 
-using Test = UnitEnum<"Test">;
-void f(Test) {}
-
 int main()
 {
 	//test::combine_exact();
-	test::pattern_term();
+	//test::pattern_term();
 	//test::arithmetic_term();
 	//test::copy();
 	//test::bit_set();

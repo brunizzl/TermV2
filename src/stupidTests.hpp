@@ -100,26 +100,39 @@ namespace bmath::intern::debug {
 	void test_rechner() 
 	{
 		const auto patterns = std::to_array<pattern::PnTerm>({ 
-			//{"x | sin(x)^2 + cos(x)^2 = 1"}, 
-			//{"a, b | a^2 + 2 a b + b^2 = (a + b)^2"}, 
-			//{"a, b | a^2 - 2 a b + b^2 = (a - b)^2"}, 
-			//{"x | sin(x) / cos(x) = tan(x)"}, 
-			//{"x | 0 x = 0"}, 
-			//{"a | a + a = 2 a"}, 
-			//{"a, bs :factors | a bs + a = a (bs + 1)"}, 
-			//{"a, bs :factors, cs :factors | a bs + a cs = a (bs + cs)"}, //will only work very few times for now (no rematch implemented yet)
-			//{"b, a | a b + a = a (b + 1)"}, 
-			//{"a :no_val, b, c | a b + a c = a (b + c)"}, 
-			//{"b, a :no_val, c | a b + a c = a (b + c)"}, 
-			//{"a, b, c | a b + a c = a (b + c)"}, 
-			//{"b, a, c | a b + a c = a (b + c)"}, 
+			//{ "x | sin(x)^2 + cos(x)^2 = 1" }, 
+			//{ "x | sin(x) / cos(x) = tan(x)" }, 
+			//{ "a, b           | a^2 + 2 a b   + b^2 = (a + b)^2" }, 
+			//{ "a, b           | a^2 - 2 a b   + b^2 = (a - b)^2" }, 
+			//{ "a :complex, b | a^2 + (2 a) b + b^2 = (a + b)^2" }, 
+
+			//{ "a | a + a = 2 a" }, 
+			//{ "a, bs :factors | a*bs + a = a (bs + 1)" }, 
+			//{ "a, bs :factors, cs :factors | a*bs + a*cs = a (bs + cs)" }, //will only work very few times for now (no rematch implemented yet)
+
+			//{ "a :int | 2 a + 1 = 'how_odd'" }, 
+			//{ "a :int | 2 a = 'let's_even_it_out'" },
+
 			//{ "fib(0) = 0" },
 			//{ "fib(1) = 1" },
 			//{ "n | fib(n) = fib(n - 1) + fib(n - 2)" },
-			//{ "a :complex, b | a^2 + (2 a) b + b^2 = (a + b)^2" }, 
-			//{ "a :int | 2 a + 1 = 'how_odd'" }, 
-			{ "as :params | drop(0, list(as)) = list(as)" },
-			{ "n :nat, a, as :params | drop(n, list(a, as)) = drop(n - 1, list(as))" },
+
+			//{ "as :params | drop(0, list(as)) = list(as)" },
+			//{ "n :nat, a, as :params | drop(n, list(a, as)) = drop(n - 1, list(as))" },
+
+			{ "cond :positive,     true_res, false_res | if_positive(cond, true_res, false_res) = true_res" },
+			{ "cond :not_positive, true_res, false_res | if_positive(cond, true_res, false_res) = false_res" },
+
+			{ "xs :params, ys :params | concat(list{xs}, list{ys}) = list{xs, ys}" },
+
+			{ "p :real, xs :params,                     | filter_l(p, list{xs}, list{})      = list{xs}" },
+			{ "p :real, xs :params, y :real, ys :params | filter_l(p, list{xs}, list{y, ys}) = filter_l(p, if_positive[y - p, list{xs, y}, list{xs}], list{ys})" },
+
+			{ "p :real, xs :params,                     | filter_se(p, list{xs}, list{})      = list{xs}" },
+			{ "p :real, xs :params, y :real, ys :params | filter_se(p, list{xs}, list{y, ys}) = filter_se(p, if_positive[p - y, list{xs, y}, list{xs}], list{ys})" },
+
+			{ "p : real             | quick_sort(list{}) = list{}" },
+			{ "p : real, xs :params | quick_sort(list{p, xs}) = concat(concat(quick_sort[filter_se(p, list{}, list{xs})], list{p}), quick_sort[filter_l(p, list{}, list{xs})])" },
 		});
 
 		for (const auto& p : patterns) {
@@ -143,10 +156,9 @@ namespace bmath::intern::debug {
 					for (const auto& p : patterns) {
 						if (test.match_and_replace(p)) {
 							changed = true;
-							std::cout << "replace -> " << test.to_string() << "\n";
 							test.standardize();
-							std::cout << "sort    -> " << test.to_string() << "\n";
-							std::cout << test.to_memory_layout() << "\n";
+							//std::cout << "    -> " << test.to_string() << "\n";
+							//std::cout << test.to_memory_layout() << "\n";
 							break;
 						}
 					}
@@ -302,12 +314,12 @@ namespace bmath::intern::test {
 			"as :params | product(as) = 1*as",
 		};
 		for (auto& s : term_names) {
-			std::cout << "-------------------------------------------------------------------------------------\n";
 			std::cout << "baue aus: \"" << s << "\"\n";
 			const PnTerm pattern(s);
 			std::cout << "pattern: " << pattern.to_string() << "\n\n";
 			std::cout << "lhs speicher:\n" << pattern.lhs_memory_layout() << "\n\n";
 			std::cout << "rhs speicher:\n" << pattern.rhs_memory_layout() << "\n\n";
+			std::cout << "-------------------------------------------------------------------------------------\n";
 		}
 	} //pattern_term
 

@@ -1256,13 +1256,14 @@ namespace bmath::intern {
 			default: {
 				assert(src_ref.type.is<Fn>());
 				const FnParams<TypedIdx_T> src_params = *src_ref; //no reference, as src and dst could be same store -> may reallocate
-				using MutFnRef = BasicNodeRef<Union_T, FnParams<TypedIdx_T>, Const::no>; //allows to insert fn bevore its params
-				auto dst_params = MutFnRef(dst_store, dst_store.insert(FnParams<TypedIdx_T>()));
+				const std::size_t dst_index = dst_store.allocate(); //allocate early to have better placement order in store
+				auto dst_params = FnParams<TypedIdx_T>();
 				for (std::size_t i = 0u; i < fn::param_count(src_ref.type); i++) {
 					const TypedIdx_T param_i = tree::copy(src_ref.new_at(src_params[i]), dst_store);
-					(*dst_params)[i] = param_i;
+					dst_params[i] = param_i;
 				}
-				return TypedIdx_T(dst_params.index, src_ref.type);
+				dst_store.at(dst_index) = dst_params;
+				return TypedIdx_T(dst_index, src_ref.type);
 			} break;
 			case Type_T(Leaf::variable): {
 				std::string src_name; //in most cases the small string optimisation works, else dont care
@@ -1710,10 +1711,11 @@ namespace bmath::intern {
 							const TypedIdx dst_param = tree::copy(Ref(store, matched_param), store); //call normal copy!
 							last_node_idx = TypedIdxSLC::insert_new(store, last_node_idx, dst_param);
 						}
-						break;
 					}
-					const TypedIdx dst_param = match::copy(param_ref, match_data, store);
-					last_node_idx = TypedIdxSLC::insert_new(store, last_node_idx, dst_param);
+					else {
+						const TypedIdx dst_param = match::copy(param_ref, match_data, store);
+						last_node_idx = TypedIdxSLC::insert_new(store, last_node_idx, dst_param);
+					}
 				}
 
 				std::copy(src_function.name, src_function.name + NamedFn::max_name_size, dst_function.name);
