@@ -122,17 +122,17 @@ namespace bmath::intern {
 					continue;
 				case ')': 
 					throw_if<ParseFailure>(--nr_paren < 0, i, "poor grouping, expected matching open parenthesis");
-					throw_if<ParseFailure>(name[find_open_par(i, TokenView(tokenized))] != '(', i, "poor grouping, expected matching open parenthesis");
+					throw_if<ParseFailure>(name[find_open_par(i, TokenView(tokenized))] != '(', i, "poor grouping, can't close parenthesis yet");
 					tokenized[i] = token::clse_grouping;
 					continue;
 				case ']':
 					throw_if<ParseFailure>(--nr_brack < 0, i, "poor grouping, expected matching open bracket");
-					throw_if<ParseFailure>(name[find_open_par(i, TokenView(tokenized))] != '[', i, "poor grouping, expected matching open bracket");
+					throw_if<ParseFailure>(name[find_open_par(i, TokenView(tokenized))] != '[', i, "poor grouping, can't close bracket yet");
 					tokenized[i] = token::clse_grouping;
 					continue;
 				case '}':
 					throw_if<ParseFailure>(--nr_brace < 0, i, "poor grouping, expected matching open brace");
-					throw_if<ParseFailure>(name[find_open_par(i, TokenView(tokenized))] != '{', i, "poor grouping, expected matching open brace");
+					throw_if<ParseFailure>(name[find_open_par(i, TokenView(tokenized))] != '{', i, "poor grouping, can't close brace yet");
 					tokenized[i] = token::clse_grouping;
 					continue;
 				}

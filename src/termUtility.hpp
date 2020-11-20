@@ -62,14 +62,16 @@ namespace bmath::intern {
 		const auto itr = std::find_if(begin(data), end(data), [key, ptr](const auto &v) { return v.*ptr == key; });
 		return itr != end(data) ? *itr : null_val;
 	}
-	
-	template<size_t N>
-		struct StringLiteral {
-		constexpr StringLiteral(const char (&str)[N]) {
-			std::copy_n(str, N, value);
-		}
 
-		char value[N];
+	
+	template<std::size_t N>
+	struct StringLiteral 
+	{
+		char data[N - 1u];
+
+		constexpr StringLiteral(const char (&str)[N]) { std::copy_n(str, N - 1u, data); } //last char is '\0' -> can be ignored
+		constexpr std::size_t size() const noexcept { return N - 1u; }
+		constexpr bool operator==(const StringLiteral&) const noexcept = default;
 	};
 
 
@@ -333,6 +335,13 @@ namespace bmath::intern {
 		explicit constexpr operator unsigned() const noexcept { return 0u; }
 		static constexpr unsigned COUNT = 1u;
 	};
+
+	//crutch while intellisense doesnt know class non type template parameters
+#define UNIT_ENUM(NAME) struct NAME {\
+		explicit constexpr operator unsigned() const noexcept { return 0u; }\
+		static constexpr unsigned COUNT = 1u;\
+	}
+
 
 	namespace enum_detail {
 

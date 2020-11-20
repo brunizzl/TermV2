@@ -265,7 +265,7 @@ namespace bmath::intern {
 			}
 		} //has_form
 
-		PnTerm::PnTerm(std::string name) 
+		PnTerm::PnTerm(std::string name)
 		{
 			auto parse_string = ParseString(name);
 			parse_string.allow_implicit_product();
@@ -276,27 +276,61 @@ namespace bmath::intern {
 			throw_if(table.value_table.size() > MatchData::max_value_match_count, "too many value match variables declared");
 			throw_if(table.multi_table.size() > MatchData::max_multi_match_count, "too many multi match variables declared");
 			PatternBuildFunction build_function = { table };
-			this->lhs_head = build_function(this->lhs_store, parts.lhs);
+			decltype(PnTerm::lhs_store) lhs_temp; //exists, because actions like rearrange_value_match might produce free slots in store.
+			decltype(PnTerm::rhs_store) rhs_temp; //exists, because actions like rearrange_value_match might produce free slots in store.
+			this->lhs_head = build_function(lhs_temp, parts.lhs);
 			table.build_lhs = false;
-			this->rhs_head = build_function(this->rhs_store, parts.rhs);
+			this->rhs_head = build_function(rhs_temp, parts.rhs);
 
 			for (const auto& value_match : table.value_table) {
 				for (const auto lhs_instance : value_match.lhs_instances) {
-					pn_tree::rearrange_value_match(this->lhs_store, this->lhs_head, lhs_instance);
+					pn_tree::rearrange_value_match(lhs_temp, this->lhs_head, lhs_instance);
 				}
 				for (const auto rhs_instance : value_match.rhs_instances) {
-					pn_tree::rearrange_value_match(this->rhs_store, this->rhs_head, rhs_instance);
+					pn_tree::rearrange_value_match(rhs_temp, this->rhs_head, rhs_instance);
 				}
 			}
 			//establish basic order after rearanging value match to allow constructs 
 			//  like "a :real, b | (a+2)+b = ..." to take summands / factors into their value match part
-			this->lhs_head = tree::establish_basic_order(this->lhs_mut_ref());
-			this->rhs_head = tree::establish_basic_order(this->rhs_mut_ref());
+			this->lhs_head = tree::establish_basic_order(PnMutRef(lhs_temp, this->lhs_head));
+			this->rhs_head = tree::establish_basic_order(PnMutRef(rhs_temp, this->rhs_head));
 
 			for (const auto& multi_match : table.multi_table) {
 				throw_if(multi_match.lhs_count > 1u, "pattern only allows single use of each Multimatch in lhs.");
 				throw_if(multi_match.rhs_count > 1u, "pattern only allows single use of each Multimatch in rhs.");
 			}
+
+			//if params occurs in variadic, it is replaced py legal and matching MultiVar version.
+			//if params occurs in Fn, true is returned (as term is illegal and can not be made legal)
+			const auto contains_illegal_parms = [](const PnMutRef head) -> bool {
+				const auto inspect_branches = [](const PnMutRef ref) -> fold::FindBool {
+					if (ref.type == Op::sum || ref.type == Op::product) {
+						const PnType result_type = ref.type == Op::sum ? MultiVar::summands : MultiVar::factors;
+						for (PnTypedIdx& summand : vc::range(ref)) {
+							if (summand.get_type() == MultiVar::params) {
+								summand = PnTypedIdx(summand.get_index(), result_type);
+							}
+						}
+					}
+					if (ref.type.is<Fn>()) {
+						for (const PnTypedIdx param : fn::range(ref->fn_params, ref.type)) {
+							if (param.get_type() == MultiVar::params) {
+								return true; //found illegal
+							}
+						}
+					}
+					return false;
+				};
+				return fold::simple_fold<fold::FindBool>(head, inspect_branches);
+			};
+
+			throw_if(contains_illegal_parms(PnMutRef(lhs_temp, this->lhs_head)), "pattern variable of type params may not occur in Fn.");
+			throw_if(contains_illegal_parms(PnMutRef(rhs_temp, this->rhs_head)), "pattern variable of type params may not occur in Fn.");
+
+			this->lhs_store.reserve(lhs_temp.nr_used_slots());
+			this->rhs_store.reserve(rhs_temp.nr_used_slots());
+			this->lhs_head = tree::copy(PnRef(lhs_temp, this->lhs_head), this->lhs_store);
+			this->rhs_head = tree::copy(PnRef(rhs_temp, this->rhs_head), this->rhs_store);
 		}
 
 		std::string PnTerm::to_string() const
@@ -1222,11 +1256,13 @@ namespace bmath::intern {
 			default: {
 				assert(src_ref.type.is<Fn>());
 				const FnParams<TypedIdx_T> src_params = *src_ref; //no reference, as src and dst could be same store -> may reallocate
-				auto dst_params = FnParams<TypedIdx_T>();
+				using MutFnRef = BasicNodeRef<Union_T, FnParams<TypedIdx_T>, Const::no>; //allows to insert fn bevore its params
+				auto dst_params = MutFnRef(dst_store, dst_store.insert(FnParams<TypedIdx_T>()));
 				for (std::size_t i = 0u; i < fn::param_count(src_ref.type); i++) {
-					dst_params[i] = tree::copy(src_ref.new_at(src_params[i]), dst_store);
+					const TypedIdx_T param_i = tree::copy(src_ref.new_at(src_params[i]), dst_store);
+					(*dst_params)[i] = param_i;
 				}
-				return TypedIdx_T(dst_store.insert(dst_params), src_ref.type);
+				return TypedIdx_T(dst_params.index, src_ref.type);
 			} break;
 			case Type_T(Leaf::variable): {
 				std::string src_name; //in most cases the small string optimisation works, else dont care
@@ -1244,10 +1280,11 @@ namespace bmath::intern {
 			} break;
 			case Type_T(pattern::_value_match): if constexpr (src_pattern) {
 				const pattern::ValueMatchVariable src_var = *src_ref;
+				const std::size_t dst_index = dst_store.allocate(); //allocate early to have better placement order in store
 				auto dst_var = pattern::ValueMatchVariable(src_var.match_data_idx, src_var.form);
 				dst_var.match_idx = tree::copy(src_ref.new_at(src_var.match_idx), dst_store);
 				dst_var.copy_idx = tree::copy(src_ref.new_at(src_var.copy_idx), dst_store);
-				const std::size_t dst_index = dst_store.insert(dst_var);
+				dst_store.at(dst_index) = dst_var;
 				return TypedIdx_T(dst_index, src_ref.type);
 			} break;
 			case Type_T(pattern::_value_proxy): //return same ref, as proxy does not own any nodes in src_store anyway (index has different meaning)
@@ -1943,23 +1980,28 @@ namespace bmath {
 	using namespace intern;
 
 	Term::Term(std::string& name)
-		:store(name.size() / 2)
 	{
+		this->store.reserve(name.size() / 2);
 		auto parse_string = ParseString(name);
 		parse_string.allow_implicit_product();
 		parse_string.remove_space();
-		const std::size_t error_pos = find_first_not_arithmetic(parse_string.tokens);
-		intern::throw_if<ParseFailure>(error_pos != TokenView::npos, error_pos, "illegal character");
+		{
+			const std::size_t error_pos = find_first_not_arithmetic(parse_string.tokens);
+			intern::throw_if<ParseFailure>(error_pos != TokenView::npos, error_pos, "illegal character");
+		}
 		this->head = build(this->store, parse_string);
-		name = std::move(parse_string.name); //give content of name back to name
 	} //Term
 
 	Term::Term(const std::string_view simple_name)
-		:store(simple_name.size() / 2)
 	{
+		this->store.reserve(simple_name.size() / 2);
 		const auto tokens = TokenString(simple_name);
-		const std::size_t error_pos = find_first_not_arithmetic(tokens);
-		intern::throw_if<ParseFailure>(error_pos != TokenView::npos, error_pos, "illegal character");
+		{
+			const std::size_t char_pos = find_first_not_arithmetic(tokens);
+			intern::throw_if<ParseFailure>(char_pos != TokenView::npos, char_pos, "illegal character");
+			const std::size_t space_pos = simple_name.find_first_of(' ');
+			intern::throw_if<ParseFailure>(space_pos != TokenView::npos, space_pos, "space forbidden in simple constructor");
+		}
 		this->head = build(this->store, ParseView(tokens, simple_name.data(), 0u));
 	} //Term
 

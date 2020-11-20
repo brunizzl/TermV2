@@ -81,22 +81,26 @@ namespace bmath::intern {
 		constexpr std::string_view name_view() const noexcept { return { this->name, this->name_size() }; }
 	};
 
-	using  Variable = StringSLC;
+	using Variable = StringSLC;
 	using Complex = std::complex<double>;
 
 	union TypesUnion
 	{
+	private:
+		char unused; //allows to constexpr default construct union without initialisation
+	public:
 		FnParams<TypedIdx> fn_params;
 		NamedFn named_fn;
 		Complex complex;
 		TypedIdxSLC index_slc; //representing NamedFn's extra parameters and Sum and Product 
 		StringSLC string;	//Variable is a string
 
-		TypesUnion(const FnParams<TypedIdx>& val) :fn_params(val)        {}
-		TypesUnion(const NamedFn&            val) :named_fn(val)         {}
-		TypesUnion(const Complex&            val) :complex(val)          {}
-		TypesUnion(const TypedIdxSLC&        val) :index_slc(val)        {}
-		TypesUnion(const StringSLC&          val) :string(val)           {} 
+		constexpr TypesUnion(const FnParams<TypedIdx>& val) noexcept :fn_params(val)        {}
+		constexpr TypesUnion(const NamedFn&            val) noexcept :named_fn(val)         {}
+		constexpr TypesUnion(const Complex&            val) noexcept :complex(val)          {}
+		constexpr TypesUnion(const TypedIdxSLC&        val) noexcept :index_slc(val)        {}
+		constexpr TypesUnion(const StringSLC&          val) noexcept :string(val)           {} 
+		constexpr TypesUnion()                              noexcept :unused(0)             {}
 
 		constexpr auto operator<=>(const TypesUnion&) const = default;
 
@@ -234,6 +238,9 @@ namespace bmath::intern {
 
 		union PnTypesUnion
 		{
+		private:
+			char unused; //allows to constexpr default construct union without initialisation
+		public:
 			FnParams<PnTypedIdx> fn_params;
 			NamedFn named_fn;
 			Complex complex;
@@ -242,13 +249,14 @@ namespace bmath::intern {
 			TreeMatchVariable tree_match;
 			ValueMatchVariable value_match;
 
-			PnTypesUnion(const FnParams<PnTypedIdx>& val) :fn_params(val)        {}
-			PnTypesUnion(const NamedFn&              val) :named_fn(val)         {}
-			PnTypesUnion(const Complex&              val) :complex(val)          {}
-			PnTypesUnion(const PnTypedIdxSLC&        val) :index_slc(val)        {}
-			PnTypesUnion(const StringSLC&            val) :string(val)           {} 
-			PnTypesUnion(const TreeMatchVariable&    val) :tree_match(val)       {} 
-			PnTypesUnion(const ValueMatchVariable&   val) :value_match(val)      {} 
+			constexpr PnTypesUnion(const FnParams<PnTypedIdx>& val) noexcept :fn_params(val)        {}
+			constexpr PnTypesUnion(const NamedFn&              val) noexcept :named_fn(val)         {}
+			constexpr PnTypesUnion(const Complex&              val) noexcept :complex(val)          {}
+			constexpr PnTypesUnion(const PnTypedIdxSLC&        val) noexcept :index_slc(val)        {}
+			constexpr PnTypesUnion(const StringSLC&            val) noexcept :string(val)           {} 
+			constexpr PnTypesUnion(const TreeMatchVariable&    val) noexcept :tree_match(val)       {} 
+			constexpr PnTypesUnion(const ValueMatchVariable&   val) noexcept :value_match(val)      {} 
+			constexpr PnTypesUnion()                                noexcept :unused(0)             {} 
 
 			constexpr auto operator<=>(const PnTypesUnion&) const = default;
 
@@ -607,7 +615,7 @@ namespace bmath::intern {
 
 		struct Void {}; //used if there is nothing to be returned from simple_fold
 
-		//calls apply with every node (postorder), parameter is (BasicRef<Union_T, Type_T, Const> ref), apply returns Res_T
+		//calls apply with every node (postorder), parameter is (BasicRef<Union_T, Type_T, is_const> ref), apply returns Res_T
 		//Res_T might have nonstatic member return_early, to indicate if the fold may be stopped early, as the result is already known
 		//not really a fold function in the classical sense, as there is no information accumulated - 
 		//  eighter you have the final result or not. (or you only mutate the term and not return any result at all)

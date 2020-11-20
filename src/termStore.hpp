@@ -25,8 +25,8 @@ namespace bmath::intern {
 			static_assert(sizeof(Union_T) == sizeof(OccupancyTable), "union VecElem assumes equal member size");
 
 			TableVecElem(const Union_T& new_value) noexcept :value(new_value) {}
-			TableVecElem(unsigned long init)           noexcept :table(init)      {}
-			TableVecElem(const TableVecElem& snd)      noexcept :table(snd.table) {} //bitwise copy of snd
+			TableVecElem(unsigned long init)       noexcept :table(init)      {}
+			TableVecElem(const TableVecElem& snd)  noexcept :table(snd.table) {} //bitwise copy of snd
 		}; //union TableVecElem
 
 	} //namespace store_detail
@@ -56,10 +56,12 @@ namespace bmath::intern {
 			return true;
 		}
 
-		constexpr BasicStore_Table(const std::size_t reserve = 0) noexcept :vector() { vector.reserve(reserve); }
+		constexpr BasicStore_Table() noexcept :vector() {}
+
+		constexpr void reserve(const std::size_t ammount) noexcept { this->vector.reserve(ammount); }
 
 		//never construct recursively using insert, as this will break if vector has to reallocate
-		[[nodiscard]] std::size_t insert(const Union_T& new_elem)
+		[[nodiscard]] std::size_t insert(const Union_T& new_elem) noexcept
 		{
 			for (std::size_t table_pos = 0; table_pos < this->vector.size(); table_pos += table_dist) {
 				if (this->vector[table_pos].table.all()) [[unlikely]] {	//currently optimizes for case with only one table present
@@ -85,12 +87,14 @@ namespace bmath::intern {
 			return this->vector.size() - 1u;	//index of just inserted element
 		} //insert
 
-		void free(const std::size_t idx)
+		void free(const std::size_t idx) noexcept
 		{
 			assert(this->valid_idx(idx));	
 			Table& table = this->vector[idx  - (idx % table_dist)].table;
 			table.reset(idx % table_dist);
 		}
+
+		[[nodiscard]] std::size_t allocate() noexcept { return this->insert(Union_T()); }
 
 		[[nodiscard]] Union_T& at(const std::size_t idx)
 		{
@@ -106,7 +110,7 @@ namespace bmath::intern {
 
 		[[nodiscard]] std::size_t size() const noexcept { return vector.size(); }
 
-		[[nodiscard]] std::vector<std::size_t> free_slots() const noexcept
+		[[nodiscard]] std::vector<std::size_t> enumerate_free_slots() const noexcept
 		{
 			std::vector<std::size_t> result;
 			for (std::size_t table_pos = 0; table_pos < this->vector.size(); table_pos += table_dist) {
@@ -126,17 +130,22 @@ namespace bmath::intern {
 				}
 			}
 			return result;
-		} //free_slots
+		} //enumerate_free_slots
 
-		[[nodiscard]] std::size_t count_free_slots() const noexcept
+		[[nodiscard]] std::size_t nr_used_slots() const noexcept
 		{
 			std::size_t pop_count = 0; 
 			for (std::size_t table_pos = 0; table_pos < this->vector.size(); table_pos += table_dist) {
 				const Table& table = this->vector[table_pos].table;
 				pop_count += table.count();
 			}
-			return this->vector.size() - pop_count;
-		} //count_free_slots
+			return pop_count;
+		} //nr_used_slots
+
+		[[nodiscard]] std::size_t nr_free_slots() const noexcept
+		{
+			return this->vector.size() - nr_used_slots();
+		} //nr_free_slots
 
 	};	//class BasicStore_Table
 
@@ -237,7 +246,7 @@ namespace bmath::intern {
 
 		[[nodiscard]] std::size_t size() const noexcept { return vector.size(); }
 
-		[[nodiscard]] std::vector<std::size_t> free_slots() const noexcept
+		[[nodiscard]] std::vector<std::size_t> enumerate_free_slots() const noexcept
 		{
 			std::vector<std::size_t> result;
 			if (this->vector.size()) {
@@ -248,9 +257,14 @@ namespace bmath::intern {
 				}
 			}
 			return result;
-		} //free_slots
+		} //enumerate_free_slots
 
-		[[nodiscard]] std::size_t count_free_slots() const noexcept
+		[[nodiscard]] std::size_t nr_used_slots() const noexcept
+		{
+			return this->vector.size() - this->nr_free_slots();
+		} //nr_used_slots
+
+		[[nodiscard]] std::size_t nr_free_slots() const noexcept
 		{
 			std::size_t result = 0;
 			if (this->vector.size()) {
@@ -261,7 +275,7 @@ namespace bmath::intern {
 				}
 			}
 			return result;
-		} //count_free_slots
+		} //nr_free_slots
 
 	};	//class BasicStore_FreeList
 

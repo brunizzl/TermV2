@@ -58,7 +58,8 @@ namespace bmath::intern {
 
 	namespace pattern {
 
-		using Unknown = UnitEnum<"Unknown">;
+		//using Unknown = UnitEnum<"Unknown">;
+		UNIT_ENUM(Unknown);
 
 		using PnVariablesType = SumEnum<Restriction, Form, MultiVar, Unknown>;
 
@@ -405,15 +406,18 @@ namespace bmath::intern {
 	{
 		using Result_T = typename VariadicTraits::Object_T;
 
-		const auto subterm_view = input.steal_prefix(op_idx);
-		const TypedIdx_T subterm = build_any(store, subterm_view);
-		const std::size_t variadic_idx = store.insert(Result_T({ subterm }));
-		std::size_t last_node_idx = variadic_idx;
+		const std::size_t variadic_idx = store.insert(Result_T());
+		std::size_t last_node_idx;
+		{
+			const ParseView subterm_view = input.steal_prefix(op_idx);
+			const TypedIdx_T subterm = build_any(store, subterm_view);
+			last_node_idx = Result_T::insert_new(store, variadic_idx, subterm);
+		}
 		while (input.size()) {
 			const char current_operator = input.chars[0u];
 			input.remove_prefix(1u); //remove current_operator;
 			op_idx = find_first_of_skip_pars(input.tokens, VariadicTraits::operator_token);
-			const auto subterm_view = input.steal_prefix(op_idx);
+			const ParseView subterm_view = input.steal_prefix(op_idx);
 			const TypedIdx_T subterm = build_any(store, subterm_view);
 			switch (current_operator) {
 			case VariadicTraits::operator_char:
@@ -444,16 +448,14 @@ namespace bmath::intern {
 			//writing parameters in result
 			input.remove_suffix(1u);            //"pow(2,4)" -> "pow(2,4"
 			input.remove_prefix(open_par + 1u); //"pow(2,4" ->      "2,4"
+			result.params_idx = store.insert(TypedIdxSLC_T());
+			std::size_t last_node_idx = result.params_idx;
 			if (input.size()) { //else no parameters at all
 				const std::size_t comma = find_first_of_skip_pars(input.tokens, token::comma);
 				const auto param_view = input.steal_prefix(comma); //now input starts with comma
 				const TypedIdx_T param = build_any(store, param_view);
-				result.params_idx = store.insert(TypedIdxSLC_T({ param }));
+				last_node_idx = TypedIdxSLC_T::insert_new(store, last_node_idx, param);
 			}
-			else {
-				result.params_idx = store.insert(TypedIdxSLC_T({})); //insert empty params to allways assume valid params elsewhere
-			}
-			std::size_t last_node_idx = result.params_idx;
 			while (input.size()) {
 				input.remove_prefix(1u); //erase comma
 				const std::size_t comma = find_first_of_skip_pars(input.tokens, token::comma);
@@ -637,7 +639,7 @@ namespace bmath::intern {
 			constexpr bool pattern = std::is_same_v<Type_T, pattern::PnType>;
 
 			if constexpr (pattern) {
-				if (!ref.store->valid_idx(ref.index) && ref.type != pattern::PnVar::value_proxy && !ref.type.is<pattern::MultiVar>()) [[unlikely]] {
+				if (!ref.store->valid_idx(ref.index) && ref.type != pattern::PnVar::value_proxy && !ref.type.is<pattern::MultiVar>()) {
 					str.append("ERROR");
 					return;
 				}
@@ -739,7 +741,7 @@ namespace bmath::intern {
 				str.append("...");
 			} break;
 			case Type_T(pattern::_params): if constexpr (pattern) {
-				str.push_back('E');
+				str.push_back('P');
 				str.append(std::to_string(ref.index));
 				str.append("...");
 			} break;
@@ -942,9 +944,17 @@ namespace bmath::intern {
 				}
 			};
 
-			if (!ref.store->valid_idx(ref.index)) [[unlikely]] {
-				rows.front().append(" ERROR");
-				return;
+			if constexpr (pattern) {
+				if (!ref.store->valid_idx(ref.index) && ref.type != pattern::PnVar::value_proxy && !ref.type.is<pattern::MultiVar>()) {
+					rows.front().append(" ERROR");
+					return;
+				}
+			}
+			else {
+				if (!ref.store->valid_idx(ref.index)) [[unlikely]] {
+					rows.front().append(" ERROR");
+					return;
+				}
 			}
 
 			std::string& current_str = rows[ref.index];
@@ -1026,7 +1036,7 @@ namespace bmath::intern {
 
 			//append name of subterm to line
 			current_str.append(std::max(0, 35 - (int)current_str.size()), ' ');
-			append_to_string(ref, current_str, 0);
+			print::append_to_string(ref, current_str, 0);
 		} //append_memory_row
 
 		template<typename Union_T, typename Type_T>
@@ -1045,7 +1055,7 @@ namespace bmath::intern {
 				}
 				result += "\n";
 			}
-			for (const auto i : store.free_slots()) {
+			for (const auto i : store.enumerate_free_slots()) {
 				rows[i].append("-----free slot-----");
 			}
 			{
@@ -1168,7 +1178,7 @@ namespace bmath::intern {
 				current_str += "...";
 			} break;
 			case Type_T(pattern::_params): if constexpr (pattern) {
-				current_str += 'E';		
+				current_str += 'P';		
 				current_str += std::to_string(ref.index);
 				current_str += "...";
 			} break;

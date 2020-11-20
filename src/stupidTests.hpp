@@ -296,6 +296,10 @@ namespace bmath::intern::test {
 			"cos('pi') = -1",
 			"cos('pi') = -1",
 			"a, b :factors | a b + a = a (b + 1)",
+			"as :params | drop(0, list(as)) = list(as)",
+			"n :nat, a, as :params | drop(n, list(a, as)) = drop(n - 1, list(as))",
+			"as :params | sum(as) = 0+as",
+			"as :params | product(as) = 1*as",
 		};
 		for (auto& s : term_names) {
 			std::cout << "-------------------------------------------------------------------------------------\n";
