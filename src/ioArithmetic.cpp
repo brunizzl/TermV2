@@ -120,6 +120,7 @@ namespace bmath::intern {
 			{ Type(Fn::ln        )            , 0 },	
 			{ Type(Fn::re        )            , 0 },	
 			{ Type(Fn::im        )            , 0 },	
+			{ Type(Fn::force     )            , 0 },	
 			{ Type(Op::named_fn  )            , 0 },
 			{ Type(Op::sum       )            , 2 },
 			{ Type(Op::product   )            , 4 },	

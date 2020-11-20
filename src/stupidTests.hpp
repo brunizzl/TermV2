@@ -126,10 +126,10 @@ namespace bmath::intern::debug {
 			{ "xs :params, ys :params | concat(list{xs}, list{ys}) = list{xs, ys}" },
 
 			{ "p :real, xs :params,                     | filter_l(p, list{xs}, list{})      = list{xs}" },
-			{ "p :real, xs :params, y :real, ys :params | filter_l(p, list{xs}, list{y, ys}) = filter_l(p, if_positive[y - p, list{xs, y}, list{xs}], list{ys})" },
+			{ "p :real, xs :params, y :real, ys :params | filter_l(p, list{xs}, list{y, ys}) = filter_l(p, if_positive[force(y - p), list{xs, y}, list{xs}], list{ys})" },
 
 			{ "p :real, xs :params,                     | filter_se(p, list{xs}, list{})      = list{xs}" },
-			{ "p :real, xs :params, y :real, ys :params | filter_se(p, list{xs}, list{y, ys}) = filter_se(p, if_positive[p - y, list{xs, y}, list{xs}], list{ys})" },
+			{ "p :real, xs :params, y :real, ys :params | filter_se(p, list{xs}, list{y, ys}) = filter_se(p, if_positive[force(p - y), list{xs, y}, list{xs}], list{ys})" },
 
 			{ "p : real             | quick_sort(list{}) = list{}" },
 			{ "p : real, xs :params | quick_sort(list{p, xs}) = concat(concat(quick_sort[filter_se(p, list{}, list{xs})], list{p}), quick_sort[filter_l(p, list{}, list{xs})])" },
@@ -147,9 +147,9 @@ namespace bmath::intern::debug {
 			std::cin >> name;
 			try {
 				bmath::Term test(name); 
-				std::cout << "input:  " << test.to_string() << "\n";
+				//std::cout << "input:  " << test.to_string() << "\n";
 				test.standardize();
-				std::cout << "sorted: " << test.to_string() << "\n";
+				//std::cout << "sorted: " << test.to_string() << "\n";
 				bool changed;
 				do {
 					changed = false;

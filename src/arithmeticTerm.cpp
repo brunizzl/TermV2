@@ -1013,6 +1013,10 @@ namespace bmath::intern {
 					}
 				}
 			} break;
+			case Type_T(Fn::force): {
+				const TypedIdx_T param = ref->fn_params[0];
+				return tree::combine_values_inexact(ref.new_at(param));
+			} break;
 			default: {
 				assert(ref.type.is<Fn>()); //if this assert hits, the switch above needs more cases.
 				if (const std::optional<TypedIdx_T> divisor = get_divisor(ref)) {

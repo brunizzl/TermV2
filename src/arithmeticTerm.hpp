@@ -55,6 +55,7 @@ namespace bmath::intern {
 		ln,		//params[0] := argument
 		re,		//params[0] := argument
 		im,		//params[0] := argument
+		force,  //params[0] := argument forces evaluation even if it is unexact
 		COUNT
 	};
 
@@ -416,7 +417,8 @@ namespace bmath::intern {
 			{ Fn::arg  , "arg"  , 1u },	
 			{ Fn::ln   , "ln"   , 1u },	
 			{ Fn::re   , "re"   , 1u },	
-			{ Fn::im   , "im"   , 1u },	
+			{ Fn::im   , "im"   , 1u },		
+			{ Fn::force, "force", 1u },	
 		});
 		static_assert(static_cast<unsigned>(props_table.front().type) == 0u);
 		static_assert(std::is_sorted(props_table.begin(), props_table.end(), [](auto lhs, auto rhs) { return lhs.type < rhs.type; }));
