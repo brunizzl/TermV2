@@ -27,6 +27,8 @@ idea status:
  - always keep -1 at index 1 in store and never allocate new -1 in build_negated and build_inverted (problem: identify bevore copy)
 */
 
+
+
 int main()
 {
 	//test::combine_exact();

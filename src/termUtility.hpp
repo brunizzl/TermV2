@@ -63,15 +63,28 @@ namespace bmath::intern {
 		return itr != end(data) ? *itr : null_val;
 	}
 
-	
-	template<std::size_t N>
+	//Nplus1 as template argument allows directly building from char array without including '\0' at end
+	template<std::size_t N_plus_1> 
 	struct StringLiteral 
 	{
-		char data[N - 1u];
+		static constexpr std::size_t N = N_plus_1 - 1u;
 
-		constexpr StringLiteral(const char (&str)[N]) { std::copy_n(str, N - 1u, data); } //last char is '\0' -> can be ignored
-		constexpr std::size_t size() const noexcept { return N - 1u; }
+		char data[N] = {};
+
+		//last char in init is '\0' -> not stored
+		constexpr StringLiteral(const char (&init)[N_plus_1]) { std::copy_n(init, N, data); } 
+
+		constexpr std::size_t size() const noexcept { return N; }
 		constexpr bool operator==(const StringLiteral&) const noexcept = default;
+
+		template<std::size_t Start, std::size_t Length>
+		constexpr StringLiteral<Length + 1u> substr() const noexcept 
+		{ 
+			static_assert(Start + Length <= N);
+			char new_data[Length + 1u] = {};
+			std::copy_n(this->data + Start, Length, new_data);
+			return StringLiteral<Length + 1u>(new_data);
+		}
 	};
 
 

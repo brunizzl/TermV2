@@ -117,22 +117,30 @@ namespace bmath::intern::debug {
 			//{ "fib(1) = 1" },
 			//{ "n | fib(n) = fib(n - 1) + fib(n - 2)" },
 
-			//{ "as :params | drop(0, list(as)) = list(as)" },
-			//{ "n :nat, a, as :params | drop(n, list(a, as)) = drop(n - 1, list(as))" },
+			{ "xs :params | reverse(list{xs}) = reverse'(list{}, list{xs})" },
+			{ "xs :params, y, ys :params | reverse'(list{xs}, list{y, ys}) = reverse'(list{y, xs}, list{ys})" },
+			{ "xs :params,               | reverse'(list{xs}, list{})      = list{xs}" },
+
+			{ "n :nat0 | fib_n(n + 2) = reverse(list_fibs(n, list{1, 0}))" },
+			{ "              tail :params | list_fibs(0, list{tail})       = list{tail}" },
+			{ "n :nat, a, b, tail :params | list_fibs(n, list{a, b, tail}) = list_fibs(n - 1, list{force(a + b), a, b, tail})" },
+
+			{ "as :params | drop(0, list(as)) = list(as)" },
+			{ "n :nat, a, as :params | drop(n, list(a, as)) = drop(n - 1, list(as))" },
 
 			{ "cond :positive,     true_res, false_res | if_positive(cond, true_res, false_res) = true_res" },
 			{ "cond :not_positive, true_res, false_res | if_positive(cond, true_res, false_res) = false_res" },
-
+			
 			{ "xs :params, ys :params | concat(list{xs}, list{ys}) = list{xs, ys}" },
-
+			
 			{ "p :real, xs :params,                     | filter_l(p, list{xs}, list{})      = list{xs}" },
 			{ "p :real, xs :params, y :real, ys :params | filter_l(p, list{xs}, list{y, ys}) = filter_l(p, if_positive[force(y - p), list{xs, y}, list{xs}], list{ys})" },
-
+			
 			{ "p :real, xs :params,                     | filter_se(p, list{xs}, list{})      = list{xs}" },
 			{ "p :real, xs :params, y :real, ys :params | filter_se(p, list{xs}, list{y, ys}) = filter_se(p, if_positive[force(p - y), list{xs, y}, list{xs}], list{ys})" },
-
-			{ "p : real             | quick_sort(list{}) = list{}" },
-			{ "p : real, xs :params | quick_sort(list{p, xs}) = concat(concat(quick_sort[filter_se(p, list{}, list{xs})], list{p}), quick_sort[filter_l(p, list{}, list{xs})])" },
+			
+			{ "p : real             | sort(list{}) = list{}" },
+			{ "p : real, xs :params | sort(list{p, xs}) = concat(concat(sort[filter_se(p, list{}, list{xs})], list{p}), sort[filter_l(p, list{}, list{xs})])" },
 		});
 
 		for (const auto& p : patterns) {
@@ -163,7 +171,8 @@ namespace bmath::intern::debug {
 						}
 					}
 				} while (changed);
-				std::cout << "done:   " << test.to_string() << "\n";
+				std::cout << "result:   " << test.to_string() << "\n";
+				//std::cout << test.to_memory_layout() << "\n";
 				std::cout << "\n";
 			}
 			catch (bmath::ParseFailure failure) {
