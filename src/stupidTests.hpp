@@ -121,11 +121,11 @@ namespace bmath::intern::debug {
 			{ "xs :params, y, ys :params | reverse'(list{xs}, list{y, ys}) = reverse'(list{y, xs}, list{ys})" },
 			{ "xs :params,               | reverse'(list{xs}, list{})      = list{xs}" },
 
-			{ "n :nat0 | fib_n(n + 2) = reverse(list_fibs(n, list{1, 0}))" },
+			{ "n :nat0                    | fib_n(n + 2)                   = reverse(list_fibs(n, list{1, 0}))" },
 			{ "              tail :params | list_fibs(0, list{tail})       = list{tail}" },
 			{ "n :nat, a, b, tail :params | list_fibs(n, list{a, b, tail}) = list_fibs(n - 1, list{force(a + b), a, b, tail})" },
 
-			{ "as :params | drop(0, list(as)) = list(as)" },
+			{ "           as :params | drop(0, list(as))    = list(as)" },
 			{ "n :nat, a, as :params | drop(n, list(a, as)) = drop(n - 1, list(as))" },
 
 			{ "cond :positive,     true_res, false_res | if_positive(cond, true_res, false_res) = true_res" },
@@ -133,14 +133,14 @@ namespace bmath::intern::debug {
 			
 			{ "xs :params, ys :params | concat(list{xs}, list{ys}) = list{xs, ys}" },
 			
-			{ "p :real, xs :params,                     | filter_l(p, list{xs}, list{})      = list{xs}" },
-			{ "p :real, xs :params, y :real, ys :params | filter_l(p, list{xs}, list{y, ys}) = filter_l(p, if_positive[force(y - p), list{xs, y}, list{xs}], list{ys})" },
+			{ "p :real, xs :params,                     | filter_le(p, list{xs}, list{})      = list{xs}" },
+			{ "p :real, xs :params, y :real, ys :params | filter_le(p, list{xs}, list{y, ys}) = filter_le(p, if_positive[force(p - y), list{xs}, list{xs, y}], list{ys})" },
 			
-			{ "p :real, xs :params,                     | filter_se(p, list{xs}, list{})      = list{xs}" },
-			{ "p :real, xs :params, y :real, ys :params | filter_se(p, list{xs}, list{y, ys}) = filter_se(p, if_positive[force(p - y), list{xs, y}, list{xs}], list{ys})" },
+			{ "p :real, xs :params,                     | filter_s(p, list{xs}, list{})      = list{xs}" },
+			{ "p :real, xs :params, y :real, ys :params | filter_s(p, list{xs}, list{y, ys}) = filter_s(p, if_positive[force(p - y), list{xs, y}, list{xs}], list{ys})" },
 			
-			{ "p : real             | sort(list{}) = list{}" },
-			{ "p : real, xs :params | sort(list{p, xs}) = concat(concat(sort[filter_se(p, list{}, list{xs})], list{p}), sort[filter_l(p, list{}, list{xs})])" },
+			{ "                      sort(list{}) = list{}" },
+			{ "p :real, xs :params | sort(list{p, xs}) = concat(concat(sort[filter_s(p, list{}, list{xs})], list{p}), sort[filter_le(p, list{}, list{xs})])" },
 		});
 
 		for (const auto& p : patterns) {
