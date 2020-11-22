@@ -560,7 +560,8 @@ namespace bmath::intern {
 		PermutationEqualsRes permutation_equals(const pattern::PnRef pn_ref, const Ref ref, pattern::MatchData& match_data);
 
 		//copies pn_ref with match_data into store, returns head of copied result.
-		[[nodiscard]] TypedIdx copy(const pattern::PnRef pn_ref, const pattern::MatchData& match_data, Store& store);
+		[[nodiscard]] TypedIdx copy(const pattern::PnRef pn_ref, const pattern::MatchData& match_data, 
+			const Store& src_store, Store& dst_store);
 
 		//this function is the primary function designed to be called from outside of this namespace.
 		//the function will try to match the head of in with the head of ref and if so, replace the matched part with out.

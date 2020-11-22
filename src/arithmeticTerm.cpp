@@ -1687,7 +1687,7 @@ namespace bmath::intern {
 			return result;
 		} //permutation_equals
 
-		TypedIdx copy(const pattern::PnRef pn_ref, const pattern::MatchData& match_data, Store& store)
+		TypedIdx copy(const pattern::PnRef pn_ref, const pattern::MatchData& match_data, const Store& src_store, Store& dst_store)
 		{
 			using namespace pattern;
 
@@ -1695,74 +1695,74 @@ namespace bmath::intern {
 			case PnType(Op::sum): 
 				[[fallthrough]];
 			case PnType(Op::product): {
-				const std::uint32_t res_idx = store.insert(TypedIdxSLC());
+				const std::uint32_t res_idx = dst_store.insert(TypedIdxSLC());
 				std::uint32_t last_node_idx = res_idx;
 				for (const PnTypedIdx elem : vc::range(pn_ref)) {
-					const TypedIdx dst_elem = match::copy(pn_ref.new_at(elem), match_data, store);
-					last_node_idx = TypedIdxSLC::insert_new(store, last_node_idx, dst_elem);
+					const TypedIdx dst_elem = match::copy(pn_ref.new_at(elem), match_data, src_store, dst_store);
+					last_node_idx = TypedIdxSLC::insert_new(dst_store, last_node_idx, dst_elem);
 				}
 				return TypedIdx(res_idx, pn_ref.type.to<Type>());
 			} break;
 			case PnType(Op::named_fn): {
 				const NamedFn& src_function = *pn_ref;
 				NamedFn dst_function;
-				std::uint32_t last_node_idx = store.insert(TypedIdxSLC());
+				std::uint32_t last_node_idx = dst_store.insert(TypedIdxSLC());
 				dst_function.params_idx = last_node_idx;
 				for (const PnTypedIdx param : fn::range(pn_ref)) {
 					const auto param_ref = pn_ref.new_at(param);
 					if (param_ref.type == MultiVar::params) {
 						for (const TypedIdx matched_param : match_data.multi_info(param_ref.index).match_indices) {
-							const TypedIdx dst_param = tree::copy(Ref(store, matched_param), store); //call normal copy!
-							last_node_idx = TypedIdxSLC::insert_new(store, last_node_idx, dst_param);
+							const TypedIdx dst_param = tree::copy(Ref(src_store, matched_param), dst_store); //call normal copy!
+							last_node_idx = TypedIdxSLC::insert_new(dst_store, last_node_idx, dst_param);
 						}
 					}
 					else {
-						const TypedIdx dst_param = match::copy(param_ref, match_data, store);
-						last_node_idx = TypedIdxSLC::insert_new(store, last_node_idx, dst_param);
+						const TypedIdx dst_param = match::copy(param_ref, match_data, src_store, dst_store);
+						last_node_idx = TypedIdxSLC::insert_new(dst_store, last_node_idx, dst_param);
 					}
 				}
 
-				std::copy(src_function.name, src_function.name + NamedFn::max_name_size, dst_function.name);
-				return TypedIdx(store.insert(dst_function), pn_ref.type.to<Type>());
+				std::copy_n(src_function.name, NamedFn::max_name_size, dst_function.name);
+				return TypedIdx(dst_store.insert(dst_function), pn_ref.type.to<Type>());
 			} break;
 			default: {
 				assert(pn_ref.type.is<Fn>());
 				const FnParams<PnTypedIdx>& pn_params = *pn_ref;
 				auto dst_params = FnParams<TypedIdx>();
 				for (std::size_t i = 0u; i < fn::param_count(pn_ref.type); i++) {
-					dst_params[i] = match::copy(pn_ref.new_at(pn_params[i]), match_data, store);
+					dst_params[i] = match::copy(pn_ref.new_at(pn_params[i]), match_data, src_store, dst_store);
 				}
-				return TypedIdx(store.insert(dst_params), pn_ref.type.to<Type>());
+				return TypedIdx(dst_store.insert(dst_params), pn_ref.type.to<Type>());
 			} break;
 			case PnType(Leaf::variable): {
 				std::string src_name; //in most cases the small string optimisation works, else dont care
 				str_slc::read(pn_ref.cast<StringSLC>(), src_name);
-				const std::size_t dst_index = str_slc::insert(store, src_name);
+				const std::size_t dst_index = str_slc::insert(dst_store, src_name);
 				return TypedIdx(dst_index, pn_ref.type.to<Type>());
 			} break;
 			case PnType(Leaf::complex): 
-				return TypedIdx(store.insert(pn_ref->complex), pn_ref.type.to<Type>());
+				return TypedIdx(dst_store.insert(pn_ref->complex), pn_ref.type.to<Type>());
 			case PnType(PnVar::tree_match): {
 				const SharedTreeDatum& info = match_data.info(pn_ref->tree_match);
-				return tree::copy(Ref(store, info.match_idx), store); //call to different copy!
+				return tree::copy(Ref(src_store, info.match_idx), dst_store); //call to different copy!
 			} break;
 			case PnType(PnVar::value_match): {
 				const ValueMatchVariable& var = *pn_ref;
-				return match::copy(pn_ref.new_at(var.copy_idx), match_data, store);				
+				return match::copy(pn_ref.new_at(var.copy_idx), match_data, src_store, dst_store);				
 			} break;
 			case PnType(PnVar::value_proxy): {
-				const auto& val = match_data.value_match_data[pn_ref.index].value;
-				return TypedIdx(store.insert(Complex(val)), Leaf::complex);
+				const Complex& val = match_data.value_match_data[pn_ref.index].value;
+				return TypedIdx(dst_store.insert(val), Leaf::complex);
 			} break;
 			case PnType(MultiVar::summands):
 				[[fallthrough]];
 			case PnType(MultiVar::factors): {
-				const std::uint32_t res_idx = store.insert(TypedIdxSLC());
+				const std::uint32_t res_idx = dst_store.insert(TypedIdxSLC());
 				std::uint32_t last_node_idx = res_idx;
 				const SharedMultiDatum& info = match_data.multi_info(pn_ref.index);
 				for (const TypedIdx elem : info.match_indices) {
-					const TypedIdx dst_elem = tree::copy(Ref(store, elem), store); //call to different copy!
-					last_node_idx = TypedIdxSLC::insert_new(store, last_node_idx, dst_elem);
+					const TypedIdx dst_elem = tree::copy(Ref(src_store, elem), dst_store); //call to different copy!
+					last_node_idx = TypedIdxSLC::insert_new(dst_store, last_node_idx, dst_elem);
 				}
 				return TypedIdx(res_idx, pn_ref.type == MultiVar::summands ? Op::sum : Op::product);			
 			} break;
@@ -1780,7 +1780,7 @@ namespace bmath::intern {
 				const auto [matched_elems, remaining_elems] = match::permutation_equals(from, ref, match_data);
 				if (matched_elems.size() > 0u) {
 					free_slc(ref.cast<TypedIdxSLC>()); //shallow deletion only of initial sum / product itself, not of its operands
-					const TypedIdx pattern_copy = match::copy(to, match_data, *ref.store);
+					const TypedIdx pattern_copy = match::copy(to, match_data, *ref.store, *ref.store);
 					//idea for future: maybe buffer copy in third store first and then delete matched elems bevore inserting copy?
 					//would result in ref.store having fewer free slots and might even avoid reallocation in ref.store
 					//makes most sense, if buffer itself most likely would not allocate.
@@ -1798,7 +1798,7 @@ namespace bmath::intern {
 			else {
 				pattern::MatchData match_data;
 				if (match::equals(from, ref, match_data)) {
-					const TypedIdx pattern_copy = match::copy(to, match_data, *ref.store);
+					const TypedIdx pattern_copy = match::copy(to, match_data, *ref.store, *ref.store);
 					//same idea as above may also be applied here.
 					tree::free(ref);
 					return { pattern_copy };
