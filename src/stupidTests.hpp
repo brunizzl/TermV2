@@ -127,11 +127,11 @@ namespace bmath::intern::debug {
 
 			{ "           as :params | drop(0, list(as))    = list(as)" },
 			{ "n :nat, a, as :params | drop(n, list(a, as)) = drop(n - 1, list(as))" },
+			
+			{ "xs :params, ys :params | concat(list{xs}, list{ys}) = list{xs, ys}" },
 
 			{ "cond :positive,     true_res, false_res | if_positive(cond, true_res, false_res) = true_res" },
 			{ "cond :not_positive, true_res, false_res | if_positive(cond, true_res, false_res) = false_res" },
-			
-			{ "xs :params, ys :params | concat(list{xs}, list{ys}) = list{xs, ys}" },
 			
 			{ "p :real, xs :params,                     | filter_le(p, list{xs}, list{})      = list{xs}" },
 			{ "p :real, xs :params, y :real, ys :params | filter_le(p, list{xs}, list{y, ys}) = filter_le(p, if_positive[force(p - y), list{xs}, list{xs, y}], list{ys})" },
@@ -140,7 +140,8 @@ namespace bmath::intern::debug {
 			{ "p :real, xs :params, y :real, ys :params | filter_s(p, list{xs}, list{y, ys}) = filter_s(p, if_positive[force(p - y), list{xs, y}, list{xs}], list{ys})" },
 			
 			{ "                      sort(list{}) = list{}" },
-			{ "p :real, xs :params | sort(list{p, xs}) = concat(concat(sort[filter_s(p, list{}, list{xs})], list{p}), sort[filter_le(p, list{}, list{xs})])" },
+			{ "p :real, xs :params | sort(list{p, xs}) = c3'(sort[filter_s(p, list{}, list{xs})], p, sort[filter_le(p, list{}, list{xs})])" },
+			{ "xs :params, y, zs :params | c3'(list{xs}, y, list{zs}) = list{xs, y, zs}" }, 
 		});
 
 		for (const auto& p : patterns) {
@@ -165,14 +166,14 @@ namespace bmath::intern::debug {
 						if (test.match_and_replace(p)) {
 							changed = true;
 							test.standardize();
-							//std::cout << "    -> " << test.to_string() << "\n";
+							std::cout << "    -> " << test.to_string() << "\n";
 							//std::cout << test.to_memory_layout() << "\n";
 							break;
 						}
 					}
 				} while (changed);
+				std::cout << test.to_memory_layout() << "\n";
 				std::cout << "result:   " << test.to_string() << "\n";
-				//std::cout << test.to_memory_layout() << "\n";
 				std::cout << "\n";
 			}
 			catch (bmath::ParseFailure failure) {

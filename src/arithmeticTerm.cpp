@@ -1800,6 +1800,7 @@ namespace bmath::intern {
 				if (match::equals(from, ref, match_data)) {
 					const TypedIdx pattern_copy = match::copy(to, match_data, *ref.store);
 					//same idea as above may also be applied here.
+					//problem: (in both cases) so far match::copy assumes to copy in same store -> tree_match (and others) try to copy from same store
 					tree::free(ref);
 					return { pattern_copy };
 				}
