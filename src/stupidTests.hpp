@@ -100,8 +100,8 @@ namespace bmath::intern::debug {
 	void test_rechner() 
 	{
 		const auto patterns = std::to_array<pattern::PnTerm>({ 
-			//{ "x | sin(x)^2 + cos(x)^2 = 1" }, 
-			//{ "x | sin(x) / cos(x) = tan(x)" }, 
+			{ "x :factors | x * 0 = 0" },
+			{ "x :any     | x ^ 1 = x" },
 			//{ "a, b           | a^2 + 2 a b   + b^2 = (a + b)^2" }, 
 			//{ "a, b           | a^2 - 2 a b   + b^2 = (a - b)^2" }, 
 			//{ "a :complex, b | a^2 + (2 a) b + b^2 = (a + b)^2" }, 
@@ -117,31 +117,41 @@ namespace bmath::intern::debug {
 			//{ "fib(1) = 1" },
 			//{ "n | fib(n) = fib(n - 1) + fib(n - 2)" },
 
-			{ "xs :params | reverse(list{xs}) = reverse'(list{}, list{xs})" },
-			{ "xs :params, y, ys :params | reverse'(list{xs}, list{y, ys}) = reverse'(list{y, xs}, list{ys})" },
-			{ "xs :params,               | reverse'(list{xs}, list{})      = list{xs}" },
+			//{ "xs :params | reverse(list{xs}) = reverse'(list{}, list{xs})" },
+			//{ "xs :params, y, ys :params | reverse'(list{xs}, list{y, ys}) = reverse'(list{y, xs}, list{ys})" },
+			//{ "xs :params,               | reverse'(list{xs}, list{})      = list{xs}" },
+			//
+			//{ "n :nat0                    | fib_n(n + 2)                   = reverse(list_fibs(n, list{1, 0}))" },
+			//{ "n :nat, a, b, tail :params | list_fibs(n, list{a, b, tail}) = list_fibs(n - 1, list{force(a + b), a, b, tail})" },
+			//{ "              tail :params | list_fibs(0, list{tail})       = list{tail}" },
+			//
+			//{ "n :nat, a, as :params | drop(n, list(a, as)) = drop(n - 1, list(as))" },
+			//{ "           as :params | drop(0, list(as))    = list(as)" },
+			//
+			//{ "cond :not_positive, true_res, false_res | if_positive(cond, true_res, false_res) = false_res" },
+			//{ "cond :positive,     true_res, false_res | if_positive(cond, true_res, false_res) = true_res" },
+			//
+			//{ "p :real, xs :params, y :real, ys :params | filter_le(p, list{xs}, list{y, ys}) = filter_le(p, if_positive[force(p - y), list{xs}, list{xs, y}], list{ys})" },
+			//{ "p :real, xs :params,                     | filter_le(p, list{xs}, list{})      = list{xs}" },
+			//
+			//{ "p :real, xs :params, y :real, ys :params | filter_s(p, list{xs}, list{y, ys}) = filter_s(p, if_positive[force(p - y), list{xs, y}, list{xs}], list{ys})" },
+			//{ "p :real, xs :params,                     | filter_s(p, list{xs}, list{})      = list{xs}" },
+			//
+			//{ "p :real, xs :params | sort(list{p, xs}) = weird_concat(sort(filter_s(p, list{}, list{xs})), p, sort(filter_le(p, list{}, list{xs})))" },
+			//{ "                    | sort(list{})      = list{}" },
+			//{ "xs :params, y, zs :params | weird_concat(list{xs}, y, list{zs}) = list{xs, y, zs}" }, 
 
-			{ "n :nat0                    | fib_n(n + 2)                   = reverse(list_fibs(n, list{1, 0}))" },
-			{ "              tail :params | list_fibs(0, list{tail})       = list{tail}" },
-			{ "n :nat, a, b, tail :params | list_fibs(n, list{a, b, tail}) = list_fibs(n - 1, list{force(a + b), a, b, tail})" },
-
-			{ "           as :params | drop(0, list(as))    = list(as)" },
-			{ "n :nat, a, as :params | drop(n, list(a, as)) = drop(n - 1, list(as))" },
-			
-			{ "xs :params, ys :params | concat(list{xs}, list{ys}) = list{xs, ys}" },
-
-			{ "cond :positive,     true_res, false_res | if_positive(cond, true_res, false_res) = true_res" },
-			{ "cond :not_positive, true_res, false_res | if_positive(cond, true_res, false_res) = false_res" },
-			
-			{ "p :real, xs :params,                     | filter_le(p, list{xs}, list{})      = list{xs}" },
-			{ "p :real, xs :params, y :real, ys :params | filter_le(p, list{xs}, list{y, ys}) = filter_le(p, if_positive[force(p - y), list{xs}, list{xs, y}], list{ys})" },
-			
-			{ "p :real, xs :params,                     | filter_s(p, list{xs}, list{})      = list{xs}" },
-			{ "p :real, xs :params, y :real, ys :params | filter_s(p, list{xs}, list{y, ys}) = filter_s(p, if_positive[force(p - y), list{xs, y}, list{xs}], list{ys})" },
-			
-			{ "                      sort(list{}) = list{}" },
-			{ "p :real, xs :params | sort(list{p, xs}) = c3'(sort[filter_s(p, list{}, list{xs})], p, sort[filter_le(p, list{}, list{xs})])" },
-			{ "xs :params, y, zs :params | c3'(list{xs}, y, list{zs}) = list{xs, y, zs}" }, 
+			//differentiation rules:
+			{ "a :value,            x :variable | diff(a, x)     = 0" },
+			{ "                     x :variable | diff(x, x)     = 1" },
+			{ "a :variable,         x :variable | diff(a, x)     = 0" },
+			{ "a :value, f :any,    x :variable | diff(f^a, x)   = a * f^(a-1) * diff(f, x)" },
+			{ "u :any, v :summands, x :variable | diff(u + v, x) = diff(u, x) + diff(v, x)" },
+			{ "u :any, v :factors,  x :variable | diff(u * v, x) = diff(u, x) * v + u * diff(v, x)" },
+			//{ "" },
+			//{ "" },
+			//{ "" },
+			//{ "" },
 		});
 
 		for (const auto& p : patterns) {
@@ -172,7 +182,7 @@ namespace bmath::intern::debug {
 						}
 					}
 				} while (changed);
-				std::cout << test.to_memory_layout() << "\n";
+				//std::cout << test.to_memory_layout() << "\n";
 				std::cout << "result:   " << test.to_string() << "\n";
 				std::cout << "\n";
 			}

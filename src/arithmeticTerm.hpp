@@ -13,6 +13,13 @@
 
 namespace bmath::intern {
 
+	enum class Leaf
+	{
+		variable,
+		complex,
+		COUNT
+	};
+
 	enum class Op //Short for Operation (Fn's are operations as well, but organisation stuff)
 	{
 		sum,
@@ -21,17 +28,12 @@ namespace bmath::intern {
 		COUNT
 	};
 
-	enum class Leaf
-	{
-		variable,
-		complex,
-		COUNT
-	};
-
-	//these are luped together, because they behave the same in most cases -> can be seperated easily from rest
-	//behavior for every specific element in Fn is defined at only two places:
+	//these are lumped together, because they behave the same in most cases -> can be seperated easily from rest
+	//behavior for every specific element in Fn is (at least) defined at 4 places:
 	//  1. function fn::eval specifies how (and if at all) to evaluate
 	//  2. array fn::props_table specifies name and parameter count
+	//  3. array unique_rematchability_table should have an entry for each Fn
+	//  4. array print::infixr_table should have an entry for each Fn
 	enum class Fn //short for Function (note that named_fn is not listed here, at it's behavior is more complicated)
 	{
 		pow,    //params[0] := base      params[1] := expo    

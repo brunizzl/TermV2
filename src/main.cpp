@@ -12,6 +12,7 @@ important:
  - write data structure one abstraction layer above PnTerm to group multiple pattens
  - enable rematch or write factorisation per hand (if from hand, perhaps introduce some way to call such routines as pattern?)
  - group all variations of pattern variables in one SumEnum
+ - add pattern variable catching functions with other pattern variables beeing parameters of these functions (perhaps two types, one variadic?)
 
 nice to have:
  - match::permutation_equals: abort earlier (use fact that both terms are sorted, not only pattern)

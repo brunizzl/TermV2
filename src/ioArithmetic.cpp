@@ -73,12 +73,13 @@ namespace bmath::intern {
 			{ Op::sum             , "sum"           },
 			{ Op::product         , "product"       },
 			{ Leaf::variable      , "variable"      },
+			{ Leaf::complex       , "value"         }, //not to be mistaken for Form::complex
 			{ Restr::function     , "fn"            },
 			{ Form::natural       , "nat"           },
 			{ Form::natural_0     , "nat0"          },
 			{ Form::integer       , "int"           },
 			{ Form::real          , "real"          },
-			{ Form::complex       , "complex"       },
+			{ Form::complex       , "complex"       }, //not to be mistaken for Leaf::complex
 			{ Form::negative      , "negative"      },
 			{ Form::not_negative  , "not_negative"  },
 			{ Form::positive      , "positive"      },

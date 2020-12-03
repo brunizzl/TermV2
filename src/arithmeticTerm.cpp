@@ -232,7 +232,7 @@ namespace bmath::intern {
 			case Restriction(Restr::nn1):
 				return (ref.type != Leaf::complex) || (ref->complex != -1.0);
 			case Restriction(Restr::function):
-				return (ref.type == Op::named_fn) || ref.type.is<Fn>();
+				return ref.type.is<Op>() || ref.type.is<Fn>();
 			default:
 				assert(restr.is<Type>());
 				return restr == ref.type;
@@ -1779,15 +1779,15 @@ namespace bmath::intern {
 				pattern::MatchData match_data;
 				const auto [matched_elems, remaining_elems] = match::permutation_equals(from, ref, match_data);
 				if (matched_elems.size() > 0u) {
+					Store copy_buffer;
+					copy_buffer.reserve(32u);
 					free_slc(ref.cast<TypedIdxSLC>()); //shallow deletion only of initial sum / product itself, not of its operands
-					const TypedIdx pattern_copy = match::copy(to, match_data, *ref.store, *ref.store);
-					//idea for future: maybe buffer copy in third store first and then delete matched elems bevore inserting copy?
-					//would result in ref.store having fewer free slots and might even avoid reallocation in ref.store
-					//makes most sense, if buffer itself most likely would not allocate.
+					const TypedIdx buffer_head = match::copy(to, match_data, *ref.store, copy_buffer);
 					for (const TypedIdx elem : matched_elems) { //delete each summand / factor occuring in match
 						tree::free(ref.new_at(elem));
 					}
-					const std::uint32_t res_idx = ref.store->insert(TypedIdxSLC({ pattern_copy }));
+					const TypedIdx pattern_copy_head = tree::copy(Ref(copy_buffer, buffer_head), *ref.store);
+					const std::uint32_t res_idx = ref.store->insert(TypedIdxSLC({ pattern_copy_head }));
 					std::uint32_t last_node_idx = res_idx;
 					for (const TypedIdx elem : remaining_elems) { //copy back all summands / factors not part of match
 						last_node_idx = TypedIdxSLC::insert_new(*ref.store, last_node_idx, elem);
@@ -1798,11 +1798,12 @@ namespace bmath::intern {
 			else {
 				pattern::MatchData match_data;
 				if (match::equals(from, ref, match_data)) {
-					const TypedIdx pattern_copy = match::copy(to, match_data, *ref.store, *ref.store);
-					//same idea as above may also be applied here.
-					//problem: (in both cases) so far match::copy assumes to copy in same store -> tree_match (and others) try to copy from same store
+					Store copy_buffer;
+					copy_buffer.reserve(32u);
+					const TypedIdx buffer_head = match::copy(to, match_data, *ref.store, copy_buffer);
 					tree::free(ref);
-					return { pattern_copy };
+					const TypedIdx result_head = tree::copy(Ref(copy_buffer, buffer_head), *ref.store);
+					return { result_head };
 				}
 			}
 			return {};
