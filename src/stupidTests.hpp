@@ -102,8 +102,8 @@ namespace bmath::intern::debug {
 		const auto patterns = std::to_array<pattern::PnTerm>({ 
 			{ "x :factors | x * 0 = 0" },
 			{ "x :any     | x ^ 1 = x" },
-			{ "a, b           | a^2 + 2 a b   + b^2 = (a + b)^2" }, 
-			{ "a, b           | a^2 - 2 a b   + b^2 = (a - b)^2" }, 
+			{ "a, b          | a^2 + 2 a b   + b^2 = (a + b)^2" }, 
+			{ "a, b          | a^2 - 2 a b   + b^2 = (a - b)^2" }, 
 			{ "a :complex, b | a^2 + (2 a) b + b^2 = (a + b)^2" }, 
 
 			{ "a | a + a = 2 a" }, 
