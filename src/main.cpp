@@ -7,8 +7,7 @@ TODO:
 
 important:
  - restructure everything to use modules
- - ctor of PnTerm: throw if two value match variables are held directly in same sum / product
- - TermSLC: only allow null_value at end -> Iterator becomes be simpler (meaning some functions in current form may produce invalid results)
+ - TermSLC: only allow null_value at end -> Iterator becomes  simpler (meaning some functions in current form may produce invalid results)
  - write data structure one abstraction layer above PnTerm to group multiple pattens
  - enable rematch or write factorisation per hand (if from hand, perhaps introduce some way to call such routines as pattern?)
  - group all variations of pattern variables in one SumEnum

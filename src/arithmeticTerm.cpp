@@ -302,13 +302,13 @@ namespace bmath::intern {
 
 			//if params occurs in variadic, it is replaced py legal and matching MultiVar version.
 			//if params occurs in Fn, true is returned (as term is illegal and can not be made legal)
-			const auto contains_illegal_parms = [](const PnMutRef head) -> bool {
+			const auto contains_illegal_params = [](const PnMutRef head) -> bool {
 				const auto inspect_branches = [](const PnMutRef ref) -> fold::FindBool {
 					if (ref.type == Op::sum || ref.type == Op::product) {
 						const PnType result_type = ref.type == Op::sum ? MultiVar::summands : MultiVar::factors;
-						for (PnTypedIdx& summand : vc::range(ref)) {
-							if (summand.get_type() == MultiVar::params) {
-								summand = PnTypedIdx(summand.get_index(), result_type);
+						for (PnTypedIdx& elem : vc::range(ref)) {
+							if (elem.get_type() == MultiVar::params) {
+								elem = PnTypedIdx(elem.get_index(), result_type); //params can convert to summands / factors
 							}
 						}
 					}
@@ -324,8 +324,24 @@ namespace bmath::intern {
 				return fold::simple_fold<fold::FindBool>(head, inspect_branches);
 			};
 
-			throw_if(contains_illegal_parms(PnMutRef(lhs_temp, this->lhs_head)), "pattern variable of type params may not occur in Fn.");
-			throw_if(contains_illegal_parms(PnMutRef(rhs_temp, this->rhs_head)), "pattern variable of type params may not occur in Fn.");
+			throw_if(contains_illegal_params(PnMutRef(lhs_temp, this->lhs_head)), "pattern variable of type params may not occur in Fn.");
+			throw_if(contains_illegal_params(PnMutRef(rhs_temp, this->rhs_head)), "pattern variable of type params may not occur in Fn.");
+
+			const auto contains_illegal_value_match = [](const PnRef head) -> bool {
+				const auto inspect_variadic = [](const PnRef ref) -> fold::FindBool {
+					if (ref.type == Op::sum || ref.type == Op::product) {
+						std::size_t nr_value_matches = 0u;
+						for (const PnTypedIdx elem : vc::range(ref)) {
+							nr_value_matches += (elem.get_type() == PnVar::value_match);
+						}
+						return nr_value_matches > 1u;
+					}
+					return false;
+				};
+				return fold::simple_fold<fold::FindBool>(head, inspect_variadic);
+			};
+
+			throw_if(contains_illegal_value_match(PnRef(lhs_temp, this->lhs_head)), "no two value match variables may share the same sum / product in lhs.");
 
 			this->lhs_store.reserve(lhs_temp.nr_used_slots());
 			this->rhs_store.reserve(rhs_temp.nr_used_slots());
