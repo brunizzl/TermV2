@@ -767,11 +767,17 @@ namespace bmath::intern {
 				for (auto& elem : vc::range(ref)) {
 					const auto [elem_idx, elem_type] = elem.split();
 					if (elem_type == ref.type) {
-						elem = TypedIdxSLC_T::null_value;
 						current_append_node = TypedIdxSLC_T::append(*ref.store, current_append_node, elem_idx);
+						elem = TypedIdxSLC_T::null_value;
 					}
 					else {
 						elem = tree::combine_layers(ref.new_at(elem));
+						//as elems type may change (for example sum holding only one summand), this second check is done.
+						if (elem.get_type() == ref.type) [[unlikely]] {
+							//bad code, as combine layers will now be called twice on every summand / factor in elem.
+							current_append_node = TypedIdxSLC_T::append(*ref.store, current_append_node, elem.get_index());
+							elem = TypedIdxSLC_T::null_value;
+						}
 					}
 
 					elem_count++;

@@ -104,8 +104,8 @@ namespace bmath::intern::debug {
 			{ "x          | x ^ 1 = x" },
 
 			{ "x, a, b | (x^a)^b = x^(a*b)" },
-			{ "x, a    | x * x^a = x^(a + 1)" },
-			{ "x, a, b | x^a * x^b = x^(a + b)" },
+			{ "x, a    | x x^a   = x^(a + 1)" },
+			{ "x, a, b | x^a x^b = x^(a + b)" },
 			{ "x :factors, y | exp(x ln(y)) = y^x" },
 
 			{ "a, b          | a^2 + 2 a b   + b^2 = (a + b)^2" }, 
@@ -186,15 +186,17 @@ namespace bmath::intern::debug {
 					for (const auto& p : patterns) {
 						if (test.match_and_replace(p)) {
 							changed = true;
-							test.standardize();
 							std::cout << "    -> " << test.to_string() << "\n";
+							test.standardize();
+							std::cout << "        -> " << test.to_string() << "\n";
 							//std::cout << test.to_memory_layout() << "\n";
 							break;
 						}
 					}
 				} while (changed);
 				//std::cout << test.to_memory_layout() << "\n";
-				std::cout << "result:   " << test.to_pretty_string() << "\n";
+				//std::cout << "result:   " << test.to_pretty_string() << "\n";
+				std::cout << "result:   " << test.to_string() << "\n";
 				std::cout << "\n";
 			}
 			catch (bmath::ParseFailure failure) {
