@@ -14,6 +14,7 @@ important:
  - add pattern variable catching functions with other pattern variables beeing parameters of these functions (perhaps two types, one variadic?)
 
 nice to have:
+ - write bit_vector class
  - const term_slc iterator dereferences to Ref, not typed_idx
  - match::permutation_equals: abort earlier (use fact that both terms are sorted, not only pattern)
  - match::match_and_replace: fist copy in some monotonic buffer store or something

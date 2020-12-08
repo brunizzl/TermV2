@@ -101,7 +101,13 @@ namespace bmath::intern::debug {
 	{
 		const auto patterns = std::to_array<pattern::PnTerm>({ 
 			{ "x :factors | x * 0 = 0" },
-			{ "x :any     | x ^ 1 = x" },
+			{ "x          | x ^ 1 = x" },
+
+			{ "x, a, b | (x^a)^b = x^(a*b)" },
+			{ "x, a    | x * x^a = x^(a + 1)" },
+			{ "x, a, b | x^a * x^b = x^(a + b)" },
+			{ "x :factors, y | exp(x ln(y)) = y^x" },
+
 			{ "a, b          | a^2 + 2 a b   + b^2 = (a + b)^2" }, 
 			{ "a, b          | a^2 - 2 a b   + b^2 = (a - b)^2" }, 
 			{ "a :complex, b | a^2 + (2 a) b + b^2 = (a + b)^2" }, 
@@ -111,11 +117,15 @@ namespace bmath::intern::debug {
 			{ "a, bs :factors, cs :factors | a*bs + a*cs = a (bs + cs)" }, //will only work very few times for now (no rematch implemented yet)
 
 			//{ "a :int | 2 a + 1 = 'how_odd'" }, 
-			//{ "a :int | 2 a = 'let's_even_it_out'" },
+			//{ "a :int | 2 a = 'how_even'" },
 
 			{ "fib(0) = 0" },
 			{ "fib(1) = 1" },
 			{ "n | fib(n) = fib(n - 1) + fib(n - 2)" },
+
+			{ "n :nat, a, as :params | drop(n, list(a, as)) = drop(n - 1, list(as))" },
+			{ "           as :params | drop(0, list(as))    = list(as)" },
+
 
 			{ "xs :params | reverse(list{xs}) = reverse'(list{}, list{xs})" },
 			{ "xs :params, y, ys :params | reverse'(list{xs}, list{y, ys}) = reverse'(list{y, xs}, list{ys})" },
@@ -125,9 +135,7 @@ namespace bmath::intern::debug {
 			{ "n :nat, a, b, tail :params | list_fibs(n, list{a, b, tail}) = list_fibs(n - 1, list{force(a + b), a, b, tail})" },
 			{ "              tail :params | list_fibs(0, list{tail})       = list{tail}" },
 			
-			{ "n :nat, a, as :params | drop(n, list(a, as)) = drop(n - 1, list(as))" },
-			{ "           as :params | drop(0, list(as))    = list(as)" },
-			
+
 			{ "cond :not_positive, true_res, false_res | if_positive(cond, true_res, false_res) = false_res" },
 			{ "cond :positive,     true_res, false_res | if_positive(cond, true_res, false_res) = true_res" },
 			
@@ -141,17 +149,20 @@ namespace bmath::intern::debug {
 			{ "                    | sort(list{})      = list{}" },
 			{ "xs :params, y, zs :params | weird_concat(list{xs}, y, list{zs}) = list{xs, y, zs}" }, 
 
+
 			//differentiation rules:
-			{ "a :value,            x :variable | diff(a, x)     = 0" },
-			{ "                     x :variable | diff(x, x)     = 1" },
-			{ "a :variable,         x :variable | diff(a, x)     = 0" },
-			{ "a :value, f :any,    x :variable | diff(f^a, x)   = a * f^(a-1) * diff(f, x)" },
-			{ "u :any, v :summands, x :variable | diff(u + v, x) = diff(u, x) + diff(v, x)" },
-			{ "u :any, v :factors,  x :variable | diff(u * v, x) = diff(u, x) * v + u * diff(v, x)" },
-			//{ "" },
-			//{ "" },
-			//{ "" },
-			//{ "" },
+			{ "x :variable, a :value            | diff(a, x)      = 0" },
+			{ "x :variable                      | diff(x, x)      = 1" },
+			{ "x :variable, a :variable         | diff(a, x)      = 0" },
+			{ "x :variable, a :value, f :any    | diff(f^a, x)    = diff(f, x) a f^(a-1)" },
+			{ "x :variable, a :value, f :any    | diff(a^f, x)    = diff(f, x) ln(a) a^f" },
+			{ "x :variable, g :any, h :any      | diff(g^h, x)    = (diff(h, x) ln(g) + h diff(g, x)/g) g^h" },
+			{ "x :variable, u :any, v :summands | diff(u + v, x)  = diff(u, x) + diff(v, x)" },
+			{ "x :variable, u :any, v :factors  | diff(u v, x)    = diff(u, x) v + u diff(v, x)" },
+			{ "x :variable, f :any              | diff(sin(f), x) = diff(f, x) cos(f)" },
+			{ "x :variable, f :any              | diff(cos(f), x) = diff(f, x) (-sin(f))" },
+			{ "x :variable, f :any              | diff(exp(f), x) = diff(f, x) exp(f)" },
+			{ "x :variable, f :any              | diff(ln(f), x)  = diff(f, x) 1/f" },
 		});
 
 		for (const auto& p : patterns) {
@@ -161,9 +172,9 @@ namespace bmath::intern::debug {
 		}
 
 		while (true) {
-			std::cout << "> ";
 			std::string name;
-			std::cin >> name;
+			std::cout << "> ";
+			std::getline(std::cin, name);
 			try {
 				bmath::Term test(name); 
 				//std::cout << "input:  " << test.to_string() << "\n";
@@ -183,7 +194,7 @@ namespace bmath::intern::debug {
 					}
 				} while (changed);
 				//std::cout << test.to_memory_layout() << "\n";
-				std::cout << "result:   " << test.to_string() << "\n";
+				std::cout << "result:   " << test.to_pretty_string() << "\n";
 				std::cout << "\n";
 			}
 			catch (bmath::ParseFailure failure) {
@@ -191,7 +202,6 @@ namespace bmath::intern::debug {
 				std::cout << name << '\n';
 				std::cout << std::string(failure.where, ' ') << "^\n\n";
 			}
-			std::cin.get();
 		}
 	} //test_rechner
 

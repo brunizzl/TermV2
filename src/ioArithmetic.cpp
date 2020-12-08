@@ -101,27 +101,6 @@ namespace bmath::intern {
 
 		//operator precedence (used to decide if parentheses are nessecary in out string)
 		constexpr auto infixr_table = std::to_array<std::pair<pattern::PnType, int>>({
-			{ Type(Fn::asinh     )            , 0 },	
-			{ Type(Fn::acosh     )            , 0 },
-			{ Type(Fn::atanh     )            , 0 },	
-			{ Type(Fn::asin      )            , 0 },	
-			{ Type(Fn::acos      )            , 0 },	
-			{ Type(Fn::atan      )            , 0 },	
-			{ Type(Fn::sinh      )            , 0 },	
-			{ Type(Fn::cosh      )            , 0 },	
-			{ Type(Fn::tanh      )            , 0 },	
-			{ Type(Fn::sqrt      )            , 0 },
-			{ Type(Fn::log       )            , 0 }, 
-			{ Type(Fn::exp       )            , 0 },
-			{ Type(Fn::sin       )            , 0 },	
-			{ Type(Fn::cos       )            , 0 },	
-			{ Type(Fn::tan       )            , 0 },	
-			{ Type(Fn::abs       )            , 0 },	
-			{ Type(Fn::arg       )            , 0 },	
-			{ Type(Fn::ln        )            , 0 },	
-			{ Type(Fn::re        )            , 0 },	
-			{ Type(Fn::im        )            , 0 },	
-			{ Type(Fn::force     )            , 0 },	
 			{ Type(Op::named_fn  )            , 0 },
 			{ Type(Op::sum       )            , 2 },
 			{ Type(Op::product   )            , 4 },	
@@ -136,7 +115,16 @@ namespace bmath::intern {
 			{ pattern::MultiVar::params       , 6 },
 		});
 		static_assert(std::is_sorted(infixr_table.begin(), infixr_table.end(), [](auto a, auto b) { return a.second < b.second; }));
-		constexpr int infixr(pattern::PnType type) { return find(infixr_table, &std::pair<pattern::PnType, int>::first, type).second; }
+
+		constexpr int infixr(pattern::PnType type) 
+		{ 
+			if (type.is<Fn>()) {
+				return 0;
+			}
+			else {
+				return find(infixr_table, &std::pair<pattern::PnType, int>::first, type).second;
+			}
+		}
 
 		void append_complex(const std::complex<double> val, std::string& dest, int parent_operator_precedence)
 		{
