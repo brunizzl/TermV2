@@ -12,11 +12,15 @@ important:
  - enable rematch or write factorisation per hand (if from hand, perhaps introduce some way to call such routines as pattern?)
  - group all variations of pattern variables in one SumEnum
  - add pattern variable catching functions with other pattern variables beeing parameters of these functions (perhaps two types, one variadic?)
+ - bug: tree::combine_values (both exact and inexact) can produce sum / product with single element (e.g. "a+0" or "a*1"), 
+      but tree::establish_basic_order combines layers only once and bevore values (also this (to be added) layer combination could allow another value combination perhaps? (maybe not))
+	  idea 1: make all combining functions return a bool to know if any combination actually occured and if so, rerun them all. (potentially very slow)
+	  idea 2: bundle all combining actions into a single function (potentially very ugly) (combine_inexact requires a second version though...)
 
 nice to have:
  - write bit_vector class
  - const term_slc iterator dereferences to Ref, not typed_idx
- - match::permutation_equals: abort earlier (use fact that both terms are sorted, not only pattern)
+ - match::permutation_equals: abort earlier (use fact that both terms are (assumed to be) sorted, not only pattern)
  - match::match_and_replace: fist copy in some monotonic buffer store or something
  - ctor of PnTerm: regroup sums / products if nessecairy to allow value match variables to better catch values
  - add (perhaps untyped?, perhaps only TypedIdx_T needed) Ref for sub-index references in store (needed below)

@@ -761,13 +761,12 @@ namespace bmath::intern {
 				[[fallthrough]];
 			case Type_T(Op::product): {
 				std::uint32_t elem_count = 0u;       
-				TypedIdx_T last_elem = TypedIdx_T(); //only relevant if it is the only element. taking the last element saves an if in the loop.
+				TypedIdx_T last_elem = TypedIdx_T(); //only relevant if it is the only element.
 
 				std::uint32_t current_append_node = ref.index;
 				for (auto& elem : vc::range(ref)) {
-					const auto [elem_idx, elem_type] = elem.split();
-					if (elem_type == ref.type) {
-						current_append_node = TypedIdxSLC_T::append(*ref.store, current_append_node, elem_idx);
+					if (elem.get_type() == ref.type) {
+						current_append_node = TypedIdxSLC_T::append(*ref.store, current_append_node, elem.get_index());
 						elem = TypedIdxSLC_T::null_value;
 					}
 					else {
@@ -775,13 +774,14 @@ namespace bmath::intern {
 						//as elems type may change (for example sum holding only one summand), this second check is done.
 						if (elem.get_type() == ref.type) [[unlikely]] {
 							//bad code, as combine layers will now be called twice on every summand / factor in elem.
+							//i expect this to be an niche case though (see the [[unlikely]] above), so don't care too much.
 							current_append_node = TypedIdxSLC_T::append(*ref.store, current_append_node, elem.get_index());
 							elem = TypedIdxSLC_T::null_value;
 						}
 					}
 
 					elem_count++;
-					last_elem = elem;
+					last_elem = elem; //can be set to TypedIdxSLC_T::null_value, but never as actual last elem.
 				}
 
 				if (elem_count == 1u) { //sum / product is redundant, if there only is a single summand / factor
@@ -885,7 +885,7 @@ namespace bmath::intern {
 				}
 			} break;
 			default: {
-				assert(ref.type.is<Fn>()); //if this assert hits, the switch above needs more cases.
+				assert(ref.type.is<Fn>()); 
 				FnParams<TypedIdx_T>& params = *ref;
 				std::array<OptComplex, 4> results_values;
 				bool all_computable = true;
@@ -952,7 +952,7 @@ namespace bmath::intern {
 			const auto compute_exact = [](auto operate) -> OptComplex {
 				std::feclearexcept(FE_ALL_EXCEPT);
 				const OptComplex result = operate();
-				return (!std::fetestexcept(FE_ALL_EXCEPT)) ? result : OptComplex();
+				return std::fetestexcept(FE_ALL_EXCEPT) ? OptComplex() : result;
 			};
 
 			switch (ref.type) {

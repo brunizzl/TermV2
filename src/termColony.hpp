@@ -75,12 +75,13 @@ namespace bmath::intern {
 		template<typename Union_T>
 		[[nodiscard]] static std::size_t append(BasicStore<Union_T>& store, const std::uint32_t this_idx, const std::uint32_t append_idx)
 		{
+			assert(append_idx != null_index);
 			auto ref = SLCMutRef<Union_T>(store, this_idx);
 			while (ref->next_idx != null_index) {
 				ref.index = ref->next_idx;
 			}
 			ref->next_idx = append_idx;
-			return ref.index;
+			return append_idx;
 		} //append
 
 	};	//struct TermSLC 

@@ -117,7 +117,7 @@ namespace bmath::intern::debug {
 			{ "a, bs :factors, cs :factors | a*bs + a*cs = a (bs + cs)" }, //will only work very few times for now (no rematch implemented yet)
 
 			//{ "a :int | 2 a + 1 = 'how_odd'" }, 
-			//{ "a :int | 2 a = 'how_even'" },
+			//{ "a :int | 2 a = 'how_unodd'" },
 
 			{ "fib(0) = 0" },
 			{ "fib(1) = 1" },
@@ -186,9 +186,8 @@ namespace bmath::intern::debug {
 					for (const auto& p : patterns) {
 						if (test.match_and_replace(p)) {
 							changed = true;
-							std::cout << "    -> " << test.to_string() << "\n";
 							test.standardize();
-							std::cout << "        -> " << test.to_string() << "\n";
+							std::cout << "    -> " << test.to_string() << "\n";
 							//std::cout << test.to_memory_layout() << "\n";
 							break;
 						}
