@@ -193,7 +193,7 @@ namespace bmath::intern::debug {
 						}
 					}
 				} while (changed);
-				//std::cout << test.to_memory_layout() << "\n";
+				std::cout << test.to_memory_layout() << "\n";
 				//std::cout << "result:   " << test.to_pretty_string() << "\n";
 				std::cout << "result:   " << test.to_string() << "\n";
 				std::cout << "\n";

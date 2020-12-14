@@ -336,36 +336,6 @@ namespace bmath::intern {
 	template<typename... Enums>
 	class [[nodiscard]] SumEnum;
 
-	template<typename Enum, Enum Count>
-	struct [[nodiscard]] WrapEnum //allows to use SumEnum with enums not having their last member named COUNT
-	{
-		static_assert(std::is_enum_v<Enum>);
-
-		Enum value;
-		constexpr WrapEnum(const Enum e) noexcept :value(e) {}
-
-		explicit constexpr WrapEnum(const unsigned u) noexcept :value(static_cast<Enum>(u)) {}
-		explicit constexpr operator unsigned() const noexcept { return static_cast<unsigned>(this->value); }
-
-		//this is the only reason for WrapEnum to exist.
-		static constexpr Enum COUNT = static_cast<Enum>(static_cast<unsigned>(Count) + 1u);
-	}; //struct WrapEnum 
-
-	//if a member of SumEnum only has a single state itself, this may be used
-	template<StringLiteral name>
-	struct UnitEnum
-	{
-		explicit constexpr operator unsigned() const noexcept { return 0u; }
-		static constexpr unsigned COUNT = 1u;
-	};
-
-	//crutch while intellisense doesnt know class non type template parameters
-#define UNIT_ENUM(NAME) struct NAME {\
-		explicit constexpr operator unsigned() const noexcept { return 0u; }\
-		static constexpr unsigned COUNT = 1u;\
-	}
-
-
 	namespace enum_detail {
 
 		template<typename Needle, typename Haystack>
@@ -373,9 +343,6 @@ namespace bmath::intern {
 
 		template<typename Needle, typename Haystack>
 		constexpr bool contains_v = Contains<Needle, Haystack>::value;
-
-		template<typename Needle, auto Count>
-		struct Contains<Needle, WrapEnum<Needle, Count>> :std::true_type {};
 
 		template<typename Needle, typename... HayTail>
 		struct Contains<Needle, SumEnum<Needle, HayTail...>> :std::true_type {};
@@ -421,9 +388,6 @@ namespace bmath::intern {
 
 		template<typename... Enums>
 		struct ListMembers<SumEnum<Enums...>> { using type = typename ListMembers<Enums...>::type; };
-
-		template<typename Enum, auto Count>
-		struct ListMembers<WrapEnum<Enum, Count>> { using type = List<Enum>; };
 
 		template<typename Enum>
 		struct ListMembers<Enum> { using type = List<Enum>; };
@@ -553,6 +517,40 @@ namespace bmath::intern {
 		constexpr friend bool operator==(const SumEnum&, const SumEnum&) noexcept = default;
 		static constexpr Value COUNT = static_cast<Value>(next_offset); //only relevant for outhermost instanciation
 	}; //class SumEnum<Enum, TailEnums...>
+
+
+	template<typename Enum, Enum Count>
+	struct [[nodiscard]] WrapEnum //allows to use SumEnum with enums not having their last member named COUNT
+	{
+		static_assert(std::is_enum_v<Enum>);
+
+		Enum value;
+		constexpr WrapEnum(const Enum e) noexcept :value(e) {}
+
+		explicit constexpr WrapEnum(const unsigned u) noexcept :value(static_cast<Enum>(u)) {}
+		explicit constexpr operator unsigned() const noexcept { return static_cast<unsigned>(this->value); }
+
+		//this is the only reason for WrapEnum to exist.
+		static constexpr Enum COUNT = static_cast<Enum>(static_cast<unsigned>(Count) + 1u);
+	}; //struct WrapEnum 
+
+	   //if a member of SumEnum only has a single state itself, this may be used
+	template<StringLiteral name>
+	struct UnitEnum
+	{
+		explicit constexpr operator unsigned() const noexcept { return 0u; }
+		static constexpr unsigned COUNT = 1u;
+	};
+
+	//crutch while intellisense doesnt know class non type template parameters
+#define UNIT_ENUM(NAME) struct NAME {\
+		explicit constexpr operator unsigned() const noexcept { return 0u; }\
+		static constexpr unsigned COUNT = 1u;\
+	}
+
+
+
+
 
 	//remove if c++20 libraries have catched up
 	template<typename T>
