@@ -44,9 +44,10 @@ int main()
 	//test::arithmetic_term();
 	//test::copy();
 	//test::bit_set();
+	test::bit_vector();
 	//test::match();
 	//debug::enumerate_pn_type();
-	debug::test_rechner();
+	//debug::test_rechner();
 }
 
 

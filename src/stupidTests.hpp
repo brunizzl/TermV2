@@ -381,6 +381,55 @@ namespace bmath::intern::test {
 		std::cout << std::noboolalpha;
 	}
 
+	void bit_vector()
+	{
+		BitVector vec;
+
+		const auto print = [&]() {
+			for (std::size_t i = 0; i < vec.size(); i++) {
+				if (i % 64 == 0) {
+					std::printf("\n%5d  ", (int)i); //pleas std::format, i need you :(
+				}
+				std::cout << (vec.test(i) ? '|' : '.');
+			}
+			std::cout << "\n\n";
+		};
+
+		for (int i = 0; i < 64; i++) {
+			vec.push_true();
+			vec.push_n_false(16u);
+		}
+
+		std::cout << "after push:\n";
+		print();
+
+		std::vector<std::size_t> sets;
+		for (int i = 0; i < 10; i++) {
+			sets.push_back(vec.set_first_n_alligned_false(16u));
+			std::cout << i << " set at " << sets.back() << "\n";
+		}
+
+		std::cout << "after set:\n";
+		print();
+
+		std::cout << (vec.count() - 64) / 16.0 << " chunks set\n\n";
+
+		for (auto set_pos : sets) {
+			vec.reset_alligned_n(set_pos, 16u);
+		}
+
+		std::cout << "after resets:\n";
+		print();
+
+		vec.clear();
+		vec.push_n_true(64u);
+		vec.push_false();
+		std::cout << "new content:\n";
+		print();
+
+		std::cout << "first false: " << vec.find_first_false() << "\n";
+	}
+
 	void combine_exact()
 	{
 		std::vector<std::string> names = { {"1/2"}, {"1/5"}, {"1 + 1e+200"} };
