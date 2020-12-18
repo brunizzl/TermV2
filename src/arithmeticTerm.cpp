@@ -90,35 +90,24 @@ namespace bmath::intern {
 		{ pattern::PnVar::value_proxy , 102 }, 
 		{ pattern::PnVar::tree_match  , 103 }, 
 		{ Type(Leaf::variable)        , 104 },
-		{ Type(Fn::pow       )        , 200 }, 
-		{ Type(Fn::log       )        , 201 }, 
-		{ Type(Fn::exp       )        , 202 }, 
-		{ Type(Fn::sqrt      )        , 203 },  
-		{ Type(Fn::asinh     )        , 204 }, 
-		{ Type(Fn::acosh     )        , 205 }, 
-		{ Type(Fn::atanh     )        , 206 }, 
-		{ Type(Fn::asin      )        , 207 }, 
-		{ Type(Fn::acos      )        , 208 }, 
-		{ Type(Fn::atan      )        , 209 }, 
-		{ Type(Fn::sinh      )        , 210 }, 
-		{ Type(Fn::cosh      )        , 211 }, 
-		{ Type(Fn::tanh      )        , 212 }, 
-		{ Type(Fn::sin       )        , 213 }, 
-		{ Type(Fn::cos       )        , 214 }, 
-		{ Type(Fn::tan       )        , 215 }, 
-		{ Type(Fn::abs       )        , 216 }, 
-		{ Type(Fn::arg       )        , 217 }, 
-		{ Type(Fn::ln        )        , 218 }, 
-		{ Type(Fn::re        )        , 219 }, 
-		{ Type(Fn::im        )        , 220 }, 
-		{ Type(Op::named_fn  )        , 221 },
+		{ Type(Op::named_fn  )        , 299 },
 		{ Type(Op::sum       )        , 300 },  
 		{ Type(Op::product   )        , 301 }, 
 		{ pattern::MultiVar::summands , 302 }, //kinda special, as they always succeed in matching -> need to be matched last 
 		{ pattern::MultiVar::factors  , 303 }, //kinda special, as they always succeed in matching -> need to be matched last 
 	});
 	static_assert(std::is_sorted(unique_rematchability_table.begin(), unique_rematchability_table.end(), [](auto a, auto b) { return a.second < b.second; }));
-	constexpr int rematchability(pattern::PnType type) noexcept { return find(unique_rematchability_table, &std::pair<pattern::PnType, int>::first, type).second; }
+	static_assert(unsigned(Fn::COUNT) < 99u); //else named_fn's rematchability of 300 is already occupied by element of Fn
+
+	constexpr int rematchability(pattern::PnType type) noexcept 
+	{ 
+		if (type.is<Fn>()) {
+			return 200 + static_cast<unsigned>(type.to<Fn>());
+		}
+		else {
+			return find(unique_rematchability_table, &std::pair<pattern::PnType, int>::first, type).second; 
+		}
+	}
 
 	//utility for both Function and NamedFn
 	namespace fn {
@@ -250,11 +239,12 @@ namespace bmath::intern {
 			switch (form) {
 			case Form::natural:   accept &= re >  0.0;                      [[fallthrough]];
 			case Form::natural_0: accept &= re >= 0.0;                      [[fallthrough]];
-			case Form::integer:   accept &= re - std::uint64_t(re) == 0.0; 
+			case Form::integer:   accept &= re - std::int64_t(re) == 0.0; 
 			                      accept &= (std::abs(re) <= max_save_int); [[fallthrough]];
 			case Form::real:      accept &= im == 0.0;                      [[fallthrough]];
 			case Form::complex:
 				return accept;
+
 			case Form::negative:      return re <   0.0 && im == 0.0;
 			case Form::positive:      return re >   0.0 && im == 0.0;
 			case Form::not_negative:  return re >=  0.0 && im == 0.0;
@@ -2017,7 +2007,7 @@ namespace bmath {
 		parse_string.remove_space();
 		{
 			const std::size_t error_pos = find_first_not_arithmetic(parse_string.tokens);
-			intern::throw_if<ParseFailure>(error_pos != TokenView::npos, error_pos, "illegal character");
+			if (error_pos != TokenView::npos) [[unlikely]] throw ParseFailure{ error_pos, "illegal character" };
 		}
 		this->head = build(this->store, parse_string);
 	} //Term
@@ -2028,9 +2018,9 @@ namespace bmath {
 		const auto tokens = TokenString(simple_name);
 		{
 			const std::size_t char_pos = find_first_not_arithmetic(tokens);
-			intern::throw_if<ParseFailure>(char_pos != TokenView::npos, char_pos, "illegal character");
+			if (char_pos != TokenView::npos) [[unlikely]] throw ParseFailure{ char_pos, "illegal character" };
 			const std::size_t space_pos = simple_name.find_first_of(' ');
-			intern::throw_if<ParseFailure>(space_pos != TokenView::npos, space_pos, "space forbidden in simple constructor");
+			if (space_pos != TokenView::npos) [[unlikely]] throw ParseFailure{ space_pos, "space forbidden in simple constructor" };
 		}
 		this->head = build(this->store, ParseView(tokens, simple_name.data(), 0u));
 	} //Term

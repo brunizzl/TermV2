@@ -20,7 +20,7 @@ namespace bmath::intern {
 		COUNT
 	};
 
-	enum class Op //Short for Operation (Fn's are operations as well, but organisation stuff)
+	enum class Op //Short for Operation (Fn's are operations as well, but not listed here, because organisation stuff)
 	{
 		sum,
 		product,
@@ -32,31 +32,30 @@ namespace bmath::intern {
 	//behavior for every specific element in Fn is (at least) defined at these places:
 	//  1. function fn::eval specifies how (and if at all) to evaluate
 	//  2. array fn::props_table specifies name and parameter count
-	//  3. array unique_rematchability_table should have an entry for each Fn
 	enum class Fn //short for Function (note that named_fn is not listed here, at it's behavior is more complicated)
 	{
 		pow,    //params[0] := base      params[1] := expo    
 		log,	//params[0] := base      params[1] := argument
-		exp,	//params[0] := argument
 		sqrt,	//params[0] := argument
-		asinh,	//params[0] := argument
-		acosh,	//params[0] := argument
-		atanh,	//params[0] := argument
-		asin,	//params[0] := argument
-		acos,	//params[0] := argument
-		atan,	//params[0] := argument
-		sinh,	//params[0] := argument
-		cosh,	//params[0] := argument
-		tanh,	//params[0] := argument
+		exp,	//params[0] := argument
+		ln,		//params[0] := argument
 		sin,	//params[0] := argument
 		cos,	//params[0] := argument
 		tan,	//params[0] := argument
+		sinh,	//params[0] := argument
+		cosh,	//params[0] := argument
+		tanh,	//params[0] := argument
+		asin,	//params[0] := argument
+		acos,	//params[0] := argument
+		atan,	//params[0] := argument
+		asinh,	//params[0] := argument
+		acosh,	//params[0] := argument
+		atanh,	//params[0] := argument
 		abs,	//params[0] := argument
 		arg,	//params[0] := argument
-		ln,		//params[0] := argument
 		re,		//params[0] := argument
 		im,		//params[0] := argument
-		force,  //params[0] := argument forces evaluation even if it is unexact
+		force,  //params[0] := argument   forces evaluation even if it is unexact
 		COUNT
 	};
 
@@ -242,6 +241,7 @@ namespace bmath::intern {
 		{
 		private:
 			char unused; //allows to constexpr default construct union without initialisation
+
 		public:
 			FnParams<PnTypedIdx> fn_params;
 			NamedFn named_fn;
@@ -399,24 +399,24 @@ namespace bmath::intern {
 		//every item enumerated in Fn (except COUNT) may be listed here in order of apperance in Fn
 		constexpr auto props_table = std::to_array<FnProps>({
 			{ Fn::pow  , "pow"  , 2u },   
-			{ Fn::log  , "log"  , 2u }, 	
+			{ Fn::log  , "log"  , 2u }, 
+			{ Fn::sqrt , "sqrt" , 1u },	
 			{ Fn::exp  , "exp"  , 1u },	
-			{ Fn::sqrt , "sqrt" , 1u },
-			{ Fn::asinh, "asinh", 1u },	
-			{ Fn::acosh, "acosh", 1u },
-			{ Fn::atanh, "atanh", 1u },	
-			{ Fn::asin , "asin" , 1u },	
-			{ Fn::acos , "acos" , 1u },	
-			{ Fn::atan , "atan" , 1u },	
-			{ Fn::sinh , "sinh" , 1u },	
-			{ Fn::cosh , "cosh" , 1u },	
-			{ Fn::tanh , "tanh" , 1u },	
+			{ Fn::ln   , "ln"   , 1u },
 			{ Fn::sin  , "sin"  , 1u },	
 			{ Fn::cos  , "cos"  , 1u },	
 			{ Fn::tan  , "tan"  , 1u },	
+			{ Fn::sinh , "sinh" , 1u },	
+			{ Fn::cosh , "cosh" , 1u },	
+			{ Fn::tanh , "tanh" , 1u },	
+			{ Fn::asin , "asin" , 1u },	
+			{ Fn::acos , "acos" , 1u },	
+			{ Fn::atan , "atan" , 1u },		
+			{ Fn::asinh, "asinh", 1u },	
+			{ Fn::acosh, "acosh", 1u },
+			{ Fn::atanh, "atanh", 1u },	
 			{ Fn::abs  , "abs"  , 1u },	
 			{ Fn::arg  , "arg"  , 1u },	
-			{ Fn::ln   , "ln"   , 1u },	
 			{ Fn::re   , "re"   , 1u },	
 			{ Fn::im   , "im"   , 1u },		
 			{ Fn::force, "force", 1u },	

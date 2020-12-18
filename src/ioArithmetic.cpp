@@ -118,7 +118,7 @@ namespace bmath::intern {
 
 		constexpr int infixr(pattern::PnType type) 
 		{ 
-			if (type.is<Fn>()) {
+			if (type.is<Fn>() && type != Fn::pow) {
 				return 0;
 			}
 			else {
@@ -239,8 +239,8 @@ namespace bmath::intern {
 						return std::complex<double>(0.0, parse_value(view));
 					}
 				}
-				throw_if<ParseFailure>(!view.tokens.starts_with(token::open_grouping), view.offset, "expected '(' or the like");
-				throw_if<ParseFailure>(!view.tokens.ends_with(token::clse_grouping), view.offset + view.size(), "expected ')' or the like");
+				if (!view.tokens.starts_with(token::open_grouping)) [[unlikely]] throw ParseFailure{ view.offset, "expected '(' or the like" };
+				if (!view.tokens.ends_with(token::clse_grouping)) [[unlikely]] throw ParseFailure{ view.offset + view.size(), "expected ')' or the like" };
 				view.remove_prefix(1u);
 				view.remove_suffix(1u);
 			} while (view.size());
@@ -269,8 +269,8 @@ namespace bmath::intern {
 				if (view.tokens.find_first_not_of(token::number) == TokenView::npos) {
 					return parse_value(view);
 				}
-				throw_if<ParseFailure>(!view.tokens.starts_with(token::open_grouping), view.offset, "expected '(' or the like");
-				throw_if<ParseFailure>(!view.tokens.ends_with(token::clse_grouping), view.offset + view.size(), "expected ')' or the like");
+				if (!view.tokens.starts_with(token::open_grouping)) [[unlikely]] throw ParseFailure{ view.offset, "expected '(' or the like" };
+				if (!view.tokens.ends_with(token::clse_grouping)) [[unlikely]] throw ParseFailure{ view.offset + view.size(), "expected ')' or the like" };
 				view.remove_prefix(1u);
 				view.remove_suffix(1u);
 			} while (view.size());
@@ -281,8 +281,8 @@ namespace bmath::intern {
 		{
 			double value;
 			const auto [ptr, error] = std::from_chars(view.chars, view.chars + view.size(), value);
-			throw_if<ParseFailure>(error != std::errc(), view.offset, "value syntax is illformed or value out of bounds");
-			throw_if<ParseFailure>(ptr != view.chars + view.size(), std::size_t(view.offset + ptr - view.chars + 1u), "value syntax is illformed");
+			if (error != std::errc()) [[unlikely]] throw ParseFailure{ view.offset, "value syntax is illformed or value out of bounds" };
+			if (ptr != view.chars + view.size()) [[unlikely]] throw ParseFailure{ std::size_t(view.offset + ptr - view.chars + 1u), "value syntax is illformed" };
 			return value;
 		} //parse_value
 
@@ -328,8 +328,8 @@ namespace bmath::intern {
 		if (first_not_character == TokenView::npos) {
 			return Head{ 0u, Head::Type::variable };
 		}
-		throw_if<ParseFailure>(view.tokens[first_not_character] != token::open_grouping, first_not_character + view.offset, "illegal character, expected '('");
-		throw_if<ParseFailure>(!view.tokens.ends_with(token::clse_grouping), view.size() + view.offset, "poor grouping, expected ')'");
+		if (view.tokens[first_not_character] != token::open_grouping) [[unlikely]] throw ParseFailure{ first_not_character + view.offset, "illegal character, expected '('" };
+		if (!view.tokens.ends_with(token::clse_grouping)) [[unlikely]] throw ParseFailure{ view.size() + view.offset, "poor grouping, expected ')'" };
 		if (first_not_character == 0u) {
 			return Head{ 0u, Head::Type::group };
 		}
@@ -340,7 +340,7 @@ namespace bmath::intern {
 
 	TypedIdx build(Store& store, ParseView input)
 	{
-		throw_if<ParseFailure>(input.size() == 0u, input.offset, "recieved empty substring");
+		if (input.size() == 0u) [[unlikely]] throw ParseFailure{ input.offset, "recieved empty substring" };
 		Head head = find_head_type(input);
 		while (head.type == Head::Type::group) {
 			input.remove_prefix(1u);
@@ -433,7 +433,7 @@ namespace bmath::intern {
 			NamedFn result;
 			{//writing name in result
 				const auto new_name = std::string_view(input.chars, open_par);
-				throw_if<ParseFailure>(new_name.size() > NamedFn::max_name_size, input.offset, "named_fn name exceeds max length");
+				if (new_name.size() > NamedFn::max_name_size) [[unlikely]] throw ParseFailure{ input.offset, "named_fn name exceeds max length" };
 				std::copy(new_name.begin(), new_name.end(), &result.name[0]);
 			}
 			//writing parameters in result
@@ -465,13 +465,13 @@ namespace bmath::intern {
 			std::size_t comma = find_first_of_skip_pars(input.tokens, token::comma);
 			auto param_view = input.steal_prefix(comma);
 			for (auto& param : fn::range(result, type)) {
-				throw_if<ParseFailure>(param_view.size() == 0u, input.offset, "too few function parameters");
+				if (param_view.size() == 0u) [[unlikely]] throw ParseFailure{ input.offset, "too few function parameters" };
 				param = build_any(store, param_view);
 				input.remove_prefix(1u); // remove comma
 				comma = find_first_of_skip_pars(input.tokens, token::comma);
 				param_view = input.steal_prefix(comma);
 			}
-			throw_if<ParseFailure>(param_view.size() > 0u, input.offset, "too many function parameters");
+			if (param_view.size() > 0u) [[unlikely]] throw ParseFailure{ input.offset, "too many function parameters" };
 			store.at(result_index) = result;
 			return TypedIdx_T(result_index, Type(type));
 		}
@@ -482,12 +482,12 @@ namespace bmath::intern {
 		PatternParts::PatternParts(const ParseView input)
 		{
 			const std::size_t bar = find_first_of_skip_pars(input.tokens, token::bar);
-			throw_if<ParseFailure>(count_skip_pars(input.tokens, token::bar) > 1u, input.offset + bar, "expected only this '|', no further ones at top grouping level");
+			if (count_skip_pars(input.tokens, token::bar) > 1u) [[unlikely]] throw ParseFailure{ input.offset + bar, "expected only this '|', no further ones at top grouping level" };
 			const std::size_t equals = find_first_of_skip_pars(input.tokens, token::equals);
-			throw_if<ParseFailure>(count_skip_pars(input.tokens, token::equals) > 1u, input.offset + equals, "expected only this '=', no further ones at top grouping level");
-			throw_if<ParseFailure>(equals == TokenView::npos, input.size() - 1u, "expected '=' at top grouping level");
+			if (count_skip_pars(input.tokens, token::equals) > 1u) [[unlikely]] throw ParseFailure{ input.offset + equals, "expected only this '=', no further ones at top grouping level" };
+			if (equals == TokenView::npos) [[unlikely]] throw ParseFailure{ input.size() - 1u, "expected '=' at top grouping level" };
 
-			if (bar != TokenView::npos) {
+			if (bar != TokenView::npos) [[likely]] {
 				this->declarations = input.substr(0u, bar);
 				this->lhs          = input.substr(bar + 1u, equals - bar - 1u);
 				this->rhs          = input.substr(equals + 1u);
@@ -505,7 +505,7 @@ namespace bmath::intern {
 				const std::size_t colon = find_first_of_skip_pars(var_view.tokens, token::colon);
 				if (colon != TokenView::npos) {
 					const PnVariablesType type = type_of(var_view.to_string_view(colon + 1u));
-					throw_if<ParseFailure>(type.is<Unknown>(), var_view.offset + colon + 1u, "unknown restriction");
+					if (type.is<Unknown>()) [[unlikely]] throw ParseFailure{ var_view.offset + colon + 1u, "unknown restriction" };
 
 					if (type.is<Form>()) {
 						this->value_table.emplace_back(var_view.to_string_view(0, colon), type.to<Form>());
@@ -558,14 +558,14 @@ namespace bmath::intern {
 				const std::uint32_t match_data_idx = std::distance(this->multi_table.begin(), iter);
 				var_idx = PnTypedIdx(match_data_idx, iter->type);
 			}
-			throw_if<ParseFailure>(var_idx == PnTypedIdx(), input.offset, "match variable has not been declared");
+			if (var_idx == PnTypedIdx()) [[unlikely]] throw ParseFailure{ input.offset, "match variable has not been declared" };
 			return var_idx;
 		} //NameLookupTable::insert_instance
 
 
 		PnTypedIdx PatternBuildFunction::operator()(PnStore& store, ParseView input)
 		{
-			throw_if<ParseFailure>(input.size() == 0u, input.offset, "recieved empty substring");
+			if (input.size() == 0u) [[unlikely]] throw ParseFailure{ input.offset, "recieved empty substring" };
 			Head head = find_head_type(input);
 			while (head.type == Head::Type::group) {
 				input.remove_prefix(1u);
@@ -609,7 +609,7 @@ namespace bmath::intern {
 			} break;
 			case Head::Type::variable: {
 				if (input.chars[0u] == '\'') {
-					throw_if<ParseFailure>(input.chars[input.size() - 1u] != '\'', input.offset + 1u, "found no matching \"'\"");
+					if (input.chars[input.size() - 1u] != '\'') [[unlikely]] throw ParseFailure{ input.offset + 1u, "found no matching \"'\"" };
 					return PnTypedIdx(str_slc::insert(store, input.to_string_view(1u, input.size() - 1u)), Type(Leaf::variable));
 				}
 				else {
@@ -750,7 +750,7 @@ namespace bmath::intern {
 
 
 
-		std::string print::to_pretty_string(const Ref ref, const int parent_infixr)
+		std::string to_pretty_string(const Ref ref, const int parent_infixr)
 		{
 			std::string str;
 
@@ -809,14 +809,14 @@ namespace bmath::intern {
 						str += "-";
 					}
 					else if (const auto base = get_pow_neg1(ref.new_at(elem))) {
-						//str += (first ? "1 / " : " / "); 
-						str += (first ? "1/" : "/"); 
+						str += (first ? "1 / " : " / "); 
+						//str += (first ? "1/" : "/"); 
 						str += print::to_pretty_string(ref.new_at(*base), infixr(Type(Op::product)));
 						first = false;
 					}
 					else {
-						//str += (first ? "" : " * ");
-						str += (first ? "" : "*");
+						str += (first ? "" : " ");
+						//str += (first ? "" : "*");
 						str += print::to_pretty_string(ref.new_at(elem), infixr(Type(Op::product)));
 						first = false;
 					}
@@ -829,25 +829,25 @@ namespace bmath::intern {
 				bool first = true;
 				for (const auto summand : vc::range(ref)) {
 					if (const auto val = get_negative_real(ref.new_at(summand))) {
-						//str += (first ? "" : " ");
+						str += (first ? "" : " ");
 						append_real(*val, str);
 					}
 					else if (auto product = get_negative_product(ref.new_at(summand))) {
 						if (product->negative_factor != -1.0) {
-							//str += (first ? "" : " ");
+							str += (first ? "" : " ");
 							append_real(product->negative_factor, str);
-							//str += " * ";
-							str += "*";
+							str += " ";
+							//str += "*";
 						}
 						else {
-							//str +=  (first ? "-" : " -");
-							str += "-";
+							str +=  (first ? "-" : " - ");
+							//str += "-";
 						}
 						append_product(product->other_factors);
 					}
 					else {
-						//str += (first ? "" : " + ");
-						str += (first ? "" : "+");
+						str += (first ? "" : " + ");
+						//str += (first ? "" : "+");
 						str += print::to_pretty_string(ref.new_at(summand), infixr(ref.type));
 					}
 					first = false;
@@ -860,7 +860,6 @@ namespace bmath::intern {
 			case Type(Fn::pow): {
 				const FnParams<TypedIdx>& params = *ref;
 				str += print::to_pretty_string(ref.new_at(params[0]), infixr(ref.type));
-				//str += " ^ ";
 				str += "^";
 				str += print::to_pretty_string(ref.new_at(params[1]), infixr(ref.type));
 			} break;
@@ -871,8 +870,7 @@ namespace bmath::intern {
 				bool first = true;
 				for (const auto param : fn::range(ref)) {
 					if (!std::exchange(first, false)) {
-						//str += ", ";
-						str += ",";
+						str += ", ";
 					}
 					str += print::to_pretty_string(ref.new_at(param), infixr(ref.type));
 				}
@@ -885,8 +883,7 @@ namespace bmath::intern {
 				str.push_back('(');
 				const char* separator = "";
 				for (const auto param : fn::range(ref->fn_params, ref.type)) {
-					//str += std::exchange(separator, ", ");
-					str += std::exchange(separator, ",");
+					str += std::exchange(separator, ", ");
 					str += print::to_pretty_string(ref.new_at(param), infixr(ref.type));
 				}
 				str.push_back(')');

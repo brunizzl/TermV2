@@ -21,14 +21,6 @@ namespace bmath::intern {
 		}
 	}
 
-	template<typename Exception_T, typename... Args>
-	constexpr void throw_if(bool cond, Args&&... args)
-	{
-		if (cond) [[unlikely]] {
-			throw Exception_T{ std::forward<Args>(args)... };
-		}
-	}
-
 
 	template<const auto x, const auto... xs, typename T>
 	constexpr bool is_one_of(const T y) noexcept
@@ -45,6 +37,7 @@ namespace bmath::intern {
 		else                           { return x == y && equivalent(x, xs...); }
 	}
 
+
 	template<auto val, std::size_t N>
 	constexpr auto replicate()
 	{
@@ -54,6 +47,12 @@ namespace bmath::intern {
 		}
 		return result;
 	}
+
+	template<auto val, std::size_t N>
+	constexpr auto replicate_v = replicate<val, N>();
+
+	static_assert(replicate_v<'a', 3> == std::array{ 'a', 'a', 'a' });
+
 
 	template <typename Struct_T, std::size_t Size, typename SearchMemberPtr_T, typename Search_T>
 	[[nodiscard]] constexpr const Struct_T& find(
@@ -73,29 +72,26 @@ namespace bmath::intern {
 		return itr != end(data) ? *itr : null_val;
 	}
 
-	//Nplus1 as template argument allows directly building from char array without including '\0' at end
-	template<std::size_t N_plus_1> 
-	struct StringLiteral 
+
+	//taken (and adapted) from here: http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2018/p0732r2.pdf
+	template<std::size_t N> 
+	struct StringLiteral :std::array<char, N>
 	{
-		static constexpr std::size_t N = N_plus_1 - 1u;
-
-		char data[N] = {};
-
-		//last char in init is '\0' -> not stored
-		constexpr StringLiteral(const char (&init)[N_plus_1]) { std::copy_n(init, N, data); } 
-
-		constexpr std::size_t size() const noexcept { return N; }
-		constexpr bool operator==(const StringLiteral&) const noexcept = default;
+		//perhaps change to array reference of length N + 1? (+ 1 because '\0')
+		constexpr StringLiteral(const char* init) { std::copy_n(init, N, this->data()); } 
 
 		template<std::size_t Start, std::size_t Length>
-		constexpr StringLiteral<Length + 1u> substr() const noexcept 
+		constexpr StringLiteral<Length> substr() const noexcept 
 		{ 
 			static_assert(Start + Length <= N);
-			char new_data[Length + 1u] = {};
-			std::copy_n(this->data + Start, Length, new_data);
-			return StringLiteral<Length + 1u>(new_data);
+			return StringLiteral<Length>(this->data() + Start);
 		}
+
+		constexpr bool operator==(const StringLiteral&) const noexcept = default;
 	};
+
+	template<std::size_t N>
+	StringLiteral(const char (&str)[N]) -> StringLiteral<N - 1>;
 
 
 
@@ -463,7 +459,7 @@ namespace bmath::intern {
 	class [[nodiscard]] SumEnum<Enum, TailEnums...> :public SumEnum<TailEnums...>
 	{
 		static_assert(enum_detail::HasCOUNT<Enum>::value, 
-			"enum part of SumEnum must name last member COUNT (or be wrapped in WrapEnum)");
+			"enum part of SumEnum must name last member COUNT");
 		static_assert(enum_detail::disjoint_v<enum_detail::ListMembers<Enum>::type, enum_detail::ListMembers<TailEnums...>::type>, 
 			"No two parameters of SumEnum's parameter pack may contain the same type within (or be equal).");
 
@@ -519,7 +515,7 @@ namespace bmath::intern {
 	}; //class SumEnum<Enum, TailEnums...>
 
 
-	template<typename Enum, Enum Count>
+	template<typename Enum, Enum LastMember>
 	struct [[nodiscard]] WrapEnum //allows to use SumEnum with enums not having their last member named COUNT
 	{
 		static_assert(std::is_enum_v<Enum>);
@@ -531,7 +527,7 @@ namespace bmath::intern {
 		explicit constexpr operator unsigned() const noexcept { return static_cast<unsigned>(this->value); }
 
 		//this is the only reason for WrapEnum to exist.
-		static constexpr Enum COUNT = static_cast<Enum>(static_cast<unsigned>(Count) + 1u);
+		static constexpr Enum COUNT = static_cast<Enum>(static_cast<unsigned>(LastMember) + 1u);
 	}; //struct WrapEnum 
 
 	   //if a member of SumEnum only has a single state itself, this may be used

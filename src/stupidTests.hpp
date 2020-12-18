@@ -104,6 +104,7 @@ namespace bmath::intern::debug {
 			{ "x          | x ^ 1 = x" },
 
 			{ "x, a, b | (x^a)^b = x^(a*b)" },
+			{ "x       | x x     = x^2" }, 
 			{ "x, a    | x x^a   = x^(a + 1)" },
 			{ "x, a, b | x^a x^b = x^(a + b)" },
 			{ "x :factors, y | exp(x ln(y)) = y^x" },
@@ -112,48 +113,47 @@ namespace bmath::intern::debug {
 			{ "a, b          | a^2 - 2 a b   + b^2 = (a - b)^2" }, 
 			{ "a :complex, b | a^2 + (2 a) b + b^2 = (a + b)^2" }, 
 
-			{ "a | a + a = 2 a" }, 
+			{ "a, bs :factors, cs :factors | a bs + a cs = a (bs + cs)" }, //will only work very few times for now (no rematch implemented yet)
 			{ "a, bs :factors | a*bs + a = a (bs + 1)" }, 
-			{ "a, bs :factors, cs :factors | a*bs + a*cs = a (bs + cs)" }, //will only work very few times for now (no rematch implemented yet)
-
-			//{ "a :int | 2 a + 1 = 'how_odd'" }, 
-			//{ "a :int | 2 a = 'how_unodd'" },
-
-			{ "fib(0) = 0" },
-			{ "fib(1) = 1" },
-			{ "n | fib(n) = fib(n - 1) + fib(n - 2)" },
-
-			{ "n :nat, a, as :params | drop(n, list(a, as)) = drop(n - 1, list(as))" },
-			{ "           as :params | drop(0, list(as))    = list(as)" },
-
-
-			{ "xs :params | reverse(list{xs}) = reverse'(list{}, list{xs})" },
-			{ "xs :params, y, ys :params | reverse'(list{xs}, list{y, ys}) = reverse'(list{y, xs}, list{ys})" },
-			{ "xs :params,               | reverse'(list{xs}, list{})      = list{xs}" },
+			{ "a | a + a = 2 a" }, 
 			
-			{ "n :nat0                    | fib_n(n + 2)                   = reverse(list_fibs(n, list{1, 0}))" },
-			{ "n :nat, a, b, tail :params | list_fibs(n, list{a, b, tail}) = list_fibs(n - 1, list{force(a + b), a, b, tail})" },
-			{ "              tail :params | list_fibs(0, list{tail})       = list{tail}" },
-			
+			{ "a, b | a a^b = 2 a" }, 
+			{ "a | a + a = 2 a" }, 
 
-			{ "cond :not_positive, true_res, false_res | if_positive(cond, true_res, false_res) = false_res" },
-			{ "cond :positive,     true_res, false_res | if_positive(cond, true_res, false_res) = true_res" },
+			////exponential runtime fibonacci implementation:
+			//{ "fib(0) = 0" },
+			//{ "fib(1) = 1" },
+			//{ "n :nat | fib(n) = fib(n - 1) + fib(n - 2)" },
+			//
+			////reversing a list:
+			//{ "xs :params | reverse(list{xs}) = reverse'(list{}, list{xs})" },
+			//{ "xs :params, y, ys :params | reverse'(list{xs}, list{y, ys}) = reverse'(list{y, xs}, list{ys})" },
+			//{ "xs :params,               | reverse'(list{xs}, list{})      = list{xs}" },
+			//
+			////listing first n fibonacci numbers:
+			//{ "n :nat0                    | fib_n(n + 2)                   = reverse(list_fibs(n, list{1, 0}))" },
+			//{ "n :nat, a, b, tail :params | list_fibs(n, list{a, b, tail}) = list_fibs(n - 1, list{force(a + b), a, b, tail})" },
+			//{ "              tail :params | list_fibs(0, list{tail})       = list{tail}" },
+			//
+			////sorting numbers:
+			//{ "cond :not_positive, true_res, false_res | if_positive(cond, true_res, false_res) = false_res" },
+			//{ "cond :positive,     true_res, false_res | if_positive(cond, true_res, false_res) = true_res" },
+			//
+			//{ "p :real, xs :params, y :real, ys :params | filter_le(p, list{xs}, list{y, ys}) = filter_le(p, if_positive[force(p - y), list{xs}, list{xs, y}], list{ys})" },
+			//{ "p :real, xs :params,                     | filter_le(p, list{xs}, list{})      = list{xs}" },
+			//
+			//{ "p :real, xs :params, y :real, ys :params | filter_s(p, list{xs}, list{y, ys}) = filter_s(p, if_positive[force(p - y), list{xs, y}, list{xs}], list{ys})" },
+			//{ "p :real, xs :params,                     | filter_s(p, list{xs}, list{})      = list{xs}" },
+			//
+			//{ "p :real, xs :params | sort(list{p, xs}) = weird_concat(sort(filter_s(p, list{}, list{xs})), p, sort(filter_le(p, list{}, list{xs})))" },
+			//{ "                    | sort(list{})      = list{}" },
+			//{ "xs :params, y, zs :params | weird_concat(list{xs}, y, list{zs}) = list{xs, y, zs}" }, 
 			
-			{ "p :real, xs :params, y :real, ys :params | filter_le(p, list{xs}, list{y, ys}) = filter_le(p, if_positive[force(p - y), list{xs}, list{xs, y}], list{ys})" },
-			{ "p :real, xs :params,                     | filter_le(p, list{xs}, list{})      = list{xs}" },
 			
-			{ "p :real, xs :params, y :real, ys :params | filter_s(p, list{xs}, list{y, ys}) = filter_s(p, if_positive[force(p - y), list{xs, y}, list{xs}], list{ys})" },
-			{ "p :real, xs :params,                     | filter_s(p, list{xs}, list{})      = list{xs}" },
-			
-			{ "p :real, xs :params | sort(list{p, xs}) = weird_concat(sort(filter_s(p, list{}, list{xs})), p, sort(filter_le(p, list{}, list{xs})))" },
-			{ "                    | sort(list{})      = list{}" },
-			{ "xs :params, y, zs :params | weird_concat(list{xs}, y, list{zs}) = list{xs, y, zs}" }, 
-
-
 			//differentiation rules:
-			{ "x :variable, a :value            | diff(a, x)      = 0" },
 			{ "x :variable                      | diff(x, x)      = 1" },
 			{ "x :variable, a :variable         | diff(a, x)      = 0" },
+			{ "x :variable, a :value            | diff(a, x)      = 0" },
 			{ "x :variable, a :value, f :any    | diff(f^a, x)    = diff(f, x) a f^(a-1)" },
 			{ "x :variable, a :value, f :any    | diff(a^f, x)    = diff(f, x) ln(a) a^f" },
 			{ "x :variable, g :any, h :any      | diff(g^h, x)    = (diff(h, x) ln(g) + h diff(g, x)/g) g^h" },
@@ -163,6 +163,10 @@ namespace bmath::intern::debug {
 			{ "x :variable, f :any              | diff(cos(f), x) = diff(f, x) (-sin(f))" },
 			{ "x :variable, f :any              | diff(exp(f), x) = diff(f, x) exp(f)" },
 			{ "x :variable, f :any              | diff(ln(f), x)  = diff(f, x) 1/f" },
+
+			////fun with value match variables:
+			//{ "k :int | 2 k + 1 = pair('how_odd', k + 1/(2^20))" }, 
+			//{ "k :int | 2 k = pair('how_unodd', k + 1/(2^20))" },
 		});
 
 		for (const auto& p : patterns) {
@@ -180,6 +184,7 @@ namespace bmath::intern::debug {
 				//std::cout << "input:  " << test.to_string() << "\n";
 				test.standardize();
 				//std::cout << "sorted: " << test.to_string() << "\n";
+				std::cout << test.to_tree() << "\n";
 				bool changed;
 				do {
 					changed = false;
@@ -187,15 +192,15 @@ namespace bmath::intern::debug {
 						if (test.match_and_replace(p)) {
 							changed = true;
 							test.standardize();
-							std::cout << "    -> " << test.to_string() << "\n";
+							std::cout << "    = " << test.to_string() << "\n";
 							//std::cout << test.to_memory_layout() << "\n";
 							break;
 						}
 					}
 				} while (changed);
-				std::cout << test.to_memory_layout() << "\n";
-				//std::cout << "result:   " << test.to_pretty_string() << "\n";
-				std::cout << "result:   " << test.to_string() << "\n";
+				//std::cout << test.to_memory_layout() << "\n";
+				std::cout << "result:   " << test.to_pretty_string() << "\n";
+				//std::cout << "result:   " << test.to_string() << "\n";
 				std::cout << "\n";
 			}
 			catch (bmath::ParseFailure failure) {

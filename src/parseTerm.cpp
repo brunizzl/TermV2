@@ -121,26 +121,26 @@ namespace bmath::intern {
 					tokenized[i] = token::open_grouping;
 					continue;
 				case ')': 
-					throw_if<ParseFailure>(--nr_paren < 0, i, "poor grouping, expected matching open parenthesis");
-					throw_if<ParseFailure>(name[find_open_par(i, TokenView(tokenized))] != '(', i, "poor grouping, can't close parenthesis yet");
+					if (--nr_paren < 0) [[unlikely]] throw ParseFailure{ i, "poor grouping, expected matching open parenthesis" };
+					if (name[find_open_par(i, TokenView(tokenized))] != '(') [[unlikely]] throw ParseFailure{ i, "poor grouping, can't close parenthesis yet" };
 					tokenized[i] = token::clse_grouping;
 					continue;
 				case ']':
-					throw_if<ParseFailure>(--nr_brack < 0, i, "poor grouping, expected matching open bracket");
-					throw_if<ParseFailure>(name[find_open_par(i, TokenView(tokenized))] != '[', i, "poor grouping, can't close bracket yet");
+					if (--nr_brack < 0) [[unlikely]] throw ParseFailure{ i, "poor grouping, expected matching open bracket" };
+					if (name[find_open_par(i, TokenView(tokenized))] != '[') [[unlikely]] throw ParseFailure{ i, "poor grouping, can't close bracket yet" };
 					tokenized[i] = token::clse_grouping;
 					continue;
 				case '}':
-					throw_if<ParseFailure>(--nr_brace < 0, i, "poor grouping, expected matching open brace");
-					throw_if<ParseFailure>(name[find_open_par(i, TokenView(tokenized))] != '{', i, "poor grouping, can't close brace yet");
+					if (--nr_brace < 0) [[unlikely]] throw ParseFailure{ i, "poor grouping, expected matching open brace" };
+					if (name[find_open_par(i, TokenView(tokenized))] != '{') [[unlikely]] throw ParseFailure{ i, "poor grouping, can't close brace yet" };
 					tokenized[i] = token::clse_grouping;
 					continue;
 				}
 				throw ParseFailure{ i, "unexpected character" };
 			}
-			throw_if<ParseFailure>(nr_paren != 0, name.length() - 1, "poor grouping, not all parenteses where closed");
-			throw_if<ParseFailure>(nr_brack != 0, name.length() - 1, "poor grouping, not all brackets where closed");
-			throw_if<ParseFailure>(nr_brace != 0, name.length() - 1, "poor grouping, not all braces where closed");
+			if (nr_paren != 0) [[unlikely]] throw ParseFailure{ name.length() - 1, "poor grouping, not all parenteses where closed" };
+			if (nr_brack != 0) [[unlikely]] throw ParseFailure{ name.length() - 1, "poor grouping, not all brackets where closed" };
+			if (nr_brace != 0) [[unlikely]] throw ParseFailure{ name.length() - 1, "poor grouping, not all braces where closed" };
 		}
 
 		if (name.starts_with('-')) {
@@ -159,7 +159,7 @@ namespace bmath::intern {
 				last_nonspace_tn = prev_tn;
 			}
 
-			throw_if<ParseFailure>(is_operator(prev_tn) && is_operator(curr_tn), curr_idx, "illegal operator sequence");
+			if (is_operator(prev_tn) && is_operator(curr_tn)) [[unlikely]] throw ParseFailure{ curr_idx, "illegal operator sequence" };
 
 			//change 'i' occuring at start of characters belonging to variables / function names to token::character
 			if (prev_tn == token::imag_unit && curr_tn == token::character) {
