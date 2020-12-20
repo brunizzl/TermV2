@@ -481,25 +481,6 @@ namespace bmath::intern {
 		template<typename Union_T, typename Type_T>
 		void free(const BasicMutRef<Union_T, Type_T> ref);
 
-		//flatten sums holding sums as summands and products holding products as factors
-		//also eliminates unessecary indirections like sums with a single summand or products with a single factor
-		//  to enable this second behavior, the index and type of ref may change, thus that is returned.
-		template<typename Union_T, typename Type_T>
-		[[nodiscard]] BasicTypedIdx<Type_T> combine_layers(const BasicMutRef<Union_T, Type_T> ref);
-
-		//if a subtree can be fully evaluated, it will be, even if the result can not be stored exactly in 
-		//floating point or the computation is unexact.
-		//if a value is returned, the state of the subtree is unspecified but valid (from a storage perspective) 
-		//and is expected to be deleted and replaced with the result.
-		template<typename Union_T, typename Type_T>
-		[[nodiscard]] OptComplex combine_values_inexact(const BasicMutRef<Union_T, Type_T> ref);
-
-		//if evaluation of subtree was inexact / impossible, returns Nothing, else returns Just result.
-		//if an exact value is returned, the state of the subtree is unspecified but valid (from a storage perspective) 
-		//and is expected to be deleted and replaced with the result. (equivalent behavior to combine_values_inexact)
-		template<typename Union_T, typename Type_T>
-		[[nodiscard]] OptComplex combine_values_exact(const BasicMutRef<Union_T, Type_T> ref);
-
 		//flattens sums holding sums as summands and products holding products as factors
 		//evaluates parts that can be evaluated (if exact, only those, that can be exact evaluated)
 		//eliminates unescesary indirections like sums with a single summand or products with a single factor
@@ -657,10 +638,6 @@ namespace bmath {
 		Term(std::string& name); //allows whitespace and implicit product
 		Term(const std::string_view simple_name); //simple_name may not contain any whitespace
 
-		void combine_layers() noexcept;
-		void combine_values_inexact() noexcept;
-		void combine_values_exact() noexcept;
-		void sort() noexcept;
 		void establish_order() noexcept; 
 
 		std::string to_memory_layout() const noexcept;

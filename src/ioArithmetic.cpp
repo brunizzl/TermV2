@@ -809,8 +809,7 @@ namespace bmath::intern {
 						str += "-";
 					}
 					else if (const auto base = get_pow_neg1(ref.new_at(elem))) {
-						str += (first ? "1 / " : " / "); 
-						//str += (first ? "1/" : "/"); 
+						str += (first ? "1/" : "/"); 
 						str += print::to_pretty_string(ref.new_at(*base), infixr(Type(Op::product)));
 						first = false;
 					}
@@ -860,7 +859,7 @@ namespace bmath::intern {
 			case Type(Fn::pow): {
 				const FnParams<TypedIdx>& params = *ref;
 				if (const OptDouble negative_expo = get_negative_real(ref.new_at(params[1]))) {
-					str += "1 / ";
+					str += "1/";
 					str += print::to_pretty_string(ref.new_at(params[0]), infixr(Type(Fn::pow)));
 					if (*negative_expo != -1.0) {
 						str += "^";
