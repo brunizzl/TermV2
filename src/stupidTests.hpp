@@ -27,25 +27,26 @@ namespace bmath::intern::debug {
 			                                                                                     << "\n"
 			<< "PnType(Fn::pow)                 = " << unsigned(PnType(Fn::pow))                 << "\n"
 			<< "PnType(Fn::log)                 = " << unsigned(PnType(Fn::log))                 << "\n"
-			<< "PnType(Fn::exp)                 = " << unsigned(PnType(Fn::exp))                 << "\n"
 			<< "PnType(Fn::sqrt)                = " << unsigned(PnType(Fn::sqrt))                << "\n"
-			<< "PnType(Fn::asinh)               = " << unsigned(PnType(Fn::asinh))               << "\n"
-			<< "PnType(Fn::acosh)               = " << unsigned(PnType(Fn::acosh))               << "\n"
-			<< "PnType(Fn::atanh)               = " << unsigned(PnType(Fn::atanh))               << "\n"
-			<< "PnType(Fn::asin)                = " << unsigned(PnType(Fn::asin))                << "\n"
-			<< "PnType(Fn::acos)                = " << unsigned(PnType(Fn::acos))                << "\n"
-			<< "PnType(Fn::atan)                = " << unsigned(PnType(Fn::atan))                << "\n"
-			<< "PnType(Fn::sinh)                = " << unsigned(PnType(Fn::sinh))                << "\n"
-			<< "PnType(Fn::cosh)                = " << unsigned(PnType(Fn::cosh))                << "\n"
-			<< "PnType(Fn::tanh)                = " << unsigned(PnType(Fn::tanh))                << "\n"
+			<< "PnType(Fn::exp)                 = " << unsigned(PnType(Fn::exp))                 << "\n"
+			<< "PnType(Fn::ln)                  = " << unsigned(PnType(Fn::ln))                  << "\n"
 			<< "PnType(Fn::sin)                 = " << unsigned(PnType(Fn::sin))                 << "\n"
 			<< "PnType(Fn::cos)                 = " << unsigned(PnType(Fn::cos))                 << "\n"
 			<< "PnType(Fn::tan)                 = " << unsigned(PnType(Fn::tan))                 << "\n"
+			<< "PnType(Fn::sinh)                = " << unsigned(PnType(Fn::sinh))                << "\n"
+			<< "PnType(Fn::cosh)                = " << unsigned(PnType(Fn::cosh))                << "\n"
+			<< "PnType(Fn::tanh)                = " << unsigned(PnType(Fn::tanh))                << "\n"
+			<< "PnType(Fn::asin)                = " << unsigned(PnType(Fn::asin))                << "\n"
+			<< "PnType(Fn::acos)                = " << unsigned(PnType(Fn::acos))                << "\n"
+			<< "PnType(Fn::atan)                = " << unsigned(PnType(Fn::atan))                << "\n"
+			<< "PnType(Fn::asinh)               = " << unsigned(PnType(Fn::asinh))               << "\n"
+			<< "PnType(Fn::acosh)               = " << unsigned(PnType(Fn::acosh))               << "\n"
+			<< "PnType(Fn::atanh)               = " << unsigned(PnType(Fn::atanh))               << "\n"
 			<< "PnType(Fn::abs)                 = " << unsigned(PnType(Fn::abs))                 << "\n"
 			<< "PnType(Fn::arg)                 = " << unsigned(PnType(Fn::arg))                 << "\n"
-			<< "PnType(Fn::ln)                  = " << unsigned(PnType(Fn::ln))                  << "\n"
 			<< "PnType(Fn::re)                  = " << unsigned(PnType(Fn::re))                  << "\n"
 			<< "PnType(Fn::im)                  = " << unsigned(PnType(Fn::im))                  << "\n"
+			<< "PnType(Fn::force)               = " << unsigned(PnType(Fn::force))               << "\n"
 			                                                                                     << "\n"
 			<< "PnType(PnVar::tree_match)       = " << unsigned(PnType(PnVar::tree_match))       << "\n"
 			<< "PnType(PnVar::value_match)      = " << unsigned(PnType(PnVar::value_match))      << "\n"
@@ -59,95 +60,96 @@ namespace bmath::intern::debug {
 			;
 	} //enumerate_pn_type
 
-	//output as of 18.11.2020:
-		//PnType(Op::sum)                 = 0
-		//PnType(Op::product)             = 1
-		//PnType(Op::named_fn)            = 2
-		//
-		//PnType(Leaf::variable)          = 3
-		//PnType(Leaf::complex)           = 4
-		//
-		//PnType(Fn::pow)                 = 5
-		//PnType(Fn::log)                 = 6
-		//PnType(Fn::exp)                 = 7
-		//PnType(Fn::sqrt)                = 8
-		//PnType(Fn::asinh)               = 9
-		//PnType(Fn::acosh)               = 10
-		//PnType(Fn::atanh)               = 11
-		//PnType(Fn::asin)                = 12
-		//PnType(Fn::acos)                = 13
-		//PnType(Fn::atan)                = 14
-		//PnType(Fn::sinh)                = 15
-		//PnType(Fn::cosh)                = 16
-		//PnType(Fn::tanh)                = 17
-		//PnType(Fn::sin)                 = 18
-		//PnType(Fn::cos)                 = 19
-		//PnType(Fn::tan)                 = 20
-		//PnType(Fn::abs)                 = 21
-		//PnType(Fn::arg)                 = 22
-		//PnType(Fn::ln)                  = 23
-		//PnType(Fn::re)                  = 24
-		//PnType(Fn::im)                  = 25
-		//
-		//PnType(PnVar::tree_match)       = 26
-		//PnType(PnVar::value_match)      = 27
-		//PnType(PnVar::value_proxy)      = 28
-		//
-		//PnType(MultiVar::summands)      = 29
-		//PnType(MultiVar::factors)       = 30
-		//PnType(MultiVar::params)        = 31
+	//output as of 20.12.2020:
+	//PnType(Op::sum)                 = 0
+	//PnType(Op::product)             = 1
+	//PnType(Op::named_fn)            = 2
+	//
+	//PnType(Leaf::variable)          = 3
+	//PnType(Leaf::complex)           = 4
+	//
+	//PnType(Fn::pow)                 = 5
+	//PnType(Fn::log)                 = 6
+	//PnType(Fn::sqrt)                = 7
+	//PnType(Fn::exp)                 = 8
+	//PnType(Fn::ln)                  = 9
+	//PnType(Fn::sin)                 = 10
+	//PnType(Fn::cos)                 = 11
+	//PnType(Fn::tan)                 = 12
+	//PnType(Fn::sinh)                = 13
+	//PnType(Fn::cosh)                = 14
+	//PnType(Fn::tanh)                = 15
+	//PnType(Fn::asin)                = 16
+	//PnType(Fn::acos)                = 17
+	//PnType(Fn::atan)                = 18
+	//PnType(Fn::asinh)               = 19
+	//PnType(Fn::acosh)               = 20
+	//PnType(Fn::atanh)               = 21
+	//PnType(Fn::abs)                 = 22
+	//PnType(Fn::arg)                 = 23
+	//PnType(Fn::re)                  = 24
+	//PnType(Fn::im)                  = 25
+	//PnType(Fn::force)               = 26
+	//
+	//PnType(PnVar::tree_match)       = 27
+	//PnType(PnVar::value_match)      = 28
+	//PnType(PnVar::value_proxy)      = 29
+	//
+	//PnType(MultiVar::summands)      = 30
+	//PnType(MultiVar::factors)       = 31
+	//PnType(MultiVar::params)        = 32
 
 	void test_rechner() 
 	{
 		const auto patterns = std::to_array<pattern::PnTerm>({ 
 			{ "x :factors | x * 0 = 0" },
 			{ "x          | x ^ 1 = x" },
-
+			
 			{ "x, a, b | (x^a)^b = x^(a*b)" },
 			{ "x       | x x     = x^2" }, 
 			{ "x, a    | x x^a   = x^(a + 1)" },
 			{ "x, a, b | x^a x^b = x^(a + b)" },
 			{ "x :factors, y | exp(x ln(y)) = y^x" },
-
+			
 			{ "a, b          | a^2 + 2 a b   + b^2 = (a + b)^2" }, 
 			{ "a, b          | a^2 - 2 a b   + b^2 = (a - b)^2" }, 
 			{ "a :complex, b | a^2 + (2 a) b + b^2 = (a + b)^2" }, 
-
+			
 			{ "a, bs :factors, cs :factors | a bs + a cs = a (bs + cs)" }, //will only work very few times for now (no rematch implemented yet)
 			{ "a, bs :factors | a*bs + a = a (bs + 1)" }, 
 			{ "a | a + a = 2 a" }, 
 			
 			{ "a, b | a a^b = 2 a" }, 
 			{ "a | a + a = 2 a" }, 
-
-			////exponential runtime fibonacci implementation:
-			//{ "fib(0) = 0" },
-			//{ "fib(1) = 1" },
-			//{ "n :nat | fib(n) = fib(n - 1) + fib(n - 2)" },
-			//
-			////reversing a list:
-			//{ "xs :params | reverse(list{xs}) = reverse'(list{}, list{xs})" },
-			//{ "xs :params, y, ys :params | reverse'(list{xs}, list{y, ys}) = reverse'(list{y, xs}, list{ys})" },
-			//{ "xs :params,               | reverse'(list{xs}, list{})      = list{xs}" },
-			//
-			////listing first n fibonacci numbers:
-			//{ "n :nat0                    | fib_n(n + 2)                   = reverse(list_fibs(n, list{1, 0}))" },
-			//{ "n :nat, a, b, tail :params | list_fibs(n, list{a, b, tail}) = list_fibs(n - 1, list{force(a + b), a, b, tail})" },
-			//{ "              tail :params | list_fibs(0, list{tail})       = list{tail}" },
-			//
-			////sorting numbers:
-			//{ "cond :not_positive, true_res, false_res | if_positive(cond, true_res, false_res) = false_res" },
-			//{ "cond :positive,     true_res, false_res | if_positive(cond, true_res, false_res) = true_res" },
-			//
-			//{ "p :real, xs :params, y :real, ys :params | filter_le(p, list{xs}, list{y, ys}) = filter_le(p, if_positive[force(p - y), list{xs}, list{xs, y}], list{ys})" },
-			//{ "p :real, xs :params,                     | filter_le(p, list{xs}, list{})      = list{xs}" },
-			//
-			//{ "p :real, xs :params, y :real, ys :params | filter_s(p, list{xs}, list{y, ys}) = filter_s(p, if_positive[force(p - y), list{xs, y}, list{xs}], list{ys})" },
-			//{ "p :real, xs :params,                     | filter_s(p, list{xs}, list{})      = list{xs}" },
-			//
-			//{ "p :real, xs :params | sort(list{p, xs}) = weird_concat(sort(filter_s(p, list{}, list{xs})), p, sort(filter_le(p, list{}, list{xs})))" },
-			//{ "                    | sort(list{})      = list{}" },
-			//{ "xs :params, y, zs :params | weird_concat(list{xs}, y, list{zs}) = list{xs, y, zs}" }, 
+		
+			//exponential runtime fibonacci implementation:
+			{ "fib(0) = 0" },
+			{ "fib(1) = 1" },
+			{ "n :nat | fib(n) = fib(n - 1) + fib(n - 2)" },
+			
+			//reversing a list:
+			{ "xs :params | reverse(list{xs}) = reverse'(list{}, list{xs})" },
+			{ "xs :params, y, ys :params | reverse'(list{xs}, list{y, ys}) = reverse'(list{y, xs}, list{ys})" },
+			{ "xs :params,               | reverse'(list{xs}, list{})      = list{xs}" },
+			
+			//listing first n fibonacci numbers:
+			{ "n :nat0                    | fib_n(n + 2)                   = reverse(list_fibs(n, list{1, 0}))" },
+			{ "n :nat, a, b, tail :params | list_fibs(n, list{a, b, tail}) = list_fibs(n - 1, list{force(a + b), a, b, tail})" },
+			{ "              tail :params | list_fibs(0, list{tail})       = list{tail}" },
+			
+			//sorting numbers:
+			{ "cond :not_positive, true_res, false_res | if_positive(cond, true_res, false_res) = false_res" },
+			{ "cond :positive,     true_res, false_res | if_positive(cond, true_res, false_res) = true_res" },
+			
+			{ "p :real, xs :params, y :real, ys :params | filter_le(p, list{xs}, list{y, ys}) = filter_le(p, if_positive[force(p - y), list{xs}, list{xs, y}], list{ys})" },
+			{ "p :real, xs :params,                     | filter_le(p, list{xs}, list{})      = list{xs}" },
+			
+			{ "p :real, xs :params, y :real, ys :params | filter_s(p, list{xs}, list{y, ys}) = filter_s(p, if_positive[force(p - y), list{xs, y}, list{xs}], list{ys})" },
+			{ "p :real, xs :params,                     | filter_s(p, list{xs}, list{})      = list{xs}" },
+			
+			{ "p :real, xs :params | sort(list{p, xs}) = weird_concat(sort(filter_s(p, list{}, list{xs})), p, sort(filter_le(p, list{}, list{xs})))" },
+			{ "                    | sort(list{})      = list{}" },
+			{ "xs :params, y, zs :params | weird_concat(list{xs}, y, list{zs}) = list{xs, y, zs}" }, 
 			
 			
 			//differentiation rules:
@@ -163,17 +165,19 @@ namespace bmath::intern::debug {
 			{ "x :variable, f :any              | diff(cos(f), x) = diff(f, x) (-sin(f))" },
 			{ "x :variable, f :any              | diff(exp(f), x) = diff(f, x) exp(f)" },
 			{ "x :variable, f :any              | diff(ln(f), x)  = diff(f, x) 1/f" },
-
+		
 			////fun with value match variables:
 			//{ "k :int | 2 k + 1 = pair('how_odd', k + 1/(2^20))" }, 
 			//{ "k :int | 2 k = pair('how_unodd', k + 1/(2^20))" },
 		});
 
-		for (const auto& p : patterns) {
-			std::cout << p.to_string() << "\n";
-			std::cout << "lhs:\n" << p.lhs_tree() << "\n";
-			std::cout << "rhs:\n" << p.rhs_tree() << "\n\n\n";
-		}
+		//for (const auto& p : patterns) {
+		//	//std::cout << p.lhs_memory_layout() << "\n";
+		//	//std::cout << p.rhs_memory_layout() << "\n";
+		//	std::cout << p.to_string() << "\n";
+		//	//std::cout << "lhs:\n" << p.lhs_tree() << "\n";
+		//	//std::cout << "rhs:\n" << p.rhs_tree() << "\n\n\n";
+		//}
 
 		while (true) {
 			std::string name;
@@ -181,17 +185,16 @@ namespace bmath::intern::debug {
 			std::getline(std::cin, name);
 			try {
 				bmath::Term test(name); 
-				//std::cout << "input:  " << test.to_string() << "\n";
-				test.standardize();
-				//std::cout << "sorted: " << test.to_string() << "\n";
-				std::cout << test.to_tree() << "\n";
+				std::cout << "input:  " << test.to_string() << "\n";
+				test.establish_order();
 				bool changed;
 				do {
 					changed = false;
 					for (const auto& p : patterns) {
 						if (test.match_and_replace(p)) {
+							//std::cout << "matched: " << p.to_string() << "\n";
 							changed = true;
-							test.standardize();
+							test.establish_order();
 							std::cout << "    = " << test.to_string() << "\n";
 							//std::cout << test.to_memory_layout() << "\n";
 							break;
@@ -199,8 +202,8 @@ namespace bmath::intern::debug {
 					}
 				} while (changed);
 				//std::cout << test.to_memory_layout() << "\n";
+				std::cout << test.to_tree() << "\n";
 				std::cout << "result:   " << test.to_pretty_string() << "\n";
-				//std::cout << "result:   " << test.to_string() << "\n";
 				std::cout << "\n";
 			}
 			catch (bmath::ParseFailure failure) {
@@ -280,6 +283,7 @@ namespace bmath::intern::test {
 	void arithmetic_term()
 	{
 		std::vector<std::string> term_names = {
+			"2.2 + 4",
 			"sqrt(100)",
 			"2-a*b",
 			"sin(-a*b)",
@@ -300,7 +304,6 @@ namespace bmath::intern::test {
 			"a*d+a*b*c",
 			"a/(a b)",
 			"1+3*4-6",
-			"2.2 + 4",
 			"1e-5",
 			"c+d+b+a+f+(a*c*b)+(a*d*b)+(a*f*b*(a+c+b)*(a+d+b))",
 			"10/5",
@@ -319,7 +322,7 @@ namespace bmath::intern::test {
 				std::cout << "speicher nach bau:\n" << term.to_memory_layout() << "\n\n";
 				std::cout << "baum nach bau:\n" << term.to_tree() << "\n\n";
 
-				term.standardize();
+				term.establish_order();
 
 				std::cout << "nach vereinfachen in huebsch: \n" << term.to_pretty_string() << "\n\n";
 				std::cout << "speicher nach vereinfachen:\n" << term.to_memory_layout() << "\n\n\n";
@@ -430,6 +433,29 @@ namespace bmath::intern::test {
 		std::cout << "first false: " << vec.find_first_false() << "\n";
 	}
 
+	void bit_vector2()
+	{
+		BitVector vec(0xffffffffffffffff, 64);
+
+		const auto print = [&]() {
+			for (std::size_t i = 0; i < vec.size(); i++) {
+				if (i % 64 == 0) {
+					std::printf("\n%5d  ", (int)i); //pleas std::format, i need you :(
+				}
+				std::cout << (vec.test(i) ? '|' : '.');
+			}
+			std::cout << "\n\n";
+		};
+
+		std::cout << "after construction:\n";
+		print();
+
+		vec.set_first_n_alligned_false(4);
+
+		std::cout << "after setting first 4 aligned false:\n";
+		print();
+	}
+
 	void combine_exact()
 	{
 		std::vector<std::string> names = { {"1/2"}, {"1/5"}, {"1 + 1e+200"} };
@@ -467,13 +493,35 @@ namespace bmath::intern::test {
 
 	void match()
 	{
-		std::string p_name = "a:real, b | (a^2 + b)^a = 1";
-		auto p = pattern::PnTerm(p_name);
-		std::string t_name = "(100 + jochen)^10";
+		//{ "x, a    | x x^a   = x^(a + 1)" };
+		auto p = pattern::PnTerm("x       | x x     = x^2");
+		std::string t_name = "a / 0";
 		auto t = Term(t_name);
-		t.standardize();
+		t.establish_order();
 		auto m = pattern::MatchData{};
 		std::cout << "match lhs of \"" << p.to_string() << "\" with \"" << t.to_string() << ": " << match::equals(p.lhs_ref(), t.ref(), m) << "\n";
+	}
+
+	void combine()
+	{
+		while (true) {
+			//difficult case: "5 ((3 a) + 0)"
+			std::string name; 
+			std::cout << "combine> ";
+			std::getline(std::cin, name);
+			try {
+				bmath::Term version_1(name); 
+				std::cout << "as parsed:\n" << version_1.to_tree() << "\n";
+				version_1.establish_order();
+				std::cout << "standardized:\n" << version_1.to_tree() << "\n";
+			}
+			catch (bmath::ParseFailure failure) {
+				std::cout << "parse failure: " << failure.what << '\n';
+				std::cout << name << '\n';
+				std::cout << std::string(failure.where, ' ') << "^\n\n";
+			}
+			std::cout << "--------------------------------------------------------------------------\n";
+		}
 	}
 
 } //namespace bmath::intern::test

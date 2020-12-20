@@ -170,7 +170,7 @@ namespace bmath::intern {
 					const double real_0 = param_vals[0]->real();
 					const double real_1 = param_vals[1]->real();
 					switch (type) {
-					case Fn::pow  : return std::pow(real_0, real_1);
+					case Fn::pow  : return (real_1 == 0.5 ? std::sqrt(real_0) : std::pow(real_0, real_1));
 					case Fn::log  : return std::log(real_1) / std::log(real_0);
 					default: assert(false);
 					}
@@ -186,7 +186,7 @@ namespace bmath::intern {
 				else if (param_vals[1]->imag() == 0.0) {
 					const double real_1 = param_vals[1]->real();
 					switch (type) {
-					case Fn::pow  : return std::pow(*param_vals[0], real_1);
+					case Fn::pow  : return (real_1 == 0.5 ? std::sqrt(*param_vals[0]) : std::pow(*param_vals[0], real_1));
 					case Fn::log  : return std::log(real_1) / std::log(*param_vals[0]); 
 					default: assert(false);
 					}
@@ -1083,6 +1083,207 @@ namespace bmath::intern {
 			return {};
 		} //combine_values_exact
 
+		template<typename Union_T, typename Type_T>
+		BasicTypedIdx<Type_T> combine(const BasicMutRef<Union_T, Type_T> ref, const bool exact)
+		{
+			using TypedIdx_T = BasicTypedIdx<Type_T>;
+			using TypedIdxSLC_T = TermSLC<TypedIdx_T>;
+			constexpr bool pattern = std::is_same_v<Type_T, pattern::PnType>;
+
+			const auto compute = [exact](auto operate) -> OptComplex {
+				if (exact) {
+					std::feclearexcept(FE_ALL_EXCEPT);
+					const OptComplex result = operate();
+					return std::fetestexcept(FE_ALL_EXCEPT) ? OptComplex() : result;
+				}
+				else {
+					return operate();
+				}
+			};
+
+			switch (ref.type) {
+			case Type_T(Op::sum): {
+				OptComplex value_acc = 0.0; //stores sum of values encountered as summands
+				std::uint32_t current_append_node = ref.index; //advances if summand layers are combined
+
+				//if summand_count == 0u only combinable values where encountered -> return only value_acc (put in store), not sum
+				//if summand_count == 1u sum is redundant -> return just the single summand
+				std::uint32_t summand_count = 0u;
+
+				for (TypedIdx_T& summand : vc::range(ref)) { //reference allowed, as no new elements are pushed in store -> never reallocates
+					summand = tree::combine(ref.new_at(summand), exact);
+					switch (summand.get_type()) {
+					case Type_T(Leaf::complex):						
+						if (const OptComplex res = compute([&] { return value_acc + ref.store->at(summand.get_index()).complex; })) {
+							value_acc = res;
+							tree::free(ref.new_at(summand));
+							summand = TypedIdxSLC_T::null_value;
+							continue;
+						}
+						break;
+					case Type_T(Op::sum):
+						//idea for future: push new summands to front, as they already recieved treatment
+						current_append_node = TypedIdxSLC_T::append(*ref.store, current_append_node, summand.get_index());
+						summand = TypedIdxSLC_T::null_value;
+						break;
+					}
+					summand_count++; 
+				}
+
+				if (summand_count == 0u) { //catches also (hopefully impossible?) case of zero summands overall
+					free_slc(ref.cast<TypedIdxSLC_T>()); //might as well call tree::free, but there are no remaining summands anyway.
+					const auto new_summand = build_value<TypedIdx_T>(*ref.store, *value_acc);
+					return new_summand;
+				}
+				else if (*value_acc != 0.0) {
+					const auto new_summand = build_value<TypedIdx_T>(*ref.store, *value_acc);
+					//note: new_summand is never counted in summand_count, but summand_count will never be read again if this line is executed anyway.
+					TypedIdxSLC_T::insert_new(*ref.store, ref.index, new_summand); 
+				}
+				else if (summand_count == 1u) {
+					const TypedIdx_T sole_summand = *begin(vc::range(ref));
+					free_slc(ref.cast<TypedIdxSLC_T>()); //dont call tree::free, as that would also free sole_summand
+					return sole_summand;
+				}
+			} break;
+			case Type_T(Op::product): {
+				//unlike with summands, where an inversion is just flipping the sign bit, not every multiplicativly inverse of a floating point number 
+				//  can be stored as floating point number without rounding -> we need two value accumulators. sigh.
+				OptComplex factor_acc = 1.0;
+				OptComplex divisor_acc = 1.0; 
+
+				//if factor_count == 0u only combinable values where encountered
+				//if factor_count == 1u product is redundant -> return only that factor and free product
+				std::uint32_t factor_count = 0u;
+
+				std::uint32_t current_append_node = ref.index; //advances if summand layers are combined
+
+				for (TypedIdx_T& factor : vc::range(ref)) {
+					factor = tree::combine(ref.new_at(factor), exact);
+					switch (factor.get_type()) {
+					case Type_T(Fn::pow): {
+						FnParams<TypedIdx_T>& power = *ref.new_at(factor);
+						if (power[0].get_type() == Leaf::complex && power[1].get_type() == Leaf::complex) {
+							std::array<OptComplex, 4> power_params = {
+								ref.store->at(power[0].get_index()).complex,
+								ref.store->at(power[1].get_index()).complex,
+							};
+							if (power_params[1]->imag() == 0.0 && power_params[1]->real() < 0.0) {
+								power_params[1] *= -1.0;
+								if (const OptComplex res = compute([&] { return divisor_acc * fn::eval(Fn::pow, power_params); })) {
+									divisor_acc = res;
+									tree::free(ref.new_at(factor)); //free whole power
+									factor = TypedIdxSLC_T::null_value;
+									continue;
+								}
+							}
+						}
+					} break;
+					case Type_T(Leaf::complex):
+						if (const OptComplex res = compute([&] { return factor_acc * ref.store->at(factor.get_index()).complex; })) {
+							factor_acc = res;
+							tree::free(ref.new_at(factor));
+							factor = TypedIdxSLC_T::null_value;
+							continue;
+						}
+						break;
+					case Type_T(Op::product):
+						//idea for future: push new factors to front, as they already recieved treatment
+						current_append_node = TypedIdxSLC_T::append(*ref.store, current_append_node, factor.get_index());
+						factor = TypedIdxSLC_T::null_value;
+						break;
+					}
+					factor_count++;
+				}
+				{
+					//reinserting the computed value(s)
+					const OptComplex result_val = compute([&] { return factor_acc / divisor_acc; });
+					if (result_val && *result_val != 1.0) {
+						const auto new_val = build_value<TypedIdx_T>(*ref.store, *result_val);
+						TypedIdxSLC_T::insert_new(*ref.store, ref.index, new_val);
+						factor_count++; //single factor case is tested below -> no need to check (and perhaps return without reinserting) here
+					}
+					else {
+						if (*factor_acc != 1.0) {
+							const auto new_factor = build_value<TypedIdx_T>(*ref.store, *factor_acc);
+							TypedIdxSLC_T::insert_new(*ref.store, ref.index, new_factor);
+							factor_count++;
+						}
+						if (*divisor_acc != 1.0) {
+							const auto new_divisor = build_value<TypedIdx_T>(*ref.store, *divisor_acc);
+							const auto new_pow = build_inverted<BasicStore<Union_T>, TypedIdx_T>(*ref.store, new_divisor);
+							TypedIdxSLC_T::insert_new(*ref.store, ref.index, new_pow);
+							factor_count++; //single factor case is tested below -> no need to check (and perhaps return without reinserting) here
+						}
+					}
+				}
+				if (factor_count == 1u) {
+					const TypedIdx_T sole_factor = *begin(vc::range(ref));
+					free_slc(ref.cast<TypedIdxSLC_T>()); //dont call tree::free, as that would also free sole_factor
+					return sole_factor;
+				}
+				else if (factor_count == 0u) { 
+					//only neccesairy if empty products are possible (hopefully not?), as in that case the product makes space for the value.
+					free_slc(ref.cast<TypedIdxSLC_T>()); //might as well call tree::free, but there are no factors anyway.
+					return build_value<TypedIdx_T>(*ref.store, 1.0);
+					//note: it is not sufficient to make ref a complex number with value 1.0, as even an empty product may hold more than one element in store.
+				}
+			} break;
+			case Type_T(Op::named_fn): {
+				NamedFn& function = *ref;
+				for (TypedIdx_T& elem : fn::range(ref)) {
+					elem = tree::combine(ref.new_at(elem), exact);
+				}
+			} break;
+			case Type_T(Fn::force): {
+				TypedIdx_T& param = ref->fn_params[0];
+				param = tree::combine(ref.new_at(param), false);
+				if (param.get_type() == Leaf::complex) {
+					const TypedIdx_T result_val = param;
+					ref.store->free(ref.index);
+					return result_val;
+				}
+			} break;
+			default: {
+				assert(ref.type.is<Fn>()); 
+				FnParams<TypedIdx_T>& params = *ref;
+				std::array<OptComplex, 4> res_vals = { OptComplex{}, {}, {}, {} }; //default initialized to NaN
+				for (std::size_t i = 0; i < fn::param_count(ref.type); i++) {
+					params[i] = tree::combine(ref.new_at(params[i]), exact);
+					if (params[i].get_type() == Leaf::complex) {
+						res_vals[i] = ref.store->at(params[i].get_index()).complex;
+					}
+				}
+				if (const OptComplex res = compute([&] { return fn::eval(ref.type.to<Fn>(), res_vals); })) {
+					tree::free(ref);
+					return build_value<TypedIdx_T>(*ref.store, *res);
+				}
+			} break;
+			case Type_T(Leaf::variable): 
+				break;
+			case Type_T(Leaf::complex): 
+				break;
+			case Type_T(pattern::_tree_match): 
+				break;
+			case Type_T(pattern::_value_match): if constexpr (pattern) {
+				pattern::ValueMatchVariable& var = *ref;
+				var.match_idx = tree::combine(ref.new_at(var.match_idx), exact);
+				var.copy_idx = tree::combine(ref.new_at(var.copy_idx), exact);
+				assert(var.match_idx.get_type() != Leaf::complex); //subtree always contains value_proxy, thus should never be evaluatable    
+				assert(var.copy_idx.get_type() != Leaf::complex);  //subtree always contains value_proxy, thus should never be evaluatable    
+			} break;
+			case Type_T(pattern::_value_proxy): 
+				break;
+			case Type_T(pattern::_summands):
+				break;
+			case Type_T(pattern::_factors):
+				break;
+			case Type_T(pattern::_params):
+				break;
+			}
+			return ref.typed_idx();
+		} //combine
+
 		template<typename Union_T1, typename Type_T1, typename Union_T2, typename Type_T2>
 		[[nodiscard]] std::strong_ordering compare(const BasicRef<Union_T1,Type_T1> ref_1, const BasicRef<Union_T2,Type_T2> ref_2)
 		{
@@ -1333,17 +1534,9 @@ namespace bmath::intern {
 		template<typename Union_T, typename Type_T>
 		BasicTypedIdx<Type_T> establish_basic_order(BasicMutRef<Union_T,Type_T> ref)
 		{
-			using TypedIdx_T = BasicTypedIdx<Type_T>;
-
-			if (ref.type != Leaf::complex) {
-				ref.set(tree::combine_layers(ref));
-				if (const OptComplex val = tree::combine_values_exact(ref)) {
-					tree::free(ref);
-					ref.set(TypedIdx_T(ref.store->insert(*val), Type_T(Leaf::complex)));
-				}
-				tree::sort(ref);
-			}
-			return ref.typed_idx();
+			const BasicTypedIdx<Type_T> combine_result = tree::combine(ref, true);
+			tree::sort(ref.new_at(combine_result));
+			return combine_result;
 		} //establish_basic_order
 
 		template<typename Union_T, typename TypedIdx_T>
@@ -2051,7 +2244,7 @@ namespace bmath {
 		tree::sort(this->mut_ref());
 	}
 
-	void Term::standardize() noexcept
+	void Term::establish_order() noexcept
 	{
 		this->head = tree::establish_basic_order(this->mut_ref());
 	}
@@ -2071,7 +2264,7 @@ namespace bmath {
 
 	std::string Term::to_pretty_string() noexcept
 	{
-		this->standardize();
+		this->establish_order();
 		return print::to_pretty_string(this->ref());
 	}
 

@@ -23,7 +23,7 @@ namespace bmath::intern {
 		static_assert(std::is_trivially_destructible_v<Value_T>);
 		static_assert(std::is_trivially_copyable_v<Value_T>);
 
-		static constexpr std::uint32_t null_index = 0u;	//assumed to hold a value invalid as an actual index in a BasicStore
+		static constexpr std::uint32_t null_index = 67108863; //largest index value storable in pattern;	//assumed to hold a value invalid as an actual index in a BasicStore
 		static constexpr Value_T null_value = Value_T();
 		static constexpr std::size_t array_size = ArraySize; //make visible to outside
 
@@ -231,7 +231,7 @@ namespace bmath::intern {
 
 	struct StringSLC
 	{
-		static constexpr std::size_t null_index = 0;
+		static constexpr std::size_t null_index = 67108863; //largest index value storable in pattern
 		static constexpr std::size_t array_size = 12u; //chosen to bring Node size to 128 bit
 		std::uint32_t next_idx = null_index;
 		char data[array_size] = {};

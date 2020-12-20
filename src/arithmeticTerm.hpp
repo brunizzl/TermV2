@@ -500,6 +500,13 @@ namespace bmath::intern {
 		template<typename Union_T, typename Type_T>
 		[[nodiscard]] OptComplex combine_values_exact(const BasicMutRef<Union_T, Type_T> ref);
 
+		//flattens sums holding sums as summands and products holding products as factors
+		//evaluates parts that can be evaluated (if exact, only those, that can be exact evaluated)
+		//eliminates unescesary indirections like sums with a single summand or products with a single factor
+		//returns new location and type of ref
+		template<typename Union_T, typename Type_T>
+		[[nodiscard]] BasicTypedIdx<Type_T> combine(const BasicMutRef<Union_T, Type_T> ref, const bool exact);
+
 		//compares two subterms of perhaps different stores, assumes both to have their variadic parts sorted
 		template<typename Union_T1, typename Type_T1, typename Union_T2, typename Type_T2>
 		[[nodiscard]] std::strong_ordering compare(const BasicRef<Union_T1, Type_T1> ref_1, const BasicRef<Union_T2, Type_T2> ref_2);
@@ -526,8 +533,7 @@ namespace bmath::intern {
 		//returns TypedIdx() if unsuccsessfull
 		TypedIdx search_variable(const Ref ref, const std::string_view name);
 
-		//first combines layers, then combines values exact, then sorts
-		//return value is new head
+		//calls first tree::combine, then tree::sort
 		template<typename Union_T, typename Type_T>
 		[[nodiscard]] BasicTypedIdx<Type_T> establish_basic_order(BasicMutRef<Union_T, Type_T> ref);
 
@@ -655,11 +661,11 @@ namespace bmath {
 		void combine_values_inexact() noexcept;
 		void combine_values_exact() noexcept;
 		void sort() noexcept;
-		void standardize() noexcept; 
+		void establish_order() noexcept; 
 
 		std::string to_memory_layout() const noexcept;
 		std::string to_string() const noexcept;
-		std::string to_pretty_string() noexcept; //will call standardize first
+		std::string to_pretty_string() noexcept; //will call establish_order first
 		std::string to_pretty_string() const noexcept; //assumes sorted term
 		std::string to_tree() const noexcept;
 

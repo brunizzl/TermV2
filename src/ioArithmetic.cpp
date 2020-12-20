@@ -859,9 +859,19 @@ namespace bmath::intern {
 			} break;
 			case Type(Fn::pow): {
 				const FnParams<TypedIdx>& params = *ref;
-				str += print::to_pretty_string(ref.new_at(params[0]), infixr(ref.type));
-				str += "^";
-				str += print::to_pretty_string(ref.new_at(params[1]), infixr(ref.type));
+				if (const OptDouble negative_expo = get_negative_real(ref.new_at(params[1]))) {
+					str += "1 / ";
+					str += print::to_pretty_string(ref.new_at(params[0]), infixr(Type(Fn::pow)));
+					if (*negative_expo != -1.0) {
+						str += "^";
+						append_real(-*negative_expo, str);
+					}
+				}
+				else {
+					str += print::to_pretty_string(ref.new_at(params[0]), infixr(ref.type));
+					str += "^";
+					str += print::to_pretty_string(ref.new_at(params[1]), infixr(ref.type));
+				}
 			} break;
 			case Type(Op::named_fn): {
 				need_parentheses = false;
@@ -964,6 +974,7 @@ namespace bmath::intern {
 			case Type_T(Op::product): {
 				current_str.append("product    : {");
 				const char* separator = "";
+				const TypedIdxSLC_T test = *ref;
 				for (const auto elem : vc::range(ref)) {
 					current_str.append(std::exchange(separator, ", "));
 					current_str.append(std::to_string(elem.get_index()));

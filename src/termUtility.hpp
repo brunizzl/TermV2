@@ -116,7 +116,7 @@ namespace bmath::intern {
 		constexpr void unsave_reallocate(const std::size_t new_capacity) noexcept
 		{
 			assert(new_capacity > BufferSize && (this->data_ == this->local_data || new_capacity > this->capacity) && 
-				"else no reallocation neccesairy");
+				"no reallocation neccesairy");
 
 			Value_T* const new_data = new Value_T[new_capacity];
 			std::move(this->data_, this->data_ + this->size_, new_data);
@@ -222,7 +222,7 @@ namespace bmath::intern {
 
 		constexpr Value_T pop_back() noexcept
 		{ 
-			assert(this->size_ > 0u && "tried popping on empty vector");
+			assert(this->size_ > 0u && "tried popping on empty data_vector");
 			return this->data_[--this->size_]; //only works for trivially destructible Value_T
 		}
 
@@ -231,6 +231,14 @@ namespace bmath::intern {
 			const std::size_t new_size = new_end - this->data_;
 			assert(new_size <= this->size_);
 			this->size_ = new_size; //only works for trivially destructible Value_T
+		}
+
+		//may be used with caution, as this does no initialisation
+		constexpr void expand_to_size(const std::size_t new_size) noexcept
+		{
+			assert(this->size_ <= new_size);
+			this->reserve(new_size);
+			this->size_ = new_size;
 		}
 
 		constexpr void clear() noexcept { this->size_ = 0u; } //only works for trivially destructible Value_T
@@ -282,7 +290,7 @@ namespace bmath::intern {
 		template<typename... Args>
 		constexpr Value_T& emplace_back(Args&&... args) noexcept
 		{
-			assert(this->size_ < MaxSize && "tried pushing on full vector");
+			assert(this->size_ < MaxSize && "tried pushing on full data_vector");
 			Value_T* const addr = &this->data_[this->size_++];
 			new (addr) Value_T{ args... };
 			return *addr;
@@ -292,7 +300,7 @@ namespace bmath::intern {
 
 		constexpr void pop_back() noexcept
 		{ 
-			assert(this->size_ > 0u && "tried popping on empty vector");
+			assert(this->size_ > 0u && "tried popping on empty data_vector");
 			this->data_[--this->size_].~Value_T();
 		}
 
@@ -585,6 +593,8 @@ namespace bmath::intern {
 	{
 		static_assert(std::is_unsigned_v<UInt_T>);
 
+		static constexpr std::size_t npos = std::countr_zero((UInt_T(0)));
+
 		UInt_T data;
 
 		constexpr IntBitSet() noexcept :data(0u) {}
@@ -615,6 +625,9 @@ namespace bmath::intern {
 	using BitSet16 = IntBitSet<std::uint16_t>;
 	using BitSet32 = IntBitSet<std::uint32_t>;
 	using BitSet64 = IntBitSet<std::uint64_t>;
+
+	static_assert(BitSet16::npos == 16u);
+	static_assert(BitSet64::npos == 64u);
 
 	template<std::size_t Bits, std::enable_if_t<(Bits % 64u == 0u), void*> = nullptr>
 	class [[nodiscard]] BitSet
@@ -656,7 +669,7 @@ namespace bmath::intern {
 		{
 			for (std::size_t i = 0u; i < array_size; i++) {
 				const std::size_t bit_in_i = this->data[i].find_first_true();
-				if (bit_in_i != 64u) { 
+				if (bit_in_i != BitSet64::npos) { 
 					return i * 64u + bit_in_i; 
 				}
 			}
@@ -667,7 +680,7 @@ namespace bmath::intern {
 		{
 			for (std::size_t i = 0u; i < array_size; i++) {
 				const std::size_t bit_in_i = this->data[i].find_first_false();
-				if (bit_in_i != 64u) { 
+				if (bit_in_i != BitSet64::npos) { 
 					return i * 64u + bit_in_i; 
 				}
 			}
@@ -694,8 +707,8 @@ namespace bmath::intern {
 		void unsave_reallocate(const std::size_t new_capacity) noexcept //new_capacity is counted in bit
 		{
 			assert(new_capacity > local_max_size && (this->data_ == this->local_data || new_capacity > this->capacity) && 
-				"else no reallocation neccesairy");
-			assert(new_capacity % 64u == 0u && "else realocation may be to small");
+				"no reallocation neccesairy");
+			assert(new_capacity % 64u == 0u && "realocation may be to small");
 
 			BitSet64* const new_data = new BitSet64[new_capacity / 64u](); //zero initialized
 			const std::size_t old_end = this->last_bitset_idx() + 1u;
@@ -727,6 +740,15 @@ namespace bmath::intern {
 		{
 			if (this->data_ != this->local_data) {
 				delete[] this->data_;
+			}
+		}
+		
+		void reserve(const std::size_t new_capacity) noexcept
+		{
+			if (new_capacity > local_max_size && 
+				(this->data_ == this->local_data || new_capacity > this->capacity)) 
+			{
+				this->unsave_reallocate(std::bit_ceil(new_capacity));
 			}
 		}
 
@@ -792,7 +814,7 @@ namespace bmath::intern {
 
 		constexpr void pop_back() noexcept
 		{ 
-			assert(this->size_ > 0u && "tried popping on empty vector");
+			assert(this->size_ > 0u && "tried popping on empty data_vector");
 			this->reset(--this->size_);
 		}
 
@@ -840,7 +862,7 @@ namespace bmath::intern {
 			std::size_t array_idx = 0u;
 			for (; array_idx < this->last_bitset_idx(); array_idx++) {
 				const std::size_t bit_idx = this->data_[array_idx].find_first_true();
-				if (bit_idx != 64u) { 
+				if (bit_idx != BitSet64::npos) { 
 					return array_idx * 64u + bit_idx; 
 				}
 			}
@@ -854,7 +876,7 @@ namespace bmath::intern {
 			std::size_t array_idx = 0u;
 			for (; array_idx < this->last_bitset_idx(); array_idx++) {
 				const std::size_t bit_idx = this->data_[array_idx].find_first_false();
-				if (bit_idx != 64u) { 
+				if (bit_idx != BitSet64::npos) { 
 					return array_idx * 64u + bit_idx; 
 				}
 			}
@@ -888,18 +910,30 @@ namespace bmath::intern {
 
 			const std::size_t n_ceil = std::bit_ceil(n);
 			const std::uint64_t mask = -1ull >> (64u - n);
-			for (std::size_t array_idx = 0u; array_idx < this->size_ / 64u; array_idx++) {
-				const BitSet64 current = this->data_[array_idx];
-				if (current.all()) {
-					continue;
+			{
+				std::size_t array_idx = 0u;
+				for (; array_idx < this->size_ / 64u; array_idx++) {
+					const BitSet64 current = this->data_[array_idx];
+					if (current.all()) {
+						continue;
+					}
+					for (std::size_t offset = 0u; offset < 64u; offset += n_ceil) {
+						if (!(current & (mask << offset))) {
+							this->data_[array_idx] |= (mask << offset);
+							return array_idx * 64u + offset;
+						}
+					}
 				}
-				for (std::size_t offset = 0u; offset < 64u; offset += n_ceil) {
-					if (!(current & (mask << offset))) {
+
+				assert(array_idx == this->last_bitset_idx() || this->size_ % 64u == 0u);
+				for (std::size_t offset = 0u; offset < this->size_ % 64u; offset += n_ceil) {
+
+					if (!(this->data_[array_idx] & (mask << offset))) {
 						this->data_[array_idx] |= (mask << offset);
 						return array_idx * 64u + offset;
 					}
 				}
-			}
+			}		
 
 			//found no sufficient subrange in existing bits -> append one at the end (alligned)
 			const std::size_t allign_ammount = n_ceil - ((this->size_ - 1u) % n_ceil) - 1u;
@@ -907,15 +941,15 @@ namespace bmath::intern {
 			this->push_n_false(allign_ammount + n);
 			this->data_[result_index / 64u] |= mask << (result_index % 64u);
 			return result_index;
-		}
+		} //set_first_n_alligned_false()
 
-		constexpr void reset_alligned_n(const std::size_t begin, const std::size_t n) noexcept
+		constexpr void reset_alligned_n(const std::size_t start, const std::size_t n) noexcept
 		{
-			assert(begin % std::bit_ceil(n) == 0u && "else not alligned");
+			assert(start % std::bit_ceil(n) == 0u && "not alligned");
 			assert(n <= 64u && n > 0u); //makes it easier for now (enables mask to be std::uint64_t)
 
 			const std::uint64_t mask = -1ull >> (64u - n); //last n bits set to true
-			this->data_[begin / 64u] &= ~(mask << (begin % 64u)); 
+			this->data_[start / 64u] &= ~(mask << (start % 64u)); 
 		}
 	}; //class BitVector
 

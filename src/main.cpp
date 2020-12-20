@@ -34,6 +34,9 @@ idea status:
  - let each PnTerm have a name in form of a constant c-string (not what pattern is constructed from, but name of rule, e.g. "differentiation: product rule" or something)
  - prettify pattern::Multivar sytax to require (and allow) "..." after variable name 
  - always keep -1 at index 1 in store and never allocate new -1 in build_negated and build_inverted (problem: identify bevore copy)
+ - build own storage type for BasicStore_SingleTable combining heap allocation of occupancy_vector and data_vector into one (possible to make typesave with unions)
+       idea: use union as in BasicStore_Table (without extra), and have two data pointers: one to start of occupancy data, one to start of payload data
+	   share size and capacity (value of capacity may only exactly represent payload capacity -> dont care because if mismatched, reallocation is always neccesairy anyway)
 */
 
 
@@ -44,10 +47,11 @@ int main()
 	//test::arithmetic_term();
 	//test::copy();
 	//test::bit_set();
-	test::bit_vector();
+	//test::bit_vector2();
 	//test::match();
-	//debug::enumerate_pn_type();
-	//debug::test_rechner();
+	debug::enumerate_pn_type();
+	debug::test_rechner();
+	//test::combine();
 }
 
 
