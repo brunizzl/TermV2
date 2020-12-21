@@ -6,11 +6,11 @@ using namespace bmath::intern;
 TODO:
 
 important:
- - debug BasicStore_SingleTable
- - deprecate SLC and introduce vector like type (requires Store to allocate multiple elements placed in direct succession)
+ - deprecate SLC and introduce vector like type
  - get rid of destinction between pattern and usual term (but use templates to allow multiple stores) 
  - write data structure one abstraction layer above PnTerm to group multiple pattens
- - enable rematch or write factorisation per hand (if from hand, perhaps introduce some way to call such routines as pattern?)
+ - enable rematch or write factorisation per hand (if per hand, perhaps introduce some way to call such routines as pattern?)
+     idea: introduce "intrinsic" type and use index in intrinsic typed_idx to specify witch (have all stored at central function pointer array)
  - group all variations of pattern variables in one SumEnum
  - restructure everything to use modules (basically needed to constexprfy all the things)
  - allow to restrict a variables possibility space e.g. natural, integer, real, complex (split Leaf::variable in own enum?)
@@ -36,8 +36,8 @@ idea status:
 
 int main()
 {
-	//debug::enumerate_pn_type();
-	//debug::test_rechner();
+	debug::enumerate_pn_type();
+	debug::test_rechner();
 	//test::combine_exact();
 	//test::pattern_term();
 	//test::arithmetic_term();
@@ -46,7 +46,7 @@ int main()
 	//test::bit_vector2();
 	//test::match();
 	//test::combine();
-	test::alloc_n();
+	//test::alloc_n();
 }
 
 

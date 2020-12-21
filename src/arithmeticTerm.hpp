@@ -126,6 +126,7 @@ namespace bmath::intern {
 	using Ref = BasicRef<TypesUnion, Type>;
 
 
+
 	namespace pattern {
 
 		enum class PnVar 
@@ -216,7 +217,7 @@ namespace bmath::intern {
 		//this variation of the match variable can match a value of specific form occuring in a term,
 		//  the form of this value may also be specified using arithmetic operations. 
 		//for example "2*k+1" with k beeing a ValueMatchVariable can match "5" and set value of SharedValueDatum to "2".
-		//that is achieved by not actually storing "2*k+1" as such, but as "k", with match_idx of k containing the 
+		//that is achieved by not actually storing "2*k+1" as such, but as "k", with mtch_idx of k containing the 
 		//  inverse operation: "(p-1)/2", where "p" is not an actual node, but just a PnVariable::value_proxy 
 		//  to indicate the original position of k.
 		//to still allow to copy "2*k+1", the copy_idx of k contains a copy of the original suroundings of k, but again with a "p"
@@ -225,13 +226,13 @@ namespace bmath::intern {
 		//  .get_index() also does not point in store of pattern, but in an array of MatchData.
 		struct ValueMatchVariable
 		{
-			PnTypedIdx match_idx;
+			PnTypedIdx mtch_idx;
 			PnTypedIdx copy_idx;
 			std::uint32_t match_data_idx; //indexes in MatchData::value_match_data
 			Form form = Form::real;
 
 			ValueMatchVariable(std::uint32_t new_match_data_idx, Form new_form)
-				:match_idx(PnTypedIdx(new_match_data_idx, PnVar::value_proxy)),
+				:mtch_idx(PnTypedIdx(new_match_data_idx, PnVar::value_proxy)),
 				copy_idx(PnTypedIdx(new_match_data_idx, PnVar::value_proxy)),
 				match_data_idx(new_match_data_idx), form(new_form)
 			{}
@@ -291,12 +292,12 @@ namespace bmath::intern {
 		//whitch actually matched, and if the name "a" is already matched, even if the current instance is not.
 		struct SharedTreeDatum
 		{
-			TypedIdx match_idx = TypedIdx{}; //indexes in Term to simplify
-			PnTypedIdx responsible = PnTypedIdx{}; //the instance of TreeMatchVariable that was setting match_idx
+			TypedIdx mtch_idx = TypedIdx{}; //indexes in Term to simplify
+			PnTypedIdx responsible = PnTypedIdx{}; //the instance of TreeMatchVariable that was setting mtch_idx
 
 			constexpr bool is_set() const noexcept
 			{
-				assert(equivalent(this->responsible != PnTypedIdx{}, this->match_idx != TypedIdx{}));
+				assert(equivalent(this->responsible != PnTypedIdx{}, this->mtch_idx != TypedIdx{}));
 				return  this->responsible != PnTypedIdx{};
 			}
 		};
@@ -309,12 +310,12 @@ namespace bmath::intern {
 		struct SharedValueDatum
 		{
 			Complex value = 0.0;
-			TypedIdx match_idx = TypedIdx{}; //indexes in Term to simplify (only usefull during rematch to only match later elements)
+			TypedIdx mtch_idx = TypedIdx{}; //indexes in Term to simplify (only usefull during rematch to only match later elements)
 			PnTypedIdx responsible = PnTypedIdx{}; //the instance of ValueMatchVariable that was setting value
 
 			constexpr bool is_set() const noexcept
 			{
-				assert(equivalent(this->value != 0.0, this->responsible != PnTypedIdx{}, this->match_idx != TypedIdx{}));
+				assert(equivalent(this->value != 0.0, this->responsible != PnTypedIdx{}, this->mtch_idx != TypedIdx{}));
 				return  this->responsible != PnTypedIdx{};
 			}
 		};
@@ -368,7 +369,7 @@ namespace bmath::intern {
 			PnTypedIdx* find_value_match_subtree(PnStore& store, PnTypedIdx& head, const PnTypedIdx value_match);
 
 			//changes value_match from its state holding two value_proxy directly to actually
-			//having copy_idx and match_idx initialized (thus value_match also bubbles up a bit in term)
+			//having copy_idx and mtch_idx initialized (thus value_match also bubbles up a bit in term)
 			void rearrange_value_match(PnStore& store, PnTypedIdx& head, const PnTypedIdx value_match);
 
 			struct Equation { PnTypedIdx lhs_head, rhs_head; };

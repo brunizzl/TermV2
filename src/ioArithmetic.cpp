@@ -716,7 +716,7 @@ namespace bmath::intern {
 				str.push_back(':');
 				str.append(name_of(var.form));
 				str.append(", ");
-				print::append_to_string(ref.new_at(var.match_idx), str);
+				print::append_to_string(ref.new_at(var.mtch_idx), str);
 				str.append(", ");
 				print::append_to_string(ref.new_at(var.copy_idx), str);
 				str.push_back('}');
@@ -1018,11 +1018,11 @@ namespace bmath::intern {
 			case Type_T(pattern::_value_match): if constexpr (pattern) {
 				const pattern::ValueMatchVariable& var = *ref;
 				current_str.append("value_match: {m:");
-				current_str.append(std::to_string(var.match_idx.get_index()));
+				current_str.append(std::to_string(var.mtch_idx.get_index()));
 				current_str.append(" c:");
 				current_str.append(std::to_string(var.copy_idx.get_index()));
 				current_str.push_back('}');
-				print::append_memory_row(ref.new_at(var.match_idx), rows);
+				print::append_memory_row(ref.new_at(var.mtch_idx), rows);
 				print::append_memory_row(ref.new_at(var.copy_idx), rows);
 			} break;
 			case Type_T(pattern::_value_proxy): 
@@ -1162,7 +1162,7 @@ namespace bmath::intern {
 				current_str += std::to_string(var.match_data_idx);
 				current_str += " :";
 				current_str += name_of(var.form);
-				print::append_tree_row(ref.new_at(var.match_idx), rows, offset + tab_width);
+				print::append_tree_row(ref.new_at(var.mtch_idx), rows, offset + tab_width);
 				print::append_tree_row(ref.new_at(var.copy_idx), rows, offset + tab_width);
 			} break;
 			case Type_T(pattern::_value_proxy): if constexpr (pattern) {

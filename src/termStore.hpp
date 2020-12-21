@@ -12,7 +12,7 @@
 namespace bmath::intern {
 
 	template <typename Payload_T>
-	class [[nodiscard]] BasicStore_SingleTable
+	class [[nodiscard]] BasicStore
 	{
 		static_assert(std::is_trivially_destructible_v<Payload_T>, "reallocation and destruction requires this");
 
@@ -145,26 +145,26 @@ namespace bmath::intern {
 			return (idx < this->size_) && this->occupancy_data()[idx / 64u].test(idx % 64u);
 		}
 
-		constexpr BasicStore_SingleTable() noexcept = default;
+		constexpr BasicStore() noexcept = default;
 
-		BasicStore_SingleTable(const BasicStore_SingleTable& snd) noexcept
+		BasicStore(const BasicStore& snd) noexcept
 		{
 			this->unsave_change_capacity(snd.capacity);
 			std::copy_n(snd.combined_data, this->capacity + tables_per_capacity(this->capacity), this->combined_data);
 			this->size_ = snd.size_;
 		}
 
-		constexpr BasicStore_SingleTable(BasicStore_SingleTable&& snd) noexcept
+		constexpr BasicStore(BasicStore&& snd) noexcept
 			:size_(std::exchange(snd.size_, 0u))
 			,capacity(std::exchange(snd.capacity, 0u))
 			,combined_data(std::exchange(snd.combined_data, nullptr))
 		{}
 
 		//not yet done
-		BasicStore_SingleTable operator=(const BasicStore_SingleTable& snd) = delete;
-		BasicStore_SingleTable operator=(BasicStore_SingleTable&& snd) = delete;
+		BasicStore operator=(const BasicStore& snd) = delete;
+		BasicStore operator=(BasicStore&& snd) = delete;
 
-		~BasicStore_SingleTable() noexcept { delete[] this->combined_data; }
+		~BasicStore() noexcept { delete[] this->combined_data; }
 
 		void reserve(const std::size_t new_capacity) noexcept 
 		{ 
@@ -300,11 +300,7 @@ namespace bmath::intern {
 			return this->size() - this->nr_used_slots();
 		} //nr_free_slots
 
-	}; //class BasicStore_SingleTable
-
-
-	template<typename Payload_T>
-	using BasicStore = BasicStore_SingleTable<Payload_T>;
+	}; //class BasicStore
 
 
 

@@ -437,7 +437,7 @@ namespace bmath::intern {
 					};
 
 					const ValueMatchVariable& var = store.at(value_match.get_index()).value_match;
-					assert(var.copy_idx == var.match_idx);
+					assert(var.copy_idx == var.mtch_idx);
 
 					return fold::tree_fold<MatchTraits, OpAccumulator>(PnRef(store, head), leaf_apply, value_match, var.copy_idx);
 				}; //classify_subterm
@@ -509,7 +509,7 @@ namespace bmath::intern {
 				if (value_match_storage != value_match_subtree) { //else value_match owns just itself, no nodes upstream
 					const VarRef var = VarRef(store, value_match.get_index());
 					const PnTypedIdx proxy_value = var->copy_idx;
-					assert(var->copy_idx == var->match_idx);
+					assert(var->copy_idx == var->mtch_idx);
 
 					var->copy_idx = *value_match_subtree; //keep the nodes now owned by value_match in current arrangement as tree to copy
 					*value_match_storage = proxy_value; //value_match_storage is now owned by value_match. it would break the tree structure to leave the reference to itself there
@@ -518,9 +518,9 @@ namespace bmath::intern {
 					const PnTypedIdx match_data = tree::copy(PnRef(store, var->copy_idx), store); //this and the following step might invalidate pointers into store data
 					const auto [new_match_data, new_match_idx] = stupid_solve_for(store, { match_data, proxy_value }, proxy_value); //rhs starts with just proxy_value
 					assert(new_match_data == proxy_value); //all terms around old position of value_match have been reversed around new_match_idx -> lhs should only have proxy left
-					var->match_idx = new_match_idx;
+					var->mtch_idx = new_match_idx;
 
-					var->match_idx = tree::establish_basic_order(PnMutRef(store, var->match_idx));
+					var->mtch_idx = tree::establish_basic_order(PnMutRef(store, var->mtch_idx));
 				}
 			} //rearrange_value_match
 
@@ -740,7 +740,7 @@ namespace bmath::intern {
 			} break;
 			case Type_T(pattern::_value_match): if constexpr (pattern) {
 				pattern::ValueMatchVariable& var = *ref;
-				tree::free(ref.new_at(var.match_idx));
+				tree::free(ref.new_at(var.mtch_idx));
 				tree::free(ref.new_at(var.copy_idx));
 				ref.store->free(ref.index);
 			} break;
@@ -936,9 +936,9 @@ namespace bmath::intern {
 				break;
 			case Type_T(pattern::_value_match): if constexpr (pattern) {
 				pattern::ValueMatchVariable& var = *ref;
-				var.match_idx = tree::combine(ref.new_at(var.match_idx), exact);
+				var.mtch_idx = tree::combine(ref.new_at(var.mtch_idx), exact);
 				var.copy_idx = tree::combine(ref.new_at(var.copy_idx), exact);
-				assert(var.match_idx.get_type() != Leaf::complex); //subtree always contains value_proxy, thus should never be evaluatable    
+				assert(var.mtch_idx.get_type() != Leaf::complex); //subtree always contains value_proxy, thus should never be evaluatable    
 				assert(var.copy_idx.get_type() != Leaf::complex);  //subtree always contains value_proxy, thus should never be evaluatable    
 			} break;
 			case Type_T(pattern::_value_proxy): 
@@ -1051,7 +1051,7 @@ namespace bmath::intern {
 				if (var_1.match_data_idx != var_2.match_data_idx) {
 					return var_1.match_data_idx <=> var_2.match_data_idx;
 				}
-				if (const auto cmp = tree::compare(ref_1.new_at(var_1.match_idx), ref_2.new_at(var_2.match_idx)); cmp != std::strong_ordering::equal) {
+				if (const auto cmp = tree::compare(ref_1.new_at(var_1.mtch_idx), ref_2.new_at(var_2.mtch_idx)); cmp != std::strong_ordering::equal) {
 					return cmp;
 				}
 				return tree::compare(ref_1.new_at(var_1.copy_idx), ref_2.new_at(var_2.copy_idx));
@@ -1169,7 +1169,7 @@ namespace bmath::intern {
 				const pattern::ValueMatchVariable src_var = *src_ref;
 				const std::size_t dst_index = dst_store.allocate(); //allocate early to have better placement order in store
 				auto dst_var = pattern::ValueMatchVariable(src_var.match_data_idx, src_var.form);
-				dst_var.match_idx = tree::copy(src_ref.new_at(src_var.match_idx), dst_store);
+				dst_var.mtch_idx = tree::copy(src_ref.new_at(src_var.mtch_idx), dst_store);
 				dst_var.copy_idx = tree::copy(src_ref.new_at(src_var.copy_idx), dst_store);
 				dst_store.at(dst_index) = dst_var;
 				return TypedIdx_T(dst_index, src_ref.type);
@@ -1257,7 +1257,7 @@ namespace bmath::intern {
 					if (TypedIdx_T* const copy_res = tree::find_subtree_owner(store, var.copy_idx, subtree)) {
 						return copy_res;
 					}
-					if (TypedIdx_T* const match_res = tree::find_subtree_owner(store, var.match_idx, subtree)) {
+					if (TypedIdx_T* const match_res = tree::find_subtree_owner(store, var.mtch_idx, subtree)) {
 						return match_res;
 					}
 				} break;
@@ -1387,10 +1387,10 @@ namespace bmath::intern {
 					}
 					auto& match_info = match_data.info(var);
 					if (match_info.is_set()) {
-						return tree::compare(ref, ref.new_at(match_info.match_idx)) == std::strong_ordering::equal;
+						return tree::compare(ref, ref.new_at(match_info.mtch_idx)) == std::strong_ordering::equal;
 					}
 					else {
-						match_info.match_idx = ref.typed_idx();
+						match_info.mtch_idx = ref.typed_idx();
 						match_info.responsible = pn_ref.typed_idx();
 						return true;
 					}
@@ -1401,7 +1401,7 @@ namespace bmath::intern {
 					}
 					const ValueMatchVariable& var = *pn_ref;
 					auto& match_info = match_data.info(var);
-					const OptComplex this_value = pn_tree::eval_value_match(pn_ref.new_at(var.match_idx), *ref); 
+					const OptComplex this_value = pn_tree::eval_value_match(pn_ref.new_at(var.mtch_idx), *ref); 
 					if (!this_value || !has_form(*this_value, var.form)) {
 						return false;
 					}
@@ -1410,7 +1410,7 @@ namespace bmath::intern {
 					}
 					else {
 						match_info.value = *this_value;
-						match_info.match_idx = ref.typed_idx();
+						match_info.mtch_idx = ref.typed_idx();
 						match_info.responsible = pn_ref.typed_idx();
 						return true;
 					}
@@ -1618,7 +1618,7 @@ namespace bmath::intern {
 				return TypedIdx(dst_store.insert(pn_ref->complex), pn_ref.type.to<Type>());
 			case PnType(PnVar::tree_match): {
 				const SharedTreeDatum& info = match_data.info(pn_ref->tree_match);
-				return tree::copy(Ref(src_store, info.match_idx), dst_store); //call to different copy!
+				return tree::copy(Ref(src_store, info.mtch_idx), dst_store); //call to different copy!
 			} break;
 			case PnType(PnVar::value_match): {
 				const ValueMatchVariable& var = *pn_ref;
@@ -1782,7 +1782,7 @@ namespace bmath::intern {
 				break;
 			case Type_T(pattern::_value_match): if constexpr (pattern) {
 				const pattern::ValueMatchVariable var = *ref;
-				const Res_T elem_res_1 = fold::simple_fold<Res_T>(ref.new_at(var.match_idx), apply);
+				const Res_T elem_res_1 = fold::simple_fold<Res_T>(ref.new_at(var.mtch_idx), apply);
 				if constexpr (return_early_possible) { if (elem_res_1.return_early()) { return elem_res_1; } }
 				const Res_T elem_res_2 = fold::simple_fold<Res_T>(ref.new_at(var.copy_idx), apply);
 				if constexpr (return_early_possible) { if (elem_res_2.return_early()) { return elem_res_2; } }
@@ -1832,7 +1832,7 @@ namespace bmath::intern {
 			case Type_T(pattern::_value_match): if constexpr (pattern) {
 				OpAccumulator acc(ref, init...);
 				const pattern::ValueMatchVariable var = *ref;
-				acc.consume(fold::tree_fold<Res_T, OpAccumulator>(ref.new_at(var.match_idx), leaf_apply, init...));
+				acc.consume(fold::tree_fold<Res_T, OpAccumulator>(ref.new_at(var.mtch_idx), leaf_apply, init...));
 				acc.consume(fold::tree_fold<Res_T, OpAccumulator>(ref.new_at(var.copy_idx), leaf_apply, init...));
 				return acc.result();
 			} [[fallthrough]];
