@@ -53,7 +53,7 @@ namespace bmath::intern {
 		//using Unknown = UnitEnum<"Unknown">;
 		UNIT_ENUM(Unknown);
 
-		using PnVariablesType = SumEnum<Restriction, Form, MultiMatch, Unknown>;
+		using PnVariablesType = SumEnum<Restriction, Form, MultiPn, Unknown>;
 
 		struct TypeProps
 		{
@@ -79,9 +79,9 @@ namespace bmath::intern {
 			{ Restr::any          , "any"           },
 			{ Restr::nn1          , "nn1"           },
 			{ Restr::no_val       , "no_val"        },
-			{ MultiMatch::summands, "summands"      },
-			{ MultiMatch::factors , "factors"       },
-			{ MultiMatch::params  , "params"        },
+			{ MultiPn::summands, "summands"      },
+			{ MultiPn::factors , "factors"       },
+			{ MultiPn::params  , "params"        },
 		});
 
 		constexpr std::string_view name_of(const PnVariablesType r) noexcept { return find(type_table, &TypeProps::type, r).name; }
@@ -99,12 +99,12 @@ namespace bmath::intern {
 			{ Type(Fn::pow                 ), 5 }, //not between other function types -> assumed to be printed with '^'  
 			{ Type(Leaf::variable          ), 6 },
 			{ Type(Leaf::complex           ), 6 }, //may be printed as sum/product itself, then (maybe) has to add parentheses on its own
-			{ Type(SingleMatch::tree       ), 6 },
-			{ Type(SingleMatch::value      ), 6 },
-			{ Type(SingleMatch::value_proxy), 6 },
-			{ Type(MultiMatch::summands    ), 6 },
-			{ Type(MultiMatch::factors     ), 6 },
-			{ Type(MultiMatch::params      ), 6 },
+			{ Type(PnNode::tree_match       ), 6 },
+			{ Type(PnNode::value_match      ), 6 },
+			{ Type(PnNode::value_proxy), 6 },
+			{ Type(MultiPn::summands    ), 6 },
+			{ Type(MultiPn::factors     ), 6 },
+			{ Type(MultiPn::params      ), 6 },
 		});
 		static_assert(std::is_sorted(infixr_table.begin(), infixr_table.end(), [](auto a, auto b) { return a.second < b.second; }));
 
@@ -498,8 +498,8 @@ namespace bmath::intern {
 					if (type.is<Form>()) {
 						this->value_table.emplace_back(var_view.to_string_view(0, colon), type.to<Form>());
 					}
-					else if (type.is<MultiMatch>()) {
-						this->multi_table.emplace_back(var_view.to_string_view(0, colon), type.to<MultiMatch>());
+					else if (type.is<MultiPn>()) {
+						this->multi_table.emplace_back(var_view.to_string_view(0, colon), type.to<MultiPn>());
 					}
 					else {
 						assert(type.is<Restriction>());
@@ -533,13 +533,13 @@ namespace bmath::intern {
 			if (const auto iter = search_name(this->tree_table); iter != this->tree_table.end()) {
 				const std::uint32_t match_data_idx = std::distance(this->tree_table.begin(), iter);
 				const TreeMatchVariable var = { match_data_idx, iter->restr };
-				var_idx = TypedIdx(store.insert(var), SingleMatch::tree);
+				var_idx = TypedIdx(store.insert(var), PnNode::tree_match);
 				(this->build_lhs ? iter->lhs_instances : iter->rhs_instances).push_back(var_idx);
 			}
 			else if (const auto iter = search_name(this->value_table); iter != this->value_table.end()) {
 				const std::uint32_t match_data_idx = std::distance(this->value_table.begin(), iter);
 				const ValueMatchVariable var(match_data_idx, iter->form);
-				var_idx = TypedIdx(store.insert(var), SingleMatch::value);
+				var_idx = TypedIdx(store.insert(var), PnNode::value_match);
 				(this->build_lhs ? iter->lhs_instances : iter->rhs_instances).push_back(var_idx);
 			}
 			else if (const auto iter = search_name(this->multi_table); iter != this->multi_table.end()) {
@@ -616,7 +616,7 @@ namespace bmath::intern {
 
 		void append_to_string(const Ref ref, std::string& str, const int parent_infixr)
 		{
-			if (!ref.store->valid_idx(ref.index) && ref.type != SingleMatch::value_proxy && !ref.type.is<MultiMatch>()) {
+			if (!ref.store->valid_idx(ref.index) && ref.type != PnNode::value_proxy && !ref.type.is<MultiPn>()) {
 				str.append("ERROR");
 				return;
 			}
@@ -675,7 +675,7 @@ namespace bmath::intern {
 			case Type(Leaf::complex): {
 				append_complex(ref->complex, str, parent_infixr);
 			} break;
-			case Type(SingleMatch::tree): {
+			case Type(PnNode::tree_match): {
 				const pattern::TreeMatchVariable& var = *ref;
 				str.append("{T");
 				str.append(std::to_string(var.match_data_idx));
@@ -685,7 +685,7 @@ namespace bmath::intern {
 				}
 				str.push_back('}');
 			} break;
-			case Type(SingleMatch::value): {
+			case Type(PnNode::value_match): {
 				const pattern::ValueMatchVariable& var = *ref;
 				str.append("{V");
 				str.append(std::to_string(var.match_data_idx));
@@ -697,20 +697,20 @@ namespace bmath::intern {
 				print::append_to_string(ref.new_at(var.copy_idx), str);
 				str.push_back('}');
 			} break;
-			case Type(SingleMatch::value_proxy): {
+			case Type(PnNode::value_proxy): {
 				str.push_back('P');
 			} break;
-			case Type(MultiMatch::summands): {
+			case Type(MultiPn::summands): {
 				str.push_back('S');
 				str.append(std::to_string(ref.index));
 				str.append("...");
 			} break;
-			case Type(MultiMatch::factors): {
+			case Type(MultiPn::factors): {
 				str.push_back('F');
 				str.append(std::to_string(ref.index));
 				str.append("...");
 			} break;
-			case Type(MultiMatch::params): {
+			case Type(MultiPn::params): {
 				str.push_back('P');
 				str.append(std::to_string(ref.index));
 				str.append("...");
@@ -911,7 +911,7 @@ namespace bmath::intern {
 				}
 			};
 
-			if (!ref.store->valid_idx(ref.index) && ref.type != SingleMatch::value_proxy && !ref.type.is<MultiMatch>()) {
+			if (!ref.store->valid_idx(ref.index) && ref.type != PnNode::value_proxy && !ref.type.is<MultiPn>()) {
 				rows.front().append("ERROR");
 				return;
 			}
@@ -971,10 +971,10 @@ namespace bmath::intern {
 			case Type(Leaf::complex): {
 				current_str.append("value      : ");
 			} break;
-			case Type(SingleMatch::tree): {
-				current_str.append("tree : ");
+			case Type(PnNode::tree_match): {
+				current_str.append("tree_match : ");
 			} break;
-			case Type(SingleMatch::value): {
+			case Type(PnNode::value_match): {
 				const pattern::ValueMatchVariable& var = *ref;
 				current_str.append("value: {m:");
 				current_str.append(std::to_string(var.mtch_idx.get_index()));
@@ -984,13 +984,13 @@ namespace bmath::intern {
 				print::append_memory_row(ref.new_at(var.mtch_idx), rows);
 				print::append_memory_row(ref.new_at(var.copy_idx), rows);
 			} break;
-			case Type(SingleMatch::value_proxy): 
+			case Type(PnNode::value_proxy): 
 				[[fallthrough]];
-			case Type(MultiMatch::summands):
+			case Type(MultiPn::summands):
 				[[fallthrough]];
-			case Type(MultiMatch::factors):
+			case Type(MultiPn::factors):
 				[[fallthrough]];
-			case Type(MultiMatch::params):
+			case Type(MultiPn::params):
 				return;
 			}
 
@@ -1098,7 +1098,7 @@ namespace bmath::intern {
 				current_str += ' ';
 				print::append_complex(*ref, current_str, 0u);
 			} break;
-			case Type(SingleMatch::tree): {
+			case Type(PnNode::tree_match): {
 				const pattern::TreeMatchVariable& var = *ref;
 				current_str += "T";
 				current_str += std::to_string(var.match_data_idx);
@@ -1107,7 +1107,7 @@ namespace bmath::intern {
 					current_str += name_of(var.restr);
 				}
 			} break;
-			case Type(SingleMatch::value): {
+			case Type(PnNode::value_match): {
 				const pattern::ValueMatchVariable& var = *ref;
 				current_str += 'V';
 				current_str += std::to_string(var.match_data_idx);
@@ -1116,20 +1116,20 @@ namespace bmath::intern {
 				print::append_tree_row(ref.new_at(var.mtch_idx), rows, offset + tab_width);
 				print::append_tree_row(ref.new_at(var.copy_idx), rows, offset + tab_width);
 			} break;
-			case Type(SingleMatch::value_proxy): {
+			case Type(PnNode::value_proxy): {
 				current_str += 'P';			
 			} break;
-			case Type(MultiMatch::summands): {
+			case Type(MultiPn::summands): {
 				current_str += 'S';		
 				current_str += std::to_string(ref.index);
 				current_str += "...";
 			} break;
-			case Type(MultiMatch::factors): {
+			case Type(MultiPn::factors): {
 				current_str += 'F';		
 				current_str += std::to_string(ref.index);
 				current_str += "...";
 			} break;
-			case Type(MultiMatch::params): {
+			case Type(MultiPn::params): {
 				current_str += 'P';		
 				current_str += std::to_string(ref.index);
 				current_str += "...";

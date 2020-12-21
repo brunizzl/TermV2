@@ -122,9 +122,9 @@ namespace bmath::intern {
 			std::string_view name;
 			std::size_t lhs_count; //(only used to throw error if multiple instances exist in lhs)
 			std::size_t rhs_count; //(only used to throw error if multiple instances exist in rhs)
-			MultiMatch type;
+			MultiPn type;
 
-			MultiNameLookup(std::string_view new_name, const MultiMatch new_type) noexcept 
+			MultiNameLookup(std::string_view new_name, const MultiPn new_type) noexcept 
 				:name(new_name), lhs_count(0u), rhs_count(0u), type(new_type) {}
 		};
 

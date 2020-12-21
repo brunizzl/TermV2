@@ -47,20 +47,20 @@
 		case Type_T(Leaf::complex): {
 			assert(false);
 		} break;
-		case Type_T(SingleMatch::tree): if constexpr (pattern) {
+		case Type_T(PnNode::tree_match): if constexpr (pattern) {
 			assert(false);
 		} break;
-		case Type_T(SingleMatch::value): if constexpr (pattern) {
+		case Type_T(PnNode::value_match): if constexpr (pattern) {
 			pattern::ValueMatchVariable& var = *ref;
 			assert(false);
 		} break;
-		case Type_T(SingleMatch::value_proxy):
+		case Type_T(PnNode::value_proxy):
 			assert(false);
 			break;
-		case Type_T(MultiMatch::summands):
+		case Type_T(MultiPn::summands):
 			assert(false);
 			break;
-		case Type_T(MultiMatch::factors):
+		case Type_T(MultiPn::factors):
 			assert(false);
 			break;
 		}
@@ -79,22 +79,22 @@ namespace bmath::intern {
 	//there are only 3 real levels of rematchability:
 	//  - none    (value 1xx): pattern is not recursive 
 	//  - unknown (value 2xx): pattern is recursive, but has strong operands order (e.g. all in Fn), thus can not rematch on outhermost level, but may hold sum / product as operand
-	//  - likely  (value 3xx): pattern is sum or product and is rematchable, as long as two or more tree variables are held as operands directly
+	//  - likely  (value 3xx): pattern is sum or product and is rematchable, as long as two or more tree_match variables are held as operands directly
 	//by sorting sum and product to the end, they are matched last in match::permutation_equals, 
-	//  thus likely already having their tree operands assocciated with something and only permitting up to a single match.
+	//  thus likely already having their tree_match operands assocciated with something and only permitting up to a single match.
 	//this approach guarantees a possible match to succeed, if a pattern has only up to a single sum / product one level below the root and none deeper.
 	//side note: as every type has a unique rematchability value, sorting by rematchability if types are different produces a strong order.
 	constexpr auto unique_rematchability_table = std::to_array<std::pair<Type, int>>({
 		{ Type(Leaf::complex           ), 100 }, 
-		{ Type(SingleMatch::value      ), 101 }, 
-		{ Type(SingleMatch::value_proxy), 102 }, 
-		{ Type(SingleMatch::tree       ), 103 }, 
+		{ Type(PnNode::value_match      ), 101 }, 
+		{ Type(PnNode::value_proxy), 102 }, 
+		{ Type(PnNode::tree_match       ), 103 }, 
 		{ Type(Leaf::variable          ), 104 },
 		{ Type(Op::named_fn            ), 299 },
 		{ Type(Op::sum                 ), 300 },  
 		{ Type(Op::product             ), 301 }, 
-		{ Type(MultiMatch::summands    ), 302 }, //kinda special, as they always succeed in matching -> need to be matched last 
-		{ Type(MultiMatch::factors     ), 303 }, //kinda special, as they always succeed in matching -> need to be matched last 
+		{ Type(MultiPn::summands    ), 302 }, //kinda special, as they always succeed in matching -> need to be matched last 
+		{ Type(MultiPn::factors     ), 303 }, //kinda special, as they always succeed in matching -> need to be matched last 
 	});
 	static_assert(std::is_sorted(unique_rematchability_table.begin(), unique_rematchability_table.end(), [](auto a, auto b) { return a.second < b.second; }));
 	static_assert(unsigned(Fn::COUNT) < 99u); //else named_fn's rematchability of 300 is already occupied by element of Fn
@@ -223,7 +223,7 @@ namespace bmath::intern {
 			case Restriction(Restr::function):
 				return ref.type.is<Op>() || ref.type.is<Fn>();
 			default:
-				assert(restr.is<Math>());
+				assert(restr.is<MathType>());
 				return restr == ref.type;
 			}
 		} //meets_restriction
@@ -262,7 +262,7 @@ namespace bmath::intern {
 			parse_string.remove_space();
 			const auto parts = PatternParts(parse_string);
 			auto table = NameLookupTable(parts.declarations);
-			throw_if(table.tree_table.size() > MatchData::max_tree_match_count, "too many tree match variables declared");
+			throw_if(table.tree_table.size() > MatchData::max_tree_match_count, "too many tree_match match variables declared");
 			throw_if(table.value_table.size() > MatchData::max_value_match_count, "too many value match variables declared");
 			throw_if(table.multi_table.size() > MatchData::max_multi_match_count, "too many multi match variables declared");
 			PatternBuildFunction build_function = { table };
@@ -281,7 +281,7 @@ namespace bmath::intern {
 				}
 			}
 			//establish basic order after rearanging value match to allow constructs 
-			//  like "a :real, b | (a+2)+b = ..." to take summands / factors into their value match part
+			//  like "a :real, b | (a+2)+b = ..." to take summands / factors into their value_match match part
 			this->lhs_head = tree::establish_basic_order(MutRef(lhs_temp, this->lhs_head));
 			this->rhs_head = tree::establish_basic_order(MutRef(rhs_temp, this->rhs_head));
 
@@ -290,21 +290,21 @@ namespace bmath::intern {
 				throw_if(multi_match.rhs_count > 1u, "pattern only allows single use of each Multimatch in rhs.");
 			}
 
-			//if params occurs in variadic, it is replaced py legal and matching MultiMatch version.
+			//if params occurs in variadic, it is replaced py legal and matching MultiPn version.
 			//if params occurs in Fn, true is returned (as term is illegal and can not be made legal)
 			const auto contains_illegal_params = [](const MutRef head) -> bool {
 				const auto inspect_branches = [](const MutRef ref) -> fold::FindBool {
 					if (ref.type == Op::sum || ref.type == Op::product) {
-						const Type result_type = ref.type == Op::sum ? MultiMatch::summands : MultiMatch::factors;
+						const Type result_type = ref.type == Op::sum ? MultiPn::summands : MultiPn::factors;
 						for (TypedIdx& elem : vc::range(ref)) {
-							if (elem.get_type() == MultiMatch::params) {
+							if (elem.get_type() == MultiPn::params) {
 								elem = TypedIdx(elem.get_index(), result_type); //params can convert to summands / factors
 							}
 						}
 					}
 					if (ref.type.is<Fn>()) {
 						for (const TypedIdx param : fn::range(ref->fn_params, ref.type)) {
-							if (param.get_type() == MultiMatch::params) {
+							if (param.get_type() == MultiPn::params) {
 								return true; //found illegal
 							}
 						}
@@ -322,7 +322,7 @@ namespace bmath::intern {
 					if (ref.type == Op::sum || ref.type == Op::product) {
 						std::size_t nr_value_matches = 0u;
 						for (const TypedIdx elem : vc::range(ref)) {
-							nr_value_matches += (elem.get_type() == SingleMatch::value);
+							nr_value_matches += (elem.get_type() == PnNode::value_match);
 						}
 						return nr_value_matches > 1u;
 					}
@@ -338,7 +338,7 @@ namespace bmath::intern {
 					if (ref.type == Op::sum || ref.type == Op::product) {
 						std::size_t nr_multi_matches = 0u;
 						for (const TypedIdx elem : vc::range(ref)) {
-							nr_multi_matches += elem.get_type().is<MultiMatch>();
+							nr_multi_matches += elem.get_type().is<MultiPn>();
 						}
 						return nr_multi_matches > 1u;
 					}
@@ -390,8 +390,8 @@ namespace bmath::intern {
 			{
 				struct MatchTraits
 				{
-					bool has_match = false; //true if subterm contains value
-					bool computable = true; //more fitting name would be "computable if value would not present"
+					bool has_match = false; //true if subterm contains value_match
+					bool computable = true; //more fitting name would be "computable if value_match would not present"
 
 					constexpr void combine(const MatchTraits snd) noexcept 
 					{ 
@@ -420,7 +420,7 @@ namespace bmath::intern {
 							case Type(Op::named_fn):
 								this->acc = MatchTraits{ .has_match = false, .computable = false };
 								break;
-							case Type(SingleMatch::value): {
+							case Type(PnNode::value_match): {
 								const bool is_right_match = TypedIdx(ref.index, ref.type) == value;
 								this->acc = MatchTraits{ .has_match = is_right_match, .computable = is_right_match };
 								break;
@@ -433,10 +433,10 @@ namespace bmath::intern {
 					}; //struct OpAccumulator
 
 					const auto leaf_apply = [](const Ref ref) -> MatchTraits {
-						return MatchTraits{ false, is_one_of<Leaf::complex, SingleMatch::value_proxy>(ref.type) };
+						return MatchTraits{ false, is_one_of<Leaf::complex, PnNode::value_proxy>(ref.type) };
 					};
 
-					const ValueMatchVariable& var = store.at(value.get_index()).value;
+					const ValueMatchVariable& var = store.at(value.get_index()).value_match;
 					assert(var.copy_idx == var.mtch_idx);
 
 					return fold::tree_fold<MatchTraits, OpAccumulator>(Ref(store, head), leaf_apply, value, var.copy_idx);
@@ -483,37 +483,37 @@ namespace bmath::intern {
 					break;
 				case Type(Leaf::complex): 
 					break;
-				case Type(SingleMatch::tree): 
+				case Type(PnNode::tree_match): 
 					break;
-				case Type(SingleMatch::value): 
+				case Type(PnNode::value_match): 
 					break;
-				case Type(SingleMatch::value_proxy):
+				case Type(PnNode::value_proxy):
 					break;
-				case Type(MultiMatch::summands):
+				case Type(MultiPn::summands):
 					break;
-				case Type(MultiMatch::factors):
+				case Type(MultiPn::factors):
 					break;
-				case Type(MultiMatch::params):
+				case Type(MultiPn::params):
 					break;
 				}
 				return nullptr;
 			} //find_value_match_subtree
 
-			void rearrange_value_match(Store& store, TypedIdx& head, const TypedIdx value)
+			void rearrange_value_match(Store& store, TypedIdx& head, const TypedIdx value_match)
 			{
 				using VarRef = BasicNodeRef<TypesUnion, ValueMatchVariable, Const::no>;
 
-				TypedIdx* const value_match_subtree = find_value_match_subtree(store, head, value);
-				TypedIdx* const value_match_storage = tree::find_subtree_owner(store, head, value);
+				TypedIdx* const value_match_subtree = find_value_match_subtree(store, head, value_match);
+				TypedIdx* const value_match_storage = tree::find_subtree_owner(store, head, value_match);
 
 				if (value_match_storage != value_match_subtree) { //else value owns just itself, no nodes upstream
-					const VarRef var = VarRef(store, value.get_index());
+					const VarRef var = VarRef(store, value_match.get_index());
 					const TypedIdx proxy_value = var->copy_idx;
 					assert(var->copy_idx == var->mtch_idx);
 
 					var->copy_idx = *value_match_subtree; //keep the nodes now owned by value in current arrangement as tree to copy
 					*value_match_storage = proxy_value; //value_match_storage is now owned by value. it would break the tree structure to leave the reference to itself there
-					*value_match_subtree = value; //previous owner of subtree now belonging to value becomes owner of value itself (value now bubbled up)
+					*value_match_subtree = value_match; //previous owner of subtree now belonging to value becomes owner of value itself (value now bubbled up)
 
 					const TypedIdx match_data = tree::copy(Ref(store, var->copy_idx), store); //this and the following step might invalidate pointers into store data
 					const auto [new_match_data, new_match_idx] = stupid_solve_for(store, { match_data, proxy_value }, proxy_value); //rhs starts with just proxy_value
@@ -557,17 +557,17 @@ namespace bmath::intern {
 						assert(false); break;
 					case Type(Leaf::complex): 
 						assert(false); break;
-					case Type(SingleMatch::tree): 
+					case Type(PnNode::tree_match): 
 						assert(false); break;
-					case Type(SingleMatch::value): 
+					case Type(PnNode::value_match): 
 						assert(false); break;
-					case Type(SingleMatch::value_proxy):
+					case Type(PnNode::value_proxy):
 						assert(false); break;
-					case Type(MultiMatch::summands):
+					case Type(MultiPn::summands):
 						assert(false); break;
-					case Type(MultiMatch::factors):
+					case Type(MultiPn::factors):
 						assert(false); break;
-					case Type(MultiMatch::params):
+					case Type(MultiPn::params):
 						assert(false); break;
 					case Type(Fn::pow): {
 						FnParams* params = &store.at(lhs_index).fn_params;
@@ -687,7 +687,7 @@ namespace bmath::intern {
 				} break;
 				case Type(Leaf::complex): 
 					return ref->complex;
-				case Type(SingleMatch::value_proxy): 
+				case Type(PnNode::value_proxy): 
 					return start_val;
 				}
 			} //eval_value_match
@@ -730,22 +730,22 @@ namespace bmath::intern {
 			case Type(Leaf::complex): {
 				ref.store->free(ref.index);
 			} break;
-			case Type(SingleMatch::tree): {
+			case Type(PnNode::tree_match): {
 				ref.store->free(ref.index);
 			} break;
-			case Type(SingleMatch::value): {
+			case Type(PnNode::value_match): {
 				pattern::ValueMatchVariable& var = *ref;
 				tree::free(ref.new_at(var.mtch_idx));
 				tree::free(ref.new_at(var.copy_idx));
 				ref.store->free(ref.index);
 			} break;
-			case Type(SingleMatch::value_proxy):
+			case Type(PnNode::value_proxy):
 				break;
-			case Type(MultiMatch::summands):
+			case Type(MultiPn::summands):
 				break;
-			case Type(MultiMatch::factors):
+			case Type(MultiPn::factors):
 				break;
-			case Type(MultiMatch::params):
+			case Type(MultiPn::params):
 				break;
 			}
 		} //free
@@ -922,22 +922,22 @@ namespace bmath::intern {
 				break;
 			case Type(Leaf::complex): 
 				break;
-			case Type(SingleMatch::tree): 
+			case Type(PnNode::tree_match): 
 				break;
-			case Type(SingleMatch::value): {
+			case Type(PnNode::value_match): {
 				pattern::ValueMatchVariable& var = *ref;
 				var.mtch_idx = tree::combine(ref.new_at(var.mtch_idx), exact);
 				var.copy_idx = tree::combine(ref.new_at(var.copy_idx), exact);
 				assert(var.mtch_idx.get_type() != Leaf::complex); //subtree always contains value_proxy, thus should never be evaluatable    
 				assert(var.copy_idx.get_type() != Leaf::complex);  //subtree always contains value_proxy, thus should never be evaluatable    
 			} break;
-			case Type(SingleMatch::value_proxy): 
+			case Type(PnNode::value_proxy): 
 				break;
-			case Type(MultiMatch::summands):
+			case Type(MultiPn::summands):
 				break;
-			case Type(MultiMatch::factors):
+			case Type(MultiPn::factors):
 				break;
-			case Type(MultiMatch::params):
+			case Type(MultiPn::params):
 				break;
 			}
 			return ref.typed_idx();
@@ -1023,12 +1023,12 @@ namespace bmath::intern {
 				const Complex& complex_2 = *ref_2;
 				return compare_complex(complex_2, complex_1);
 			} break;
-			case Type(SingleMatch::tree): {
+			case Type(PnNode::tree_match): {
 				const pattern::TreeMatchVariable& var_1 = *ref_1;
 				const pattern::TreeMatchVariable& var_2 = *ref_2;
 				return var_1.match_data_idx <=> var_2.match_data_idx;
 			} break;
-			case Type(SingleMatch::value): {
+			case Type(PnNode::value_match): {
 				const pattern::ValueMatchVariable& var_1 = *ref_1;
 				const pattern::ValueMatchVariable& var_2 = *ref_2;
 				if (var_1.form != var_2.form) {
@@ -1042,13 +1042,13 @@ namespace bmath::intern {
 				}
 				return tree::compare(ref_1.new_at(var_1.copy_idx), ref_2.new_at(var_2.copy_idx));
 			} break;
-			case Type(SingleMatch::value_proxy): 
+			case Type(PnNode::value_proxy): 
 				[[fallthrough]];
-			case Type(MultiMatch::summands): 
+			case Type(MultiPn::summands): 
 				[[fallthrough]];
-			case Type(MultiMatch::factors): 
+			case Type(MultiPn::factors): 
 				[[fallthrough]];
-			case Type(MultiMatch::params): {
+			case Type(MultiPn::params): {
 				return ref_1.index <=> ref_2.index;
 			} break;
 			}
@@ -1135,11 +1135,11 @@ namespace bmath::intern {
 				const std::size_t dst_index = dst_store.insert(*src_ref);
 				return TypedIdx(dst_index, src_ref.type);
 			} break;
-			case Type(SingleMatch::tree): {
+			case Type(PnNode::tree_match): {
 				const std::size_t dst_index = dst_store.insert(*src_ref); //shallow copy of var
 				return TypedIdx(dst_index, src_ref.type);
 			} break;
-			case Type(SingleMatch::value): {
+			case Type(PnNode::value_match): {
 				const pattern::ValueMatchVariable src_var = *src_ref;
 				const std::size_t dst_index = dst_store.allocate(); //allocate early to have better placement order in store
 				auto dst_var = pattern::ValueMatchVariable(src_var.match_data_idx, src_var.form);
@@ -1148,13 +1148,13 @@ namespace bmath::intern {
 				dst_store.at(dst_index) = dst_var;
 				return TypedIdx(dst_index, src_ref.type);
 			} break;
-			case Type(SingleMatch::value_proxy): //return same ref, as proxy does not own any nodes in src_store anyway (index has different meaning)
+			case Type(PnNode::value_proxy): //return same ref, as proxy does not own any nodes in src_store anyway (index has different meaning)
 				[[fallthrough]];
-			case Type(MultiMatch::summands):
+			case Type(MultiPn::summands):
 				[[fallthrough]];
-			case Type(MultiMatch::factors):	//return same ref, as multi_match does not own any nodes in src_store anyway (index has different meaning)
+			case Type(MultiPn::factors):	//return same ref, as multi_match does not own any nodes in src_store anyway (index has different meaning)
 				[[fallthrough]];
-			case Type(MultiMatch::params):
+			case Type(MultiPn::params):
 				return src_ref.typed_idx();
 			}
 			assert(false); 
@@ -1214,10 +1214,10 @@ namespace bmath::intern {
 					break;
 				case Type(Leaf::complex): 
 					break;
-				case Type(SingleMatch::tree): 
+				case Type(PnNode::tree_match): 
 					break;
-				case Type(SingleMatch::value): {
-					pattern::ValueMatchVariable& var = store.at(index).value;
+				case Type(PnNode::value_match): {
+					pattern::ValueMatchVariable& var = store.at(index).value_match;
 					if (TypedIdx* const copy_res = tree::find_subtree_owner(store, var.copy_idx, subtree)) {
 						return copy_res;
 					}
@@ -1225,13 +1225,13 @@ namespace bmath::intern {
 						return match_res;
 					}
 				} break;
-				case Type(SingleMatch::value_proxy):
+				case Type(PnNode::value_proxy):
 					break;
-				case Type(MultiMatch::summands):
+				case Type(MultiPn::summands):
 					break;
-				case Type(MultiMatch::factors):
+				case Type(MultiPn::factors):
 					break;
-				case Type(MultiMatch::params):
+				case Type(MultiPn::params):
 					break;
 				}
 				return nullptr;
@@ -1243,7 +1243,7 @@ namespace bmath::intern {
 		{
 			using namespace pattern;
 			const auto test_for_variables = [](Ref ref) -> fold::FindBool {
-				return ref.type == Leaf::variable || ref.type.is<PnVar>();
+				return ref.type == Leaf::variable || ref.type.is<MatchType>();
 			};
 			return fold::simple_fold<fold::FindBool>(ref, test_for_variables);
 		} //contains_variables
@@ -1266,7 +1266,7 @@ namespace bmath::intern {
 		{
 			using namespace pattern;
 
-			if (!pn_ref.type.is<PnVar>()) {
+			if (!pn_ref.type.is<MatchType>()) {
 				if (pn_ref.type != ref.type) [[likely]] {
 					return false;
 				}
@@ -1291,7 +1291,7 @@ namespace bmath::intern {
 						for (; pn_iter != pn_stop && iter != stop; ++pn_iter, ++iter) {
 							const auto pn_iter_ref = pn_ref.new_at(*pn_iter);
 							const auto iter_ref = ref.new_at(*iter);
-							if (pn_iter_ref.type == MultiMatch::params) {
+							if (pn_iter_ref.type == MultiPn::params) {
 								SharedMultiDatum& info = match_data.multi_info(pn_iter_ref.index);
 								assert(info.match_indices.size() == 0u);
 								while (iter != stop) {
@@ -1306,7 +1306,7 @@ namespace bmath::intern {
 						}
 
 						if (iter == stop) {
-							return pn_iter == pn_stop || pn_iter->get_type() == MultiMatch::params;
+							return pn_iter == pn_stop || pn_iter->get_type() == MultiPn::params;
 						}
 						return false;
 					} break;
@@ -1337,7 +1337,7 @@ namespace bmath::intern {
 			else {
 
 				switch (pn_ref.type) {
-				case Type(SingleMatch::tree): {
+				case Type(PnNode::tree_match): {
 					const TreeMatchVariable& var = *pn_ref;
 					if (!meets_restriction(ref, var.restr)) {
 						return false;
@@ -1352,7 +1352,7 @@ namespace bmath::intern {
 						return true;
 					}
 				} break;
-				case Type(SingleMatch::value): {
+				case Type(PnNode::value_match): {
 					if (ref.type != Leaf::complex) { //only this test allows us to pass *ref to evaluate this_value
 						return false;
 					}
@@ -1372,10 +1372,10 @@ namespace bmath::intern {
 						return true;
 					}
 				} break;
-				case Type(SingleMatch::value_proxy): //may only be encountered in pn_tree::eval_value_match (as value does no equals call)
+				case Type(PnNode::value_proxy): //may only be encountered in pn_tree::eval_value_match (as value_match does no equals call)
 					assert(false);
 					return false;
-				case Type(MultiMatch::summands):
+				case Type(MultiPn::summands):
 					if (ref.type == Op::sum) {
 						SharedMultiDatum& info = match_data.multi_info(pn_ref.index);
 						assert(info.match_indices.size() == 0u);
@@ -1385,7 +1385,7 @@ namespace bmath::intern {
 						return true;
 					}
 					return false;
-				case Type(MultiMatch::factors):
+				case Type(MultiPn::factors):
 					if (ref.type == Op::product) {
 						SharedMultiDatum& info = match_data.multi_info(pn_ref.index);
 						assert(info.match_indices.size() == 0u);
@@ -1395,7 +1395,7 @@ namespace bmath::intern {
 						return true;
 					}
 					return false;
-				case Type(MultiMatch::params): //assumed to be handeled only as param in named_fn
+				case Type(MultiPn::params): //assumed to be handeled only as param in named_fn
 					[[fallthrough]];
 				default:
 					assert(false);
@@ -1416,21 +1416,21 @@ namespace bmath::intern {
 			const auto reset_own_matches = [&match_data](const Ref pn_ref) {
 				const auto reset_single = [&match_data](const Ref ref) -> fold::Void {
 					switch (ref.type) {
-					case Type(SingleMatch::tree): {
-						SharedTreeDatum& info = match_data.info(ref->tree);
+					case Type(PnNode::tree_match): {
+						SharedTreeDatum& info = match_data.info(ref->tree_match);
 						if (info.responsible == ref.typed_idx()) {
 							info = SharedTreeDatum();
 						}
 					} break;
-					case Type(SingleMatch::value): {
-						SharedValueDatum& info = match_data.info(ref->value);
+					case Type(PnNode::value_match): {
+						SharedValueDatum& info = match_data.info(ref->value_match);
 						if (info.responsible == ref.typed_idx()) {
 							info = SharedValueDatum();
 						}
 					} break;
-					case Type(MultiMatch::summands):
+					case Type(MultiPn::summands):
 						[[fallthrough]];
-					case Type(MultiMatch::factors): {
+					case Type(MultiPn::factors): {
 						SharedMultiDatum& info = match_data.multi_info(ref.index);
 						info.match_indices.clear();
 					} break;
@@ -1462,8 +1462,8 @@ namespace bmath::intern {
 			std::uint32_t start_k = 0u; //all elements in not_matched bevore index start_k are ignored
 			while (pn_i < pn_elements.size()) {
 				const PnElemData pn_data_i = pn_elements[pn_i];
-				if (ref.type == Op::sum     && pn_data_i.elem.get_type() == MultiMatch::summands ||
-					ref.type == Op::product && pn_data_i.elem.get_type() == MultiMatch::factors ) [[unlikely]]
+				if (ref.type == Op::sum     && pn_data_i.elem.get_type() == MultiPn::summands ||
+					ref.type == Op::product && pn_data_i.elem.get_type() == MultiPn::factors ) [[unlikely]]
 				{
 					not_matched.shorten_to(std::remove(not_matched.begin(), not_matched.end(), null_value)); //remove null_value's from not_matched
 					for (const TypedIdx elem : not_matched) {
@@ -1541,7 +1541,7 @@ namespace bmath::intern {
 				dst_function.params_idx = last_node_idx;
 				for (const TypedIdx param : fn::range(pn_ref)) {
 					const auto param_ref = pn_ref.new_at(param);
-					if (param_ref.type == MultiMatch::params) {
+					if (param_ref.type == MultiPn::params) {
 						for (const TypedIdx matched_param : match_data.multi_info(param_ref.index).match_indices) {
 							const TypedIdx dst_param = tree::copy(Ref(src_store, matched_param), dst_store); //call normal copy!
 							last_node_idx = TypedIdxSLC::insert_new(dst_store, last_node_idx, dst_param);
@@ -1573,21 +1573,21 @@ namespace bmath::intern {
 			} break;
 			case Type(Leaf::complex): 
 				return TypedIdx(dst_store.insert(pn_ref->complex), pn_ref.type);
-			case Type(SingleMatch::tree): {
-				const SharedTreeDatum& info = match_data.info(pn_ref->tree);
+			case Type(PnNode::tree_match): {
+				const SharedTreeDatum& info = match_data.info(pn_ref->tree_match);
 				return tree::copy(Ref(src_store, info.mtch_idx), dst_store); //call to different copy!
 			} break;
-			case Type(SingleMatch::value): {
+			case Type(PnNode::value_match): {
 				const ValueMatchVariable& var = *pn_ref;
 				return match::copy(pn_ref.new_at(var.copy_idx), match_data, src_store, dst_store);				
 			} break;
-			case Type(SingleMatch::value_proxy): {
+			case Type(PnNode::value_proxy): {
 				const Complex& val = match_data.value_match_data[pn_ref.index].value;
 				return TypedIdx(dst_store.insert(val), Type(Leaf::complex));
 			} break;
-			case Type(MultiMatch::summands):
+			case Type(MultiPn::summands):
 				[[fallthrough]];
-			case Type(MultiMatch::factors): {
+			case Type(MultiPn::factors): {
 				const std::uint32_t res_idx = dst_store.insert(TypedIdxSLC());
 				std::uint32_t last_node_idx = res_idx;
 				const SharedMultiDatum& info = match_data.multi_info(pn_ref.index);
@@ -1595,9 +1595,9 @@ namespace bmath::intern {
 					const TypedIdx dst_elem = tree::copy(Ref(src_store, elem), dst_store); //call to different copy!
 					last_node_idx = TypedIdxSLC::insert_new(dst_store, last_node_idx, dst_elem);
 				}
-				return TypedIdx(res_idx, pn_ref.type == MultiMatch::summands ? Type(Op::sum) : Type(Op::product));			
+				return TypedIdx(res_idx, pn_ref.type == MultiPn::summands ? Type(Op::sum) : Type(Op::product));			
 			} break;
-			case Type(MultiMatch::params):  //already handeled in named_fn
+			case Type(MultiPn::params):  //already handeled in named_fn
 				assert(false);
 				return TypedIdx();
 			}
@@ -1735,22 +1735,22 @@ namespace bmath::intern {
 				break;
 			case Type_T(Leaf::complex): 
 				break;
-			case Type_T(SingleMatch::tree): 
+			case Type_T(PnNode::tree_match): 
 				break;
-			case Type_T(SingleMatch::value): if constexpr (pattern) {
+			case Type_T(PnNode::value_match): if constexpr (pattern) {
 				const pattern::ValueMatchVariable var = *ref;
 				const Res_T elem_res_1 = fold::simple_fold<Res_T>(ref.new_at(var.mtch_idx), apply);
 				if constexpr (return_early_possible) { if (elem_res_1.return_early()) { return elem_res_1; } }
 				const Res_T elem_res_2 = fold::simple_fold<Res_T>(ref.new_at(var.copy_idx), apply);
 				if constexpr (return_early_possible) { if (elem_res_2.return_early()) { return elem_res_2; } }
 			} break;
-			case Type_T(SingleMatch::value_proxy):
+			case Type_T(PnNode::value_proxy):
 				break;
-			case Type_T(MultiMatch::summands):
+			case Type_T(MultiPn::summands):
 				break;
-			case Type_T(MultiMatch::factors):
+			case Type_T(MultiPn::factors):
 				break;
-			case Type_T(MultiMatch::params):
+			case Type_T(MultiPn::params):
 				break;
 			}
 			return apply(ref); 
@@ -1786,7 +1786,7 @@ namespace bmath::intern {
 				}
 				return acc.result();		
 			}
-			case Type_T(SingleMatch::value): if constexpr (pattern) {
+			case Type_T(PnNode::value_match): if constexpr (pattern) {
 				OpAccumulator acc(ref, init...);
 				const pattern::ValueMatchVariable var = *ref;
 				acc.consume(fold::tree_fold<Res_T, OpAccumulator>(ref.new_at(var.mtch_idx), leaf_apply, init...));
@@ -1797,15 +1797,15 @@ namespace bmath::intern {
 				[[fallthrough]];
 			case Type_T(Leaf::complex):
 				[[fallthrough]];
-			case Type_T(SingleMatch::tree): 
+			case Type_T(PnNode::tree_match): 
 				[[fallthrough]];
-			case Type_T(SingleMatch::value_proxy):
+			case Type_T(PnNode::value_proxy):
 				[[fallthrough]];
-			case Type_T(MultiMatch::summands):
+			case Type_T(MultiPn::summands):
 				[[fallthrough]];
-			case Type_T(MultiMatch::factors):
+			case Type_T(MultiPn::factors):
 				[[fallthrough]];
-			case Type_T(MultiMatch::params):
+			case Type_T(MultiPn::params):
 				return leaf_apply(ref);
 			}
 		} //tree_fold

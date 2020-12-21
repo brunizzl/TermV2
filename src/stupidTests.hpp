@@ -18,45 +18,45 @@ namespace bmath::intern::debug {
 		using namespace pattern;
 		static_assert(unsigned(Type::COUNT) == unsigned(Type(Type::COUNT)), "else at least a second version of this function is needed");
 		std::cout
-			<< "Type(Op::sum)                 = " << unsigned(Type(Op::sum))                 << "\n"
-			<< "Type(Op::product)             = " << unsigned(Type(Op::product))             << "\n"
-			<< "Type(Op::named_fn)            = " << unsigned(Type(Op::named_fn))            << "\n"
-			                                                                                     << "\n"
-			<< "Type(Leaf::variable)          = " << unsigned(Type(Leaf::variable))          << "\n"
-			<< "Type(Leaf::complex)           = " << unsigned(Type(Leaf::complex))           << "\n"
-			                                                                                     << "\n"
-			<< "Type(Fn::pow)                 = " << unsigned(Type(Fn::pow))                 << "\n"
-			<< "Type(Fn::log)                 = " << unsigned(Type(Fn::log))                 << "\n"
-			<< "Type(Fn::sqrt)                = " << unsigned(Type(Fn::sqrt))                << "\n"
-			<< "Type(Fn::exp)                 = " << unsigned(Type(Fn::exp))                 << "\n"
-			<< "Type(Fn::ln)                  = " << unsigned(Type(Fn::ln))                  << "\n"
-			<< "Type(Fn::sin)                 = " << unsigned(Type(Fn::sin))                 << "\n"
-			<< "Type(Fn::cos)                 = " << unsigned(Type(Fn::cos))                 << "\n"
-			<< "Type(Fn::tan)                 = " << unsigned(Type(Fn::tan))                 << "\n"
-			<< "Type(Fn::sinh)                = " << unsigned(Type(Fn::sinh))                << "\n"
-			<< "Type(Fn::cosh)                = " << unsigned(Type(Fn::cosh))                << "\n"
-			<< "Type(Fn::tanh)                = " << unsigned(Type(Fn::tanh))                << "\n"
-			<< "Type(Fn::asin)                = " << unsigned(Type(Fn::asin))                << "\n"
-			<< "Type(Fn::acos)                = " << unsigned(Type(Fn::acos))                << "\n"
-			<< "Type(Fn::atan)                = " << unsigned(Type(Fn::atan))                << "\n"
-			<< "Type(Fn::asinh)               = " << unsigned(Type(Fn::asinh))               << "\n"
-			<< "Type(Fn::acosh)               = " << unsigned(Type(Fn::acosh))               << "\n"
-			<< "Type(Fn::atanh)               = " << unsigned(Type(Fn::atanh))               << "\n"
-			<< "Type(Fn::abs)                 = " << unsigned(Type(Fn::abs))                 << "\n"
-			<< "Type(Fn::arg)                 = " << unsigned(Type(Fn::arg))                 << "\n"
-			<< "Type(Fn::re)                  = " << unsigned(Type(Fn::re))                  << "\n"
-			<< "Type(Fn::im)                  = " << unsigned(Type(Fn::im))                  << "\n"
-			<< "Type(Fn::force)               = " << unsigned(Type(Fn::force))               << "\n"
-			                                                                                     << "\n"
-			<< "Type(SingleMatch::tree)       = " << unsigned(Type(SingleMatch::tree))       << "\n"
-			<< "Type(SingleMatch::value)      = " << unsigned(Type(SingleMatch::value))      << "\n"
-			<< "Type(SingleMatch::value_proxy)      = " << unsigned(Type(SingleMatch::value_proxy))      << "\n"
-			                                                                                     << "\n"
-			<< "Type(MultiMatch::summands)      = " << unsigned(Type(MultiMatch::summands))      << "\n"
-			<< "Type(MultiMatch::factors)       = " << unsigned(Type(MultiMatch::factors))       << "\n"
-			<< "Type(MultiMatch::params)        = " << unsigned(Type(MultiMatch::params))        << "\n"
-			                                                                                     << "\n"
-			                                                                                     << "\n"
+			<< "Type(Op::sum)                  = " << unsigned(Type(Op::sum))                  << "\n"
+			<< "Type(Op::product)              = " << unsigned(Type(Op::product))              << "\n"
+			<< "Type(Op::named_fn)             = " << unsigned(Type(Op::named_fn))             << "\n"
+			                                                                                   << "\n"
+			<< "Type(Leaf::variable)           = " << unsigned(Type(Leaf::variable))           << "\n"
+			<< "Type(Leaf::complex)            = " << unsigned(Type(Leaf::complex))            << "\n"
+			                                                                                   << "\n"
+			<< "Type(Fn::pow)                  = " << unsigned(Type(Fn::pow))                  << "\n"
+			<< "Type(Fn::log)                  = " << unsigned(Type(Fn::log))                  << "\n"
+			<< "Type(Fn::sqrt)                 = " << unsigned(Type(Fn::sqrt))                 << "\n"
+			<< "Type(Fn::exp)                  = " << unsigned(Type(Fn::exp))                  << "\n"
+			<< "Type(Fn::ln)                   = " << unsigned(Type(Fn::ln))                   << "\n"
+			<< "Type(Fn::sin)                  = " << unsigned(Type(Fn::sin))                  << "\n"
+			<< "Type(Fn::cos)                  = " << unsigned(Type(Fn::cos))                  << "\n"
+			<< "Type(Fn::tan)                  = " << unsigned(Type(Fn::tan))                  << "\n"
+			<< "Type(Fn::sinh)                 = " << unsigned(Type(Fn::sinh))                 << "\n"
+			<< "Type(Fn::cosh)                 = " << unsigned(Type(Fn::cosh))                 << "\n"
+			<< "Type(Fn::tanh)                 = " << unsigned(Type(Fn::tanh))                 << "\n"
+			<< "Type(Fn::asin)                 = " << unsigned(Type(Fn::asin))                 << "\n"
+			<< "Type(Fn::acos)                 = " << unsigned(Type(Fn::acos))                 << "\n"
+			<< "Type(Fn::atan)                 = " << unsigned(Type(Fn::atan))                 << "\n"
+			<< "Type(Fn::asinh)                = " << unsigned(Type(Fn::asinh))                << "\n"
+			<< "Type(Fn::acosh)                = " << unsigned(Type(Fn::acosh))                << "\n"
+			<< "Type(Fn::atanh)                = " << unsigned(Type(Fn::atanh))                << "\n"
+			<< "Type(Fn::abs)                  = " << unsigned(Type(Fn::abs))                  << "\n"
+			<< "Type(Fn::arg)                  = " << unsigned(Type(Fn::arg))                  << "\n"
+			<< "Type(Fn::re)                   = " << unsigned(Type(Fn::re))                   << "\n"
+			<< "Type(Fn::im)                   = " << unsigned(Type(Fn::im))                   << "\n"
+			<< "Type(Fn::force)                = " << unsigned(Type(Fn::force))                << "\n"
+			                                                                                   << "\n"
+			<< "Type(PnNode::tree_match)       = " << unsigned(Type(PnNode::tree_match))       << "\n"
+			<< "Type(PnNode::value_match)      = " << unsigned(Type(PnNode::value_match))      << "\n"
+			<< "Type(PnNode::value_proxy)      = " << unsigned(Type(PnNode::value_proxy))      << "\n"
+			                                                                                   << "\n"
+			<< "Type(MultiPn::summands)     = " << unsigned(Type(MultiPn::summands))     << "\n"
+			<< "Type(MultiPn::factors)      = " << unsigned(Type(MultiPn::factors))      << "\n"
+			<< "Type(MultiPn::params)       = " << unsigned(Type(MultiPn::params))       << "\n"
+			                                                                                   << "\n"
+			                                                                                   << "\n"
 			;
 	} //enumerate_pn_type
 
@@ -91,13 +91,13 @@ namespace bmath::intern::debug {
 	//Type(Fn::im)                  = 25
 	//Type(Fn::force)               = 26
 	//
-	//Type(PnVar::tree)       = 27
-	//Type(PnVar::value)      = 28
-	//Type(PnVar::value_proxy)      = 29
+	//Type(MatchType::tree_match)       = 27
+	//Type(MatchType::value_match)      = 28
+	//Type(MatchType::value_proxy)      = 29
 	//
-	//Type(MultiMatch::summands)      = 30
-	//Type(MultiMatch::factors)       = 31
-	//Type(MultiMatch::params)        = 32
+	//Type(MultiPn::summands)      = 30
+	//Type(MultiPn::factors)       = 31
+	//Type(MultiPn::params)        = 32
 
 	void test_rechner() 
 	{

@@ -59,22 +59,23 @@ namespace bmath::intern {
 		COUNT
 	};
 
-	using Math = SumEnum<Fn, Leaf, Op>;
+	using MathType = SumEnum<Fn, Leaf, Op>;
 
 
 
 	//not expeced to be present in normal Term, only in Patterns
-	enum class SingleMatch 
+	enum class PnNode 
 	{ 
-		tree, 
-		value,
+		tree_match,  //real nodes appearing as elements in the store, just as everything of MathType
+		value_match, //real nodes appearing as elements in the store, just as everything of MathType
 		value_proxy, //not actual node in tree, just "end" indicator for value subtrees
 		COUNT 
 	};
 
 	//not expeced to be present in normal Term, only in Patterns
-	//represent not actual node in pattern tree, as all match info is stored in MultiMatchDatum in MatchData		
-	enum class MultiMatch 
+	//represent not actual nodes in pattern tree, as all match info is stored in MultiMatchDatum in MatchData	
+	//thus all info required in the tree is given in the typed_idx, where the index is repurposed to point elsewhere
+	enum class MultiPn 
 	{ 
 		summands, 
 		factors, 
@@ -82,10 +83,10 @@ namespace bmath::intern {
 		COUNT 
 	};
 
-	using PnVar = SumEnum<MultiMatch, SingleMatch>;
+	using MatchType = SumEnum<MultiPn, PnNode>;
 
 
-	using Type = SumEnum<PnVar, Math>;
+	using Type = SumEnum<MatchType, MathType>;
 
 	using TypedIdx = BasicTypedIdx<Type>;
 
@@ -118,7 +119,7 @@ namespace bmath::intern {
 
 		//note: of Type, only sum, product, complex or variable may be used, as there is (currently)
 		//  no need to differentiate between any of the functions of Fn and unknown_function.
-		using Restriction = SumEnum<Restr, Math>; 
+		using Restriction = SumEnum<Restr, MathType>; 
 
 		//in a valid pattern, all TreeMatchVariables of same name share the same restr and the same match_data_idx.
 		//it is allowed to have multiple instances of the same TreeMatchVariable per side.
@@ -129,7 +130,7 @@ namespace bmath::intern {
 			Restriction restr = pattern::Restr::any;
 		};
 
-		//although the type MultiMatchVariable does not exist as type of node in term, oder nodes may reference it
+		//although the type MultiMatchVariable does not exist as type of node in term, other nodes may reference it
 		// (now called PnVariable::summands or PnVariable::factors)
 		//Meaning: if some TypedIdx has .get_type() == PnVariable::summands, all data of this node are stored in MatchData at
 		//  .get_index(), not in the pattern tree (same goes for .get_type() == PnVariable::factors).
@@ -177,8 +178,8 @@ namespace bmath::intern {
 			Form form = Form::real;
 
 			ValueMatchVariable(std::uint32_t new_match_data_idx, Form new_form)
-				:mtch_idx(TypedIdx(new_match_data_idx, SingleMatch::value_proxy)),
-				copy_idx(TypedIdx(new_match_data_idx, SingleMatch::value_proxy)),
+				:mtch_idx(TypedIdx(new_match_data_idx, PnNode::value_proxy)),
+				copy_idx(TypedIdx(new_match_data_idx, PnNode::value_proxy)),
 				match_data_idx(new_match_data_idx), form(new_form)
 			{}
 		};
@@ -197,17 +198,17 @@ namespace bmath::intern {
 		Complex complex;
 		TypedIdxSLC index_slc; //representing NamedFn's extra parameters and Sum and Product 
 		StringSLC string;	//Variable is a string
-		pattern::TreeMatchVariable tree;    //only expected as part of pattern
-		pattern::ValueMatchVariable value;  //only expected as part of pattern
+		pattern::TreeMatchVariable tree_match;    //only expected as part of pattern
+		pattern::ValueMatchVariable value_match;  //only expected as part of pattern
 
-		constexpr TypesUnion(const FnParams                   & val) noexcept :fn_params(val) {}
-		constexpr TypesUnion(const NamedFn                    & val) noexcept :named_fn(val)  {}
-		constexpr TypesUnion(const Complex                    & val) noexcept :complex(val)   {}
-		constexpr TypesUnion(const TypedIdxSLC                & val) noexcept :index_slc(val) {}
-		constexpr TypesUnion(const StringSLC                  & val) noexcept :string(val)    {} 
-		constexpr TypesUnion(const pattern::TreeMatchVariable & val) noexcept :tree(val)      {} 
-		constexpr TypesUnion(const pattern::ValueMatchVariable& val) noexcept :value(val)     {} 
-		constexpr TypesUnion()                                       noexcept :unused(0)      {} 
+		constexpr TypesUnion(const FnParams                   & val) noexcept :fn_params(val)   {}
+		constexpr TypesUnion(const NamedFn                    & val) noexcept :named_fn(val)    {}
+		constexpr TypesUnion(const Complex                    & val) noexcept :complex(val)     {}
+		constexpr TypesUnion(const TypedIdxSLC                & val) noexcept :index_slc(val)   {}
+		constexpr TypesUnion(const StringSLC                  & val) noexcept :string(val)      {} 
+		constexpr TypesUnion(const pattern::TreeMatchVariable & val) noexcept :tree_match(val)  {} 
+		constexpr TypesUnion(const pattern::ValueMatchVariable& val) noexcept :value_match(val) {} 
+		constexpr TypesUnion()                                       noexcept :unused(0)        {} 
 
 		constexpr auto operator<=>(const TypesUnion&) const = default;
 
@@ -216,16 +217,16 @@ namespace bmath::intern {
 		constexpr operator const Complex                     &() const noexcept { return this->complex; }
 		constexpr operator const TypedIdxSLC                 &() const noexcept { return this->index_slc; }
 		constexpr operator const StringSLC                   &() const noexcept { return this->string; }
-		constexpr operator const pattern::TreeMatchVariable  &() const noexcept { return this->tree; }
-		constexpr operator const pattern::ValueMatchVariable &() const noexcept { return this->value; }
+		constexpr operator const pattern::TreeMatchVariable  &() const noexcept { return this->tree_match; }
+		constexpr operator const pattern::ValueMatchVariable &() const noexcept { return this->value_match; }
 
 		constexpr operator FnParams                    &() noexcept { return this->fn_params; }
 		constexpr operator NamedFn                     &() noexcept { return this->named_fn; }
 		constexpr operator Complex                     &() noexcept { return this->complex; }
 		constexpr operator TypedIdxSLC                 &() noexcept { return this->index_slc; }
 		constexpr operator StringSLC                   &() noexcept { return this->string; }
-		constexpr operator pattern::TreeMatchVariable  &() noexcept { return this->tree; }
-		constexpr operator pattern::ValueMatchVariable &() noexcept { return this->value; }
+		constexpr operator pattern::TreeMatchVariable  &() noexcept { return this->tree_match; }
+		constexpr operator pattern::ValueMatchVariable &() noexcept { return this->value_match; }
 	};
 
 	static_assert(sizeof(TypesUnion) * 8 == 128);
@@ -265,7 +266,7 @@ namespace bmath::intern {
 		{
 			Complex value = 0.0;
 			TypedIdx mtch_idx = TypedIdx{}; //indexes in Term to simplify (only usefull during rematch to only match later elements)
-			TypedIdx responsible = TypedIdx{}; //the instance of ValueMatchVariable that was setting value
+			TypedIdx responsible = TypedIdx{}; //the instance of ValueMatchVariable that was setting value_match
 
 			constexpr bool is_set() const noexcept
 			{
@@ -317,14 +318,14 @@ namespace bmath::intern {
 		//algorithms specific to patterns
 		namespace pn_tree {
 
-			//returns pointer to position in parent of value, where value is to be held in future
-			// (currently value is only somewhere in the subtree that it will own, not nesseccarily at the root.
+			//returns pointer to position in parent of value_match, where value_match is to be held in future
+			// (currently value_match is only somewhere in the subtree that it will own, not nesseccarily at the root.
 			//assumes head to be passed at reference to its own storage position
-			TypedIdx* find_value_match_subtree(Store& store, TypedIdx& head, const TypedIdx value);
+			TypedIdx* find_value_match_subtree(Store& store, TypedIdx& head, const TypedIdx value_match);
 
-			//changes value from its state holding two value_proxy directly to actually
-			//having copy_idx and mtch_idx initialized (thus value also bubbles up a bit in term)
-			void rearrange_value_match(Store& store, TypedIdx& head, const TypedIdx value);
+			//changes value_match from its state holding two value_proxy directly to actually
+			//having copy_idx and mtch_idx initialized (thus value_match also bubbles up a bit in term)
+			void rearrange_value_match(Store& store, TypedIdx& head, const TypedIdx value_match);
 
 			struct Equation { TypedIdx lhs_head, rhs_head; };
 
@@ -475,12 +476,13 @@ namespace bmath::intern {
 		//allows to match a sum / product pn_ref in a sum / product ref regardless of order
 		//if no match was found, both PermutationEqualsRes.matched and PermutationEqualsRes.not_matched will be empty, 
 		//  else PermutationEqualsRes.matched will contain the elements in term where a corrensponding part in pattern was found and
-		//  PermutationEqualsRes.not_matched will contain the leftovers (-> empty if MultiMatch paticipated).
+		//  PermutationEqualsRes.not_matched will contain the leftovers (-> empty if MultiPn paticipated).
 		//it is assumed, that pn_ref and ref are both the same variadic type (eighter sum and sum or product and product)
 		PermutationEqualsRes permutation_equals(const Ref pn_ref, const Ref ref, pattern::MatchData& match_data);
 
 		//copies pn_ref with match_data into store, returns head of copied result.
-		[[nodiscard]] TypedIdx copy(const Ref pn_ref, const pattern::MatchData& match_data, const Store& src_store, Store& dst_store);
+		[[nodiscard]] TypedIdx copy(const Ref pn_ref, const pattern::MatchData& match_data, 
+			const Store& src_store, Store& dst_store);
 
 		//this function is the primary function designed to be called from outside of this namespace.
 		//the function will try to match the head of in with the head of ref and if so, replace the matched part with out.
