@@ -101,7 +101,7 @@ namespace bmath::intern::debug {
 
 	void test_rechner() 
 	{
-		const auto patterns = std::to_array<pattern::PnTerm>({ 
+		static const auto patterns = std::to_array<pattern::PnTerm>({ 
 			{ "x :factors | x * 0 = 0" },
 			{ "x          | 0 ^ x = 0" },
 			{ "x          | x ^ 1 = x" },
@@ -512,5 +512,118 @@ namespace bmath::intern::test {
 			std::cout << "--------------------------------------------------------------------------\n";
 		}
 	}
+
+
+	void alloc_n()
+	{
+		BasicStore<long long> store;
+		const auto print = [&store]() {
+			for (int i = 0; i < store.size(); i++) {
+				std::printf("%3d | ", i);
+				if (store.valid_idx(i)) {
+					std::cout << store.at(i) << "\n";
+				}
+				else {
+					std::cout << "__free__\n";
+				}
+			}
+			std::cout << "\n";
+		};
+
+		struct Input
+		{
+			std::vector<long long> elems;
+			std::size_t start = -1;
+
+			Input(std::initializer_list<long long> init) :elems(init) {}
+		};
+
+		std::vector<Input> inputs = {
+			{1},
+			{200, 201},
+			{2},
+			{210, 211},
+			{3},
+			{4},
+			{5},
+			{220, 221},
+			{230, 231},
+			{300, 301, 302},
+			{6},
+			{7},
+			{600, 601, 602, 603, 604, 605},
+			{310, 311, 312},
+			{400, 401, 402, 403},
+
+			{-1},
+			{-2},
+			{-300, -301, -302},
+			{-200, -201},
+			{-3},
+			{-4},
+			{-210, -211},
+			{-5},
+			{-6},
+			{-310, -311, -312},
+			{-7},
+			{-220, -221},
+			{-230, -231},
+			{-400, -401, -402, -403},
+			{-600, -601, -602, -603, -604, -605},
+		};
+
+		for (auto& input : inputs) {
+			if (input.elems.front() < 0) {
+				break;
+			}
+			input.start = store.allocate_n(input.elems.size());
+			for (int i = 0; i < input.elems.size(); i++) {
+				store.at(input.start + i) = input.elems[i];
+			}
+		}
+		
+		std::cout << "after inserts:\n";
+		print();
+
+		{
+			int i = 0;
+			for (auto& input : inputs) {
+				if (i % 2 == 0) {
+					if (input.start != -1) {
+						store.free_n(input.start, input.elems.size());
+						input.start = -1;
+					}
+				}
+				i++;
+			}
+		}
+
+		std::cout << "after frees:\n";
+		print();
+
+		for (auto& input : inputs) {
+			if (input.elems.front() > 0) {
+				continue;
+			}
+			input.start = store.allocate_n(input.elems.size());
+			for (int i = 0; i < input.elems.size(); i++) {
+				store.at(input.start + i) = input.elems[i];
+			}
+		}
+
+		std::cout << "after new inputs:\n";
+		print();
+
+		for (auto& input : inputs) {
+			if (input.start != -1) {
+				store.free_n(input.start, input.elems.size());
+				input.start = -1;
+			}
+		}
+
+		std::cout << "final:\n";
+		print();
+	}
+
 
 } //namespace bmath::intern::test

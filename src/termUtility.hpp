@@ -14,6 +14,9 @@
 
 namespace bmath::intern {
 
+	
+#define ASSERT(expr) if (!(expr)) __debugbreak()
+
 	constexpr void throw_if(bool cond, const char* const msg)
 	{
 		if (cond) [[unlikely]] {

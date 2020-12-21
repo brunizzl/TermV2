@@ -227,7 +227,7 @@ namespace bmath::intern {
 		//the spacer_size may elems in front of returned index are still free (duh.)
 		[[nodiscard]] std::size_t at_back_allocate_alligned(std::size_t n) noexcept
 		{
-			const std::size_t alligned_n_size = std::min(std::bit_ceil(n), 64u);
+			const std::size_t alligned_n_size = std::min(std::bit_ceil(n), 64ull);
 			const std::size_t spacer_size  = alligned_n_size - ((this->size_ - 1u) % alligned_n_size) - 1u;
 			const std::size_t result_index = this->size_ + spacer_size;
 			const std::size_t new_size     = this->size_ + spacer_size + n;
@@ -318,18 +318,12 @@ namespace bmath::intern {
 
 		constexpr inline [[nodiscard]] Union_T& at(const std::size_t idx) noexcept
 		{
-			if (!this->valid_idx(idx)) {
-				__debugbreak();
-			}
-			assert(this->valid_idx(idx));
+			ASSERT(this->valid_idx(idx));
 			return this->payload_data()[idx];
 		}
 
 		constexpr inline [[nodiscard]] const Union_T& at(const std::size_t idx) const noexcept
 		{
-			if (!this->valid_idx(idx)) {
-				__debugbreak();
-			}
 			assert(this->valid_idx(idx));
 			return this->payload_data()[idx];
 		}
@@ -352,7 +346,7 @@ namespace bmath::intern {
 
 			const std::size_t result_index = find_first_free_index();
 			if (result_index >= this->capacity) {
-				this->unsave_change_capacity(std::max(8ull, 2u * this->capacity)); //std::max, because capacity may be 0
+				this->unsave_change_capacity(std::max(4ull, 2u * this->capacity)); //std::max, because capacity may be 0
 			}
 			if (result_index == this->size_) {
 				this->size_++;
@@ -381,32 +375,31 @@ namespace bmath::intern {
 			if (n == 1u) { //quite a lot faster for that case
 				return this->allocate(); 
 			}
-			if (n > 64u) { //allows mask to be single std::uint64_t
-				return this->at_back_allocate_alligned(n);
-			}
-			{
+			if (n <= 64u) { //allows mask to be single std::uint64_t
 				const std::size_t n_ceil = std::bit_ceil(n);
 				const std::uint64_t mask = -1ull >> (64u - n);
 				std::size_t bitset_index = 0u;
 				for (; bitset_index < this->size_ / 64u; bitset_index++) { //test all but last bitset (also last if all of it is used)
-					const BitSet64 current = this->occupancy_data()[bitset_index];
-					if (current.all()) {
+					BitSet64& bitset = this->occupancy_data()[bitset_index];
+					if (bitset.all()) {
 						continue;
 					}
 					for (std::size_t offset = 0u; offset < 64u; offset += n_ceil) {
-						if (!(current & (mask << offset))) {
-							this->occupancy_data()[bitset_index] |= (mask << offset);
+						if (!(bitset & (mask << offset))) {
+							bitset |= (mask << offset);
+							return bitset_index * 64u + offset;
 						}
 					}
 				}
 				for (std::size_t offset = 0u; offset < this->size_ % 64u; offset += n_ceil) { //test used part of last bitset
-					if (!(this->occupancy_data()[bitset_index] & (mask << offset))) {
-						this->occupancy_data()[bitset_index] |= (mask << offset);
+					BitSet64& bitset = this->occupancy_data()[bitset_index];
+					if (!(bitset & (mask << offset))) {
+						bitset |= (mask << offset);
 						return bitset_index * 64u + offset;
 					}
 				}
 			}
-			//no fitting space found -> allocate at end
+			//no fitting space found (or n to large) -> allocate at end
 			return this->at_back_allocate_alligned(n);
 		} //allocate_n()
 
@@ -420,8 +413,9 @@ namespace bmath::intern {
 				this->occupancy_data()[bit_index / 64u] = 0ull; //reset all in first (n / 64u) tables responsible for the n freed elements 
 			}
 			const std::uint64_t last_mask = (-1ull >> (64u - (n % 64u))) << (start % 64u);
-			assert((this->occupancy_data()[bit_index / 64u] & last_mask) == last_mask); //check if all elements actually where used
-			this->occupancy_data()[bit_index / 64u] &= ~last_mask;
+			BitSet64& bitset = this->occupancy_data()[bit_index / 64u];
+			assert((bitset & last_mask) == last_mask); //check if all elements actually where used
+			bitset &= ~last_mask;
 		} //free_n()
 
 		[[nodiscard]] std::vector<std::size_t> enumerate_free_slots() const noexcept
