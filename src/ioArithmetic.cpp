@@ -14,29 +14,21 @@ namespace bmath::intern {
 
 	namespace vc {
 
-		struct BasicSumTraits
+		struct SumTraits
 		{
-			static constexpr Type type_name = Op::sum;
+			static constexpr Type type_name = Type(Op::sum);
 			static constexpr char operator_char = '+';
 			static constexpr char inverse_operator_char = '-';
 			static constexpr Token operator_token = token::sum;
 		};
 
-		struct SumTraits : public BasicSumTraits { using Object_T = Sum; };
-		struct PnSumTraits : public BasicSumTraits { using Object_T = pattern::PnSum; };
-
-
-
-		struct BasicProductTraits
+		struct ProductTraits
 		{
-			static constexpr Type type_name = Op::product;
+			static constexpr Type type_name = Type(Op::product);
 			static constexpr char operator_char = '*';
 			static constexpr char inverse_operator_char = '/';
 			static constexpr Token operator_token = token::product;
 		};
-
-		struct ProductTraits : public BasicProductTraits { using Object_T = Product; };
-		struct PnProductTraits : public BasicProductTraits { using Object_T = pattern::PnProduct; };
 
 	} //namespace vc
 
@@ -47,14 +39,14 @@ namespace bmath::intern {
 	//char inverse_operator_char: the character symbolizing the inverse operation, e.g. '-'
 	//Token operator_token: the token symbolizing both normal and inverse operation, e.g. token::sum
 
-	//BuildInverse recieves an already build term (by TypedIdx_T) and returns the inverse (by TypedIdx_T)
+	//BuildInverse recieves an already build term (by TypedIdx) and returns the inverse (by TypedIdx)
 	//  e.g. for sum, it should turn "a" -> "a*(-1)", for product "a" -> "a^(-1)"
 	//BuildAny can buld any type of term, this function will very likely already call build_variadic.
-	template<typename VariadicTraits, typename TypedIdx_T, typename Store_T, typename BuildInverse, typename BuildAny>
-	[[nodiscard]] TypedIdx_T build_variadic(Store_T& store, ParseView input, std::size_t op_idx, BuildInverse build_inverse, BuildAny build_any);
+	template<typename VariadicTraits, typename Store_T, typename BuildInverse, typename BuildAny>
+	[[nodiscard]] TypedIdx build_variadic(Store_T& store, ParseView input, std::size_t op_idx, BuildInverse build_inverse, BuildAny build_any);
 
-	template<typename TypedIdx_T, typename Store_T, typename BuildAny>
-	[[nodiscard]] TypedIdx_T build_function(Store_T& store, ParseView input, const std::size_t open_par, BuildAny build_any);
+	template<typename Store_T, typename BuildAny>
+	[[nodiscard]] TypedIdx build_function(Store_T& store, ParseView input, const std::size_t open_par, BuildAny build_any);
 
 	namespace pattern {
 
@@ -87,9 +79,9 @@ namespace bmath::intern {
 			{ Restr::any          , "any"           },
 			{ Restr::nn1          , "nn1"           },
 			{ Restr::no_val       , "no_val"        },
-			{ MultiMatch::summands  , "summands"      },
-			{ MultiMatch::factors   , "factors"       },
-			{ MultiMatch::params    , "params"        },
+			{ MultiMatch::summands, "summands"      },
+			{ MultiMatch::factors , "factors"       },
+			{ MultiMatch::params  , "params"        },
 		});
 
 		constexpr std::string_view name_of(const PnVariablesType r) noexcept { return find(type_table, &TypeProps::type, r).name; }
@@ -100,29 +92,29 @@ namespace bmath::intern {
 	namespace print {
 
 		//operator precedence (used to decide if parentheses are nessecary in out string)
-		constexpr auto infixr_table = std::to_array<std::pair<pattern::PnType, int>>({
-			{ Type(Op::named_fn  )            , 0 },
-			{ Type(Op::sum       )            , 2 },
-			{ Type(Op::product   )            , 4 },	
-			{ Type(Fn::pow       )            , 5 }, //not between other function types -> assumed to be printed with '^'  
-			{ Type(Leaf::variable)            , 6 },
-			{ Type(Leaf::complex )            , 6 }, //may be printed as sum/product itself, then (maybe) has to add parentheses on its own
-			{ pattern::SingleMatch::tree      , 6 },
-			{ pattern::SingleMatch::value     , 6 },
-			{ pattern::SingleMatch::value_proxy     , 6 },
-			{ pattern::MultiMatch::summands     , 6 },
-			{ pattern::MultiMatch::factors      , 6 },
-			{ pattern::MultiMatch::params       , 6 },
+		constexpr auto infixr_table = std::to_array<std::pair<Type, int>>({
+			{ Type(Op::named_fn            ), 0 },
+			{ Type(Op::sum                 ), 2 },
+			{ Type(Op::product             ), 4 },	
+			{ Type(Fn::pow                 ), 5 }, //not between other function types -> assumed to be printed with '^'  
+			{ Type(Leaf::variable          ), 6 },
+			{ Type(Leaf::complex           ), 6 }, //may be printed as sum/product itself, then (maybe) has to add parentheses on its own
+			{ Type(SingleMatch::tree       ), 6 },
+			{ Type(SingleMatch::value      ), 6 },
+			{ Type(SingleMatch::value_proxy), 6 },
+			{ Type(MultiMatch::summands    ), 6 },
+			{ Type(MultiMatch::factors     ), 6 },
+			{ Type(MultiMatch::params      ), 6 },
 		});
 		static_assert(std::is_sorted(infixr_table.begin(), infixr_table.end(), [](auto a, auto b) { return a.second < b.second; }));
 
-		constexpr int infixr(pattern::PnType type) 
+		constexpr int infixr(Type type) 
 		{ 
 			if (type.is<Fn>() && type != Fn::pow) {
 				return 0;
 			}
 			else {
-				return find(infixr_table, &std::pair<pattern::PnType, int>::first, type).second;
+				return find(infixr_table, &std::pair<Type, int>::first, type).second;
 			}
 		}
 
@@ -349,7 +341,7 @@ namespace bmath::intern {
 		}
 		switch (head.type) {
 		case Head::Type::sum: {
-			return build_variadic<vc::SumTraits, TypedIdx>(store, input, head.where, build_negated<Store, TypedIdx>, build);
+			return build_variadic<vc::SumTraits>(store, input, head.where, build_negated<Store>, build);
 		} break;
 		case Head::Type::negate: {
 			input.remove_prefix(1u);  //remove minus sign
@@ -357,33 +349,33 @@ namespace bmath::intern {
 			return build_negated(store, to_negate);
 		} break;
 		case Head::Type::product: {
-			return build_variadic<vc::ProductTraits, TypedIdx>(store, input, head.where, build_inverted<Store, TypedIdx>, build);
+			return build_variadic<vc::ProductTraits>(store, input, head.where, build_inverted<Store>, build);
 		} break;
 		case Head::Type::power: {
 			const auto base_view = input.steal_prefix(head.where);
 			input.remove_prefix(1u); //remove hat
 			const TypedIdx base = build(store, base_view);
 			const TypedIdx expo = build(store, input);
-			return TypedIdx(store.insert(FnParams<TypedIdx>{ base, expo, TypedIdx(), TypedIdx() }), Fn::pow);
+			return TypedIdx(store.insert(FnParams{ base, expo, TypedIdx(), TypedIdx() }), Type(Fn::pow));
 		} break;
 		case Head::Type::complex_computable: {
-			return build_value<TypedIdx>(store, compute::eval_complex(input));
+			return build_value(store, compute::eval_complex(input));
 		} break;
 		case Head::Type::natural_computable: { 
-			return build_value<TypedIdx>(store, compute::eval_natural(input));
+			return build_value(store, compute::eval_natural(input));
 		} break;
 		case Head::Type::real_value: {
-			return build_value<TypedIdx>(store, compute::parse_value(input));
+			return build_value(store, compute::parse_value(input));
 		} break;
 		case Head::Type::imag_value: {
 			input.remove_suffix(1u); //remove token::imag_unit
-			return build_value<TypedIdx>(store, Complex(0.0, compute::parse_value(input)));
+			return build_value(store, Complex(0.0, compute::parse_value(input)));
 		} break;
 		case Head::Type::function: {
-			return build_function<TypedIdx>(store, input, head.where, build);
+			return build_function(store, input, head.where, build);
 		} break;
 		case Head::Type::variable: {
-			return TypedIdx(str_slc::insert(store, input.to_string_view()), Leaf::variable);
+			return TypedIdx(str_slc::insert(store, input.to_string_view()), Type(Leaf::variable));
 		} break;
 		default: 
 			assert(false); 
@@ -391,42 +383,38 @@ namespace bmath::intern {
 		}
 	} //build
 
-	template<typename VariadicTraits, typename TypedIdx_T, typename Store_T, typename BuildInverse, typename BuildAny>
-	TypedIdx_T build_variadic(Store_T& store, ParseView input, std::size_t op_idx, BuildInverse build_inverse, BuildAny build_any)
+	template<typename VariadicTraits, typename Store_T, typename BuildInverse, typename BuildAny>
+	TypedIdx build_variadic(Store_T& store, ParseView input, std::size_t op_idx, BuildInverse build_inverse, BuildAny build_any)
 	{
-		using Result_T = typename VariadicTraits::Object_T;
-
-		const std::size_t variadic_idx = store.insert(Result_T());
+		const std::size_t variadic_idx = store.insert(TypedIdxSLC());
 		std::size_t last_node_idx;
 		{
 			const ParseView subterm_view = input.steal_prefix(op_idx);
-			const TypedIdx_T subterm = build_any(store, subterm_view);
-			last_node_idx = Result_T::insert_new(store, variadic_idx, subterm);
+			const TypedIdx subterm = build_any(store, subterm_view);
+			last_node_idx = TypedIdxSLC::insert_new(store, variadic_idx, subterm);
 		}
 		while (input.size()) {
 			const char current_operator = input.chars[0u];
 			input.remove_prefix(1u); //remove current_operator;
 			op_idx = find_first_of_skip_pars(input.tokens, VariadicTraits::operator_token);
 			const ParseView subterm_view = input.steal_prefix(op_idx);
-			const TypedIdx_T subterm = build_any(store, subterm_view);
+			const TypedIdx subterm = build_any(store, subterm_view);
 			switch (current_operator) {
 			case VariadicTraits::operator_char:
-				last_node_idx = Result_T::insert_new(store, last_node_idx, subterm);
+				last_node_idx = TypedIdxSLC::insert_new(store, last_node_idx, subterm);
 				break;
 			case VariadicTraits::inverse_operator_char:
-				last_node_idx = Result_T::insert_new(store, last_node_idx, build_inverse(store, subterm));
+				last_node_idx = TypedIdxSLC::insert_new(store, last_node_idx, build_inverse(store, subterm));
 				break;
 			default: assert(false);
 			}
 		}
-		return TypedIdx_T(variadic_idx, VariadicTraits::type_name);
+		return TypedIdx(variadic_idx, VariadicTraits::type_name);
 	} //build_variadic
 
-	template<typename TypedIdx_T, typename Store_T, typename BuildAny>
-	[[nodiscard]] TypedIdx_T build_function(Store_T& store, ParseView input, const std::size_t open_par, BuildAny build_any)
+	template<typename Store_T, typename BuildAny>
+	[[nodiscard]] TypedIdx build_function(Store_T& store, ParseView input, const std::size_t open_par, BuildAny build_any)
 	{
-		using TypedIdxSLC_T = TermSLC<TypedIdx_T>;
-
 		const auto type = fn::type_of(input.to_string_view(0u, open_par));
 		if (type == Fn::COUNT) { //build generic function
 			const std::size_t result_index = store.allocate(); //allocate function node first -> better positioning in store
@@ -439,32 +427,32 @@ namespace bmath::intern {
 			//writing parameters in result
 			input.remove_suffix(1u);            //"pow(2,4)" -> "pow(2,4"
 			input.remove_prefix(open_par + 1u); //"pow(2,4" ->      "2,4"
-			result.params_idx = store.insert(TypedIdxSLC_T());
+			result.params_idx = store.insert(TypedIdxSLC());
 			std::size_t last_node_idx = result.params_idx;
 			if (input.size()) { //else no parameters at all
 				const std::size_t comma = find_first_of_skip_pars(input.tokens, token::comma);
 				const auto param_view = input.steal_prefix(comma); //now input starts with comma
-				const TypedIdx_T param = build_any(store, param_view);
-				last_node_idx = TypedIdxSLC_T::insert_new(store, last_node_idx, param);
+				const TypedIdx param = build_any(store, param_view);
+				last_node_idx = TypedIdxSLC::insert_new(store, last_node_idx, param);
 			}
 			while (input.size()) {
 				input.remove_prefix(1u); //erase comma
 				const std::size_t comma = find_first_of_skip_pars(input.tokens, token::comma);
 				const auto param_view = input.steal_prefix(comma);
-				const TypedIdx_T param = build_any(store, param_view);
-				last_node_idx = TypedIdxSLC_T::insert_new(store, last_node_idx, param);
+				const TypedIdx param = build_any(store, param_view);
+				last_node_idx = TypedIdxSLC::insert_new(store, last_node_idx, param);
 			}
 			store.at(result_index) = result;
-			return TypedIdx_T(result_index, Type(Op::named_fn));
+			return TypedIdx(result_index, Type(Op::named_fn));
 		}
 		else { //build known function
 			const std::size_t result_index = store.allocate(); //allocate function node first -> better positioning in store
-			FnParams<TypedIdx_T> result{ TypedIdx_T(), TypedIdx_T(), TypedIdx_T(), TypedIdx_T() };
+			FnParams result{ TypedIdx(), TypedIdx(), TypedIdx(), TypedIdx() };
 			input.remove_suffix(1u);
 			input.remove_prefix(open_par + 1u);	//only arguments are left
 			std::size_t comma = find_first_of_skip_pars(input.tokens, token::comma);
 			auto param_view = input.steal_prefix(comma);
-			for (auto& param : fn::range(result, type)) {
+			for (auto& param : fn::range(result, Type(type))) {
 				if (param_view.size() == 0u) [[unlikely]] throw ParseFailure{ input.offset, "too few function parameters" };
 				param = build_any(store, param_view);
 				input.remove_prefix(1u); // remove comma
@@ -473,7 +461,7 @@ namespace bmath::intern {
 			}
 			if (param_view.size() > 0u) [[unlikely]] throw ParseFailure{ input.offset, "too many function parameters" };
 			store.at(result_index) = result;
-			return TypedIdx_T(result_index, Type(type));
+			return TypedIdx(result_index, Type(type));
 		}
 	} //build_function
 
@@ -534,36 +522,36 @@ namespace bmath::intern {
 			}
 		} //NameLookupTable::NameLookupTable
 
-		PnTypedIdx NameLookupTable::insert_instance(PnStore& store, const ParseView input)
+		TypedIdx NameLookupTable::insert_instance(Store& store, const ParseView input)
 		{
 			const auto name = input.to_string_view();
 			const auto search_name = [name](auto& vec) { 
 				return std::find_if(vec.begin(), vec.end(), [name](const auto& x) { return x.name == name; });
 			};
 
-			auto var_idx = PnTypedIdx();
+			auto var_idx = TypedIdx();
 			if (const auto iter = search_name(this->tree_table); iter != this->tree_table.end()) {
 				const std::uint32_t match_data_idx = std::distance(this->tree_table.begin(), iter);
 				const TreeMatchVariable var = { match_data_idx, iter->restr };
-				var_idx = PnTypedIdx(store.insert(var), SingleMatch::tree);
+				var_idx = TypedIdx(store.insert(var), SingleMatch::tree);
 				(this->build_lhs ? iter->lhs_instances : iter->rhs_instances).push_back(var_idx);
 			}
 			else if (const auto iter = search_name(this->value_table); iter != this->value_table.end()) {
 				const std::uint32_t match_data_idx = std::distance(this->value_table.begin(), iter);
 				const ValueMatchVariable var(match_data_idx, iter->form);
-				var_idx = PnTypedIdx(store.insert(var), SingleMatch::value);
+				var_idx = TypedIdx(store.insert(var), SingleMatch::value);
 				(this->build_lhs ? iter->lhs_instances : iter->rhs_instances).push_back(var_idx);
 			}
 			else if (const auto iter = search_name(this->multi_table); iter != this->multi_table.end()) {
 				const std::uint32_t match_data_idx = std::distance(this->multi_table.begin(), iter);
-				var_idx = PnTypedIdx(match_data_idx, iter->type);
+				var_idx = TypedIdx(match_data_idx, iter->type);
 			}
-			if (var_idx == PnTypedIdx()) [[unlikely]] throw ParseFailure{ input.offset, "match variable has not been declared" };
+			if (var_idx == TypedIdx()) [[unlikely]] throw ParseFailure{ input.offset, "match variable has not been declared" };
 			return var_idx;
 		} //NameLookupTable::insert_instance
 
 
-		PnTypedIdx PatternBuildFunction::operator()(PnStore& store, ParseView input)
+		TypedIdx PatternBuildFunction::operator()(Store& store, ParseView input)
 		{
 			if (input.size() == 0u) [[unlikely]] throw ParseFailure{ input.offset, "recieved empty substring" };
 			Head head = find_head_type(input);
@@ -574,43 +562,43 @@ namespace bmath::intern {
 			}
 			switch (head.type) {
 			case Head::Type::sum: {
-				return build_variadic<vc::PnSumTraits, PnTypedIdx>(store, input, head.where, build_negated<PnStore, PnTypedIdx>, *this);
+				return build_variadic<vc::SumTraits>(store, input, head.where, build_negated<Store>, *this);
 			} break;
 			case Head::Type::negate: {
 				input.remove_prefix(1u);  //remove minus sign
-				const PnTypedIdx to_negate = this->operator()(store, input);
+				const TypedIdx to_negate = this->operator()(store, input);
 				return build_negated(store, to_negate);
 			} break;
 			case Head::Type::product: {
-				return build_variadic<vc::PnProductTraits, PnTypedIdx>(store, input, head.where, build_inverted<PnStore, PnTypedIdx>, *this);
+				return build_variadic<vc::ProductTraits>(store, input, head.where, build_inverted<Store>, *this);
 			} break;
 			case Head::Type::power: {
 				const auto base_view = input.steal_prefix(head.where);
 				input.remove_prefix(1u); //remove hat
-				const PnTypedIdx base = this->operator()(store, base_view);
-				const PnTypedIdx expo = this->operator()(store, input);
-				return PnTypedIdx(store.insert(FnParams<PnTypedIdx>{ base, expo, PnTypedIdx(), PnTypedIdx() }), Type(Fn::pow));
+				const TypedIdx base = this->operator()(store, base_view);
+				const TypedIdx expo = this->operator()(store, input);
+				return TypedIdx(store.insert(FnParams{ base, expo, TypedIdx(), TypedIdx() }), Type(Fn::pow));
 			} break;
 			case Head::Type::complex_computable: {
-				return build_value<PnTypedIdx>(store, compute::eval_complex(input));
+				return build_value(store, compute::eval_complex(input));
 			} break;
 			case Head::Type::natural_computable: { 
-				return build_value<PnTypedIdx>(store, compute::eval_natural(input));
+				return build_value(store, compute::eval_natural(input));
 			} break;
 			case Head::Type::real_value: {
-				return build_value<PnTypedIdx>(store, compute::parse_value(input));
+				return build_value(store, compute::parse_value(input));
 			} break;
 			case Head::Type::imag_value: {
 				input.remove_suffix(1u); //remove token::imag_unit
-				return build_value<PnTypedIdx>(store, Complex(0.0, compute::parse_value(input)));
+				return build_value(store, Complex(0.0, compute::parse_value(input)));
 			} break;
 			case Head::Type::function: {
-				return build_function<PnTypedIdx>(store, input, head.where, *this);
+				return build_function(store, input, head.where, *this);
 			} break;
 			case Head::Type::variable: {
 				if (input.chars[0u] == '\'') {
 					if (input.chars[input.size() - 1u] != '\'') [[unlikely]] throw ParseFailure{ input.offset + 1u, "found no matching \"'\"" };
-					return PnTypedIdx(str_slc::insert(store, input.to_string_view(1u, input.size() - 1u)), Type(Leaf::variable));
+					return TypedIdx(str_slc::insert(store, input.to_string_view(1u, input.size() - 1u)), Type(Leaf::variable));
 				}
 				else {
 					return this->table.insert_instance(store, input);
@@ -618,7 +606,7 @@ namespace bmath::intern {
 			} break;
 			default: 
 				assert(false); 
-				return PnTypedIdx();
+				return TypedIdx();
 			}
 		} //PatternBuildFunction::operator()
 
@@ -626,23 +614,11 @@ namespace bmath::intern {
 
 	namespace print {
 
-		template<typename Union_T, typename Type_T>
-		void append_to_string(const BasicRef<Union_T, Type_T> ref, std::string& str, const int parent_infixr)
+		void append_to_string(const Ref ref, std::string& str, const int parent_infixr)
 		{
-			using TypedIdx_T = BasicTypedIdx<Type_T>;
-			constexpr bool pattern = std::is_same_v<Type_T, pattern::PnType>;
-
-			if constexpr (pattern) {
-				if (!ref.store->valid_idx(ref.index) && ref.type != pattern::SingleMatch::value_proxy && !ref.type.is<pattern::MultiMatch>()) {
-					str.append("ERROR");
-					return;
-				}
-			}
-			else {
-				if (!ref.store->valid_idx(ref.index)) [[unlikely]] {
-					str.append("ERROR");
-					return;
-				}
+			if (!ref.store->valid_idx(ref.index) && ref.type != SingleMatch::value_proxy && !ref.type.is<MultiMatch>()) {
+				str.append("ERROR");
+				return;
 			}
 
 			const int own_infixr = infixr(ref.type);
@@ -651,27 +627,27 @@ namespace bmath::intern {
 			}
 
 			switch (ref.type) {
-			case Type_T(Op::sum): {
+			case Type(Op::sum): {
 				const char* seperator = "";
 				for (const auto summand : vc::range(ref)) {
 					str.append(std::exchange(seperator, "+"));
 					print::append_to_string(ref.new_at(summand), str, own_infixr);
 				}
 			} break;
-			case Type_T(Op::product): {
+			case Type(Op::product): {
 				const char* seperator = "";
 				for (const auto factor : vc::range(ref)) {
 					str.append(std::exchange(seperator, "*"));
 					print::append_to_string(ref.new_at(factor), str, own_infixr);
 				}
 			} break;
-			case Type_T(Fn::pow): {
-				const FnParams<TypedIdx_T>& params = *ref;
+			case Type(Fn::pow): {
+				const FnParams& params = *ref;
 				print::append_to_string(ref.new_at(params[0]), str, own_infixr);
 				str.push_back('^');
 				print::append_to_string(ref.new_at(params[1]), str, own_infixr);
 			} break;
-			case Type_T(Op::named_fn): {
+			case Type(Op::named_fn): {
 				const NamedFn& named_fn = *ref;
 				str.pop_back(); //pop open parenthesis
 				str.append(named_fn.name_view());
@@ -693,13 +669,13 @@ namespace bmath::intern {
 					print::append_to_string(ref.new_at(param), str, own_infixr);
 				}
 			} break;
-			case Type_T(Leaf::variable): {
+			case Type(Leaf::variable): {
 				str_slc::read(ref.cast<StringSLC>(), str);
 			} break;
-			case Type_T(Leaf::complex): {
+			case Type(Leaf::complex): {
 				append_complex(ref->complex, str, parent_infixr);
 			} break;
-			case Type_T(pattern::_tree_match): if constexpr (pattern) {
+			case Type(SingleMatch::tree): {
 				const pattern::TreeMatchVariable& var = *ref;
 				str.append("{T");
 				str.append(std::to_string(var.match_data_idx));
@@ -709,7 +685,7 @@ namespace bmath::intern {
 				}
 				str.push_back('}');
 			} break;
-			case Type_T(pattern::_value_match): if constexpr (pattern) {
+			case Type(SingleMatch::value): {
 				const pattern::ValueMatchVariable& var = *ref;
 				str.append("{V");
 				str.append(std::to_string(var.match_data_idx));
@@ -721,20 +697,20 @@ namespace bmath::intern {
 				print::append_to_string(ref.new_at(var.copy_idx), str);
 				str.push_back('}');
 			} break;
-			case Type_T(pattern::_value_proxy): if constexpr (pattern) {
+			case Type(SingleMatch::value_proxy): {
 				str.push_back('P');
 			} break;
-			case Type_T(pattern::_summands): if constexpr (pattern) {
+			case Type(MultiMatch::summands): {
 				str.push_back('S');
 				str.append(std::to_string(ref.index));
 				str.append("...");
 			} break;
-			case Type_T(pattern::_factors): if constexpr (pattern) {
+			case Type(MultiMatch::factors): {
 				str.push_back('F');
 				str.append(std::to_string(ref.index));
 				str.append("...");
 			} break;
-			case Type_T(pattern::_params): if constexpr (pattern) {
+			case Type(MultiMatch::params): {
 				str.push_back('P');
 				str.append(std::to_string(ref.index));
 				str.append("...");
@@ -745,10 +721,6 @@ namespace bmath::intern {
 				str.push_back(')');
 			}
 		} //append_to_string
-		template void append_to_string<TypesUnion, Type>(const Ref ref, std::string& str, const int parent_infixr);
-		template void append_to_string<pattern::PnTypesUnion, pattern::PnType>(const pattern::PnRef ref, std::string& str, const int parent_infixr);
-
-
 
 		std::string to_pretty_string(const Ref ref, const int parent_infixr)
 		{
@@ -769,7 +741,7 @@ namespace bmath::intern {
 			 //returns base, if ref is actually <base>^(-1)
 			const auto get_pow_neg1 = [get_negative_real](const Ref ref) -> std::optional<TypedIdx> {
 				if (ref.type == Fn::pow) {
-					const FnParams<TypedIdx>& params = *ref;
+					const FnParams& params = *ref;
 					if (const auto expo = get_negative_real(ref.new_at(params[1]))) {
 						if (*expo == -1.0) {
 							return { params[0] };
@@ -857,7 +829,7 @@ namespace bmath::intern {
 				append_product(vc::range(ref));
 			} break;
 			case Type(Fn::pow): {
-				const FnParams<TypedIdx>& params = *ref;
+				const FnParams& params = *ref;
 				if (const OptDouble negative_expo = get_negative_real(ref.new_at(params[1]))) {
 					str += "1/";
 					str += print::to_pretty_string(ref.new_at(params[0]), infixr(Type(Fn::pow)));
@@ -913,19 +885,14 @@ namespace bmath::intern {
 			}
 		} //to_pretty_string
 
-		template<typename Union_T, typename Type_T>
-		void append_memory_row(const BasicRef<Union_T, Type_T> ref, std::vector<std::string>& rows)
+		void append_memory_row(const Ref ref, std::vector<std::string>& rows)
 		{
-			using TypedIdx_T = BasicTypedIdx<Type_T>;
-			using TypedIdxSLC_T = TermSLC<TypedIdx_T>;
-			constexpr bool pattern = std::is_same_v<Type_T, pattern::PnType>;
-
 			const auto show_typedidx_col_nodes = [&ref, &rows](std::uint32_t idx, bool show_first) {
-				const TypedIdxSLC_T* col = &ref.store->at(idx).index_slc;
+				const TypedIdxSLC* col = &ref.store->at(idx).index_slc;
 				if (show_first) {
 					rows[idx].append("(SLC node part of index " + std::to_string(ref.index) + ')');
 				}
-				while (col->next_idx != TypedIdxSLC_T::null_index) {
+				while (col->next_idx != TypedIdxSLC::null_index) {
 					rows[col->next_idx].append("(SLC node part of index " + std::to_string(ref.index) + ')');
 					col = &ref.store->at(col->next_idx).index_slc;
 				}
@@ -944,22 +911,14 @@ namespace bmath::intern {
 				}
 			};
 
-			if constexpr (pattern) {
-				if (!ref.store->valid_idx(ref.index) && ref.type != pattern::SingleMatch::value_proxy && !ref.type.is<pattern::MultiMatch>()) {
-					rows.front().append(" ERROR");
-					return;
-				}
-			}
-			else {
-				if (!ref.store->valid_idx(ref.index)) [[unlikely]] {
-					rows.front().append(" ERROR");
-					return;
-				}
+			if (!ref.store->valid_idx(ref.index) && ref.type != SingleMatch::value_proxy && !ref.type.is<MultiMatch>()) {
+				rows.front().append("ERROR");
+				return;
 			}
 
 			std::string& current_str = rows[ref.index];
 			switch (ref.type) {
-			case Type_T(Op::sum): {
+			case Type(Op::sum): {
 				current_str.append("sum        : {");
 				const char* separator = "";
 				for (const auto elem : vc::range(ref)) {
@@ -970,10 +929,10 @@ namespace bmath::intern {
 				current_str.push_back('}');
 				show_typedidx_col_nodes(ref.index, false);
 			} break;
-			case Type_T(Op::product): {
+			case Type(Op::product): {
 				current_str.append("product    : {");
 				const char* separator = "";
-				const TypedIdxSLC_T test = *ref;
+				const TypedIdxSLC test = *ref;
 				for (const auto elem : vc::range(ref)) {
 					current_str.append(std::exchange(separator, ", "));
 					current_str.append(std::to_string(elem.get_index()));
@@ -982,7 +941,7 @@ namespace bmath::intern {
 				current_str.push_back('}');
 				show_typedidx_col_nodes(ref.index, false);
 			} break;
-			case Type_T(Op::named_fn): {
+			case Type(Op::named_fn): {
 				const NamedFn& named_fn = *ref;
 				current_str.append("function?  : {");
 				const char* separator = "";
@@ -1005,17 +964,17 @@ namespace bmath::intern {
 				}
 				current_str.push_back('}');
 			} break;
-			case Type_T(Leaf::variable): {
+			case Type(Leaf::variable): {
 				current_str.append("variable   : ");
 				show_string_nodes(ref.index, false);
 			} break;
-			case Type_T(Leaf::complex): {
+			case Type(Leaf::complex): {
 				current_str.append("value      : ");
 			} break;
-			case Type_T(pattern::_tree_match): if constexpr (pattern) {
+			case Type(SingleMatch::tree): {
 				current_str.append("tree : ");
 			} break;
-			case Type_T(pattern::_value_match): if constexpr (pattern) {
+			case Type(SingleMatch::value): {
 				const pattern::ValueMatchVariable& var = *ref;
 				current_str.append("value: {m:");
 				current_str.append(std::to_string(var.mtch_idx.get_index()));
@@ -1025,13 +984,13 @@ namespace bmath::intern {
 				print::append_memory_row(ref.new_at(var.mtch_idx), rows);
 				print::append_memory_row(ref.new_at(var.copy_idx), rows);
 			} break;
-			case Type_T(pattern::_value_proxy): 
+			case Type(SingleMatch::value_proxy): 
 				[[fallthrough]];
-			case Type_T(pattern::_summands):
+			case Type(MultiMatch::summands):
 				[[fallthrough]];
-			case Type_T(pattern::_factors):
+			case Type(MultiMatch::factors):
 				[[fallthrough]];
-			case Type_T(pattern::_params):
+			case Type(MultiMatch::params):
 				return;
 			}
 
@@ -1040,8 +999,7 @@ namespace bmath::intern {
 			print::append_to_string(ref, current_str, 0);
 		} //append_memory_row
 
-		template<typename Union_T, typename Type_T>
-		std::string to_memory_layout(const BasicStore<Union_T>& store, const std::initializer_list<const BasicTypedIdx<Type_T>> heads)
+		std::string to_memory_layout(const Store& store, const std::initializer_list<const TypedIdx> heads)
 		{
 			std::vector<std::string> rows(store.size(), "");
 
@@ -1052,7 +1010,7 @@ namespace bmath::intern {
 				for (const auto head : heads) {
 					result += std::exchange(separator, ", ");
 					result += std::to_string(head.get_index());
-					print::append_memory_row(BasicRef<Union_T, Type_T>(store, head), rows);
+					print::append_memory_row(Ref(store, head), rows);
 				}
 				result += "\n";
 			}
@@ -1074,17 +1032,10 @@ namespace bmath::intern {
 			}
 			return result;
 		} //to_memory_layout
-		template std::string to_memory_layout<TypesUnion, Type>(const Store& store, const std::initializer_list<const TypedIdx> head);
-		template std::string to_memory_layout<pattern::PnTypesUnion, pattern::PnType>(const pattern::PnStore& store, const std::initializer_list<const pattern::PnTypedIdx> head);
 
 		//line name assumes '\0' as last character
-		template<typename Union_T, typename Type_T>
-		void append_tree_row(const BasicRef<Union_T, Type_T> ref, std::vector<std::string>& rows, const std::size_t offset)
+		void append_tree_row(const Ref ref, std::vector<std::string>& rows, const std::size_t offset)
 		{
-			using TypedIdx_T = BasicTypedIdx<Type_T>;
-			using TypedIdxSLC_T = TermSLC<TypedIdx_T>;
-			constexpr bool pattern = std::is_same_v<Type_T, pattern::PnType>;
-
 			constexpr std::size_t tab_width = 3u; //specifies how may more characters the subtrees of ref are shifted right, compared to ref
 
 			rows.push_back(std::string(offset, ' '));
@@ -1114,40 +1065,40 @@ namespace bmath::intern {
 			}
 
 			switch (ref.type) {
-			case Type_T(Op::sum): {
+			case Type(Op::sum): {
 				current_str += "sum";
-				for (const TypedIdx_T summand : vc::range(ref)) {
+				for (const TypedIdx summand : vc::range(ref)) {
 					print::append_tree_row(ref.new_at(summand), rows, offset + tab_width);
 				}
 			} break;
-			case Type_T(Op::product): {
+			case Type(Op::product): {
 				current_str += "product";
-				for (const TypedIdx_T factor : vc::range(ref)) {
+				for (const TypedIdx factor : vc::range(ref)) {
 					print::append_tree_row(ref.new_at(factor), rows, offset + tab_width);
 				}
 			} break;
-			case Type_T(Op::named_fn): {
+			case Type(Op::named_fn): {
 				current_str.append(ref->named_fn.name_view());
-				for (const TypedIdx_T param : fn::range(ref)) {
+				for (const TypedIdx param : fn::range(ref)) {
 					print::append_tree_row(ref.new_at(param), rows, offset + tab_width);
 				}
 			} break;
 			default: {
 				assert(ref.type.is<Fn>());
 				current_str += fn::name_of(ref.type.to<Fn>());
-				for (const TypedIdx_T param : fn::range(ref->fn_params, ref.type)) {
+				for (const TypedIdx param : fn::range(ref->fn_params, ref.type)) {
 					print::append_tree_row(ref.new_at(param), rows, offset + tab_width);
 				}
 			} break;
-			case Type_T(Leaf::variable): {
+			case Type(Leaf::variable): {
 				current_str += ' ';
 				str_slc::read(ref.cast<StringSLC>(), current_str);
 			} break;
-			case Type_T(Leaf::complex): {
+			case Type(Leaf::complex): {
 				current_str += ' ';
 				print::append_complex(*ref, current_str, 0u);
 			} break;
-			case Type_T(pattern::_tree_match): if constexpr (pattern) {
+			case Type(SingleMatch::tree): {
 				const pattern::TreeMatchVariable& var = *ref;
 				current_str += "T";
 				current_str += std::to_string(var.match_data_idx);
@@ -1156,7 +1107,7 @@ namespace bmath::intern {
 					current_str += name_of(var.restr);
 				}
 			} break;
-			case Type_T(pattern::_value_match): if constexpr (pattern) {
+			case Type(SingleMatch::value): {
 				const pattern::ValueMatchVariable& var = *ref;
 				current_str += 'V';
 				current_str += std::to_string(var.match_data_idx);
@@ -1165,20 +1116,20 @@ namespace bmath::intern {
 				print::append_tree_row(ref.new_at(var.mtch_idx), rows, offset + tab_width);
 				print::append_tree_row(ref.new_at(var.copy_idx), rows, offset + tab_width);
 			} break;
-			case Type_T(pattern::_value_proxy): if constexpr (pattern) {
+			case Type(SingleMatch::value_proxy): {
 				current_str += 'P';			
 			} break;
-			case Type_T(pattern::_summands): if constexpr (pattern) {
+			case Type(MultiMatch::summands): {
 				current_str += 'S';		
 				current_str += std::to_string(ref.index);
 				current_str += "...";
 			} break;
-			case Type_T(pattern::_factors): if constexpr (pattern) {
+			case Type(MultiMatch::factors): {
 				current_str += 'F';		
 				current_str += std::to_string(ref.index);
 				current_str += "...";
 			} break;
-			case Type_T(pattern::_params): if constexpr (pattern) {
+			case Type(MultiMatch::params): {
 				current_str += 'P';		
 				current_str += std::to_string(ref.index);
 				current_str += "...";
@@ -1186,8 +1137,7 @@ namespace bmath::intern {
 			}
 		} //append_tree_row
 
-		template<typename Union_T, typename Type_T>
-		std::string to_tree(const BasicRef<Union_T, Type_T> ref, const std::size_t offset)
+		std::string to_tree(const Ref ref, const std::size_t offset)
 		{
 			std::vector<std::string> rows;
 			rows.push_back(std::string(offset, ' ') + "head");
@@ -1201,8 +1151,6 @@ namespace bmath::intern {
 
 			return result;
 		} //to_tree
-		template std::string to_tree<TypesUnion, Type>(const Ref ref, const std::size_t offset);
-		template std::string to_tree<pattern::PnTypesUnion, pattern::PnType>(const pattern::PnRef ref, const std::size_t offset);
 
 	} //namespace print
 

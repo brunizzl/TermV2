@@ -16,88 +16,88 @@ namespace bmath::intern::debug {
 	void enumerate_pn_type()
 	{
 		using namespace pattern;
-		static_assert(unsigned(Type::COUNT) == unsigned(PnType(Type::COUNT)), "else at least a second version of this function is needed");
+		static_assert(unsigned(Type::COUNT) == unsigned(Type(Type::COUNT)), "else at least a second version of this function is needed");
 		std::cout
-			<< "PnType(Op::sum)                 = " << unsigned(PnType(Op::sum))                 << "\n"
-			<< "PnType(Op::product)             = " << unsigned(PnType(Op::product))             << "\n"
-			<< "PnType(Op::named_fn)            = " << unsigned(PnType(Op::named_fn))            << "\n"
+			<< "Type(Op::sum)                 = " << unsigned(Type(Op::sum))                 << "\n"
+			<< "Type(Op::product)             = " << unsigned(Type(Op::product))             << "\n"
+			<< "Type(Op::named_fn)            = " << unsigned(Type(Op::named_fn))            << "\n"
 			                                                                                     << "\n"
-			<< "PnType(Leaf::variable)          = " << unsigned(PnType(Leaf::variable))          << "\n"
-			<< "PnType(Leaf::complex)           = " << unsigned(PnType(Leaf::complex))           << "\n"
+			<< "Type(Leaf::variable)          = " << unsigned(Type(Leaf::variable))          << "\n"
+			<< "Type(Leaf::complex)           = " << unsigned(Type(Leaf::complex))           << "\n"
 			                                                                                     << "\n"
-			<< "PnType(Fn::pow)                 = " << unsigned(PnType(Fn::pow))                 << "\n"
-			<< "PnType(Fn::log)                 = " << unsigned(PnType(Fn::log))                 << "\n"
-			<< "PnType(Fn::sqrt)                = " << unsigned(PnType(Fn::sqrt))                << "\n"
-			<< "PnType(Fn::exp)                 = " << unsigned(PnType(Fn::exp))                 << "\n"
-			<< "PnType(Fn::ln)                  = " << unsigned(PnType(Fn::ln))                  << "\n"
-			<< "PnType(Fn::sin)                 = " << unsigned(PnType(Fn::sin))                 << "\n"
-			<< "PnType(Fn::cos)                 = " << unsigned(PnType(Fn::cos))                 << "\n"
-			<< "PnType(Fn::tan)                 = " << unsigned(PnType(Fn::tan))                 << "\n"
-			<< "PnType(Fn::sinh)                = " << unsigned(PnType(Fn::sinh))                << "\n"
-			<< "PnType(Fn::cosh)                = " << unsigned(PnType(Fn::cosh))                << "\n"
-			<< "PnType(Fn::tanh)                = " << unsigned(PnType(Fn::tanh))                << "\n"
-			<< "PnType(Fn::asin)                = " << unsigned(PnType(Fn::asin))                << "\n"
-			<< "PnType(Fn::acos)                = " << unsigned(PnType(Fn::acos))                << "\n"
-			<< "PnType(Fn::atan)                = " << unsigned(PnType(Fn::atan))                << "\n"
-			<< "PnType(Fn::asinh)               = " << unsigned(PnType(Fn::asinh))               << "\n"
-			<< "PnType(Fn::acosh)               = " << unsigned(PnType(Fn::acosh))               << "\n"
-			<< "PnType(Fn::atanh)               = " << unsigned(PnType(Fn::atanh))               << "\n"
-			<< "PnType(Fn::abs)                 = " << unsigned(PnType(Fn::abs))                 << "\n"
-			<< "PnType(Fn::arg)                 = " << unsigned(PnType(Fn::arg))                 << "\n"
-			<< "PnType(Fn::re)                  = " << unsigned(PnType(Fn::re))                  << "\n"
-			<< "PnType(Fn::im)                  = " << unsigned(PnType(Fn::im))                  << "\n"
-			<< "PnType(Fn::force)               = " << unsigned(PnType(Fn::force))               << "\n"
+			<< "Type(Fn::pow)                 = " << unsigned(Type(Fn::pow))                 << "\n"
+			<< "Type(Fn::log)                 = " << unsigned(Type(Fn::log))                 << "\n"
+			<< "Type(Fn::sqrt)                = " << unsigned(Type(Fn::sqrt))                << "\n"
+			<< "Type(Fn::exp)                 = " << unsigned(Type(Fn::exp))                 << "\n"
+			<< "Type(Fn::ln)                  = " << unsigned(Type(Fn::ln))                  << "\n"
+			<< "Type(Fn::sin)                 = " << unsigned(Type(Fn::sin))                 << "\n"
+			<< "Type(Fn::cos)                 = " << unsigned(Type(Fn::cos))                 << "\n"
+			<< "Type(Fn::tan)                 = " << unsigned(Type(Fn::tan))                 << "\n"
+			<< "Type(Fn::sinh)                = " << unsigned(Type(Fn::sinh))                << "\n"
+			<< "Type(Fn::cosh)                = " << unsigned(Type(Fn::cosh))                << "\n"
+			<< "Type(Fn::tanh)                = " << unsigned(Type(Fn::tanh))                << "\n"
+			<< "Type(Fn::asin)                = " << unsigned(Type(Fn::asin))                << "\n"
+			<< "Type(Fn::acos)                = " << unsigned(Type(Fn::acos))                << "\n"
+			<< "Type(Fn::atan)                = " << unsigned(Type(Fn::atan))                << "\n"
+			<< "Type(Fn::asinh)               = " << unsigned(Type(Fn::asinh))               << "\n"
+			<< "Type(Fn::acosh)               = " << unsigned(Type(Fn::acosh))               << "\n"
+			<< "Type(Fn::atanh)               = " << unsigned(Type(Fn::atanh))               << "\n"
+			<< "Type(Fn::abs)                 = " << unsigned(Type(Fn::abs))                 << "\n"
+			<< "Type(Fn::arg)                 = " << unsigned(Type(Fn::arg))                 << "\n"
+			<< "Type(Fn::re)                  = " << unsigned(Type(Fn::re))                  << "\n"
+			<< "Type(Fn::im)                  = " << unsigned(Type(Fn::im))                  << "\n"
+			<< "Type(Fn::force)               = " << unsigned(Type(Fn::force))               << "\n"
 			                                                                                     << "\n"
-			<< "PnType(SingleMatch::tree)       = " << unsigned(PnType(SingleMatch::tree))       << "\n"
-			<< "PnType(SingleMatch::value)      = " << unsigned(PnType(SingleMatch::value))      << "\n"
-			<< "PnType(SingleMatch::value_proxy)      = " << unsigned(PnType(SingleMatch::value_proxy))      << "\n"
+			<< "Type(SingleMatch::tree)       = " << unsigned(Type(SingleMatch::tree))       << "\n"
+			<< "Type(SingleMatch::value)      = " << unsigned(Type(SingleMatch::value))      << "\n"
+			<< "Type(SingleMatch::value_proxy)      = " << unsigned(Type(SingleMatch::value_proxy))      << "\n"
 			                                                                                     << "\n"
-			<< "PnType(MultiMatch::summands)      = " << unsigned(PnType(MultiMatch::summands))      << "\n"
-			<< "PnType(MultiMatch::factors)       = " << unsigned(PnType(MultiMatch::factors))       << "\n"
-			<< "PnType(MultiMatch::params)        = " << unsigned(PnType(MultiMatch::params))        << "\n"
+			<< "Type(MultiMatch::summands)      = " << unsigned(Type(MultiMatch::summands))      << "\n"
+			<< "Type(MultiMatch::factors)       = " << unsigned(Type(MultiMatch::factors))       << "\n"
+			<< "Type(MultiMatch::params)        = " << unsigned(Type(MultiMatch::params))        << "\n"
 			                                                                                     << "\n"
 			                                                                                     << "\n"
 			;
 	} //enumerate_pn_type
 
 	//output as of 20.12.2020:
-	//PnType(Op::sum)                 = 0
-	//PnType(Op::product)             = 1
-	//PnType(Op::named_fn)            = 2
+	//Type(Op::sum)                 = 0
+	//Type(Op::product)             = 1
+	//Type(Op::named_fn)            = 2
 	//
-	//PnType(Leaf::variable)          = 3
-	//PnType(Leaf::complex)           = 4
+	//Type(Leaf::variable)          = 3
+	//Type(Leaf::complex)           = 4
 	//
-	//PnType(Fn::pow)                 = 5
-	//PnType(Fn::log)                 = 6
-	//PnType(Fn::sqrt)                = 7
-	//PnType(Fn::exp)                 = 8
-	//PnType(Fn::ln)                  = 9
-	//PnType(Fn::sin)                 = 10
-	//PnType(Fn::cos)                 = 11
-	//PnType(Fn::tan)                 = 12
-	//PnType(Fn::sinh)                = 13
-	//PnType(Fn::cosh)                = 14
-	//PnType(Fn::tanh)                = 15
-	//PnType(Fn::asin)                = 16
-	//PnType(Fn::acos)                = 17
-	//PnType(Fn::atan)                = 18
-	//PnType(Fn::asinh)               = 19
-	//PnType(Fn::acosh)               = 20
-	//PnType(Fn::atanh)               = 21
-	//PnType(Fn::abs)                 = 22
-	//PnType(Fn::arg)                 = 23
-	//PnType(Fn::re)                  = 24
-	//PnType(Fn::im)                  = 25
-	//PnType(Fn::force)               = 26
+	//Type(Fn::pow)                 = 5
+	//Type(Fn::log)                 = 6
+	//Type(Fn::sqrt)                = 7
+	//Type(Fn::exp)                 = 8
+	//Type(Fn::ln)                  = 9
+	//Type(Fn::sin)                 = 10
+	//Type(Fn::cos)                 = 11
+	//Type(Fn::tan)                 = 12
+	//Type(Fn::sinh)                = 13
+	//Type(Fn::cosh)                = 14
+	//Type(Fn::tanh)                = 15
+	//Type(Fn::asin)                = 16
+	//Type(Fn::acos)                = 17
+	//Type(Fn::atan)                = 18
+	//Type(Fn::asinh)               = 19
+	//Type(Fn::acosh)               = 20
+	//Type(Fn::atanh)               = 21
+	//Type(Fn::abs)                 = 22
+	//Type(Fn::arg)                 = 23
+	//Type(Fn::re)                  = 24
+	//Type(Fn::im)                  = 25
+	//Type(Fn::force)               = 26
 	//
-	//PnType(PnVar::tree)       = 27
-	//PnType(PnVar::value)      = 28
-	//PnType(PnVar::value_proxy)      = 29
+	//Type(PnVar::tree)       = 27
+	//Type(PnVar::value)      = 28
+	//Type(PnVar::value_proxy)      = 29
 	//
-	//PnType(MultiMatch::summands)      = 30
-	//PnType(MultiMatch::factors)       = 31
-	//PnType(MultiMatch::params)        = 32
+	//Type(MultiMatch::summands)      = 30
+	//Type(MultiMatch::factors)       = 31
+	//Type(MultiMatch::params)        = 32
 
 	void test_rechner() 
 	{

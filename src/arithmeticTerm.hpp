@@ -59,17 +59,40 @@ namespace bmath::intern {
 		COUNT
 	};
 
-	using Type = SumEnum<Fn, Leaf, Op>;
+	using Math = SumEnum<Fn, Leaf, Op>;
+
+
+
+	//not expeced to be present in normal Term, only in Patterns
+	enum class SingleMatch 
+	{ 
+		tree, 
+		value,
+		value_proxy, //not actual node in tree, just "end" indicator for value subtrees
+		COUNT 
+	};
+
+	//not expeced to be present in normal Term, only in Patterns
+	//represent not actual node in pattern tree, as all match info is stored in MultiMatchDatum in MatchData		
+	enum class MultiMatch 
+	{ 
+		summands, 
+		factors, 
+		params, 
+		COUNT 
+	};
+
+	using PnVar = SumEnum<MultiMatch, SingleMatch>;
+
+
+	using Type = SumEnum<PnVar, Math>;
 
 	using TypedIdx = BasicTypedIdx<Type>;
+
 	using TypedIdxSLC = TermSLC<TypedIdx>;
-
-	using Sum     = TypedIdxSLC;
-	using Product = TypedIdxSLC;
-
-	//if any buildin funtion exeeds a parameter count of 4, a more involved structure needs to replace this.
-	template<typename TypedIdx_T>
-	using FnParams = std::array<TypedIdx_T, 4>;
+	using FnParams = std::array<TypedIdx, 4>;
+	using Variable = StringSLC;
+	using Complex = std::complex<double>;
 
 	struct NamedFn
 	{
@@ -82,81 +105,7 @@ namespace bmath::intern {
 		constexpr std::string_view name_view() const noexcept { return { this->name, this->name_size() }; }
 	};
 
-	using Variable = StringSLC;
-	using Complex = std::complex<double>;
-
-	union TypesUnion
-	{
-	private:
-		char unused; //allows to constexpr default construct union without initialisation
-	public:
-		FnParams<TypedIdx> fn_params;
-		NamedFn named_fn;
-		Complex complex;
-		TypedIdxSLC index_slc; //representing NamedFn's extra parameters and Sum and Product 
-		StringSLC string;	//Variable is a string
-
-		constexpr TypesUnion(const FnParams<TypedIdx>& val) noexcept :fn_params(val)        {}
-		constexpr TypesUnion(const NamedFn&            val) noexcept :named_fn(val)         {}
-		constexpr TypesUnion(const Complex&            val) noexcept :complex(val)          {}
-		constexpr TypesUnion(const TypedIdxSLC&        val) noexcept :index_slc(val)        {}
-		constexpr TypesUnion(const StringSLC&          val) noexcept :string(val)           {} 
-		constexpr TypesUnion()                              noexcept :unused(0)             {}
-
-		constexpr auto operator<=>(const TypesUnion&) const = default;
-
-		constexpr operator const FnParams<TypedIdx> &() const noexcept { return this->fn_params; }
-		constexpr operator const NamedFn            &() const noexcept { return this->named_fn; }
-		constexpr operator const Complex            &() const noexcept { return this->complex; }
-		constexpr operator const TypedIdxSLC        &() const noexcept { return this->index_slc; }
-		constexpr operator const StringSLC          &() const noexcept { return this->string; }
-
-		constexpr operator FnParams<TypedIdx> &() noexcept { return this->fn_params; }
-		constexpr operator NamedFn            &() noexcept { return this->named_fn; }
-		constexpr operator Complex            &() noexcept { return this->complex; }
-		constexpr operator TypedIdxSLC        &() noexcept { return this->index_slc; }
-		constexpr operator StringSLC          &() noexcept { return this->string; }
-	};
-
-	static_assert(sizeof(TypesUnion) * 8 == 128);
-	using Store = BasicStore<TypesUnion>;
-
-
-	using MutRef = BasicMutRef<TypesUnion, Type>;
-	using Ref = BasicRef<TypesUnion, Type>;
-
-
 	namespace pattern {
-
-		enum class SingleMatch 
-		{ 
-			tree, 
-			value,
-			value_proxy, //not actual node in tree, just "end" indicator for value subtrees
-			COUNT 
-		};
-
-		//represent not actual node in pattern tree, as all match info is stored in MultiMatchDatum in MatchData		
-		enum class MultiMatch { summands, factors, params, COUNT };
-
-		using PnVar = SumEnum<MultiMatch, SingleMatch>;
-
-		using PnType = SumEnum<PnVar, Type>; //dont list all enums making up Type directly, to allow converion to Type
-
-		//as the usual Term does not know special pattern elements, these constants serve as placeholders for
-		//  the actual PnType instances to also allow them beeing used in templates compiled to both pattern and normal term.
-		static constexpr unsigned _tree_match  = unsigned(PnType(SingleMatch::tree));
-		static constexpr unsigned _value_match = unsigned(PnType(SingleMatch::value));
-		static constexpr unsigned _value_proxy = unsigned(PnType(SingleMatch::value_proxy));
-		static constexpr unsigned _summands    = unsigned(PnType(MultiMatch::summands));
-		static constexpr unsigned _factors     = unsigned(PnType(MultiMatch::factors));
-		static constexpr unsigned _params      = unsigned(PnType(MultiMatch::params));
-
-		using PnTypedIdx = BasicTypedIdx<PnType>;
-		using PnTypedIdxSLC = TermSLC<PnTypedIdx>;
-
-		using PnSum = PnTypedIdxSLC;
-		using PnProduct = PnTypedIdxSLC;
 
 		enum class Restr
 		{
@@ -169,9 +118,7 @@ namespace bmath::intern {
 
 		//note: of Type, only sum, product, complex or variable may be used, as there is (currently)
 		//  no need to differentiate between any of the functions of Fn and unknown_function.
-		using Restriction = SumEnum<Restr, Type>; 
-
-		bool meets_restriction(const Ref ref, const Restriction restr);
+		using Restriction = SumEnum<Restr, Math>; 
 
 		//in a valid pattern, all TreeMatchVariables of same name share the same restr and the same match_data_idx.
 		//it is allowed to have multiple instances of the same TreeMatchVariable per side.
@@ -179,12 +126,12 @@ namespace bmath::intern {
 		struct TreeMatchVariable
 		{
 			std::uint32_t match_data_idx; //indexes in MatchData::tree_match_data
-			Restriction restr = Restr::any;
+			Restriction restr = pattern::Restr::any;
 		};
 
 		//although the type MultiMatchVariable does not exist as type of node in term, oder nodes may reference it
 		// (now called PnVariable::summands or PnVariable::factors)
-		//Meaning: if some PnTypedIdx has .get_type() == PnVariable::summands, all data of this node are stored in MatchData at
+		//Meaning: if some TypedIdx has .get_type() == PnVariable::summands, all data of this node are stored in MatchData at
 		//  .get_index(), not in the pattern tree (same goes for .get_type() == PnVariable::factors).
 		//The concept of a (imagined) MultiMatchVariable is quite similar to TreeMatchVariable with Restr::any, 
 		//but it can match multiple summands / factors in same sum / product, not only a single one.
@@ -209,8 +156,6 @@ namespace bmath::intern {
 			COUNT
 		};
 
-		bool has_form(const Complex& nr, const Form form);
-
 		//in a valid pattern, all ValueMatchVariables of same name (although that is thrown away after building) 
 		//share the same form and the same MatchData index
 		//it is allowed to have multiple instances of the same ValueMatchVariable per side.
@@ -222,83 +167,92 @@ namespace bmath::intern {
 		//  to indicate the original position of k.
 		//to still allow to copy "2*k+1", the copy_idx of k contains a copy of the original suroundings of k, but again with a "p"
 		//  in there: "2*p+1". this "p" is required to also store ValueMatchVariable::match_data_idx as it's index.
-		//in praxis a PnTypedIdx with .get_type() == PnVariable::value_proxy works similar to (imagined) MultiMatchVariable, as
+		//in praxis a TypedIdx with .get_type() == PnVariable::value_proxy works similar to (imagined) MultiMatchVariable, as
 		//  .get_index() also does not point in store of pattern, but in an array of MatchData.
 		struct ValueMatchVariable
 		{
-			PnTypedIdx mtch_idx;
-			PnTypedIdx copy_idx;
+			TypedIdx mtch_idx;
+			TypedIdx copy_idx;
 			std::uint32_t match_data_idx; //indexes in MatchData::value_match_data
 			Form form = Form::real;
 
 			ValueMatchVariable(std::uint32_t new_match_data_idx, Form new_form)
-				:mtch_idx(PnTypedIdx(new_match_data_idx, SingleMatch::value_proxy)),
-				copy_idx(PnTypedIdx(new_match_data_idx, SingleMatch::value_proxy)),
+				:mtch_idx(TypedIdx(new_match_data_idx, SingleMatch::value_proxy)),
+				copy_idx(TypedIdx(new_match_data_idx, SingleMatch::value_proxy)),
 				match_data_idx(new_match_data_idx), form(new_form)
 			{}
 		};
 
-		union PnTypesUnion
-		{
-		private:
-			char unused; //allows to constexpr default construct union without initialisation
-
-		public:
-			FnParams<PnTypedIdx> fn_params;
-			NamedFn named_fn;
-			Complex complex;
-			PnTypedIdxSLC index_slc; //representing NamedFn's extra parameters and Sum and Product 
-			StringSLC string;	//PnVariable is a string
-			TreeMatchVariable tree;
-			ValueMatchVariable value;
-
-			constexpr PnTypesUnion(const FnParams<PnTypedIdx>& val) noexcept :fn_params(val)        {}
-			constexpr PnTypesUnion(const NamedFn&              val) noexcept :named_fn(val)         {}
-			constexpr PnTypesUnion(const Complex&              val) noexcept :complex(val)          {}
-			constexpr PnTypesUnion(const PnTypedIdxSLC&        val) noexcept :index_slc(val)        {}
-			constexpr PnTypesUnion(const StringSLC&            val) noexcept :string(val)           {} 
-			constexpr PnTypesUnion(const TreeMatchVariable&    val) noexcept :tree(val)       {} 
-			constexpr PnTypesUnion(const ValueMatchVariable&   val) noexcept :value(val)      {} 
-			constexpr PnTypesUnion()                                noexcept :unused(0)             {} 
-
-			constexpr auto operator<=>(const PnTypesUnion&) const = default;
-
-			constexpr operator const FnParams<PnTypedIdx> &() const noexcept { return this->fn_params; }
-			constexpr operator const NamedFn              &() const noexcept { return this->named_fn; }
-			constexpr operator const Complex              &() const noexcept { return this->complex; }
-			constexpr operator const PnTypedIdxSLC        &() const noexcept { return this->index_slc; }
-			constexpr operator const StringSLC            &() const noexcept { return this->string; }
-			constexpr operator const TreeMatchVariable    &() const noexcept { return this->tree; }
-			constexpr operator const ValueMatchVariable   &() const noexcept { return this->value; }
-
-			constexpr operator FnParams<PnTypedIdx> &() noexcept { return this->fn_params; }
-			constexpr operator NamedFn              &() noexcept { return this->named_fn; }
-			constexpr operator Complex              &() noexcept { return this->complex; }
-			constexpr operator PnTypedIdxSLC        &() noexcept { return this->index_slc; }
-			constexpr operator StringSLC            &() noexcept { return this->string; }
-			constexpr operator TreeMatchVariable    &() noexcept { return this->tree; }
-			constexpr operator ValueMatchVariable   &() noexcept { return this->value; }
-		};
-		static_assert(sizeof(PnTypesUnion) * 8 == 128);
-
-		using PnStore = BasicStore<PnTypesUnion>;
-
-		using PnMutRef = BasicMutRef<PnTypesUnion, PnType>;
-		using PnRef = BasicRef<PnTypesUnion, PnType>;
+	} //namespace pattern
 
 
+
+	union TypesUnion
+	{
+	private:
+		char unused; //allows to constexpr default construct union without initialisation
+	public:
+		FnParams fn_params;
+		NamedFn named_fn;
+		Complex complex;
+		TypedIdxSLC index_slc; //representing NamedFn's extra parameters and Sum and Product 
+		StringSLC string;	//Variable is a string
+		pattern::TreeMatchVariable tree;    //only expected as part of pattern
+		pattern::ValueMatchVariable value;  //only expected as part of pattern
+
+		constexpr TypesUnion(const FnParams                   & val) noexcept :fn_params(val) {}
+		constexpr TypesUnion(const NamedFn                    & val) noexcept :named_fn(val)  {}
+		constexpr TypesUnion(const Complex                    & val) noexcept :complex(val)   {}
+		constexpr TypesUnion(const TypedIdxSLC                & val) noexcept :index_slc(val) {}
+		constexpr TypesUnion(const StringSLC                  & val) noexcept :string(val)    {} 
+		constexpr TypesUnion(const pattern::TreeMatchVariable & val) noexcept :tree(val)      {} 
+		constexpr TypesUnion(const pattern::ValueMatchVariable& val) noexcept :value(val)     {} 
+		constexpr TypesUnion()                                       noexcept :unused(0)      {} 
+
+		constexpr auto operator<=>(const TypesUnion&) const = default;
+
+		constexpr operator const FnParams                    &() const noexcept { return this->fn_params; }
+		constexpr operator const NamedFn                     &() const noexcept { return this->named_fn; }
+		constexpr operator const Complex                     &() const noexcept { return this->complex; }
+		constexpr operator const TypedIdxSLC                 &() const noexcept { return this->index_slc; }
+		constexpr operator const StringSLC                   &() const noexcept { return this->string; }
+		constexpr operator const pattern::TreeMatchVariable  &() const noexcept { return this->tree; }
+		constexpr operator const pattern::ValueMatchVariable &() const noexcept { return this->value; }
+
+		constexpr operator FnParams                    &() noexcept { return this->fn_params; }
+		constexpr operator NamedFn                     &() noexcept { return this->named_fn; }
+		constexpr operator Complex                     &() noexcept { return this->complex; }
+		constexpr operator TypedIdxSLC                 &() noexcept { return this->index_slc; }
+		constexpr operator StringSLC                   &() noexcept { return this->string; }
+		constexpr operator pattern::TreeMatchVariable  &() noexcept { return this->tree; }
+		constexpr operator pattern::ValueMatchVariable &() noexcept { return this->value; }
+	};
+
+	static_assert(sizeof(TypesUnion) * 8 == 128);
+	using Store = BasicStore<TypesUnion>;
+
+
+	using MutRef = BasicMutRef<TypesUnion, Type>;
+	using Ref = BasicRef<TypesUnion, Type>;
+
+
+	namespace pattern {
+
+		bool meets_restriction(const Ref ref, const Restriction restr);
+
+		bool has_form(const Complex& nr, const Form form);
 
 		//all MatchVariables of same name in pattern (e.g. "a" in pattern "a*b+a" share the same SharedTreeDatum to know 
 		//whitch actually matched, and if the name "a" is already matched, even if the current instance is not.
 		struct SharedTreeDatum
 		{
 			TypedIdx mtch_idx = TypedIdx{}; //indexes in Term to simplify
-			PnTypedIdx responsible = PnTypedIdx{}; //the instance of TreeMatchVariable that was setting mtch_idx
+			TypedIdx responsible = TypedIdx{}; //the instance of TreeMatchVariable that was setting mtch_idx
 
 			constexpr bool is_set() const noexcept
 			{
-				assert(equivalent(this->responsible != PnTypedIdx{}, this->mtch_idx != TypedIdx{}));
-				return  this->responsible != PnTypedIdx{};
+				assert(equivalent(this->responsible != TypedIdx{}, this->mtch_idx != TypedIdx{}));
+				return  this->responsible != TypedIdx{};
 			}
 		};
 
@@ -311,12 +265,12 @@ namespace bmath::intern {
 		{
 			Complex value = 0.0;
 			TypedIdx mtch_idx = TypedIdx{}; //indexes in Term to simplify (only usefull during rematch to only match later elements)
-			PnTypedIdx responsible = PnTypedIdx{}; //the instance of ValueMatchVariable that was setting value
+			TypedIdx responsible = TypedIdx{}; //the instance of ValueMatchVariable that was setting value
 
 			constexpr bool is_set() const noexcept
 			{
-				assert(equivalent(this->value != 0.0, this->responsible != PnTypedIdx{}, this->mtch_idx != TypedIdx{}));
-				return  this->responsible != PnTypedIdx{};
+				assert(equivalent(this->value != 0.0, this->responsible != TypedIdx{}, this->mtch_idx != TypedIdx{}));
+				return  this->responsible != TypedIdx{};
 			}
 		};
 
@@ -342,10 +296,10 @@ namespace bmath::intern {
 
 		struct PnTerm
 		{
-			PnTypedIdx lhs_head;
-			PnTypedIdx rhs_head;
-			PnStore lhs_store;
-			PnStore rhs_store;
+			TypedIdx lhs_head;
+			TypedIdx rhs_head;
+			Store lhs_store;
+			Store rhs_store;
 
 			PnTerm(std::string name);
 			std::string to_string() const;
@@ -354,10 +308,10 @@ namespace bmath::intern {
 			std::string lhs_tree(const std::size_t offset = 0u) const;
 			std::string rhs_tree(const std::size_t offset = 0u) const;
 
-			PnMutRef lhs_mut_ref() noexcept { return PnMutRef(this->lhs_store, this->lhs_head); }
-			PnMutRef rhs_mut_ref() noexcept { return PnMutRef(this->rhs_store, this->rhs_head); }
-			PnRef lhs_ref() const noexcept { return PnRef(this->lhs_store, this->lhs_head); }
-			PnRef rhs_ref() const noexcept { return PnRef(this->rhs_store, this->rhs_head); }
+			MutRef lhs_mut_ref() noexcept { return MutRef(this->lhs_store, this->lhs_head); }
+			MutRef rhs_mut_ref() noexcept { return MutRef(this->rhs_store, this->rhs_head); }
+			Ref lhs_ref() const noexcept { return Ref(this->lhs_store, this->lhs_head); }
+			Ref rhs_ref() const noexcept { return Ref(this->rhs_store, this->rhs_head); }
 		};
 
 		//algorithms specific to patterns
@@ -366,22 +320,22 @@ namespace bmath::intern {
 			//returns pointer to position in parent of value, where value is to be held in future
 			// (currently value is only somewhere in the subtree that it will own, not nesseccarily at the root.
 			//assumes head to be passed at reference to its own storage position
-			PnTypedIdx* find_value_match_subtree(PnStore& store, PnTypedIdx& head, const PnTypedIdx value);
+			TypedIdx* find_value_match_subtree(Store& store, TypedIdx& head, const TypedIdx value);
 
 			//changes value from its state holding two value_proxy directly to actually
 			//having copy_idx and mtch_idx initialized (thus value also bubbles up a bit in term)
-			void rearrange_value_match(PnStore& store, PnTypedIdx& head, const PnTypedIdx value);
+			void rearrange_value_match(Store& store, TypedIdx& head, const TypedIdx value);
 
-			struct Equation { PnTypedIdx lhs_head, rhs_head; };
+			struct Equation { TypedIdx lhs_head, rhs_head; };
 
 			//reorders lhs and rhs until to_isolate is lhs_head, returns updated lhs_head and rhs_head
 			//(possible other subtrees identical to to_isolate are not considered, thus the name prefix)
 			//currently only used in rearrange_value_match, thus quite specialized
-			[[nodiscard]] Equation stupid_solve_for(PnStore& store, Equation eq, const PnTypedIdx to_isolate);
+			[[nodiscard]] Equation stupid_solve_for(Store& store, Equation eq, const TypedIdx to_isolate);
 
 			//mostly stripped down version of tree::combine_values_exact to find calculate SharedValueDatum.value
 			// from the start_val taken out of matched term
-			OptComplex eval_value_match(const PnRef ref, const Complex& start_val);
+			OptComplex eval_value_match(const Ref ref, const Complex& start_val);
 
 		} //namespace pn_tree
 
@@ -434,17 +388,15 @@ namespace bmath::intern {
 		constexpr std::size_t param_count(const Fn type) noexcept 
 		{ return props_table[static_cast<unsigned>(type)].param_count; }
 
-		constexpr std::size_t param_count(const pattern::PnType type) noexcept 
+		constexpr std::size_t param_count(const Type type) noexcept 
 		{ return props_table[static_cast<unsigned>(type.to<Fn>())].param_count; }
 
 
 
-		template<typename TypedIdx_T, typename Type_T>
-		constexpr std::span<TypedIdx_T> range(FnParams<TypedIdx_T>& params, const Type_T type) noexcept
+		constexpr std::span<TypedIdx> range(FnParams& params, const Type type) noexcept
 		{ return { params.data(), param_count(type) }; }
 
-		template<typename TypedIdx_T, typename Type_T>
-		constexpr std::span<const TypedIdx_T> range(const FnParams<TypedIdx_T>& params, const Type_T type) noexcept
+		constexpr std::span<const TypedIdx> range(const FnParams& params, const Type type) noexcept
 		{ return { params.data(), param_count(type) }; }
 
 
@@ -455,13 +407,6 @@ namespace bmath::intern {
 			return ref.new_as<TypedIdxSLC>(ref->named_fn.params_idx); 
 		}
 
-		template<Const is_const>
-		constexpr auto range(const BasicRef<pattern::PnTypesUnion, pattern::PnType, is_const> ref) noexcept 
-		{ 
-			assert(ref.type == Op::named_fn);
-			return ref.new_as<pattern::PnTypedIdxSLC>(ref->named_fn.params_idx); 
-		}
-
 	} //namespace fn
 
 	//utility for variadic types (Sum and Product)
@@ -469,61 +414,47 @@ namespace bmath::intern {
 
 		inline auto range(const MutRef ref) noexcept { return ref.cast<TypedIdxSLC>(); }
 		inline auto range(const    Ref ref) noexcept { return ref.cast<TypedIdxSLC>(); }
-
-		inline auto range(const pattern::PnMutRef ref) noexcept { return ref.cast<pattern::PnTypedIdxSLC>(); }
-		inline auto range(const    pattern::PnRef ref) noexcept { return ref.cast<pattern::PnTypedIdxSLC>(); }
-
 	} //namespace vc
 
 	//general purpose recursive tree traversal
 	namespace tree {
 
 		//removes subtree starting at ref from store
-		template<typename Union_T, typename Type_T>
-		void free(const BasicMutRef<Union_T, Type_T> ref);
+		void free(const MutRef ref);
 
 		//flattens sums holding sums as summands and products holding products as factors
 		//evaluates parts that can be evaluated (if exact, only those, that can be exact evaluated)
 		//eliminates unescesary indirections like sums with a single summand or products with a single factor
 		//returns new location and type of ref
-		template<typename Union_T, typename Type_T>
-		[[nodiscard]] BasicTypedIdx<Type_T> combine(const BasicMutRef<Union_T, Type_T> ref, const bool exact);
+		[[nodiscard]] TypedIdx combine(const MutRef ref, const bool exact);
 
 		//compares two subterms of perhaps different stores, assumes both to have their variadic parts sorted
-		template<typename Union_T1, typename Type_T1, typename Union_T2, typename Type_T2>
-		[[nodiscard]] std::strong_ordering compare(const BasicRef<Union_T1, Type_T1> ref_1, const BasicRef<Union_T2, Type_T2> ref_2);
+		[[nodiscard]] std::strong_ordering compare(const Ref ref_1, const Ref ref_2);
 
 		//sorts variadic parts by compare
-		template<typename Union_T, typename Type_T>
-		void sort(const BasicMutRef<Union_T, Type_T> ref);
+		void sort(const MutRef ref);
 
 		//counts number of logical nodes of subtree (note: logical nodes might be fewer than used slots in store)
-		template<typename Union_T, typename Type_T>
-		std::size_t count(const BasicRef<Union_T, Type_T> ref);
+		std::size_t count(const Ref ref);
 
 		//copies subtree starting at src_ref into dst_store and returns its head
-		template<typename Union_T, typename Type_T>
-		[[nodiscard]] BasicTypedIdx<Type_T> copy(const BasicRef<Union_T, Type_T> src_ref, BasicStore<Union_T>& dst_store);
+		[[nodiscard]] TypedIdx copy(const Ref src_ref, Store& dst_store);
 
 		//returns true iff subtree starting at ref contains to_contain (or is to_contain itself)
-		template<typename Union_T, typename Type_T>
-		bool contains(const BasicRef<Union_T, Type_T> ref, const BasicTypedIdx<Type_T> to_contain);
+		bool contains(const Ref ref, const TypedIdx to_contain);
 
 		bool contains_variables(const Ref ref);
-		bool contains_variables(const pattern::PnRef ref);
 
 		//returns TypedIdx() if unsuccsessfull
 		TypedIdx search_variable(const Ref ref, const std::string_view name);
 
 		//calls first tree::combine, then tree::sort
-		template<typename Union_T, typename Type_T>
-		[[nodiscard]] BasicTypedIdx<Type_T> establish_basic_order(BasicMutRef<Union_T, Type_T> ref);
+		[[nodiscard]] TypedIdx establish_basic_order(MutRef ref);
 
 		//returns pointer to field of parent of subtree, where subtree is held
 		//only the non-const return value requires this function to not take a const store, 
 		//  else handing in a reference as head might not be desired.
-		template<typename Union_T, typename TypedIdx_T>
-		TypedIdx_T* find_subtree_owner(BasicStore<Union_T>& store, TypedIdx_T& head, const TypedIdx_T subtree);
+		TypedIdx* find_subtree_owner(Store& store, TypedIdx& head, const TypedIdx subtree);
 
 	} //namespace tree
 
@@ -533,7 +464,7 @@ namespace bmath::intern {
 		//compares term starting at ref.index in ref.store with pattern starting at pn_ref.index in pn_ref.store
 		//if match is succsessfull, match_data stores what pattern's match variables matched and true is returned.
 		//if match was not succsessfull, match_data is NOT reset and false is returned
-		bool equals(const pattern::PnRef pn_ref, const Ref ref, pattern::MatchData& match_data);
+		bool equals(const Ref pn_ref, const Ref ref, pattern::MatchData& match_data);
 
 		struct PermutationEqualsRes
 		{
@@ -546,25 +477,24 @@ namespace bmath::intern {
 		//  else PermutationEqualsRes.matched will contain the elements in term where a corrensponding part in pattern was found and
 		//  PermutationEqualsRes.not_matched will contain the leftovers (-> empty if MultiMatch paticipated).
 		//it is assumed, that pn_ref and ref are both the same variadic type (eighter sum and sum or product and product)
-		PermutationEqualsRes permutation_equals(const pattern::PnRef pn_ref, const Ref ref, pattern::MatchData& match_data);
+		PermutationEqualsRes permutation_equals(const Ref pn_ref, const Ref ref, pattern::MatchData& match_data);
 
 		//copies pn_ref with match_data into store, returns head of copied result.
-		[[nodiscard]] TypedIdx copy(const pattern::PnRef pn_ref, const pattern::MatchData& match_data, 
-			const Store& src_store, Store& dst_store);
+		[[nodiscard]] TypedIdx copy(const Ref pn_ref, const pattern::MatchData& match_data, const Store& src_store, Store& dst_store);
 
 		//this function is the primary function designed to be called from outside of this namespace.
 		//the function will try to match the head of in with the head of ref and if so, replace the matched part with out.
 		//if a transformation happened, Just the new subterm is returned to replace the TypedIdx of the old subterm in its parent,
 		//  else nothing.
 		//if the result contains something, ref is no longer valid.
-		[[nodiscard]] std::optional<TypedIdx> match_and_replace(const pattern::PnRef in, const pattern::PnRef out, const MutRef ref);
+		[[nodiscard]] std::optional<TypedIdx> match_and_replace(const Ref in, const Ref out, const MutRef ref);
 
 		//tries to match in (in postoreder) against every subterm of ref and finally ref itself. if a deeper match was found, 
 		// snd of return value is true. 
 		//if fst of return value is valid, ref could be matched and got replaced by *fst of return value, meaning ref is no longer valid
 		// and caller needs to replace ref with *return_value.first  
 		[[nodiscard]] std::pair<std::optional<TypedIdx>, bool> recursive_match_and_replace(
-			const pattern::PnRef in, const pattern::PnRef out, const MutRef ref);
+			const Ref in, const Ref out, const MutRef ref);
 
 	} //namespace match
 
@@ -598,7 +528,7 @@ namespace bmath::intern {
 		struct ReturnEarlyPossible :std::false_type {};
 
 		template<typename T> 
-		struct ReturnEarlyPossible <T, std::void_t<decltype(std::declval<T>().return_early())>	> :std::true_type {};
+		struct ReturnEarlyPossible <T, std::void_t<decltype(std::declval<T>().return_early())>> :std::true_type {};
 
 		static_assert(ReturnEarlyPossible<Find<TypedIdx>>::value);
 		static_assert(ReturnEarlyPossible<FindBool>::value);

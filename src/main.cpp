@@ -7,7 +7,7 @@ TODO:
 
 important:
  - deprecate SLC and introduce vector like type
- - get rid of destinction between pattern and usual term (but use templates to allow multiple stores) 
+ - use templates to allow multiple stores
  - write data structure one abstraction layer above PnTerm to group multiple pattens
  - enable rematch or write factorisation per hand (if per hand, perhaps introduce some way to call such routines as pattern?)
      idea: introduce "intrinsic" type and use index in intrinsic typed_idx to specify witch (have all stored at central function pointer array)
@@ -19,7 +19,7 @@ nice to have:
  - const term_slc iterator dereferences to Ref, not typed_idx
  - match::permutation_equals: abort earlier (use fact that both terms are (assumed to be) sorted, not only pattern)
       idea: remember what was matched / tried to be matched already in bitset, also have bitset recording currently matched summands / factors
- - add (perhaps untyped?, perhaps only TypedIdx_T needed) Ref for sub-index references in store (needed below)
+ - add (perhaps untyped?, perhaps only TypedIdx needed) Ref for sub-index references in store (needed below)
  - avoid copying pattern::MultiMatch entries (needs to know original storage location of each entry, to steal it from there)
  - write nonrecursive copy with queue for better locality in store (challenge: children are allocated after parents, need to keep (sub) index where child reference is to be held)
  - seperate utility in different files, create utility folder

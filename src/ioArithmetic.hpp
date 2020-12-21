@@ -54,25 +54,30 @@ namespace bmath::intern {
 	[[nodiscard]] TypedIdx build(Store& store, ParseView view);
 
 
-	template<typename TypedIdx_T, typename Store_T>
-	[[nodiscard]] TypedIdx_T build_value(Store_T& store, const std::complex<double> complex) noexcept
+	template<typename Store_T>
+	[[nodiscard]] TypedIdx build_value(Store_T& store, const std::complex<double> complex) noexcept
 	{
-		return TypedIdx_T(store.insert(complex), Type(Leaf::complex));
+		const std::size_t result_idx = store.allocate();
+		new (&store.at(result_idx)) TypesUnion(complex);
+		return TypedIdx(result_idx, Type(Leaf::complex));
 	}
 
-	template<typename Store_T, typename TypedIdx_T>
-	[[nodiscard]] TypedIdx_T build_negated(Store_T& store, const TypedIdx_T to_negate) noexcept
+	template<typename Store_T>
+	[[nodiscard]] TypedIdx build_negated(Store_T& store, const TypedIdx to_negate) noexcept
 	{
-		using TypedIdxSLC_T = TermSLC<TypedIdx_T>;
-		const TypedIdx_T minus_1 = build_value<TypedIdx_T>(store, -1.0);
-		return TypedIdx_T(store.insert(TypedIdxSLC_T({ minus_1, to_negate })), Type(Op::product));
+		const TypedIdx minus_1 = build_value(store, -1.0);
+		const std::size_t result_idx = store.allocate();
+		new (&store.at(result_idx)) TypesUnion(TypedIdxSLC({ minus_1, to_negate }));
+		return TypedIdx(result_idx, Type(Op::product));
 	}
 
-	template<typename Store_T, typename TypedIdx_T>
-	[[nodiscard]] TypedIdx_T build_inverted(Store_T& store, const TypedIdx_T to_invert) noexcept
+	template<typename Store_T>
+	[[nodiscard]] TypedIdx build_inverted(Store_T& store, const TypedIdx to_invert) noexcept
 	{
-		const TypedIdx_T minus_1 = build_value<TypedIdx_T>(store, -1.0);
-		return TypedIdx_T(store.insert(FnParams<TypedIdx_T>({ to_invert, minus_1, TypedIdx_T(), TypedIdx_T() })), Type(Fn::pow));
+		const TypedIdx minus_1 = build_value(store, -1.0);
+		const std::size_t result_idx = store.allocate();
+		new (&store.at(result_idx)) TypesUnion(FnParams({ to_invert, minus_1, TypedIdx(), TypedIdx() }));
+		return TypedIdx(result_idx, Type(Fn::pow));
 	}
 
 	namespace pattern {
@@ -92,11 +97,11 @@ namespace bmath::intern {
 		struct [[nodiscard]] TreeNameLookup 
 		{
 			std::string_view name;
-			Restriction restr;
-			StupidBufferVector<PnTypedIdx, 4u> lhs_instances;
-			StupidBufferVector<PnTypedIdx, 4u> rhs_instances;
+			pattern::Restriction restr;
+			StupidBufferVector<TypedIdx, 4u> lhs_instances;
+			StupidBufferVector<TypedIdx, 4u> rhs_instances;
 
-			TreeNameLookup(std::string_view new_name, Restriction new_restr) noexcept
+			TreeNameLookup(std::string_view new_name, pattern::Restriction new_restr) noexcept
 				:name(new_name), restr(new_restr) {}
 		};
 		
@@ -105,8 +110,8 @@ namespace bmath::intern {
 		{
 			std::string_view name;
 			Form form;
-			StupidBufferVector<PnTypedIdx, 4u> lhs_instances;
-			StupidBufferVector<PnTypedIdx, 4u> rhs_instances;
+			StupidBufferVector<TypedIdx, 4u> lhs_instances;
+			StupidBufferVector<TypedIdx, 4u> rhs_instances;
 
 			ValueNameLookup(std::string_view new_name, Form new_form) noexcept
 				:name(new_name), form(new_form) {}
@@ -134,7 +139,7 @@ namespace bmath::intern {
 			//assumes to only get declarations part of pattern
 			NameLookupTable(ParseView declarations);
 
-			PnTypedIdx insert_instance(PnStore& store, const ParseView input);
+			TypedIdx insert_instance(Store& store, const ParseView input);
 		};
 
 		struct PatternBuildFunction
@@ -143,27 +148,23 @@ namespace bmath::intern {
 			NameLookupTable& table;
 
 			//equivalent to build() for pattern
-			PnTypedIdx operator()(PnStore& store, ParseView input);
+			TypedIdx operator()(Store& store, ParseView input);
 		};
 
 	} //namespace pattern
 
 	namespace print {
 
-		template<typename Union_T, typename Type_T>
-		void append_to_string(const BasicRef<Union_T, Type_T> ref, std::string& str, const int parent_infixr = 0);
+		void append_to_string(const Ref ref, std::string& str, const int parent_infixr = 0);
 
 		//prettier, but also slower
 		std::string to_pretty_string(const Ref ref, const int parent_infixr = 0);
 
-		template<typename Union_T, typename Type_T>
-		std::string to_memory_layout(const BasicStore<Union_T>& store, 
-			const std::initializer_list<const BasicTypedIdx<Type_T>> heads);
+		std::string to_memory_layout(const Store& store, const std::initializer_list<const TypedIdx> heads);
 
 		//returns tree representation of ref
 		//offset specifies how far the whole tree is shifted to the right
-		template<typename Union_T, typename Type_T>
-		std::string to_tree(const BasicRef<Union_T, Type_T> ref, const std::size_t offset = 0u);
+		std::string to_tree(const Ref ref, const std::size_t offset = 0u);
 
 	} //namespace print
 
