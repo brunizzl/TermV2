@@ -11,155 +11,12 @@
 
 namespace bmath::intern {
 
-	namespace store_detail {
-
-		//every table_dist'th element in vec will not store actual term content, but a table of which of 
-		//the next (table_dist -1) slots are still free. 
-		//thus this union can act as both.
-		template<typename Union_T>
-		union [[nodiscard]] TableVecElem
-		{
-			static constexpr std::size_t table_dist = sizeof(Union_T) * 8;	//also number of elements each table keeps track of
-			using OccupancyTable = BitSet<table_dist>; 
-
-			Union_T value;
-			OccupancyTable table;
-			static_assert(sizeof(Union_T) == sizeof(OccupancyTable), "union VecElem assumes equal member size");
-
-			TableVecElem(const Union_T& new_value) noexcept :value(new_value) {}
-			TableVecElem(unsigned long init)       noexcept :table(init)      {}
-			TableVecElem(const TableVecElem& snd)  noexcept :table(snd.table) {} //bitwise copy of snd
-		}; //union TableVecElem
-
-	} //namespace store_detail
-
-	  //possibly preferred version for debugging
-	template <typename Union_T, typename Vec_T = std::vector<store_detail::TableVecElem<Union_T>>>
-	class [[nodiscard]] BasicStore_Table
-	{
-		static_assert(std::is_trivially_destructible_v<Union_T>, "required to allow Union_T to be used in VecElem union");
-		static_assert(std::is_trivially_copyable_v<Union_T>, "dunno, feels like a sane thing.");
-
-		using VecElem = typename store_detail::TableVecElem<Union_T>;
-		static constexpr std::size_t table_dist = VecElem::table_dist;
-		using Table = typename VecElem::OccupancyTable;
-
-		Vec_T vector;
-
-	public:
-		//debugging function to ensure only valid accesses
-		bool valid_idx(const std::size_t idx) const noexcept
-		{
-			if (this->vector.size() < idx + 1u) return false; //index not currently owned by vector
-			if (idx % table_dist == 0u) return false; //index is not value position, but points at table
-			const Table& table = this->vector[idx  - (idx % table_dist)].table;
-			if (!table.test(idx % table_dist)) return false; //index not currently populated
-			return true;
-		}
-
-		constexpr BasicStore_Table() noexcept = default;
-
-		constexpr void reserve(const std::size_t ammount) noexcept { this->vector.reserve(ammount); }
-
-		//never construct recursively using insert, as this will break if vector has to reallocate
-		[[nodiscard]] std::size_t insert(const Union_T& new_elem) noexcept
-		{
-			for (std::size_t table_pos = 0; table_pos < this->vector.size(); table_pos += table_dist) {
-				Table& table = this->vector[table_pos].table;
-				if (!table.all()) [[likely]] {	//currently optimizes for case with only one table present
-					const std::size_t relative_pos = table.find_first_false();
-					table.set(relative_pos);
-					const std::size_t found_pos = table_pos + relative_pos;
-					if (found_pos >= this->vector.size()) {	//put new element in vector
-						this->vector.emplace_back(new_elem);
-					}
-					else {	//reuse old element in vector
-						new (&this->vector[found_pos]) VecElem(new_elem);
-					}
-					return found_pos;
-				}
-			}
-			//first bit is set, as table itself occupies that slot, second as new element is emplaced afterwards.
-			this->vector.emplace_back(0x3);	
-			this->vector.emplace_back(new_elem);
-			return this->vector.size() - 1u;	//index of just inserted element
-		} //insert
-
-		[[nodiscard]] std::size_t allocate() noexcept { return this->insert(Union_T()); }
-
-		void free(const std::size_t idx) noexcept
-		{
-			assert(this->valid_idx(idx));	
-			Table& table = this->vector[idx  - (idx % table_dist)].table;
-			table.reset(idx % table_dist);
-		}
-
-		[[nodiscard]] Union_T& at(const std::size_t idx)
-		{
-			if (!this->valid_idx(idx)) __debugbreak();
-			assert(this->valid_idx(idx));	
-			return this->vector[idx].value;
-		}
-
-		[[nodiscard]] const Union_T& at(const std::size_t idx) const
-		{
-			assert(this->valid_idx(idx));		
-			return this->vector[idx].value;
-		}
-
-		[[nodiscard]] std::size_t size() const noexcept { return vector.size(); }
-
-		[[nodiscard]] std::vector<std::size_t> enumerate_free_slots() const noexcept
-		{
-			std::vector<std::size_t> result;
-			result.reserve(this->nr_free_slots());
-			for (std::size_t table_pos = 0; table_pos < this->vector.size(); table_pos += table_dist) {
-				if (this->vector[table_pos].table.all()) [[unlikely]] {	//currently optimizes for case with only one table present
-					continue;
-				}
-				else {
-					const Table table = this->vector[table_pos].table;
-					for (std::size_t relative_pos = 1; relative_pos < table_dist; relative_pos++) {	//first bit encodes position of table -> start one later
-						if (table_pos + relative_pos == this->vector.size()) [[unlikely]] {
-							break;
-						}
-							if (!table.test(relative_pos)) {
-								result.push_back(table_pos + relative_pos);
-							}
-					}
-				}
-			}
-			return result;
-		} //enumerate_free_slots
-
-		[[nodiscard]] std::size_t nr_used_slots() const noexcept
-		{
-			std::size_t pop_count = 0; 
-			for (std::size_t table_pos = 0; table_pos < this->vector.size(); table_pos += table_dist) {
-				const Table& table = this->vector[table_pos].table;
-				pop_count += table.count();
-			}
-			return pop_count;
-		} //nr_used_slots
-
-		[[nodiscard]] std::size_t nr_free_slots() const noexcept
-		{
-			return this->vector.size() - nr_used_slots();
-		} //nr_free_slots
-
-	};	//class BasicStore_Table
-
-
-
-
-
-
-	template <typename Union_T>
+	template <typename Payload_T>
 	class [[nodiscard]] BasicStore_SingleTable
 	{
-		static_assert(std::is_trivially_destructible_v<Union_T>, "reallocation and destruction requires this");
+		static_assert(std::is_trivially_destructible_v<Payload_T>, "reallocation and destruction requires this");
 
-		static constexpr std::size_t bits_per_table = sizeof(Union_T) * 8u;
+		static constexpr std::size_t bits_per_table = sizeof(Payload_T) * 8u;
 		static_assert(bits_per_table % 64u == 0u);
 
 		static constexpr std::size_t tables_per_capacity(const std::size_t cap) 
@@ -171,14 +28,14 @@ namespace bmath::intern {
 		{
 			BitSet64 data[bits_per_table / 64u] = {};
 		};
-		static_assert(sizeof(Table) == sizeof(Union_T));
+		static_assert(sizeof(Table) == sizeof(Payload_T));
 
 		union [[nodiscard]] VecElem
 		{
-			Union_T payload;
+			Payload_T payload;
 			Table table;
 
-			constexpr VecElem(const Union_T& new_payload) noexcept :payload(new_payload) {}
+			constexpr VecElem(const Payload_T& new_payload) noexcept :payload(new_payload) {}
 			constexpr VecElem(const Table& new_table)     noexcept :table(new_table)     {}
 			constexpr VecElem(const VecElem& snd)         noexcept :table(snd.table)     {} //bitwise copy of snd
 			constexpr VecElem()                           noexcept :table()              {} //zero-initialize
@@ -200,8 +57,8 @@ namespace bmath::intern {
 		constexpr inline const BitSet64* occupancy_data() const noexcept { return this->combined_data[this->capacity].table.data; }
 
 		//returns pointer to begin of payload array (same adress as combinded_data, but new type)
-		constexpr inline Union_T* payload_data() noexcept { return &this->combined_data->payload; }
-		constexpr inline const Union_T* payload_data() const noexcept { return &this->combined_data->payload; }
+		constexpr inline Payload_T* payload_data() noexcept { return &this->combined_data->payload; }
+		constexpr inline const Payload_T* payload_data() const noexcept { return &this->combined_data->payload; }
 
 
 		//unsave, because if new_capacity is smaller than current this->size_, the last elements are lost and size_ is not shrunk -> possible to access invalid memory
@@ -316,19 +173,19 @@ namespace bmath::intern {
 			}
 		}
 
-		constexpr inline [[nodiscard]] Union_T& at(const std::size_t idx) noexcept
+		constexpr inline [[nodiscard]] Payload_T& at(const std::size_t idx) noexcept
 		{
 			ASSERT(this->valid_idx(idx));
 			return this->payload_data()[idx];
 		}
 
-		constexpr inline [[nodiscard]] const Union_T& at(const std::size_t idx) const noexcept
+		constexpr inline [[nodiscard]] const Payload_T& at(const std::size_t idx) const noexcept
 		{
 			assert(this->valid_idx(idx));
 			return this->payload_data()[idx];
 		}
 
-		//unlike unsave_change_capacity, this allocates space for a (single) Union_T for the user, instead of (always) resizing the underlying array
+		//unlike unsave_change_capacity, this allocates space for a (single) Payload_T for the user, instead of (always) resizing the underlying array
 		[[nodiscard]] std::size_t allocate() noexcept
 		{
 			const auto find_first_free_index = [this]() -> std::size_t {
@@ -355,10 +212,10 @@ namespace bmath::intern {
 			return result_index;
 		} //allocate()
 
-		[[nodiscard]] std::size_t insert(const Union_T& new_elem) noexcept
+		[[nodiscard]] std::size_t insert(const Payload_T& new_elem) noexcept
 		{
 			const std::size_t result_index = this->allocate();
-			new (&this->at(result_index)) Union_T(new_elem);
+			new (&this->at(result_index)) Payload_T(new_elem);
 			return result_index;
 		}
 
@@ -446,146 +303,12 @@ namespace bmath::intern {
 	}; //class BasicStore_SingleTable
 
 
+	template<typename Payload_T>
+	using BasicStore = BasicStore_SingleTable<Payload_T>;
 
 
 
-	namespace store_detail {
-
-		struct [[nodiscard]] FreeList
-		{
-			static constexpr std::size_t start_idx = 0;
-			std::size_t next;
-		};
-
-		//at this->vector[0] always resides a node of the FreeList. all currently unused elements are listed from there.
-		template <typename Union_T>
-		union [[nodiscard]] FreeListVecElem
-		{
-			Union_T value;
-			FreeList free_list;
-			static_assert(sizeof(FreeList) <= sizeof(Union_T), "size of union VecElem may not be defined by FreeList");
-
-			FreeListVecElem(const Union_T& new_value) noexcept :value(new_value) {}
-			FreeListVecElem(const FreeList& node)         noexcept :free_list(node)  {}
-			FreeListVecElem(const FreeListVecElem& snd)   noexcept :value(snd.value) {} //bitwise copy of snd
-		}; //union FreeListVecElem
-
-	} //namespace store_detail
-
-	//possibly faster version, but also with less access checks, thus with no (internal) memory savety	
-	template <typename Union_T, typename Vec_T = std::vector<store_detail::FreeListVecElem<Union_T>>>
-	class [[nodiscard]] BasicStore_FreeList
-	{
-		static_assert(std::is_trivially_destructible_v<Union_T>, "required to allow Union_T to be used in VecElem union");
-		static_assert(std::is_trivially_copyable_v<Union_T>, "dunno, feels like a sane thing.");
-
-		using VecElem = store_detail::FreeListVecElem<Union_T>;
-		using FreeList = store_detail::FreeList;
-
-		//first elem is guaranteed to be free_list, the rest may vary.
-		Vec_T vector;
-
-		//assumes vector to already hold first element
-		[[nodiscard]] std::size_t get_free_position() noexcept
-		{
-			FreeList& first = this->vector[FreeList::start_idx].free_list;
-			if (first.next == FreeList::start_idx) {	//no free elements available (besides first)
-				return FreeList::start_idx;
-			}
-			else {	//at least one free element available (besides first)
-				const std::size_t second_idx = first.next;
-				const std::size_t third_idx = this->vector[second_idx].free_list.next;
-
-				first.next = third_idx;
-				return second_idx;
-			}
-		}
-
-	public:
-		bool valid_idx(const std::size_t idx) const noexcept { return true; } //that boring testability is task of Table version
-
-		constexpr BasicStore_FreeList() noexcept = default;
-
-		//never construct recursively using insert, as this will break if vector has to reallocate
-		[[nodiscard]] std::size_t insert(const Union_T& new_elem)
-		{
-			if (this->vector.size() == 0) [[unlikely]] {
-				this->vector.reserve(2u); //reserve for both first free_list node and the new element
-			this->vector.emplace_back(FreeList{ FreeList::start_idx });
-			this->vector.emplace_back(new_elem);
-			return 1u; //new element is at second position -> index 1
-			}			
-			else if (const std::size_t free_pos = this->get_free_position(); free_pos != FreeList::start_idx) {
-				new (&this->vector[free_pos]) VecElem(new_elem);
-				return free_pos;
-			}
-			else {
-				const std::size_t new_pos = this->vector.size();
-				this->vector.emplace_back(new_elem);
-				return new_pos;
-			}
-		}
-
-		[[nodiscard]] std::size_t allocate() noexcept { return this->insert(Union_T()); }
-
-		void free(const std::size_t idx) noexcept
-		{
-			//there is currently no test if the start was freed previously (because expensive). if so, freeing again would break the list.
-			FreeList& first = this->vector[FreeList::start_idx].free_list;
-			const std::size_t second_idx = first.next;
-			FreeList& new_node = this->vector[idx].free_list;
-
-			new_node.next = second_idx;				  //Union_T guaranteed to be trivially destructable -> just override with FreeList
-			first.next = idx;
-		}
-
-		//no tests if a free_list is accessed, as only position of the first node is known anyway.
-		[[nodiscard]] Union_T& at(const std::size_t idx) noexcept { return this->vector[idx].value; }
-		[[nodiscard]] const Union_T& at(const std::size_t idx) const noexcept { return this->vector[idx].value; }
-
-		[[nodiscard]] std::size_t size() const noexcept { return vector.size(); }
-
-		[[nodiscard]] std::vector<std::size_t> enumerate_free_slots() const noexcept
-		{
-			std::vector<std::size_t> result;
-			if (this->vector.size()) {
-				FreeList node = this->vector[FreeList::start_idx].free_list;
-				while (node.next != FreeList::start_idx) {
-					result.push_back(node.next);
-					node = this->vector[node.next].free_list;
-				}
-			}
-			return result;
-		} //enumerate_free_slots
-
-		[[nodiscard]] std::size_t nr_used_slots() const noexcept
-		{
-			return this->vector.size() - this->nr_free_slots();
-		} //nr_used_slots
-
-		[[nodiscard]] std::size_t nr_free_slots() const noexcept
-		{
-			std::size_t result = 0;
-			if (this->vector.size()) {
-				FreeList node = this->vector[FreeList::start_idx].free_list;
-				while (node.next != FreeList::start_idx) {
-					result++;
-					node = this->vector[node.next].free_list;
-				}
-			}
-			return result;
-		} //nr_free_slots
-
-	};	//class BasicStore_FreeList
-
-	template<typename Union_T>
-	using BasicStore = BasicStore_SingleTable<Union_T>;
-	//using BasicStore = BasicStore_Table<Union_T>;
-	//using BasicStore = BasicStore_FreeList<Union_T>;
-
-
-
-	template<typename Union_T, typename Vec_T = std::vector<Union_T>>
+	template<typename Payload_T, typename Vec_T = std::vector<Payload_T>>
 	class BasicMonotonicStore
 	{
 		Vec_T vector;
@@ -595,17 +318,17 @@ namespace bmath::intern {
 
 		constexpr void reserve(const std::size_t ammount) noexcept { this->vector.reserve(ammount); }
 
-		[[nodiscard]] std::size_t insert(const Union_T& new_elem)
+		[[nodiscard]] std::size_t insert(const Payload_T& new_elem)
 		{
 			const std::size_t new_pos = this->vector.size();
 			this->vector.emplace_back(new_elem);
 			return new_pos;
 		}
 
-		[[nodiscard]] std::size_t allocate() noexcept { return this->insert(Union_T()); }
+		[[nodiscard]] std::size_t allocate() noexcept { return this->insert(Payload_T()); }
 
-		[[nodiscard]] Union_T& at(const std::size_t idx) noexcept { return this->vector[idx]; }
-		[[nodiscard]] const Union_T& at(const std::size_t idx) const noexcept { return this->vector[idx]; }
+		[[nodiscard]] Payload_T& at(const std::size_t idx) noexcept { return this->vector[idx]; }
+		[[nodiscard]] const Payload_T& at(const std::size_t idx) const noexcept { return this->vector[idx]; }
 
 		[[nodiscard]] std::size_t size() const noexcept { return vector.size(); }
 	}; //struct BasicMonotonicStore
