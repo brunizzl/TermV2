@@ -2,24 +2,11 @@
 
 #include <cstdint>
 #include <type_traits>
+#include <bit>
 
 #include "termUtility.hpp"
 
 namespace bmath::intern {
-
-	namespace typed_idx_detail {
-
-		template<typename Enum_T>
-		constexpr std::size_t nr_used_bits(Enum_T count)
-		{
-			std::size_t power = 0;
-			while ((1ull << power) <= static_cast<std::size_t>(count)) {	//cant use std::pow in constexpr :(
-				power++;
-			}
-			return power;
-		}
-
-	} //namespace typed_idx_detail
 
 	template<typename UnderlyingType, typename TypesEnum>
 	struct [[nodiscard]] SplitResult
@@ -37,7 +24,7 @@ namespace bmath::intern {
 
 		UnderlyingType data;
 
-		static constexpr std::size_t index_offset = typed_idx_detail::nr_used_bits(TypesEnum::COUNT);
+		static constexpr std::size_t index_offset = std::bit_width((unsigned)TypesEnum::COUNT);
 		static constexpr UnderlyingType enum_mask = (1ull << index_offset) - 1ull;
 		static constexpr UnderlyingType index_mask = ~enum_mask;
 
@@ -73,7 +60,7 @@ namespace bmath::intern {
 	{
 		static_assert(std::is_unsigned_v<UnderlyingType>);
 
-		static constexpr std::size_t index_offset = typed_idx_detail::nr_used_bits(TypesEnum::COUNT);
+		static constexpr std::size_t index_offset = std::bit_width((unsigned)TypesEnum::COUNT);
 		static constexpr UnderlyingType enum_mask = (1ull << index_offset) - 1ull;
 		static constexpr UnderlyingType index_mask = ~enum_mask;
 

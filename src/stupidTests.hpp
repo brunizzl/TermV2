@@ -124,6 +124,16 @@ namespace bmath::intern::debug {
 			{ "a | a + a = 2 a" }, 
 
 			{ "x | sin(x)^2 + cos(x)^2 = 1" },
+
+			//roots and extreme points of sin and cos:
+			{ "         cos(            'pi') = -1" },
+			{ "k :int | cos((k + 0.5)   'pi') =  0" },
+			{ "k :int | cos((2 k)       'pi') =  1" },
+			{ "k :int | cos((2 k + 1)   'pi') = -1" },
+			{ "         sin(            'pi') =  0" },
+			{ "k :int | sin(k           'pi') =  0" },
+			{ "k :int | sin((2 k + 0.5) 'pi') =  1" },
+			{ "k :int | sin((2 k + 1.5) 'pi') = -1" },
 		
 			////exponential runtime fibonacci implementation:
 			//{ "fib(0) = 0" },
@@ -167,10 +177,6 @@ namespace bmath::intern::debug {
 			{ "x :variable, f :any              | diff(cos(f), x) = diff(f, x) (-sin(f))" },
 			{ "x :variable, f :any              | diff(exp(f), x) = diff(f, x) exp(f)" },
 			{ "x :variable, f :any              | diff(ln(f), x)  = diff(f, x) 1/f" },
-		
-			////fun with value match variables:
-			//{ "k :int | 2 k + 1 = pair('how_odd', k + 1/(2^20))" }, 
-			//{ "k :int | 2 k = pair('how_unodd', k + 1/(2^20))" },
 		});
 
 		for (const auto& p : patterns) {
@@ -205,8 +211,8 @@ namespace bmath::intern::debug {
 					}
 				} while (changed);
 				std::cout << "result:   " << test.to_pretty_string() << "\n";
-				//std::cout << test.to_memory_layout() << "\n";
-				std::cout << test.to_tree() << "\n";
+				std::cout << test.to_memory_layout() << "\n";
+				//std::cout << test.to_tree() << "\n";
 				std::cout << "\n";
 			}
 			catch (bmath::ParseFailure failure) {

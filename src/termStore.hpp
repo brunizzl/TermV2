@@ -159,12 +159,17 @@ namespace bmath::intern {
 	{
 		static_assert(std::is_trivially_destructible_v<Union_T>, "reallocation and destruction requires this");
 
-		constexpr static std::size_t bits_per_table = sizeof(Union_T) * 8u;
+		static constexpr std::size_t bits_per_table = sizeof(Union_T) * 8u;
 		static_assert(bits_per_table % 64u == 0u);
+
+		static constexpr std::size_t tables_per_capacity(const std::size_t cap) 
+		{ 
+			return (cap + bits_per_table - 1u) / bits_per_table;
+		}
 
 		struct Table
 		{
-			BitSet64 data[bits_per_table / 64u];
+			BitSet64 data[bits_per_table / 64u] = {};
 		};
 		static_assert(sizeof(Table) == sizeof(Union_T));
 
@@ -206,8 +211,8 @@ namespace bmath::intern {
 			assert(this->size_ <= this->capacity);
 
 			//old capacity of payload data == this->capacity
-			const std::size_t new_tables_count = (new_capacity + bits_per_table - 1u) / bits_per_table;
-			const std::size_t old_tables_count = (this->capacity + bits_per_table - 1u) / bits_per_table;
+			const std::size_t new_tables_count = tables_per_capacity(new_capacity);
+			const std::size_t old_tables_count = tables_per_capacity(this->capacity);
 
 			VecElem* const new_data = new VecElem[new_capacity + new_tables_count](); //zero-initialized
 			std::copy_n(this->combined_data, this->size_, new_data); //copy old payload array into front of new payload array
@@ -283,9 +288,24 @@ namespace bmath::intern {
 			return (idx < this->size_) && this->occupancy_data()[idx / 64u].test(idx % 64u);
 		}
 
-		constexpr BasicStore_SingleTable() noexcept
+		constexpr BasicStore_SingleTable() noexcept = default;
+
+		BasicStore_SingleTable(const BasicStore_SingleTable& snd) noexcept
 		{
+			this->unsave_change_capacity(snd.capacity);
+			std::copy_n(snd.combined_data, this->capacity + tables_per_capacity(this->capacity), this->combined_data);
+			this->size_ = snd.size_;
 		}
+
+		constexpr BasicStore_SingleTable(BasicStore_SingleTable&& snd) noexcept
+			:size_(std::exchange(snd.size_, 0u))
+			,capacity(std::exchange(snd.capacity, 0u))
+			,combined_data(std::exchange(snd.combined_data, nullptr))
+		{}
+
+		//not yet done
+		BasicStore_SingleTable operator=(const BasicStore_SingleTable& snd) = delete;
+		BasicStore_SingleTable operator=(BasicStore_SingleTable&& snd) = delete;
 
 		~BasicStore_SingleTable() noexcept { delete[] this->combined_data; }
 
@@ -426,7 +446,7 @@ namespace bmath::intern {
 
 		[[nodiscard]] std::size_t nr_free_slots() const noexcept
 		{
-			return this->vector.size() - nr_used_slots();
+			return this->size() - this->nr_used_slots();
 		} //nr_free_slots
 
 	}; //class BasicStore_SingleTable
@@ -565,8 +585,8 @@ namespace bmath::intern {
 	};	//class BasicStore_FreeList
 
 	template<typename Union_T>
-	//using BasicStore = BasicStore_SingleTable<Union_T>;
-	using BasicStore = BasicStore_Table<Union_T>;
+	using BasicStore = BasicStore_SingleTable<Union_T>;
+	//using BasicStore = BasicStore_Table<Union_T>;
 	//using BasicStore = BasicStore_FreeList<Union_T>;
 
 
@@ -668,7 +688,9 @@ namespace bmath::intern {
 			:store(&new_store), index(new_index) {}
 
 		template<typename Type_T>
-		constexpr BasicNodeRef(const BasicRef<Union_T, Type_T, is_const>& ref) :store(ref.store), index(ref.index) {}
+		constexpr BasicNodeRef(const BasicRef<Union_T, Type_T, is_const>& ref) :store(ref.store), index(ref.index) {
+		
+		}
 
 		constexpr auto new_at(const std::size_t new_index) const noexcept { return BasicNodeRef(*this->store, new_index); }
 

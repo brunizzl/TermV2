@@ -1045,7 +1045,7 @@ namespace bmath::intern {
 		{
 			std::vector<std::string> rows(store.size(), "");
 
-			std::string result("   | head(s) at index: ");
+			std::string result((heads.size() == 1u) ? "   | head at index: " : "   | heads at indices: ");
 			result.reserve(store.size() * 15);
 			{
 				const char* separator = "";

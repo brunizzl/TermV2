@@ -333,6 +333,22 @@ namespace bmath::intern {
 
 			throw_if(contains_illegal_value_match(PnRef(lhs_temp, this->lhs_head)), "no two value match variables may share the same sum / product in lhs.");
 
+			const auto contains_illegal_multi_match = [](const PnRef head) -> bool {
+				const auto inspect_variadic = [](const PnRef ref) -> fold::FindBool {
+					if (ref.type == Op::sum || ref.type == Op::product) {
+						std::size_t nr_multi_matches = 0u;
+						for (const PnTypedIdx elem : vc::range(ref)) {
+							nr_multi_matches += elem.get_type().is<MultiVar>();
+						}
+						return nr_multi_matches > 1u;
+					}
+					return false;
+				};
+				return fold::simple_fold<fold::FindBool>(head, inspect_variadic);
+			};
+
+			throw_if(contains_illegal_multi_match(PnRef(lhs_temp, this->lhs_head)), "no two multi match variables may share the same sum / product in lhs.");
+
 			this->lhs_store.reserve(lhs_temp.nr_used_slots());
 			this->rhs_store.reserve(rhs_temp.nr_used_slots());
 			this->lhs_head = tree::copy(PnRef(lhs_temp, this->lhs_head), this->lhs_store);

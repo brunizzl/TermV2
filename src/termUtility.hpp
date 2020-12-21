@@ -38,20 +38,14 @@ namespace bmath::intern {
 	}
 
 
-	template<auto val, std::size_t N>
-	constexpr auto replicate()
+	template<std::size_t N>
+	constexpr auto replicate(auto val)
 	{
 		std::array<decltype(val), N> result;
-		for (auto& elem : result) {
-			elem = val;
-		}
+		result.fill(val);
 		return result;
 	}
-
-	template<auto val, std::size_t N>
-	constexpr auto replicate_v = replicate<val, N>();
-
-	static_assert(replicate_v<'a', 3> == std::array{ 'a', 'a', 'a' });
+	static_assert(replicate<3>('a') == std::array{ 'a', 'a', 'a' });
 
 
 	template <typename Struct_T, std::size_t Size, typename SearchMemberPtr_T, typename Search_T>
