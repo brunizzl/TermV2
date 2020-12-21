@@ -126,31 +126,31 @@ namespace bmath::intern {
 	using Ref = BasicRef<TypesUnion, Type>;
 
 
-
 	namespace pattern {
 
-		enum class PnVar 
+		enum class SingleMatch 
 		{ 
-			tree_match, 
-			value_match,
-			value_proxy, //not actual node in tree, just "end" indicator
+			tree, 
+			value,
+			value_proxy, //not actual node in tree, just "end" indicator for value subtrees
 			COUNT 
 		};
 
 		//represent not actual node in pattern tree, as all match info is stored in MultiMatchDatum in MatchData		
-		enum class MultiVar { summands, factors, params, COUNT };
+		enum class MultiMatch { summands, factors, params, COUNT };
 
+		using PnVar = SumEnum<MultiMatch, SingleMatch>;
 
-		using PnType = SumEnum<MultiVar, PnVar, Type>; //dont list all enums making up Type directly, to allow converion to Type
+		using PnType = SumEnum<PnVar, Type>; //dont list all enums making up Type directly, to allow converion to Type
 
 		//as the usual Term does not know special pattern elements, these constants serve as placeholders for
 		//  the actual PnType instances to also allow them beeing used in templates compiled to both pattern and normal term.
-		static constexpr unsigned _tree_match  = unsigned(PnType(PnVar::tree_match));
-		static constexpr unsigned _value_match = unsigned(PnType(PnVar::value_match));
-		static constexpr unsigned _value_proxy = unsigned(PnType(PnVar::value_proxy));
-		static constexpr unsigned _summands    = unsigned(PnType(MultiVar::summands));
-		static constexpr unsigned _factors     = unsigned(PnType(MultiVar::factors));
-		static constexpr unsigned _params      = unsigned(PnType(MultiVar::params));
+		static constexpr unsigned _tree_match  = unsigned(PnType(SingleMatch::tree));
+		static constexpr unsigned _value_match = unsigned(PnType(SingleMatch::value));
+		static constexpr unsigned _value_proxy = unsigned(PnType(SingleMatch::value_proxy));
+		static constexpr unsigned _summands    = unsigned(PnType(MultiMatch::summands));
+		static constexpr unsigned _factors     = unsigned(PnType(MultiMatch::factors));
+		static constexpr unsigned _params      = unsigned(PnType(MultiMatch::params));
 
 		using PnTypedIdx = BasicTypedIdx<PnType>;
 		using PnTypedIdxSLC = TermSLC<PnTypedIdx>;
@@ -232,8 +232,8 @@ namespace bmath::intern {
 			Form form = Form::real;
 
 			ValueMatchVariable(std::uint32_t new_match_data_idx, Form new_form)
-				:mtch_idx(PnTypedIdx(new_match_data_idx, PnVar::value_proxy)),
-				copy_idx(PnTypedIdx(new_match_data_idx, PnVar::value_proxy)),
+				:mtch_idx(PnTypedIdx(new_match_data_idx, SingleMatch::value_proxy)),
+				copy_idx(PnTypedIdx(new_match_data_idx, SingleMatch::value_proxy)),
 				match_data_idx(new_match_data_idx), form(new_form)
 			{}
 		};
@@ -249,16 +249,16 @@ namespace bmath::intern {
 			Complex complex;
 			PnTypedIdxSLC index_slc; //representing NamedFn's extra parameters and Sum and Product 
 			StringSLC string;	//PnVariable is a string
-			TreeMatchVariable tree_match;
-			ValueMatchVariable value_match;
+			TreeMatchVariable tree;
+			ValueMatchVariable value;
 
 			constexpr PnTypesUnion(const FnParams<PnTypedIdx>& val) noexcept :fn_params(val)        {}
 			constexpr PnTypesUnion(const NamedFn&              val) noexcept :named_fn(val)         {}
 			constexpr PnTypesUnion(const Complex&              val) noexcept :complex(val)          {}
 			constexpr PnTypesUnion(const PnTypedIdxSLC&        val) noexcept :index_slc(val)        {}
 			constexpr PnTypesUnion(const StringSLC&            val) noexcept :string(val)           {} 
-			constexpr PnTypesUnion(const TreeMatchVariable&    val) noexcept :tree_match(val)       {} 
-			constexpr PnTypesUnion(const ValueMatchVariable&   val) noexcept :value_match(val)      {} 
+			constexpr PnTypesUnion(const TreeMatchVariable&    val) noexcept :tree(val)       {} 
+			constexpr PnTypesUnion(const ValueMatchVariable&   val) noexcept :value(val)      {} 
 			constexpr PnTypesUnion()                                noexcept :unused(0)             {} 
 
 			constexpr auto operator<=>(const PnTypesUnion&) const = default;
@@ -268,16 +268,16 @@ namespace bmath::intern {
 			constexpr operator const Complex              &() const noexcept { return this->complex; }
 			constexpr operator const PnTypedIdxSLC        &() const noexcept { return this->index_slc; }
 			constexpr operator const StringSLC            &() const noexcept { return this->string; }
-			constexpr operator const TreeMatchVariable    &() const noexcept { return this->tree_match; }
-			constexpr operator const ValueMatchVariable   &() const noexcept { return this->value_match; }
+			constexpr operator const TreeMatchVariable    &() const noexcept { return this->tree; }
+			constexpr operator const ValueMatchVariable   &() const noexcept { return this->value; }
 
 			constexpr operator FnParams<PnTypedIdx> &() noexcept { return this->fn_params; }
 			constexpr operator NamedFn              &() noexcept { return this->named_fn; }
 			constexpr operator Complex              &() noexcept { return this->complex; }
 			constexpr operator PnTypedIdxSLC        &() noexcept { return this->index_slc; }
 			constexpr operator StringSLC            &() noexcept { return this->string; }
-			constexpr operator TreeMatchVariable    &() noexcept { return this->tree_match; }
-			constexpr operator ValueMatchVariable   &() noexcept { return this->value_match; }
+			constexpr operator TreeMatchVariable    &() noexcept { return this->tree; }
+			constexpr operator ValueMatchVariable   &() noexcept { return this->value; }
 		};
 		static_assert(sizeof(PnTypesUnion) * 8 == 128);
 
@@ -363,14 +363,14 @@ namespace bmath::intern {
 		//algorithms specific to patterns
 		namespace pn_tree {
 
-			//returns pointer to position in parent of value_match, where value_match is to be held in future
-			// (currently value_match is only somewhere in the subtree that it will own, not nesseccarily at the root.
+			//returns pointer to position in parent of value, where value is to be held in future
+			// (currently value is only somewhere in the subtree that it will own, not nesseccarily at the root.
 			//assumes head to be passed at reference to its own storage position
-			PnTypedIdx* find_value_match_subtree(PnStore& store, PnTypedIdx& head, const PnTypedIdx value_match);
+			PnTypedIdx* find_value_match_subtree(PnStore& store, PnTypedIdx& head, const PnTypedIdx value);
 
-			//changes value_match from its state holding two value_proxy directly to actually
-			//having copy_idx and mtch_idx initialized (thus value_match also bubbles up a bit in term)
-			void rearrange_value_match(PnStore& store, PnTypedIdx& head, const PnTypedIdx value_match);
+			//changes value from its state holding two value_proxy directly to actually
+			//having copy_idx and mtch_idx initialized (thus value also bubbles up a bit in term)
+			void rearrange_value_match(PnStore& store, PnTypedIdx& head, const PnTypedIdx value);
 
 			struct Equation { PnTypedIdx lhs_head, rhs_head; };
 
@@ -544,7 +544,7 @@ namespace bmath::intern {
 		//allows to match a sum / product pn_ref in a sum / product ref regardless of order
 		//if no match was found, both PermutationEqualsRes.matched and PermutationEqualsRes.not_matched will be empty, 
 		//  else PermutationEqualsRes.matched will contain the elements in term where a corrensponding part in pattern was found and
-		//  PermutationEqualsRes.not_matched will contain the leftovers (-> empty if MultiVar paticipated).
+		//  PermutationEqualsRes.not_matched will contain the leftovers (-> empty if MultiMatch paticipated).
 		//it is assumed, that pn_ref and ref are both the same variadic type (eighter sum and sum or product and product)
 		PermutationEqualsRes permutation_equals(const pattern::PnRef pn_ref, const Ref ref, pattern::MatchData& match_data);
 

@@ -12,10 +12,9 @@
 #include <concepts>
 #include <compare>
 
-namespace bmath::intern {
-
-	
 #define ASSERT(expr) if (!(expr)) __debugbreak()
+
+namespace bmath::intern {
 
 	constexpr void throw_if(bool cond, const char* const msg)
 	{

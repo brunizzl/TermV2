@@ -61,7 +61,7 @@ namespace bmath::intern {
 		//using Unknown = UnitEnum<"Unknown">;
 		UNIT_ENUM(Unknown);
 
-		using PnVariablesType = SumEnum<Restriction, Form, MultiVar, Unknown>;
+		using PnVariablesType = SumEnum<Restriction, Form, MultiMatch, Unknown>;
 
 		struct TypeProps
 		{
@@ -87,9 +87,9 @@ namespace bmath::intern {
 			{ Restr::any          , "any"           },
 			{ Restr::nn1          , "nn1"           },
 			{ Restr::no_val       , "no_val"        },
-			{ MultiVar::summands  , "summands"      },
-			{ MultiVar::factors   , "factors"       },
-			{ MultiVar::params    , "params"        },
+			{ MultiMatch::summands  , "summands"      },
+			{ MultiMatch::factors   , "factors"       },
+			{ MultiMatch::params    , "params"        },
 		});
 
 		constexpr std::string_view name_of(const PnVariablesType r) noexcept { return find(type_table, &TypeProps::type, r).name; }
@@ -107,12 +107,12 @@ namespace bmath::intern {
 			{ Type(Fn::pow       )            , 5 }, //not between other function types -> assumed to be printed with '^'  
 			{ Type(Leaf::variable)            , 6 },
 			{ Type(Leaf::complex )            , 6 }, //may be printed as sum/product itself, then (maybe) has to add parentheses on its own
-			{ pattern::PnVar::tree_match      , 6 },
-			{ pattern::PnVar::value_match     , 6 },
-			{ pattern::PnVar::value_proxy     , 6 },
-			{ pattern::MultiVar::summands     , 6 },
-			{ pattern::MultiVar::factors      , 6 },
-			{ pattern::MultiVar::params       , 6 },
+			{ pattern::SingleMatch::tree      , 6 },
+			{ pattern::SingleMatch::value     , 6 },
+			{ pattern::SingleMatch::value_proxy     , 6 },
+			{ pattern::MultiMatch::summands     , 6 },
+			{ pattern::MultiMatch::factors      , 6 },
+			{ pattern::MultiMatch::params       , 6 },
 		});
 		static_assert(std::is_sorted(infixr_table.begin(), infixr_table.end(), [](auto a, auto b) { return a.second < b.second; }));
 
@@ -510,8 +510,8 @@ namespace bmath::intern {
 					if (type.is<Form>()) {
 						this->value_table.emplace_back(var_view.to_string_view(0, colon), type.to<Form>());
 					}
-					else if (type.is<MultiVar>()) {
-						this->multi_table.emplace_back(var_view.to_string_view(0, colon), type.to<MultiVar>());
+					else if (type.is<MultiMatch>()) {
+						this->multi_table.emplace_back(var_view.to_string_view(0, colon), type.to<MultiMatch>());
 					}
 					else {
 						assert(type.is<Restriction>());
@@ -545,13 +545,13 @@ namespace bmath::intern {
 			if (const auto iter = search_name(this->tree_table); iter != this->tree_table.end()) {
 				const std::uint32_t match_data_idx = std::distance(this->tree_table.begin(), iter);
 				const TreeMatchVariable var = { match_data_idx, iter->restr };
-				var_idx = PnTypedIdx(store.insert(var), PnVar::tree_match);
+				var_idx = PnTypedIdx(store.insert(var), SingleMatch::tree);
 				(this->build_lhs ? iter->lhs_instances : iter->rhs_instances).push_back(var_idx);
 			}
 			else if (const auto iter = search_name(this->value_table); iter != this->value_table.end()) {
 				const std::uint32_t match_data_idx = std::distance(this->value_table.begin(), iter);
 				const ValueMatchVariable var(match_data_idx, iter->form);
-				var_idx = PnTypedIdx(store.insert(var), PnVar::value_match);
+				var_idx = PnTypedIdx(store.insert(var), SingleMatch::value);
 				(this->build_lhs ? iter->lhs_instances : iter->rhs_instances).push_back(var_idx);
 			}
 			else if (const auto iter = search_name(this->multi_table); iter != this->multi_table.end()) {
@@ -633,7 +633,7 @@ namespace bmath::intern {
 			constexpr bool pattern = std::is_same_v<Type_T, pattern::PnType>;
 
 			if constexpr (pattern) {
-				if (!ref.store->valid_idx(ref.index) && ref.type != pattern::PnVar::value_proxy && !ref.type.is<pattern::MultiVar>()) {
+				if (!ref.store->valid_idx(ref.index) && ref.type != pattern::SingleMatch::value_proxy && !ref.type.is<pattern::MultiMatch>()) {
 					str.append("ERROR");
 					return;
 				}
@@ -945,7 +945,7 @@ namespace bmath::intern {
 			};
 
 			if constexpr (pattern) {
-				if (!ref.store->valid_idx(ref.index) && ref.type != pattern::PnVar::value_proxy && !ref.type.is<pattern::MultiVar>()) {
+				if (!ref.store->valid_idx(ref.index) && ref.type != pattern::SingleMatch::value_proxy && !ref.type.is<pattern::MultiMatch>()) {
 					rows.front().append(" ERROR");
 					return;
 				}
@@ -1013,11 +1013,11 @@ namespace bmath::intern {
 				current_str.append("value      : ");
 			} break;
 			case Type_T(pattern::_tree_match): if constexpr (pattern) {
-				current_str.append("tree_match : ");
+				current_str.append("tree : ");
 			} break;
 			case Type_T(pattern::_value_match): if constexpr (pattern) {
 				const pattern::ValueMatchVariable& var = *ref;
-				current_str.append("value_match: {m:");
+				current_str.append("value: {m:");
 				current_str.append(std::to_string(var.mtch_idx.get_index()));
 				current_str.append(" c:");
 				current_str.append(std::to_string(var.copy_idx.get_index()));

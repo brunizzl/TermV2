@@ -48,13 +48,13 @@ namespace bmath::intern::debug {
 			<< "PnType(Fn::im)                  = " << unsigned(PnType(Fn::im))                  << "\n"
 			<< "PnType(Fn::force)               = " << unsigned(PnType(Fn::force))               << "\n"
 			                                                                                     << "\n"
-			<< "PnType(PnVar::tree_match)       = " << unsigned(PnType(PnVar::tree_match))       << "\n"
-			<< "PnType(PnVar::value_match)      = " << unsigned(PnType(PnVar::value_match))      << "\n"
-			<< "PnType(PnVar::value_proxy)      = " << unsigned(PnType(PnVar::value_proxy))      << "\n"
+			<< "PnType(SingleMatch::tree)       = " << unsigned(PnType(SingleMatch::tree))       << "\n"
+			<< "PnType(SingleMatch::value)      = " << unsigned(PnType(SingleMatch::value))      << "\n"
+			<< "PnType(SingleMatch::value_proxy)      = " << unsigned(PnType(SingleMatch::value_proxy))      << "\n"
 			                                                                                     << "\n"
-			<< "PnType(MultiVar::summands)      = " << unsigned(PnType(MultiVar::summands))      << "\n"
-			<< "PnType(MultiVar::factors)       = " << unsigned(PnType(MultiVar::factors))       << "\n"
-			<< "PnType(MultiVar::params)        = " << unsigned(PnType(MultiVar::params))        << "\n"
+			<< "PnType(MultiMatch::summands)      = " << unsigned(PnType(MultiMatch::summands))      << "\n"
+			<< "PnType(MultiMatch::factors)       = " << unsigned(PnType(MultiMatch::factors))       << "\n"
+			<< "PnType(MultiMatch::params)        = " << unsigned(PnType(MultiMatch::params))        << "\n"
 			                                                                                     << "\n"
 			                                                                                     << "\n"
 			;
@@ -91,13 +91,13 @@ namespace bmath::intern::debug {
 	//PnType(Fn::im)                  = 25
 	//PnType(Fn::force)               = 26
 	//
-	//PnType(PnVar::tree_match)       = 27
-	//PnType(PnVar::value_match)      = 28
+	//PnType(PnVar::tree)       = 27
+	//PnType(PnVar::value)      = 28
 	//PnType(PnVar::value_proxy)      = 29
 	//
-	//PnType(MultiVar::summands)      = 30
-	//PnType(MultiVar::factors)       = 31
-	//PnType(MultiVar::params)        = 32
+	//PnType(MultiMatch::summands)      = 30
+	//PnType(MultiMatch::factors)       = 31
+	//PnType(MultiMatch::params)        = 32
 
 	void test_rechner() 
 	{
