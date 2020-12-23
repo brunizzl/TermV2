@@ -375,7 +375,7 @@ namespace bmath::intern {
 			return build_function(store, input, head.where, build);
 		} break;
 		case Head::Type::variable: {
-			return TypedIdx(str_slc::insert(store, input.to_string_view()), Type(Leaf::variable));
+			return TypedIdx(Variable::build(store, input.to_string_view()), Type(Leaf::variable));
 		} break;
 		default: 
 			assert(false); 
@@ -598,7 +598,7 @@ namespace bmath::intern {
 			case Head::Type::variable: {
 				if (input.chars[0u] == '\'') {
 					if (input.chars[input.size() - 1u] != '\'') [[unlikely]] throw ParseFailure{ input.offset + 1u, "found no matching \"'\"" };
-					return TypedIdx(str_slc::insert(store, input.to_string_view(1u, input.size() - 1u)), Type(Leaf::variable));
+					return TypedIdx(Variable::build(store, input.to_string_view(1u, input.size() - 1u)), Type(Leaf::variable));
 				}
 				else {
 					return this->table.insert_instance(store, input);
@@ -670,7 +670,7 @@ namespace bmath::intern {
 				}
 			} break;
 			case Type(Leaf::variable): {
-				str_slc::read(ref.cast<StringSLC>(), str);
+				str += std::string_view(ref->variable.data, ref->variable.size);
 			} break;
 			case Type(Leaf::complex): {
 				append_complex(ref->complex, str, parent_infixr);
@@ -870,7 +870,7 @@ namespace bmath::intern {
 				str.push_back(')');
 			} break;
 			case Type(Leaf::variable): {
-				str_slc::read(ref.cast<StringSLC>(), str);
+				str += std::string_view(ref->variable.data, ref->variable.size);
 			} break;
 			case Type(Leaf::complex): {
 				append_complex(ref->complex, str, parent_infixr);
@@ -898,16 +898,14 @@ namespace bmath::intern {
 				}
 			};
 			const auto show_string_nodes = [&ref, &rows](std::uint32_t idx, bool show_first) {
-				const StringSLC* str = &ref.store->at(idx).string;
-				if (show_first) {
-					rows[idx].append("(str node part of index " + std::to_string(ref.index) + ": \""
-						+ std::string(str->data, StringSLC::array_size) + "\")");
+				const Variable& var = ref.store->at(idx);
+				const std::size_t end = idx + Variable::node_count(var.capacity);
+				if (!show_first) {
+					idx++;
 				}
-				while (str->next_idx != StringSLC::null_index) {
-					const std::size_t str_idx = str->next_idx;
-					str = &ref.store->at(str->next_idx).string;
-					rows[str_idx].append("(str node part of index " + std::to_string(ref.index) + ": \""
-						+ std::string(str->data, StringSLC::array_size) + "\")");
+				while (idx < end) {
+					rows[idx].append("(str node part of index " + std::to_string(ref.index));
+					idx++;
 				}
 			};
 
@@ -1092,7 +1090,7 @@ namespace bmath::intern {
 			} break;
 			case Type(Leaf::variable): {
 				current_str += ' ';
-				str_slc::read(ref.cast<StringSLC>(), current_str);
+				current_str += std::string_view(ref->variable.data, ref->variable.size);
 			} break;
 			case Type(Leaf::complex): {
 				current_str += ' ';

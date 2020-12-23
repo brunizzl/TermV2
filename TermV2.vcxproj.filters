@@ -59,7 +59,7 @@
     <ClInclude Include="src\transform.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\termArray.hpp">
+    <ClInclude Include="src\termVector.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

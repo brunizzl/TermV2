@@ -725,7 +725,7 @@ namespace bmath::intern {
 				ref.store->free(ref.index);
 			} break;
 			case Type(Leaf::variable): {
-				free_slc(ref.cast<StringSLC>());
+				Variable::free(*ref.store, ref.index);
 			} break;
 			case Type(Leaf::complex): {
 				ref.store->free(ref.index);
@@ -1016,7 +1016,13 @@ namespace bmath::intern {
 				return std::strong_ordering::equal;
 			} break;
 			case Type(Leaf::variable): {
-				return str_slc::compare(ref_1.cast<StringSLC>(), ref_2.cast<StringSLC>());
+				const Variable& var_1 = *ref_1;
+				const Variable& var_2 = *ref_2;
+				const std::size_t size = std::min(var_1.size, var_2.size);
+				if (const std::strong_ordering cmp = compare_arrays(var_1.data, var_2.data, size); cmp != std::strong_ordering::equal) {
+					return cmp;
+				}
+				return var_1.size <=> var_2.size;
 			} break;
 			case Type(Leaf::complex): {
 				const Complex& complex_1 = *ref_1;
@@ -1126,9 +1132,9 @@ namespace bmath::intern {
 				return TypedIdx(dst_index, src_ref.type);
 			} break;
 			case Type(Leaf::variable): {
-				std::string src_name; //in most cases the small string optimisation works, else dont care
-				str_slc::read(src_ref.cast<StringSLC>(), src_name);
-				const std::size_t dst_index = str_slc::insert(dst_store, src_name);
+				const Variable& src_var = *src_ref;
+				const auto src_name = std::string_view(src_var.data, src_var.size);
+				const std::size_t dst_index = Variable::build(dst_store, src_name);
 				return TypedIdx(dst_index, src_ref.type);
 			} break;
 			case Type(Leaf::complex): {
@@ -1251,7 +1257,7 @@ namespace bmath::intern {
 		TypedIdx search_variable(const Ref ref, const std::string_view name)
 		{
 			const auto test_for_name = [name](Ref ref) -> fold::Find<TypedIdx> {
-				return (ref.type == Leaf::variable && str_slc::compare(ref.cast<StringSLC>(), name) == std::strong_ordering::equal) ?
+				return (ref.type == Leaf::variable && std::string_view(ref->variable.data, ref->variable.size) == name) ?
 					fold::done(TypedIdx(ref.index, ref.type)) : //name was found -> cut tree evaluation here
 					fold::more(TypedIdx());
 			};
@@ -1324,8 +1330,11 @@ namespace bmath::intern {
 						}
 						return true;
 					} break;
-					case Type(Leaf::variable):
-						return str_slc::compare(pn_ref.cast<StringSLC>(), ref.cast<StringSLC>()) == std::strong_ordering::equal;
+					case Type(Leaf::variable): {
+						const Variable& var = *ref;
+						const Variable& pn_var = *pn_ref;
+						return std::string_view(var.data, var.size) == std::string_view(pn_var.data, pn_var.size);
+					} break;
 					case Type(Leaf::complex): {
 						const Complex& complex = *ref;
 						const Complex& pn_complex = *pn_ref;
@@ -1566,9 +1575,9 @@ namespace bmath::intern {
 				return TypedIdx(dst_store.insert(dst_params), pn_ref.type);
 			} break;
 			case Type(Leaf::variable): {
-				std::string src_name; //in most cases the small string optimisation works, else dont care
-				str_slc::read(pn_ref.cast<StringSLC>(), src_name);
-				const std::size_t dst_index = str_slc::insert(dst_store, src_name);
+				const Variable& src_var = *pn_ref;
+				const auto src_name = std::string_view(src_var.data, src_var.size);
+				const std::size_t dst_index = Variable::build(dst_store, src_name);
 				return TypedIdx(dst_index, pn_ref.type);
 			} break;
 			case Type(Leaf::complex): 

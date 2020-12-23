@@ -10,6 +10,7 @@
 #include "arithmeticTerm.hpp"
 #include "parseTerm.hpp"
 #include "ioArithmetic.hpp"
+#include "termVector.hpp"
 
 namespace bmath::intern::debug {
 
@@ -329,13 +330,13 @@ namespace bmath::intern::test {
 
 				std::cout << "nach bau: \n" << term.to_string() << "\n\n";
 				std::cout << "speicher nach bau:\n" << term.to_memory_layout() << "\n\n";
-				std::cout << "baum nach bau:\n" << term.to_tree() << "\n\n";
+				//std::cout << "baum nach bau:\n" << term.to_tree() << "\n\n";
 
 				term.establish_order();
 
 				std::cout << "nach vereinfachen in huebsch: \n" << term.to_pretty_string() << "\n\n";
 				std::cout << "speicher nach vereinfachen:\n" << term.to_memory_layout() << "\n\n\n";
-				std::cout << "baum nach vereinfachen:\n" << term.to_tree() << "\n\n";
+				//std::cout << "baum nach vereinfachen:\n" << term.to_tree() << "\n\n";
 			}
 			catch (ParseFailure failure) {
 				std::cout << failure.what << '\n';
@@ -623,6 +624,31 @@ namespace bmath::intern::test {
 
 		std::cout << "final:\n";
 		print();
+	}
+
+	void term_array()
+	{
+		using StringArray = StoredVector<char, 16>;
+		using Store_T = BasicStore<StringArray>;
+		using Ref_T = BasicNodeRef<StringArray, StringArray, Const::yes>;
+
+		static_assert(StringArray::min_capacity == 12u);
+		static_assert(StringArray::values_per_node == 16u);
+
+		Store_T store;
+		const std::vector<std::string> inputs = { "haaaaaaaaaaaaaaaaaaaaaalllllllllllooooo", "du", "nudel", ":)" };
+		std::vector<std::size_t> positions;
+		for (const auto& input : inputs) {
+			positions.push_back(StringArray::build(store, input));
+		}
+
+		for (std::size_t position : positions) {
+			for (char c : Ref_T(store, position)) {
+				std::cout << c;
+			}
+			std::cout << " ";
+		}
+		std::cout << "\n";
 	}
 
 

@@ -10,6 +10,7 @@
 #include "termStore.hpp"
 #include "termColony.hpp"
 #include "parseTerm.hpp"
+#include "termVector.hpp"
 
 namespace bmath::intern {
 
@@ -92,7 +93,7 @@ namespace bmath::intern {
 
 	using TypedIdxSLC = TermSLC<TypedIdx>;
 	using FnParams = std::array<TypedIdx, 4>;
-	using Variable = StringSLC;
+	using Variable = StoredVector<char, 16>;
 	using Complex = std::complex<double>;
 
 	struct NamedFn
@@ -194,7 +195,7 @@ namespace bmath::intern {
 		NamedFn named_fn;
 		Complex complex;
 		TypedIdxSLC index_slc; //representing NamedFn's extra parameters and Sum and Product 
-		StringSLC string;	//Variable is a string
+		Variable variable;
 		pattern::TreeMatchVariable tree_match;    //only expected as part of pattern
 		pattern::ValueMatchVariable value_match;  //only expected as part of pattern
 
@@ -202,7 +203,7 @@ namespace bmath::intern {
 		constexpr TypesUnion(const NamedFn                    & val) noexcept :named_fn(val)    {}
 		constexpr TypesUnion(const Complex                    & val) noexcept :complex(val)     {}
 		constexpr TypesUnion(const TypedIdxSLC                & val) noexcept :index_slc(val)   {}
-		constexpr TypesUnion(const StringSLC                  & val) noexcept :string(val)      {} 
+		constexpr TypesUnion(const Variable                   & val) noexcept :variable(val)    {} 
 		constexpr TypesUnion(const pattern::TreeMatchVariable & val) noexcept :tree_match(val)  {} 
 		constexpr TypesUnion(const pattern::ValueMatchVariable& val) noexcept :value_match(val) {} 
 		constexpr TypesUnion()                                       noexcept :complex(0.0)     {} 
@@ -213,7 +214,7 @@ namespace bmath::intern {
 		constexpr operator const NamedFn                     &() const noexcept { return this->named_fn; }
 		constexpr operator const Complex                     &() const noexcept { return this->complex; }
 		constexpr operator const TypedIdxSLC                 &() const noexcept { return this->index_slc; }
-		constexpr operator const StringSLC                   &() const noexcept { return this->string; }
+		constexpr operator const Variable                    &() const noexcept { return this->variable; }
 		constexpr operator const pattern::TreeMatchVariable  &() const noexcept { return this->tree_match; }
 		constexpr operator const pattern::ValueMatchVariable &() const noexcept { return this->value_match; }
 
@@ -221,7 +222,7 @@ namespace bmath::intern {
 		constexpr operator NamedFn                     &() noexcept { return this->named_fn; }
 		constexpr operator Complex                     &() noexcept { return this->complex; }
 		constexpr operator TypedIdxSLC                 &() noexcept { return this->index_slc; }
-		constexpr operator StringSLC                   &() noexcept { return this->string; }
+		constexpr operator Variable                    &() noexcept { return this->variable; }
 		constexpr operator pattern::TreeMatchVariable  &() noexcept { return this->tree_match; }
 		constexpr operator pattern::ValueMatchVariable &() noexcept { return this->value_match; }
 	};
