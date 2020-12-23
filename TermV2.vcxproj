@@ -129,6 +129,7 @@
     <ClInclude Include="src\ioArithmetic.hpp" />
     <ClInclude Include="src\parseTerm.hpp" />
     <ClInclude Include="src\stupidTests.hpp" />
+    <ClInclude Include="src\termArray.hpp" />
     <ClInclude Include="src\termColony.hpp" />
     <ClInclude Include="src\termStore.hpp" />
     <ClInclude Include="src\transform.hpp" />

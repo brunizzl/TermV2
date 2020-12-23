@@ -79,9 +79,9 @@ namespace bmath::intern {
 			{ Restr::any          , "any"           },
 			{ Restr::nn1          , "nn1"           },
 			{ Restr::no_val       , "no_val"        },
-			{ MultiPn::summands, "summands"      },
-			{ MultiPn::factors , "factors"       },
-			{ MultiPn::params  , "params"        },
+			{ MultiPn::summands   , "summands"      },
+			{ MultiPn::factors    , "factors"       },
+			{ MultiPn::params     , "params"        },
 		});
 
 		constexpr std::string_view name_of(const PnVariablesType r) noexcept { return find(type_table, &TypeProps::type, r).name; }

@@ -89,7 +89,7 @@ namespace bmath::intern {
 
 
 	template<typename Union_T, typename Type_T, Const is_const>
-	struct Iterator
+	struct SLC_Iterator
 	{
 		using Store_T = std::conditional_t<(bool)is_const, const BasicStore<Union_T>, BasicStore<Union_T>>;
 		using SLC_T = std::conditional_t<(bool)is_const, const TermSLC<BasicTypedIdx<Type_T>>, TermSLC<BasicTypedIdx<Type_T>>>;
@@ -104,9 +104,9 @@ namespace bmath::intern {
 		Ref_T ref;				//.index == 0, if whole object represents end()
 		std::uint32_t array_idx;		// == SLC::array_size, if whole object represents end()
 
-		constexpr Iterator(const Ref_T& new_ref, std::uint32_t new_array_idx) :ref(new_ref), array_idx(new_array_idx) {}
+		constexpr SLC_Iterator(const Ref_T& new_ref, std::uint32_t new_array_idx) :ref(new_ref), array_idx(new_array_idx) {}
 
-		constexpr Iterator& operator=(const Iterator& other)
+		constexpr SLC_Iterator& operator=(const SLC_Iterator& other)
 		{
 			assert(this->ref.store == other.ref.store && "only interaction between iterators in same term makes sense");
 			this->ref.index = other.ref.index;
@@ -127,7 +127,7 @@ namespace bmath::intern {
 			}
 		}
 
-		constexpr Iterator& operator++()
+		constexpr SLC_Iterator& operator++()
 		{
 			do {
 				if (++this->array_idx == SLC_T::array_size) [[unlikely]] {
@@ -144,9 +144,9 @@ namespace bmath::intern {
 			return *this;
 		}
 
-		constexpr Iterator operator++(int)
+		constexpr SLC_Iterator operator++(int)
 		{
-			Iterator result = *this;
+			SLC_Iterator result = *this;
 			this->operator++();
 			return result;
 		}
@@ -161,18 +161,18 @@ namespace bmath::intern {
 			return &this->ref->values[this->array_idx]; 
 		}
 
-		constexpr bool operator==(const Iterator& other) const noexcept
+		constexpr bool operator==(const SLC_Iterator& other) const noexcept
 		{
 			assert(this->ref.store == other.ref.store && "only comparison between iterators in same term makes sense");
 			return this->array_idx == other.array_idx && this->ref.index == other.ref.index;
 		}
-	};	//struct Iterator
+	};	//struct SLC_Iterator
 
 
 	template<typename Union_T, typename Type_T, Const is_const>
 	constexpr auto unchecked_begin(const BasicNodeRef<Union_T, TermSLC<BasicTypedIdx<Type_T>>, is_const>& ref)
 	{
-		using Iter = Iterator<Union_T, Type_T, is_const>;
+		using Iter = SLC_Iterator<Union_T, Type_T, is_const>;
 		return Iter(ref, 0u);
 	}
 
@@ -180,7 +180,7 @@ namespace bmath::intern {
 	constexpr auto begin(const BasicNodeRef<Union_T, TermSLC<BasicTypedIdx<Type_T>>, is_const>& ref)
 	{
 		using SLC_T = TermSLC<BasicTypedIdx<Type_T>>;
-		using Iter = Iterator<Union_T, Type_T, is_const>;
+		using Iter = SLC_Iterator<Union_T, Type_T, is_const>;
 		Iter iter = unchecked_begin(ref);
 		if (iter.ref->values[0] == SLC_T::null_value) [[unlikely]] {
 			++iter; //operator++ guarantees to eighter return end or a valid position
@@ -192,7 +192,7 @@ namespace bmath::intern {
 	constexpr auto end(const BasicNodeRef<Union_T, TermSLC<BasicTypedIdx<Type_T>>, is_const>& ref)
 	{
 		using SLC_T = TermSLC<BasicTypedIdx<Type_T>>;
-		using Iter = Iterator<Union_T, Type_T, is_const>;
+		using Iter = SLC_Iterator<Union_T, Type_T, is_const>;
 		return Iter({ *ref.store, 0u }, SLC_T::array_size);
 	}
 

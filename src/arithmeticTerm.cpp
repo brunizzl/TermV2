@@ -1344,10 +1344,10 @@ namespace bmath::intern {
 					}
 					auto& match_info = match_data.info(var);
 					if (match_info.is_set()) {
-						return tree::compare(ref, ref.new_at(match_info.mtch_idx)) == std::strong_ordering::equal;
+						return tree::compare(ref, ref.new_at(match_info.match_idx)) == std::strong_ordering::equal;
 					}
 					else {
-						match_info.mtch_idx = ref.typed_idx();
+						match_info.match_idx = ref.typed_idx();
 						match_info.responsible = pn_ref.typed_idx();
 						return true;
 					}
@@ -1575,7 +1575,7 @@ namespace bmath::intern {
 				return TypedIdx(dst_store.insert(pn_ref->complex), pn_ref.type);
 			case Type(PnNode::tree_match): {
 				const SharedTreeDatum& info = match_data.info(pn_ref->tree_match);
-				return tree::copy(Ref(src_store, info.mtch_idx), dst_store); //call to different copy!
+				return tree::copy(Ref(src_store, info.match_idx), dst_store); //call to different copy!
 			} break;
 			case Type(PnNode::value_match): {
 				const ValueMatchVariable& var = *pn_ref;

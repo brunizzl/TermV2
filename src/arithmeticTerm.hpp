@@ -163,7 +163,7 @@ namespace bmath::intern {
 		//this variation of the match variable can match a value of specific form occuring in a term,
 		//  the form of this value may also be specified using arithmetic operations. 
 		//for example "2*k+1" with k beeing a ValueMatchVariable can match "5" and set value of SharedValueDatum to "2".
-		//that is achieved by not actually storing "2*k+1" as such, but as "k", with mtch_idx of k containing the 
+		//that is achieved by not actually storing "2*k+1" as such, but as "k", with match_idx of k containing the 
 		//  inverse operation: "(p-1)/2", where "p" is not an actual node, but just a PnVariable::value_proxy 
 		//  to indicate the original position of k.
 		//to still allow to copy "2*k+1", the copy_idx of k contains a copy of the original suroundings of k, but again with a "p"
@@ -190,9 +190,6 @@ namespace bmath::intern {
 
 	union TypesUnion
 	{
-	private:
-		char unused; //allows to constexpr default construct union without initialisation
-	public:
 		FnParams fn_params;
 		NamedFn named_fn;
 		Complex complex;
@@ -208,7 +205,7 @@ namespace bmath::intern {
 		constexpr TypesUnion(const StringSLC                  & val) noexcept :string(val)      {} 
 		constexpr TypesUnion(const pattern::TreeMatchVariable & val) noexcept :tree_match(val)  {} 
 		constexpr TypesUnion(const pattern::ValueMatchVariable& val) noexcept :value_match(val) {} 
-		constexpr TypesUnion()                                       noexcept :unused(0)        {} 
+		constexpr TypesUnion()                                       noexcept :complex(0.0)     {} 
 
 		constexpr auto operator<=>(const TypesUnion&) const = default;
 
@@ -247,12 +244,12 @@ namespace bmath::intern {
 		//whitch actually matched, and if the name "a" is already matched, even if the current instance is not.
 		struct SharedTreeDatum
 		{
-			TypedIdx mtch_idx = TypedIdx{}; //indexes in Term to simplify
-			TypedIdx responsible = TypedIdx{}; //the instance of TreeMatchVariable that was setting mtch_idx
+			TypedIdx match_idx = TypedIdx{}; //indexes in Term to simplify
+			TypedIdx responsible = TypedIdx{}; //the instance of TreeMatchVariable that was setting match_idx
 
 			constexpr bool is_set() const noexcept
 			{
-				assert(equivalent(this->responsible != TypedIdx{}, this->mtch_idx != TypedIdx{}));
+				assert(equivalent(this->responsible != TypedIdx{}, this->match_idx != TypedIdx{}));
 				return  this->responsible != TypedIdx{};
 			}
 		};
@@ -324,7 +321,7 @@ namespace bmath::intern {
 			TypedIdx* find_value_match_subtree(Store& store, TypedIdx& head, const TypedIdx value_match);
 
 			//changes value_match from its state holding two value_proxy directly to actually
-			//having copy_idx and mtch_idx initialized (thus value_match also bubbles up a bit in term)
+			//having copy_idx and match_idx initialized (thus value_match also bubbles up a bit in term)
 			void rearrange_value_match(Store& store, TypedIdx& head, const TypedIdx value_match);
 
 			struct Equation { TypedIdx lhs_head, rhs_head; };

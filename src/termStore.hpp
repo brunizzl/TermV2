@@ -56,10 +56,6 @@ namespace bmath::intern {
 		constexpr inline BitSet64* occupancy_data() noexcept { return this->combined_data[this->capacity].table.data; }
 		constexpr inline const BitSet64* occupancy_data() const noexcept { return this->combined_data[this->capacity].table.data; }
 
-		//returns pointer to begin of payload array (same adress as combinded_data, but new type)
-		constexpr inline Payload_T* payload_data() noexcept { return &this->combined_data->payload; }
-		constexpr inline const Payload_T* payload_data() const noexcept { return &this->combined_data->payload; }
-
 
 		//unsave, because if new_capacity is smaller than current this->size_, the last elements are lost and size_ is not shrunk -> possible to access invalid memory
 		void unsave_change_capacity(const std::size_t new_capacity) noexcept
@@ -138,6 +134,10 @@ namespace bmath::intern {
 		} //at_back_allocate_alligned()
 
 	public:
+		//returns pointer to begin of payload array (same adress as combinded_data, but new type)
+		constexpr inline Payload_T* data() noexcept { return &this->combined_data->payload; }
+		constexpr inline const Payload_T* data() const noexcept { return &this->combined_data->payload; }
+
 		constexpr std::size_t size() const noexcept { return this->size_; }
 
 		constexpr bool valid_idx(std::size_t idx) const noexcept 
@@ -176,13 +176,13 @@ namespace bmath::intern {
 		constexpr inline [[nodiscard]] Payload_T& at(const std::size_t idx) noexcept
 		{
 			ASSERT(this->valid_idx(idx));
-			return this->payload_data()[idx];
+			return this->data()[idx];
 		}
 
 		constexpr inline [[nodiscard]] const Payload_T& at(const std::size_t idx) const noexcept
 		{
 			assert(this->valid_idx(idx));
-			return this->payload_data()[idx];
+			return this->data()[idx];
 		}
 
 		//unlike unsave_change_capacity, this allocates space for a (single) Payload_T for the user, instead of (always) resizing the underlying array

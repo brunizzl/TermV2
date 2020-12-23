@@ -26,7 +26,7 @@ nice to have:
 
 idea status:
  - ctor of PnTerm: regroup sums / products if nessecairy to allow value match variables to better catch values
- - TermSLC: only allow null_value at end -> Iterator becomes  simpler (meaning some functions in current form may produce invalid results)
+ - TermSLC: only allow null_value at end -> SLC_Iterator becomes  simpler (meaning some functions in current form may produce invalid results)
  - let each PnTerm have a name in form of a constant c-string (not what pattern is constructed from, but name of rule, e.g. "differentiation: product rule" or something)
  - prettify pattern::Multivar sytax to require (and allow) "..." after variable name 
  - always keep -1 at some known index in store and never allocate new -1 in build_negated and build_inverted (problem: identify bevore copy)
