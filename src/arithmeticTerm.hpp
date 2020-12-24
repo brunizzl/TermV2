@@ -91,7 +91,7 @@ namespace bmath::intern {
 	using TypedIdx = BasicTypedIdx<Type>;
 
 	using FnParams = std::array<TypedIdx, 4>;
-	using TypedIdxVector = StoredVector<TypedIdx>;
+	using VariadicParams = StoredVector<TypedIdx>;
 	using Variable = StoredVector<char>;
 	using Complex = std::complex<double>;
 
@@ -181,14 +181,14 @@ namespace bmath::intern {
 	{
 		FnParams fn_params;
 		Complex complex;
-		TypedIdxVector index_vector; //representing NamedFn's extra parameters and Sum and Product 
+		VariadicParams variadic; //Sum and Product 
 		Variable variable;
 		pattern::TreeMatchVariable tree_match;    //only expected as part of pattern
 		pattern::ValueMatchVariable value_match;  //only expected as part of pattern
 
 		constexpr TypesUnion(const FnParams                   & val) noexcept :fn_params(val)   {}
 		constexpr TypesUnion(const Complex                    & val) noexcept :complex(val)     {}
-		constexpr TypesUnion(const TypedIdxVector             & val) noexcept :index_vector(val)   {}
+		constexpr TypesUnion(const VariadicParams             & val) noexcept :variadic(val)    {}
 		constexpr TypesUnion(const Variable                   & val) noexcept :variable(val)    {} 
 		constexpr TypesUnion(const pattern::TreeMatchVariable & val) noexcept :tree_match(val)  {} 
 		constexpr TypesUnion(const pattern::ValueMatchVariable& val) noexcept :value_match(val) {} 
@@ -198,14 +198,14 @@ namespace bmath::intern {
 
 		constexpr operator const FnParams                    &() const noexcept { return this->fn_params; }
 		constexpr operator const Complex                     &() const noexcept { return this->complex; }
-		constexpr operator const TypedIdxVector              &() const noexcept { return this->index_vector; }
+		constexpr operator const VariadicParams              &() const noexcept { return this->variadic; }
 		constexpr operator const Variable                    &() const noexcept { return this->variable; }
 		constexpr operator const pattern::TreeMatchVariable  &() const noexcept { return this->tree_match; }
 		constexpr operator const pattern::ValueMatchVariable &() const noexcept { return this->value_match; }
 
 		constexpr operator FnParams                    &() noexcept { return this->fn_params; }
 		constexpr operator Complex                     &() noexcept { return this->complex; }
-		constexpr operator TypedIdxVector              &() noexcept { return this->index_vector; }
+		constexpr operator VariadicParams              &() noexcept { return this->variadic; }
 		constexpr operator Variable                    &() noexcept { return this->variable; }
 		constexpr operator pattern::TreeMatchVariable  &() noexcept { return this->tree_match; }
 		constexpr operator pattern::ValueMatchVariable &() noexcept { return this->value_match; }
@@ -377,20 +377,24 @@ namespace bmath::intern {
 
 
 
-		constexpr std::span<TypedIdx> range(FnParams& params, const Type type) noexcept
-		{ return { params.data(), param_count(type) }; }
+		constexpr std::span<const TypedIdx> range(const Ref ref) noexcept
+		{ 
+			return { ref->fn_params.data(), param_count(ref.type) }; 
+		}
 
-		constexpr std::span<const TypedIdx> range(const FnParams& params, const Type type) noexcept
-		{ return { params.data(), param_count(type) }; }
+		constexpr std::span<TypedIdx> range(FnParams& params, const Type type) noexcept
+		{ 
+			return { params.data(), param_count(type) }; 
+		}
 
 	} //namespace fn
 
 	//utility for variadic types (Sum and Product)
 	namespace variadic {
 
-		inline auto         range(const MutRef ref) noexcept { return ref.cast<TypedIdxVector>(); }
-		inline auto& unsave_range(const MutRef ref) noexcept { return ref->index_vector; }
-		inline auto&        range(const    Ref ref) noexcept { return ref->index_vector; }
+		inline auto         range(const MutRef ref) noexcept { return ref.cast<VariadicParams>(); }
+		inline auto& unsave_range(const MutRef ref) noexcept { return ref->variadic; }
+		inline auto&        range(const    Ref ref) noexcept { return ref->variadic; }
 
 	} //namespace variadic
 

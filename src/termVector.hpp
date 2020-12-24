@@ -39,7 +39,7 @@ namespace bmath::intern {
 
 		static constexpr std::size_t node_count(const std::size_t capacity_) noexcept 
 		{	
-			ASSERT((capacity_ + values_per_node - min_capacity) % values_per_node == 0u);
+			assert((capacity_ + values_per_node - min_capacity) % values_per_node == 0u);
 			return (capacity_ + values_per_node - min_capacity) / values_per_node;
 		}
 
@@ -89,44 +89,76 @@ namespace bmath::intern {
 		struct MutEndIndicator { std::uint32_t idx; };
 
 		template<typename Value_T, std::size_t AllocNodeSize, typename Store_T>
-		struct MutIterator
+		class MutIterator
 		{
+			using StoredVector_T = std::conditional_t <std::is_const_v<Value_T>,
+				const StoredVector<std::remove_const_t<Value_T>, AllocNodeSize>,
+				      StoredVector<std::remove_const_t<Value_T>, AllocNodeSize>
+			>;
+
+			using Diff_T = const std::ptrdiff_t;	
+
+			constexpr Value_T* raw_pointer() noexcept
+			{
+				return static_cast<StoredVector_T&>(this->store.at(this->store_idx)).data + this->array_idx; 
+			}
+
+			static constexpr bool valid_interaction(const MutIterator& fst, const MutIterator& snd) noexcept 
+			{
+				return (&fst.store == &snd.store) && (fst.store_idx == snd.store_idx);
+			}
+
+		public:
+			Store_T& store;
+			std::uint32_t store_idx;
+			std::uint32_t array_idx;
+
+			//http://www.cplusplus.com/reference/iterator/RandomAccessIterator/
 			using value_type      = Value_T;
 			using difference_type = std::ptrdiff_t;	
 			using pointer         = Value_T*;
 			using reference       = Value_T&;
 			using iterator_category = std::contiguous_iterator_tag;
 
-			Store_T& store;
-			std::uint32_t store_idx;
-			std::uint32_t array_idx;
-
 			constexpr MutIterator& operator++() noexcept { ++this->array_idx; return *this; }  
 			constexpr MutIterator operator++(int) noexcept { auto result = *this; ++(*this); return result; }
+			constexpr MutIterator& operator+=(Diff_T n) noexcept { this->array_idx += n; return *this; }  
+			constexpr MutIterator operator+(Diff_T n) const noexcept { auto result = *this; result += n; return result; }
 
-			constexpr Value_T& operator*()  noexcept 
+			constexpr MutIterator operator+(const MutIterator& snd) const noexcept 
 			{ 
-				using Mut_T = std::remove_const_t<Value_T>;
-				using StoredVector_T = std::conditional_t <std::is_const_v<Value_T>,
-					const StoredVector<Mut_T, AllocNodeSize>,
-					StoredVector<Mut_T, AllocNodeSize>>;
-				return *(static_cast<StoredVector_T&>(this->store.at(this->store_idx)).data + this->array_idx); 
+				assert(valid_interaction(*this, snd));
+				return MutIterator{ this->store, this->store_idx, this->array_idx + snd.array_idx };
 			}
 
-			constexpr Value_T* operator->() noexcept 
+			constexpr MutIterator& operator--() noexcept { --this->array_idx; return *this; }  
+			constexpr MutIterator operator--(int) noexcept { auto result = *this; --(*this); return result; }
+			constexpr MutIterator& operator-=(Diff_T n) noexcept { this->array_idx -= n; return *this; }  
+			constexpr MutIterator operator-(Diff_T n) const noexcept { auto result = *this; result -= n; return result; }
+
+			constexpr MutIterator operator-(const MutIterator& snd) noexcept 
 			{ 
-				using Mut_T = std::remove_const_t<Value_T>;
-				using StoredVector_T = std::conditional_t <std::is_const_v<Value_T>,
-					const StoredVector<Mut_T, AllocNodeSize>,
-					StoredVector<Mut_T, AllocNodeSize>>;
-				return static_cast<StoredVector_T&>(this->store.at(this->store_idx)).data + this->array_idx; 
+				assert(valid_interaction(*this, snd) && this->array_idx >= snd.array_idx);
+				return MutIterator{ this->store, this->store_idx, this->array_idx - snd.array_idx };
 			}
+
+			constexpr const Value_T& operator*()  const noexcept { return *this->raw_pointer(); }
+			constexpr const Value_T* operator->() const noexcept { return this->raw_pointer(); }
+			constexpr const Value_T& operator[](Diff_T n) const noexcept { return *(this->raw_pointer() + n); }
+			constexpr Value_T& operator*()  noexcept { return *this->raw_pointer(); }
+			constexpr Value_T* operator->() noexcept { return this->raw_pointer(); }
+			constexpr Value_T& operator[](Diff_T n) noexcept { return *(this->raw_pointer() + n); }
 
 			constexpr bool operator==(const MutIterator& snd) const noexcept
 			{
-				assert(&this->store == &snd.store);
-				assert(this->store_idx == snd.store_idx);
+				assert(valid_interaction(*this, snd));
 				return this->offset == snd.offset;
+			}
+
+			constexpr std::strong_ordering operator<=>(const MutIterator& snd) const noexcept
+			{
+				assert(valid_interaction(*this, snd));
+				return this->offset <=> snd.offset;
 			}
 
 			constexpr bool operator==(const MutEndIndicator& end_) const noexcept { return this->array_idx == end_.idx; }

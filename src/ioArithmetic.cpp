@@ -406,7 +406,7 @@ namespace bmath::intern {
 			default: assert(false);
 			}
 		}
-		return TypedIdx(TypedIdxVector::build(store, result_buffer), VariadicTraits::type_name);
+		return TypedIdx(VariadicParams::build(store, result_buffer), VariadicTraits::type_name);
 	} //build_variadic
 
 	template<typename Store_T, typename BuildAny>
@@ -436,7 +436,7 @@ namespace bmath::intern {
 			//	const auto param_view = input.steal_prefix(comma);
 			//	result_buffer.push_back(build_any(store, param_view));
 			//}
-			//return TypedIdx(TypedIdxVector::build(store, result_buffer), Type(Variadic::named_fn));
+			//return TypedIdx(VariadicParams::build(store, result_buffer), Type(Variadic::named_fn));
 			throw ParseFailure { input.offset, "function name unknown" };
 		}
 		else { //build known function
@@ -647,7 +647,7 @@ namespace bmath::intern {
 				str.append(fn::name_of(ref.type.to<Fn>()));
 				str.push_back('(');
 				const char* seperator = "";
-				for (const auto param : fn::range(ref->fn_params, ref.type)) {
+				for (const auto param : fn::range(ref)) {
 					str.append(std::exchange(seperator, ", "));
 					print::append_to_string(ref.new_at(param), str, own_infixr);
 				}
@@ -833,7 +833,7 @@ namespace bmath::intern {
 				str.append(fn::name_of(ref.type.to<Fn>()));
 				str.push_back('(');
 				const char* separator = "";
-				for (const auto param : fn::range(ref->fn_params, ref.type)) {
+				for (const auto param : fn::range(ref)) {
 					str += std::exchange(separator, ", ");
 					str += print::to_pretty_string(ref.new_at(param), infixr(ref.type));
 				}
@@ -858,8 +858,8 @@ namespace bmath::intern {
 		void append_memory_row(const Ref ref, std::vector<std::string>& rows)
 		{
 			const auto show_typedidx_vec_nodes = [&ref, &rows](std::uint32_t idx, bool show_first) {
-				const TypedIdxVector& vec = ref.store->at(idx).index_vector;
-				const std::size_t end = idx + TypedIdxVector::node_count(vec.capacity);
+				const VariadicParams& vec = ref.store->at(idx).variadic;
+				const std::size_t end = idx + VariadicParams::node_count(vec.capacity);
 				if (!show_first) {
 					idx++;
 				}
@@ -901,7 +901,7 @@ namespace bmath::intern {
 			case Type(Variadic::product): {
 				current_str.append("product    : {");
 				const char* separator = "";
-				const TypedIdxVector test = *ref;
+				const VariadicParams test = *ref;
 				for (const auto elem : variadic::range(ref)) {
 					current_str.append(std::exchange(separator, ", "));
 					current_str.append(std::to_string(elem.get_index()));
@@ -914,7 +914,7 @@ namespace bmath::intern {
 				assert(ref.type.is<Fn>());
 				current_str.append("function   : {");
 				const char* separator = "";
-				for (const auto param : fn::range(ref->fn_params, ref.type)) {
+				for (const auto param : fn::range(ref)) {
 					current_str.append(std::exchange(separator, ", "));
 					current_str.append(std::to_string(param.get_index()));
 					print::append_memory_row(ref.new_at(param), rows);
@@ -1037,7 +1037,7 @@ namespace bmath::intern {
 			default: {
 				assert(ref.type.is<Fn>());
 				current_str += fn::name_of(ref.type.to<Fn>());
-				for (const TypedIdx param : fn::range(ref->fn_params, ref.type)) {
+				for (const TypedIdx param : fn::range(ref)) {
 					print::append_tree_row(ref.new_at(param), rows, offset + tab_width);
 				}
 			} break;

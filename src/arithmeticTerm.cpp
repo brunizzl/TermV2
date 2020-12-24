@@ -84,8 +84,8 @@ namespace bmath::intern {
 		{ Type(PnNode::value_proxy  ), 102 }, 
 		{ Type(PnNode::tree_match   ), 103 }, 
 		{ Type(Leaf::variable       ), 104 },
-		{ Type(Variadic::sum              ), 300 },  
-		{ Type(Variadic::product          ), 301 }, 
+		{ Type(Variadic::sum        ), 300 },  
+		{ Type(Variadic::product    ), 301 }, 
 		{ Type(MultiPn::summands    ), 302 }, //kinda special, as they always succeed in matching -> need to be matched last 
 		{ Type(MultiPn::factors     ), 303 }, //kinda special, as they always succeed in matching -> need to be matched last 
 	});
@@ -264,7 +264,7 @@ namespace bmath::intern {
 
 			for (const auto& value : table.value_table) {
 				for (const auto lhs_instance : value.lhs_instances) {
-					pn_tree::rearrange_value_match(lhs_temp, this->lhs_head, lhs_instance);
+					pn_tree::rearrange_value_match(lhs_temp, this->lhs_head, lhs_instance);;
 				}
 				for (const auto rhs_instance : value.rhs_instances) {
 					pn_tree::rearrange_value_match(rhs_temp, this->rhs_head, rhs_instance);
@@ -517,7 +517,7 @@ namespace bmath::intern {
 					case Type(Variadic::product):
 					{
 						StupidBufferVector<TypedIdx, 8> result_buffer = { eq.rhs_head };
-						for (const TypedIdx elem : variadic::range(Ref(store, eq.lhs_head))) {
+						for (const TypedIdx elem : variadic::range(MutRef(store, eq.lhs_head))) {
 							if (tree::contains(Ref(store, elem), to_isolate)) {
 								eq.lhs_head = elem; 
 							}
@@ -529,9 +529,9 @@ namespace bmath::intern {
 							}
 						}
 						//all factors (summands) have been shifted to rhs -> delete SLC (but not recursively, elems have new owner!)
-						TypedIdxVector::free(store, lhs_index);
+						VariadicParams::free(store, lhs_index);
 						//new eq.rhs_head is product (sum) of old eq.rhs_head divided by (minus) eq.lhs_head factors (summands).
-						eq.rhs_head = TypedIdx(TypedIdxVector::build(store, result_buffer), lhs_type);  
+						eq.rhs_head = TypedIdx(VariadicParams::build(store, result_buffer), lhs_type);  
 					} break;
 					case Type(Leaf::variable): 
 						assert(false); break;
@@ -687,7 +687,7 @@ namespace bmath::intern {
 				for (const TypedIdx elem : variadic::range(ref)) {
 					tree::free(ref.new_at(elem));
 				}
-				TypedIdxVector::free(*ref.store, ref.index);
+				VariadicParams::free(*ref.store, ref.index);
 			} break;
 			default: {
 				assert(ref.type.is<Fn>());
@@ -744,7 +744,7 @@ namespace bmath::intern {
 						for (const TypedIdx nested_summand : variadic::unsave_range(ref.new_at(summand))) {
 							new_sum.push_back(nested_summand);
 						}						
-						TypedIdxVector::free(*ref.store, summand.get_index()); //free nested sum, but not nested summands
+						VariadicParams::free(*ref.store, summand.get_index()); //free nested sum, but not nested summands
 						break;
 					case Type(Leaf::complex):						
 						if (const OptComplex res = compute([&] { return value_acc + ref.store->at(summand.get_index()).complex; })) {
@@ -764,15 +764,15 @@ namespace bmath::intern {
 				}
 				
 				if (new_sum.size() == 1u) {
-					TypedIdxVector::free(*ref.store, ref.index); //free old sum (but not summands)
+					VariadicParams::free(*ref.store, ref.index); //free old sum (but not summands)
 					return new_sum.front();
 				}
-				else if (const auto old_capacity = ref->index_vector.capacity; new_sum.size() <= old_capacity) [[likely]] {
-					TypedIdxVector::emplace(*ref, new_sum, old_capacity);
+				else if (const auto old_capacity = ref->variadic.capacity; new_sum.size() <= old_capacity) [[likely]] {
+					VariadicParams::emplace(*ref, new_sum, old_capacity);
 				}
 				else {
-					TypedIdxVector::free(*ref.store, ref.index); //free old sum (but not old summands)
-					return TypedIdx(TypedIdxVector::build(*ref.store, new_sum), Type(Variadic::sum));
+					VariadicParams::free(*ref.store, ref.index); //free old sum (but not old summands)
+					return TypedIdx(VariadicParams::build(*ref.store, new_sum), Type(Variadic::sum));
 				}
 			} break;
 			case Type(Variadic::product): {
@@ -808,7 +808,7 @@ namespace bmath::intern {
 						for (const TypedIdx nested_factor : variadic::unsave_range(ref.new_at(factor))) {
 							new_product.push_back(nested_factor);
 						}
-						TypedIdxVector::free(*ref.store, factor.get_index()); //free nested product, but not nested factors
+						VariadicParams::free(*ref.store, factor.get_index()); //free nested product, but not nested factors
 						break;
 					case Type(Leaf::complex):
 						if (const OptComplex res = compute([&] { return factor_acc * ref.store->at(factor.get_index()).complex; })) {
@@ -839,20 +839,20 @@ namespace bmath::intern {
 				}
 
 				if (new_product.size() == 1u) {
-					TypedIdxVector::free(*ref.store, ref.index); //free old product (but not old factors)
+					VariadicParams::free(*ref.store, ref.index); //free old product (but not old factors)
 					return new_product.front();
 				}
 				else if (new_product.size() == 0u) { 
 					//note: it is not sufficient to make ref a complex number with value 1.0, as even an empty product may hold more than one element in store.
-					TypedIdxVector::free(*ref.store, ref.index); //might as well call tree::free, but there are no factors anyway.
+					VariadicParams::free(*ref.store, ref.index); //might as well call tree::free, but there are no factors anyway.
 					return build_value(*ref.store, 1.0);
 				}
-				else if (const auto old_capacity = ref->index_vector.capacity; new_product.size() <= old_capacity) [[likely]] {
-					TypedIdxVector::emplace(*ref, new_product, old_capacity);
+				else if (const auto old_capacity = ref->variadic.capacity; new_product.size() <= old_capacity) [[likely]] {
+					VariadicParams::emplace(*ref, new_product, old_capacity);
 				}
 				else {
-					TypedIdxVector::free(*ref.store, ref.index); //free old sum (but not old summands)
-					return TypedIdx(TypedIdxVector::build(*ref.store, new_product), Type(Variadic::product));
+					VariadicParams::free(*ref.store, ref.index); //free old sum (but not old summands)
+					return TypedIdx(VariadicParams::build(*ref.store, new_product), Type(Variadic::product));
 				}
 			} break;
 			case Type(Fn::force): {
@@ -865,7 +865,7 @@ namespace bmath::intern {
 				}
 			} break;
 			default: {
-				ASSERT(ref.type.is<Fn>()); 
+				assert(ref.type.is<Fn>()); 
 				FnParams& params = *ref;
 				std::array<OptComplex, 4> res_vals = { OptComplex{}, {}, {}, {} }; //default initialized to NaN
 				for (std::size_t i = 0; i < fn::param_count(ref.type); i++) {
@@ -915,8 +915,8 @@ namespace bmath::intern {
 			case Type(Variadic::sum):
 				[[fallthrough]];
 			case Type(Variadic::product): {
-				const TypedIdxVector& vector_1 = *ref_1;
-				const TypedIdxVector& vector_2 = *ref_2;
+				const VariadicParams& vector_1 = *ref_1;
+				const VariadicParams& vector_2 = *ref_2;
 				if (vector_1.size != vector_2.size) {
 					return vector_1.size <=> vector_2.size;
 				}
@@ -936,8 +936,8 @@ namespace bmath::intern {
 			} break;
 			default: {
 				assert(ref_1.type.is<Fn>() && ref_2.type.is<Fn>());
-				auto range_1 = fn::range(ref_1->fn_params, ref_1.type);
-				auto range_2 = fn::range(ref_2->fn_params, ref_2.type);
+				auto range_1 = fn::range(ref_1);
+				auto range_2 = fn::range(ref_2);
 				auto iter_1 = range_1.begin();
 				auto iter_2 = range_2.begin();
 				for (; iter_1 != range_1.end(); ++iter_1, ++iter_2) { //iter_1 and iter_2 both go over same number of params -> only test iter_1 for end
@@ -1003,7 +1003,7 @@ namespace bmath::intern {
 				};
 
 				if (ref.type == Variadic::sum || ref.type == Variadic::product) {
-					TypedIdxVector& operation = *ref;
+					VariadicParams& operation = *ref;
 					std::sort(operation.begin(), operation.end(), compare_function);
 				}
 				return fold::Void{};
@@ -1032,15 +1032,15 @@ namespace bmath::intern {
 			case Type(Variadic::sum): 
 				[[fallthrough]];
 			case Type(Variadic::product): {
-				const std::uint32_t size = src_ref->index_vector.size;
-				const std::uint32_t capacity = src_ref->index_vector.capacity;
-				const std::uint32_t node_count = TypedIdxVector::node_count(capacity);
+				const std::uint32_t size = src_ref->variadic.size;
+				const std::uint32_t capacity = src_ref->variadic.capacity;
+				const std::uint32_t node_count = VariadicParams::node_count(capacity);
 
 				const std::uint32_t dst_index = dst_store.allocate_n(node_count);
-				dst_store.at(dst_index) = TypedIdxVector(size, capacity);
+				dst_store.at(dst_index) = VariadicParams(size, capacity);
 
-				auto src_iter = save_begin(src_ref.cast<TypedIdxVector>());
-				auto dst_iter = begin(MutRef(dst_store, dst_index).cast<TypedIdxVector>());
+				auto src_iter = save_begin(src_ref.cast<VariadicParams>());
+				auto dst_iter = begin(MutRef(dst_store, dst_index).cast<VariadicParams>());
 				const auto end = stored_vector::MutEndIndicator{ size };
 				while (dst_iter != end) {
 					const TypedIdx dst_elem = tree::copy(src_ref.new_at(*src_iter), dst_store);
@@ -1104,7 +1104,7 @@ namespace bmath::intern {
 		{
 			return fold::simple_fold<fold::FindBool>(ref, 
 				[to_contain](const Ref ref) -> fold::FindBool 
-				{ return TypedIdx(ref.index, ref.type) == to_contain; }
+				{ return ref.typed_idx() == to_contain; }
 			);
 		} //contains
 
@@ -1211,10 +1211,10 @@ namespace bmath::intern {
 					} break;
 					default: {
 						assert(pn_ref.type.is<Fn>());
-						auto pn_range = fn::range(pn_ref->fn_params, pn_ref.type);
+						auto pn_range = fn::range(pn_ref);
 						auto pn_iter = pn_range.begin();
 						const auto pn_stop = end(pn_range);
-						auto range = fn::range(ref->fn_params, ref.type);
+						auto range = fn::range(ref);
 						auto iter = range.begin();
 						for (; pn_iter != pn_stop; ++pn_iter, ++iter) { //iter and pn_iter both go over same number of params
 							if (!match::equals(pn_ref.new_at(*pn_iter), ref.new_at(*iter), match_data)) {
@@ -1429,14 +1429,14 @@ namespace bmath::intern {
 			case Type(Variadic::sum): 
 				[[fallthrough]];
 			case Type(Variadic::product): {
-				const std::uint32_t size = pn_ref->index_vector.size;
-				const std::uint32_t capacity = pn_ref->index_vector.capacity;
-				const std::uint32_t node_count = TypedIdxVector::node_count(capacity);
+				const std::uint32_t size = pn_ref->variadic.size;
+				const std::uint32_t capacity = pn_ref->variadic.capacity;
+				const std::uint32_t node_count = VariadicParams::node_count(capacity);
 
 				assert(pn_ref.store != &src_store);
 				const std::uint32_t dst_index = dst_store.allocate_n(node_count);
-				dst_store.at(dst_index) = TypedIdxVector(size, capacity);
-				auto dst_iter = begin(MutRef(dst_store, dst_index).cast<TypedIdxVector>());
+				dst_store.at(dst_index) = VariadicParams(size, capacity);
+				auto dst_iter = begin(MutRef(dst_store, dst_index).cast<VariadicParams>());
 
 				for (const TypedIdx pn_elem : variadic::range(pn_ref)) {
 					const TypedIdx dst_elem = match::copy(pn_ref.new_at(pn_elem), match_data, src_store, dst_store);
@@ -1479,12 +1479,12 @@ namespace bmath::intern {
 				[[fallthrough]];
 			case Type(MultiPn::factors): {
 				const SharedMultiDatum& info = match_data.multi_info(pn_ref.index);
-				const std::uint32_t capacity = TypedIdxVector::smallest_fit_capacity(info.match_indices.size());
-				const std::uint32_t nodes_count = TypedIdxVector::node_count(capacity);
+				const std::uint32_t capacity = VariadicParams::smallest_fit_capacity(info.match_indices.size());
+				const std::uint32_t nodes_count = VariadicParams::node_count(capacity);
 
 				const std::uint32_t res_idx = dst_store.allocate_n(nodes_count);
-				dst_store.at(res_idx) = TypedIdxVector(info.match_indices.size(), capacity);
-				auto dst_iter = begin(MutRef(dst_store, res_idx).cast<TypedIdxVector>());
+				dst_store.at(res_idx) = VariadicParams(info.match_indices.size(), capacity);
+				auto dst_iter = begin(MutRef(dst_store, res_idx).cast<VariadicParams>());
 
 				for (const TypedIdx elem : info.match_indices) {
 					const TypedIdx dst_elem = tree::copy(Ref(src_store, elem), dst_store); //call to different copy!
@@ -1508,13 +1508,13 @@ namespace bmath::intern {
 				if (matched_elems.size() > 0u) {
 					Store copy_buffer;
 					copy_buffer.reserve(32u);
-					TypedIdxVector::free(*ref.store, ref.index);  //shallow deletion only of initial sum / product itself, not of its operands
+					VariadicParams::free(*ref.store, ref.index);  //shallow deletion only of initial sum / product itself, not of its operands
 					const TypedIdx buffer_head = match::copy(to, match_data, *ref.store, copy_buffer);
 					for (const TypedIdx elem : matched_elems) { //delete each summand / factor occuring in match
 						tree::free(ref.new_at(elem));
 					}
 					remaining_elems.push_back(tree::copy(Ref(copy_buffer, buffer_head), *ref.store));
-					const std::uint32_t res_idx = TypedIdxVector::build(*ref.store, remaining_elems);
+					const std::uint32_t res_idx = VariadicParams::build(*ref.store, remaining_elems);
 					return { TypedIdx(res_idx, ref.type) };
 				}
 			}
@@ -1583,7 +1583,6 @@ namespace bmath::intern {
 		template<typename Res_T, typename Union_T, typename Type_T, Const is_const, typename Apply>
 		Res_T simple_fold(const BasicRef<Union_T, Type_T, is_const> ref, Apply apply)
 		{
-			constexpr bool pattern = std::is_same_v<Type_T, Type>;
 			constexpr bool return_early_possible = ReturnEarlyPossible<Res_T>::value;
 
 			switch (ref.type) {
@@ -1597,9 +1596,17 @@ namespace bmath::intern {
 			} break;
 			default: {
 				assert(ref.type.is<Fn>());
-				for (const auto param : fn::range(ref->fn_params, ref.type)) {
-					const Res_T param_res = fold::simple_fold<Res_T>(ref.new_at(param), apply);
-					if constexpr (return_early_possible) { if (param_res.return_early()) { return param_res; } }
+				if constexpr (is_const == Const::yes) {
+					for (const auto param : fn::range(ref)) {
+						const Res_T param_res = fold::simple_fold<Res_T>(ref.new_at(param), apply);
+						if constexpr (return_early_possible) { if (param_res.return_early()) { return param_res; } }
+					}
+				}
+				else {
+					for (const auto param : fn::range(ref->fn_params, ref.type)) {
+						const Res_T param_res = fold::simple_fold<Res_T>(ref.new_at(param), apply);
+						if constexpr (return_early_possible) { if (param_res.return_early()) { return param_res; } }
+					}
 				}
 			} break;
 			case Type_T(Leaf::variable): 
@@ -1608,7 +1615,7 @@ namespace bmath::intern {
 				break;
 			case Type_T(PnNode::tree_match): 
 				break;
-			case Type_T(PnNode::value_match): if constexpr (pattern) {
+			case Type_T(PnNode::value_match): {
 				const pattern::ValueMatchVariable var = *ref;
 				const Res_T elem_res_1 = fold::simple_fold<Res_T>(ref.new_at(var.mtch_idx), apply);
 				if constexpr (return_early_possible) { if (elem_res_1.return_early()) { return elem_res_1; } }
@@ -1630,8 +1637,6 @@ namespace bmath::intern {
 		template<typename Res_T, typename OpAccumulator, typename Union_T, typename Type_T, Const is_const, typename LeafApply, typename... AccInit>
 		Res_T tree_fold(const BasicRef<Union_T, Type_T, is_const> ref, LeafApply leaf_apply, const AccInit... init)
 		{
-			constexpr bool pattern = std::is_same_v<Type_T, Type>;
-
 			switch (ref.type) {
 			case Type_T(Variadic::sum): 
 				[[fallthrough]];
@@ -1645,12 +1650,19 @@ namespace bmath::intern {
 			default: {
 				assert(ref.type.is<Fn>());
 				OpAccumulator acc(ref, init...);
-				for (const auto param : fn::range(ref->fn_params, ref.type)) {
-					acc.consume(fold::tree_fold<Res_T, OpAccumulator>(ref.new_at(param), leaf_apply, init...));
+				if constexpr (is_const == Const::yes) {
+					for (const auto param : fn::range(ref)) {
+						acc.consume(fold::tree_fold<Res_T, OpAccumulator>(ref.new_at(param), leaf_apply, init...));
+					}
+				}
+				else {
+					for (const auto param : fn::range(ref->fn_params, ref.type)) {
+						acc.consume(fold::tree_fold<Res_T, OpAccumulator>(ref.new_at(param), leaf_apply, init...));
+					}
 				}
 				return acc.result();		
 			}
-			case Type_T(PnNode::value_match): if constexpr (pattern) {
+			case Type_T(PnNode::value_match): {
 				OpAccumulator acc(ref, init...);
 				const pattern::ValueMatchVariable var = *ref;
 				acc.consume(fold::tree_fold<Res_T, OpAccumulator>(ref.new_at(var.mtch_idx), leaf_apply, init...));

@@ -18,8 +18,8 @@ namespace bmath::intern::debug {
 		using namespace pattern;
 		static_assert(unsigned(Type::COUNT) == unsigned(Type(Type::COUNT)), "else at least a second version of this function is needed");
 		std::cout
-			<< "Type(Op::sum)                  = " << unsigned(Type(Variadic::sum))                  << "\n"
-			<< "Type(Op::product)              = " << unsigned(Type(Variadic::product))              << "\n"
+			<< "Type(Variadic::sum)            = " << unsigned(Type(Variadic::sum))            << "\n"
+			<< "Type(Variadic::product)        = " << unsigned(Type(Variadic::product))        << "\n"
 			                                                                                   << "\n"
 			<< "Type(Leaf::variable)           = " << unsigned(Type(Leaf::variable))           << "\n"
 			<< "Type(Leaf::complex)            = " << unsigned(Type(Leaf::complex))            << "\n"
@@ -51,59 +51,20 @@ namespace bmath::intern::debug {
 			<< "Type(PnNode::value_match)      = " << unsigned(Type(PnNode::value_match))      << "\n"
 			<< "Type(PnNode::value_proxy)      = " << unsigned(Type(PnNode::value_proxy))      << "\n"
 			                                                                                   << "\n"
-			<< "Type(MultiPn::summands)     = " << unsigned(Type(MultiPn::summands))     << "\n"
-			<< "Type(MultiPn::factors)      = " << unsigned(Type(MultiPn::factors))      << "\n"
-			<< "Type(MultiPn::params)       = " << unsigned(Type(MultiPn::params))       << "\n"
+			<< "Type(MultiPn::summands)        = " << unsigned(Type(MultiPn::summands))        << "\n"
+			<< "Type(MultiPn::factors)         = " << unsigned(Type(MultiPn::factors))         << "\n"
+			<< "Type(MultiPn::params)          = " << unsigned(Type(MultiPn::params))          << "\n"
 			                                                                                   << "\n"
 			                                                                                   << "\n"
 			;
 	} //enumerate_pn_type
 
-	//output as of 20.12.2020:
-	//Type(Variadic::sum)                 = 0
-	//Type(Variadic::product)             = 1
-	//Type(Variadic::named_fn)            = 2
-	//
-	//Type(Leaf::variable)          = 3
-	//Type(Leaf::complex)           = 4
-	//
-	//Type(Fn::pow)                 = 5
-	//Type(Fn::log)                 = 6
-	//Type(Fn::sqrt)                = 7
-	//Type(Fn::exp)                 = 8
-	//Type(Fn::ln)                  = 9
-	//Type(Fn::sin)                 = 10
-	//Type(Fn::cos)                 = 11
-	//Type(Fn::tan)                 = 12
-	//Type(Fn::sinh)                = 13
-	//Type(Fn::cosh)                = 14
-	//Type(Fn::tanh)                = 15
-	//Type(Fn::asin)                = 16
-	//Type(Fn::acos)                = 17
-	//Type(Fn::atan)                = 18
-	//Type(Fn::asinh)               = 19
-	//Type(Fn::acosh)               = 20
-	//Type(Fn::atanh)               = 21
-	//Type(Fn::abs)                 = 22
-	//Type(Fn::arg)                 = 23
-	//Type(Fn::re)                  = 24
-	//Type(Fn::im)                  = 25
-	//Type(Fn::force)               = 26
-	//
-	//Type(MatchType::tree_match)       = 27
-	//Type(MatchType::value_match)      = 28
-	//Type(MatchType::value_proxy)      = 29
-	//
-	//Type(MultiPn::summands)      = 30
-	//Type(MultiPn::factors)       = 31
-	//Type(MultiPn::params)        = 32
-
 	void test_rechner() 
 	{
 		static const auto patterns = std::to_array<pattern::PnTerm>({ 
-			{ "x :factors | x * 0 = 0" },
-			{ "x          | 0 ^ x = 0" },
-			{ "x          | x ^ 1 = x" },
+			{ "x :factors | 0 x = 0" },
+			{ "x          | 0^x = 0" },
+			{ "x          | x^1 = x" },
 			
 			{ "x, a, b | (x^a)^b = x^(a*b)" },
 			{ "x       | x x     = x^2" }, 
@@ -133,35 +94,6 @@ namespace bmath::intern::debug {
 			{ "k :int | sin(k           'pi') =  0" },
 			{ "k :int | sin((2 k + 0.5) 'pi') =  1" },
 			{ "k :int | sin((2 k + 1.5) 'pi') = -1" },
-		
-			////exponential runtime fibonacci implementation:
-			//{ "fib(0) = 0" },
-			//{ "fib(1) = 1" },
-			//{ "n :nat | fib(n) = fib(n - 1) + fib(n - 2)" },
-			//
-			////reversing a list:
-			//{ "xs :params | reverse(list{xs}) = reverse'(list{}, list{xs})" },
-			//{ "xs :params, y, ys :params | reverse'(list{xs}, list{y, ys}) = reverse'(list{y, xs}, list{ys})" },
-			//{ "xs :params,               | reverse'(list{xs}, list{})      = list{xs}" },
-			//
-			////listing first n fibonacci numbers:
-			//{ "n :nat0                    | fib_n(n + 2)                   = reverse(list_fibs(n, list{1, 0}))" },
-			//{ "n :nat, a, b, tail :params | list_fibs(n, list{a, b, tail}) = list_fibs(n - 1, list{force(a + b), a, b, tail})" },
-			//{ "              tail :params | list_fibs(0, list{tail})       = list{tail}" },
-			//
-			////sorting numbers:
-			//{ "cond :not_positive, true_res, false_res | if_positive(cond, true_res, false_res) = false_res" },
-			//{ "cond :positive,     true_res, false_res | if_positive(cond, true_res, false_res) = true_res" },
-			//
-			//{ "p :real, xs :params, y :real, ys :params | filter_le(p, list{xs}, list{y, ys}) = filter_le(p, if_positive[force(p - y), list{xs}, list{xs, y}], list{ys})" },
-			//{ "p :real, xs :params,                     | filter_le(p, list{xs}, list{})      = list{xs}" },
-			//
-			//{ "p :real, xs :params, y :real, ys :params | filter_s(p, list{xs}, list{y, ys}) = filter_s(p, if_positive[force(p - y), list{xs, y}, list{xs}], list{ys})" },
-			//{ "p :real, xs :params,                     | filter_s(p, list{xs}, list{})      = list{xs}" },
-			//
-			//{ "p :real, xs :params | sort(list{p, xs}) = weird_concat(sort(filter_s(p, list{}, list{xs})), p, sort(filter_le(p, list{}, list{xs})))" },
-			//{ "                    | sort(list{})      = list{}" },
-			//{ "xs :params, y, zs :params | weird_concat(list{xs}, y, list{zs}) = list{xs, y, zs}" }, 			
 			
 			//differentiation rules:
 			{ "x :variable                      | diff(x, x)      = 1" },
@@ -210,7 +142,7 @@ namespace bmath::intern::debug {
 					}
 				} while (changed);
 				std::cout << "result:   " << test.to_pretty_string() << "\n";
-				std::cout << test.to_memory_layout() << "\n";
+				//std::cout << test.to_memory_layout() << "\n";
 				//std::cout << test.to_tree() << "\n";
 				std::cout << "\n";
 			}
