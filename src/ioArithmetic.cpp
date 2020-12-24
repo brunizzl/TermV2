@@ -12,11 +12,11 @@ namespace bmath::intern {
 	/////////////////////////////////////////////////////////////////////local definitions//////////////////////////////////////////////////////////////////////////////////
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	namespace vc {
+	namespace variadic {
 
 		struct SumTraits
 		{
-			static constexpr Type type_name = Type(Op::sum);
+			static constexpr Type type_name = Type(Variadic::sum);
 			static constexpr char operator_char = '+';
 			static constexpr char inverse_operator_char = '-';
 			static constexpr Token operator_token = token::sum;
@@ -24,13 +24,13 @@ namespace bmath::intern {
 
 		struct ProductTraits
 		{
-			static constexpr Type type_name = Type(Op::product);
+			static constexpr Type type_name = Type(Variadic::product);
 			static constexpr char operator_char = '*';
 			static constexpr char inverse_operator_char = '/';
 			static constexpr Token operator_token = token::product;
 		};
 
-	} //namespace vc
+	} //namespace variadic
 
 	//VariadicTraits must include:
 	//unsing declaration Object_T: type to construct (e.g. Sum)
@@ -62,8 +62,8 @@ namespace bmath::intern {
 		};
 
 		constexpr auto type_table = std::to_array<TypeProps>({
-			{ Op::sum             , "sum"           },
-			{ Op::product         , "product"       },
+			{ Variadic::sum             , "sum"           },
+			{ Variadic::product         , "product"       },
 			{ Leaf::variable      , "variable"      },
 			{ Leaf::complex       , "value"         }, //not to be mistaken for Form::complex
 			{ Restr::function     , "fn"            },
@@ -93,18 +93,17 @@ namespace bmath::intern {
 
 		//operator precedence (used to decide if parentheses are nessecary in out string)
 		constexpr auto infixr_table = std::to_array<std::pair<Type, int>>({
-			{ Type(Op::named_fn            ), 0 },
-			{ Type(Op::sum                 ), 2 },
-			{ Type(Op::product             ), 4 },	
-			{ Type(Fn::pow                 ), 5 }, //not between other function types -> assumed to be printed with '^'  
-			{ Type(Leaf::variable          ), 6 },
-			{ Type(Leaf::complex           ), 6 }, //may be printed as sum/product itself, then (maybe) has to add parentheses on its own
-			{ Type(PnNode::tree_match       ), 6 },
-			{ Type(PnNode::value_match      ), 6 },
+			{ Type(Variadic::sum            ), 2 },
+			{ Type(Variadic::product        ), 4 },	
+			{ Type(Fn::pow            ), 5 }, //not between other function types -> assumed to be printed with '^'  
+			{ Type(Leaf::variable     ), 6 },
+			{ Type(Leaf::complex      ), 6 }, //may be printed as sum/product itself, then (maybe) has to add parentheses on its own
+			{ Type(PnNode::tree_match ), 6 },
+			{ Type(PnNode::value_match), 6 },
 			{ Type(PnNode::value_proxy), 6 },
-			{ Type(MultiPn::summands    ), 6 },
-			{ Type(MultiPn::factors     ), 6 },
-			{ Type(MultiPn::params      ), 6 },
+			{ Type(MultiPn::summands  ), 6 },
+			{ Type(MultiPn::factors   ), 6 },
+			{ Type(MultiPn::params    ), 6 },
 		});
 		static_assert(std::is_sorted(infixr_table.begin(), infixr_table.end(), [](auto a, auto b) { return a.second < b.second; }));
 
@@ -141,17 +140,17 @@ namespace bmath::intern {
 			bool parentheses = false;
 
 			if (val.real() != 0.0 && val.imag() != 0.0) {
-				parentheses = parent_operator_precedence > infixr(Type(Op::sum));
+				parentheses = parent_operator_precedence > infixr(Type(Variadic::sum));
 				buffer << val.real();
 				add_im_to_stream(val.imag(), Flag::showpos);		
 			}
 			else if (val.real() != 0.0 && val.imag() == 0.0) {
-				parentheses = val.real() < 0.0 && parent_operator_precedence >= infixr(Type(Op::sum));	//leading '-'
+				parentheses = val.real() < 0.0 && parent_operator_precedence >= infixr(Type(Variadic::sum));	//leading '-'
 				buffer << val.real();
 			}
 			else if (val.real() == 0.0 && val.imag() != 0.0) {
-				parentheses = val.imag() < 0.0 && parent_operator_precedence >= infixr(Type(Op::sum));	//leading '-'	
-				parentheses |= parent_operator_precedence > infixr(Type(Op::product));	//*i
+				parentheses = val.imag() < 0.0 && parent_operator_precedence >= infixr(Type(Variadic::sum));	//leading '-'	
+				parentheses |= parent_operator_precedence > infixr(Type(Variadic::product));	//*i
 				add_im_to_stream(val.imag(), Flag::noshowpos);
 			}
 			else {
@@ -341,7 +340,7 @@ namespace bmath::intern {
 		}
 		switch (head.type) {
 		case Head::Type::sum: {
-			return build_variadic<vc::SumTraits>(store, input, head.where, build_negated<Store>, build);
+			return build_variadic<variadic::SumTraits>(store, input, head.where, build_negated<Store>, build);
 		} break;
 		case Head::Type::negate: {
 			input.remove_prefix(1u);  //remove minus sign
@@ -349,7 +348,7 @@ namespace bmath::intern {
 			return build_negated(store, to_negate);
 		} break;
 		case Head::Type::product: {
-			return build_variadic<vc::ProductTraits>(store, input, head.where, build_inverted<Store>, build);
+			return build_variadic<variadic::ProductTraits>(store, input, head.where, build_inverted<Store>, build);
 		} break;
 		case Head::Type::power: {
 			const auto base_view = input.steal_prefix(head.where);
@@ -386,12 +385,10 @@ namespace bmath::intern {
 	template<typename VariadicTraits, typename Store_T, typename BuildInverse, typename BuildAny>
 	TypedIdx build_variadic(Store_T& store, ParseView input, std::size_t op_idx, BuildInverse build_inverse, BuildAny build_any)
 	{
-		const std::size_t variadic_idx = store.insert(TypedIdxSLC());
-		std::size_t last_node_idx;
+		StupidBufferVector<TypedIdx, 16> result_buffer;
 		{
 			const ParseView subterm_view = input.steal_prefix(op_idx);
-			const TypedIdx subterm = build_any(store, subterm_view);
-			last_node_idx = TypedIdxSLC::insert_new(store, variadic_idx, subterm);
+			result_buffer.push_back(build_any(store, subterm_view));
 		}
 		while (input.size()) {
 			const char current_operator = input.chars[0u];
@@ -401,15 +398,15 @@ namespace bmath::intern {
 			const TypedIdx subterm = build_any(store, subterm_view);
 			switch (current_operator) {
 			case VariadicTraits::operator_char:
-				last_node_idx = TypedIdxSLC::insert_new(store, last_node_idx, subterm);
+				result_buffer.push_back(subterm);
 				break;
 			case VariadicTraits::inverse_operator_char:
-				last_node_idx = TypedIdxSLC::insert_new(store, last_node_idx, build_inverse(store, subterm));
+				result_buffer.push_back(build_inverse(store, subterm));
 				break;
 			default: assert(false);
 			}
 		}
-		return TypedIdx(variadic_idx, VariadicTraits::type_name);
+		return TypedIdx(TypedIdxVector::build(store, result_buffer), VariadicTraits::type_name);
 	} //build_variadic
 
 	template<typename Store_T, typename BuildAny>
@@ -417,33 +414,30 @@ namespace bmath::intern {
 	{
 		const auto type = fn::type_of(input.to_string_view(0u, open_par));
 		if (type == Fn::COUNT) { //build generic function
-			const std::size_t result_index = store.allocate(); //allocate function node first -> better positioning in store
-			NamedFn result;
-			{//writing name in result
-				const auto new_name = std::string_view(input.chars, open_par);
-				if (new_name.size() > NamedFn::max_name_size) [[unlikely]] throw ParseFailure{ input.offset, "named_fn name exceeds max length" };
-				std::copy(new_name.begin(), new_name.end(), &result.name[0]);
-			}
-			//writing parameters in result
-			input.remove_suffix(1u);            //"pow(2,4)" -> "pow(2,4"
-			input.remove_prefix(open_par + 1u); //"pow(2,4" ->      "2,4"
-			result.params_idx = store.insert(TypedIdxSLC());
-			std::size_t last_node_idx = result.params_idx;
-			if (input.size()) { //else no parameters at all
-				const std::size_t comma = find_first_of_skip_pars(input.tokens, token::comma);
-				const auto param_view = input.steal_prefix(comma); //now input starts with comma
-				const TypedIdx param = build_any(store, param_view);
-				last_node_idx = TypedIdxSLC::insert_new(store, last_node_idx, param);
-			}
-			while (input.size()) {
-				input.remove_prefix(1u); //erase comma
-				const std::size_t comma = find_first_of_skip_pars(input.tokens, token::comma);
-				const auto param_view = input.steal_prefix(comma);
-				const TypedIdx param = build_any(store, param_view);
-				last_node_idx = TypedIdxSLC::insert_new(store, last_node_idx, param);
-			}
-			store.at(result_index) = result;
-			return TypedIdx(result_index, Type(Op::named_fn));
+			//const std::size_t result_index = store.allocate(); //allocate function node first -> better positioning in store
+			//NamedFn result;
+			//{//writing name in result
+			//	const auto new_name = std::string_view(input.chars, open_par);
+			//	if (new_name.size() > NamedFn::max_name_size) [[unlikely]] throw ParseFailure{ input.offset, "named_fn name exceeds max length" };
+			//	std::copy(new_name.begin(), new_name.end(), &result.name[0]);
+			//}
+			////writing parameters in result
+			//input.remove_suffix(1u);            //"pow(2,4)" -> "pow(2,4"
+			//input.remove_prefix(open_par + 1u); //"pow(2,4" ->      "2,4"
+			//StupidBufferVector<TypedIdx, 16> result_buffer;
+			//if (input.size()) { //else no parameters at all
+			//	const std::size_t comma = find_first_of_skip_pars(input.tokens, token::comma);
+			//	const auto param_view = input.steal_prefix(comma); //now input starts with comma
+			//	result_buffer.push_back(build_any(store, param_view));
+			//}
+			//while (input.size()) {
+			//	input.remove_prefix(1u); //erase comma
+			//	const std::size_t comma = find_first_of_skip_pars(input.tokens, token::comma);
+			//	const auto param_view = input.steal_prefix(comma);
+			//	result_buffer.push_back(build_any(store, param_view));
+			//}
+			//return TypedIdx(TypedIdxVector::build(store, result_buffer), Type(Variadic::named_fn));
+			throw ParseFailure { input.offset, "function name unknown" };
 		}
 		else { //build known function
 			const std::size_t result_index = store.allocate(); //allocate function node first -> better positioning in store
@@ -562,7 +556,7 @@ namespace bmath::intern {
 			}
 			switch (head.type) {
 			case Head::Type::sum: {
-				return build_variadic<vc::SumTraits>(store, input, head.where, build_negated<Store>, *this);
+				return build_variadic<variadic::SumTraits>(store, input, head.where, build_negated<Store>, *this);
 			} break;
 			case Head::Type::negate: {
 				input.remove_prefix(1u);  //remove minus sign
@@ -570,7 +564,7 @@ namespace bmath::intern {
 				return build_negated(store, to_negate);
 			} break;
 			case Head::Type::product: {
-				return build_variadic<vc::ProductTraits>(store, input, head.where, build_inverted<Store>, *this);
+				return build_variadic<variadic::ProductTraits>(store, input, head.where, build_inverted<Store>, *this);
 			} break;
 			case Head::Type::power: {
 				const auto base_view = input.steal_prefix(head.where);
@@ -627,16 +621,16 @@ namespace bmath::intern {
 			}
 
 			switch (ref.type) {
-			case Type(Op::sum): {
+			case Type(Variadic::sum): {
 				const char* seperator = "";
-				for (const auto summand : vc::range(ref)) {
+				for (const auto summand : variadic::range(ref)) {
 					str.append(std::exchange(seperator, "+"));
 					print::append_to_string(ref.new_at(summand), str, own_infixr);
 				}
 			} break;
-			case Type(Op::product): {
+			case Type(Variadic::product): {
 				const char* seperator = "";
-				for (const auto factor : vc::range(ref)) {
+				for (const auto factor : variadic::range(ref)) {
 					str.append(std::exchange(seperator, "*"));
 					print::append_to_string(ref.new_at(factor), str, own_infixr);
 				}
@@ -646,17 +640,6 @@ namespace bmath::intern {
 				print::append_to_string(ref.new_at(params[0]), str, own_infixr);
 				str.push_back('^');
 				print::append_to_string(ref.new_at(params[1]), str, own_infixr);
-			} break;
-			case Type(Op::named_fn): {
-				const NamedFn& named_fn = *ref;
-				str.pop_back(); //pop open parenthesis
-				str.append(named_fn.name_view());
-				str.push_back('(');
-				const char* seperator = "";
-				for (const auto param : fn::range(ref)) {
-					str.append(std::exchange(seperator, ", "));
-					print::append_to_string(ref.new_at(param), str, own_infixr);
-				}
 			} break;
 			default: {
 				assert(ref.type.is<Fn>());
@@ -753,11 +736,11 @@ namespace bmath::intern {
 
 			struct GetNegativeProductResult { double negative_factor; StupidBufferVector<TypedIdx, 8> other_factors; };
 			const auto get_negative_product = [get_negative_real](const Ref ref) -> std::optional<GetNegativeProductResult> {
-				if (ref.type == Op::product) {
+				if (ref.type == Variadic::product) {
 					StupidBufferVector<TypedIdx, 8> other_factors;
 					double negative_factor;
 					bool found_negative_factor = false;
-					for (const auto factor : vc::range(ref)) {
+					for (const auto factor : variadic::range(ref)) {
 						if (!found_negative_factor) {
 							if (const auto negative_val = get_negative_real(ref.new_at(factor))) {
 								negative_factor = *negative_val;
@@ -782,13 +765,13 @@ namespace bmath::intern {
 					}
 					else if (const auto base = get_pow_neg1(ref.new_at(elem))) {
 						str += (first ? "1/" : "/"); 
-						str += print::to_pretty_string(ref.new_at(*base), infixr(Type(Op::product)));
+						str += print::to_pretty_string(ref.new_at(*base), infixr(Type(Variadic::product)));
 						first = false;
 					}
 					else {
 						str += (first ? "" : " ");
 						//str += (first ? "" : "*");
-						str += print::to_pretty_string(ref.new_at(elem), infixr(Type(Op::product)));
+						str += print::to_pretty_string(ref.new_at(elem), infixr(Type(Variadic::product)));
 						first = false;
 					}
 				}
@@ -796,9 +779,9 @@ namespace bmath::intern {
 			}; //append_product
 
 			switch (ref.type) {
-			case Type(Op::sum): {
+			case Type(Variadic::sum): {
 				bool first = true;
-				for (const auto summand : vc::range(ref)) {
+				for (const auto summand : variadic::range(ref)) {
 					if (const auto val = get_negative_real(ref.new_at(summand))) {
 						str += (first ? "" : " ");
 						append_real(*val, str);
@@ -825,8 +808,8 @@ namespace bmath::intern {
 				}
 				assert(!first && "found sum with zero summands");
 			} break;
-			case Type(Op::product): {
-				append_product(vc::range(ref));
+			case Type(Variadic::product): {
+				append_product(variadic::range(ref));
 			} break;
 			case Type(Fn::pow): {
 				const FnParams& params = *ref;
@@ -843,19 +826,6 @@ namespace bmath::intern {
 					str += "^";
 					str += print::to_pretty_string(ref.new_at(params[1]), infixr(ref.type));
 				}
-			} break;
-			case Type(Op::named_fn): {
-				need_parentheses = false;
-				str.append(ref->named_fn.name_view());
-				str.push_back('(');
-				bool first = true;
-				for (const auto param : fn::range(ref)) {
-					if (!std::exchange(first, false)) {
-						str += ", ";
-					}
-					str += print::to_pretty_string(ref.new_at(param), infixr(ref.type));
-				}
-				str.push_back(')');
 			} break;
 			default: {
 				assert(ref.type.is<Fn>());
@@ -887,14 +857,15 @@ namespace bmath::intern {
 
 		void append_memory_row(const Ref ref, std::vector<std::string>& rows)
 		{
-			const auto show_typedidx_col_nodes = [&ref, &rows](std::uint32_t idx, bool show_first) {
-				const TypedIdxSLC* col = &ref.store->at(idx).index_slc;
-				if (show_first) {
-					rows[idx].append("(SLC node part of index " + std::to_string(ref.index) + ')');
+			const auto show_typedidx_vec_nodes = [&ref, &rows](std::uint32_t idx, bool show_first) {
+				const TypedIdxVector& vec = ref.store->at(idx).index_vector;
+				const std::size_t end = idx + TypedIdxVector::node_count(vec.capacity);
+				if (!show_first) {
+					idx++;
 				}
-				while (col->next_idx != TypedIdxSLC::null_index) {
-					rows[col->next_idx].append("(SLC node part of index " + std::to_string(ref.index) + ')');
-					col = &ref.store->at(col->next_idx).index_slc;
+				while (idx < end) {
+					rows[idx].append("(node part of index " + std::to_string(ref.index) + ')');
+					idx++;
 				}
 			};
 			const auto show_string_nodes = [&ref, &rows](std::uint32_t idx, bool show_first) {
@@ -904,7 +875,7 @@ namespace bmath::intern {
 					idx++;
 				}
 				while (idx < end) {
-					rows[idx].append("(str node part of index " + std::to_string(ref.index));
+					rows[idx].append("(node part of index " + std::to_string(ref.index) + ')');
 					idx++;
 				}
 			};
@@ -916,40 +887,28 @@ namespace bmath::intern {
 
 			std::string& current_str = rows[ref.index];
 			switch (ref.type) {
-			case Type(Op::sum): {
+			case Type(Variadic::sum): {
 				current_str.append("sum        : {");
 				const char* separator = "";
-				for (const auto elem : vc::range(ref)) {
+				for (const auto elem : variadic::range(ref)) {
 					current_str.append(std::exchange(separator, ", "));
 					current_str.append(std::to_string(elem.get_index()));
 					print::append_memory_row(ref.new_at(elem), rows);
 				}
 				current_str.push_back('}');
-				show_typedidx_col_nodes(ref.index, false);
+				show_typedidx_vec_nodes(ref.index, false);
 			} break;
-			case Type(Op::product): {
+			case Type(Variadic::product): {
 				current_str.append("product    : {");
 				const char* separator = "";
-				const TypedIdxSLC test = *ref;
-				for (const auto elem : vc::range(ref)) {
+				const TypedIdxVector test = *ref;
+				for (const auto elem : variadic::range(ref)) {
 					current_str.append(std::exchange(separator, ", "));
 					current_str.append(std::to_string(elem.get_index()));
 					print::append_memory_row(ref.new_at(elem), rows);
 				}
 				current_str.push_back('}');
-				show_typedidx_col_nodes(ref.index, false);
-			} break;
-			case Type(Op::named_fn): {
-				const NamedFn& named_fn = *ref;
-				current_str.append("function?  : {");
-				const char* separator = "";
-				for (const auto param : fn::range(ref)) {
-					current_str.append(std::exchange(separator, ", "));
-					current_str.append(std::to_string(param.get_index()));
-					print::append_memory_row(ref.new_at(param), rows);
-				}
-				current_str.push_back('}');
-				show_typedidx_col_nodes(named_fn.params_idx, true);
+				show_typedidx_vec_nodes(ref.index, false);
 			} break;
 			default: {
 				assert(ref.type.is<Fn>());
@@ -1063,22 +1022,16 @@ namespace bmath::intern {
 			}
 
 			switch (ref.type) {
-			case Type(Op::sum): {
+			case Type(Variadic::sum): {
 				current_str += "sum";
-				for (const TypedIdx summand : vc::range(ref)) {
+				for (const TypedIdx summand : variadic::range(ref)) {
 					print::append_tree_row(ref.new_at(summand), rows, offset + tab_width);
 				}
 			} break;
-			case Type(Op::product): {
+			case Type(Variadic::product): {
 				current_str += "product";
-				for (const TypedIdx factor : vc::range(ref)) {
+				for (const TypedIdx factor : variadic::range(ref)) {
 					print::append_tree_row(ref.new_at(factor), rows, offset + tab_width);
-				}
-			} break;
-			case Type(Op::named_fn): {
-				current_str.append(ref->named_fn.name_view());
-				for (const TypedIdx param : fn::range(ref)) {
-					print::append_tree_row(ref.new_at(param), rows, offset + tab_width);
 				}
 			} break;
 			default: {

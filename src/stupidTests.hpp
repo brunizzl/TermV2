@@ -6,7 +6,6 @@
 #include <numeric>
 
 #include "termStore.hpp"
-#include "termColony.hpp"
 #include "arithmeticTerm.hpp"
 #include "parseTerm.hpp"
 #include "ioArithmetic.hpp"
@@ -19,9 +18,8 @@ namespace bmath::intern::debug {
 		using namespace pattern;
 		static_assert(unsigned(Type::COUNT) == unsigned(Type(Type::COUNT)), "else at least a second version of this function is needed");
 		std::cout
-			<< "Type(Op::sum)                  = " << unsigned(Type(Op::sum))                  << "\n"
-			<< "Type(Op::product)              = " << unsigned(Type(Op::product))              << "\n"
-			<< "Type(Op::named_fn)             = " << unsigned(Type(Op::named_fn))             << "\n"
+			<< "Type(Op::sum)                  = " << unsigned(Type(Variadic::sum))                  << "\n"
+			<< "Type(Op::product)              = " << unsigned(Type(Variadic::product))              << "\n"
 			                                                                                   << "\n"
 			<< "Type(Leaf::variable)           = " << unsigned(Type(Leaf::variable))           << "\n"
 			<< "Type(Leaf::complex)            = " << unsigned(Type(Leaf::complex))            << "\n"
@@ -62,9 +60,9 @@ namespace bmath::intern::debug {
 	} //enumerate_pn_type
 
 	//output as of 20.12.2020:
-	//Type(Op::sum)                 = 0
-	//Type(Op::product)             = 1
-	//Type(Op::named_fn)            = 2
+	//Type(Variadic::sum)                 = 0
+	//Type(Variadic::product)             = 1
+	//Type(Variadic::named_fn)            = 2
 	//
 	//Type(Leaf::variable)          = 3
 	//Type(Leaf::complex)           = 4
@@ -293,13 +291,14 @@ namespace bmath::intern::test {
 	void arithmetic_term()
 	{
 		std::vector<std::string> term_names = {
+			"1*2*IchBinBrunoUndIchBinDerKameramann*3",
+			" -(b'+c)*2*i-5*(a+3 e 2 weinachtsmannVomNordpolUnterWasserWeilKlimawandel)",
+			"sin(1) + 3 + sin(3) + fred + 1 + sin(7) - hans + jens + herbert + 7 + anneliese + fred + sin(3) + marco + 3 + bernd",
 			"2.2 + 4",
 			"sqrt(100)",
 			"2-a*b",
 			"sin(-a*b)",
-			" -(b'+c)*2*i-5*(a+3 e 2 weinachtsmannVomNordpolUnterWasserWeilKlimawandel)",
 			"1/5*herbert(20e-10, 3 a, 6 anneliese(fred, marko * 4))",
-			"sin(1) + 3 + sin(3) + fred + 1 + sin(7) - hans + jens + herbert + 7 + anneliese + fred + sin(3) + marco + 3 + bernd",
 			"a+ln(b^2)+ln(c)+2-b^2-c*a",
 			"c*d+g*f+g",
 			"c*d+g*f+f",
@@ -630,18 +629,18 @@ namespace bmath::intern::test {
 	{
 		using StringArray = StoredVector<char, 16>;
 		using Store_T = BasicStore<StringArray>;
-		using Ref_T = BasicNodeRef<StringArray, StringArray, Const::yes>;
-
+		using Ref_T = BasicNodeRef<StringArray, StringArray, Const::no>;
+	
 		static_assert(StringArray::min_capacity == 12u);
 		static_assert(StringArray::values_per_node == 16u);
-
+	
 		Store_T store;
 		const std::vector<std::string> inputs = { "haaaaaaaaaaaaaaaaaaaaaalllllllllllooooo", "du", "nudel", ":)" };
 		std::vector<std::size_t> positions;
 		for (const auto& input : inputs) {
 			positions.push_back(StringArray::build(store, input));
 		}
-
+	
 		for (std::size_t position : positions) {
 			for (char c : Ref_T(store, position)) {
 				std::cout << c;

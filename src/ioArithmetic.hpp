@@ -67,8 +67,8 @@ namespace bmath::intern {
 	{
 		const TypedIdx minus_1 = build_value(store, -1.0);
 		const std::size_t result_idx = store.allocate();
-		new (&store.at(result_idx)) TypesUnion(TypedIdxSLC({ minus_1, to_negate }));
-		return TypedIdx(result_idx, Type(Op::product));
+		new (&store.at(result_idx)) TypesUnion(TypedIdxVector({ minus_1, to_negate }));
+		return TypedIdx(result_idx, Type(Variadic::product));
 	}
 
 	template<typename Store_T>

@@ -11,26 +11,20 @@
 
 #include "termUtility.hpp"
 #include "arithmeticTerm.hpp"
-#include "termColony.hpp"
 #include "ioArithmetic.hpp"
 
 /*
-	template<typename Union_T, typename Type_T>
-	void prototype(const BasicRef<Union_T,Type_T> ref)
+	void prototype(const Ref ref)
 	{
-		using TypedIdx = BasicTypedIdx<Type_T>;
-		using TypedIdxSLC = TermSLC<TypedIdx>;
-		constexpr bool pattern = std::is_same_v<Type_T, Type>;
-
 		switch (ref.type) {
-		case Type_T(Op::sum): 
+		case Type_T(Variadic::sum): 
 			[[fallthrough]];
-		case Type_T(Op::product): {
-			for (const TypedIdx elem : vc::range(ref)) {
+		case Type_T(Variadic::product): {
+			for (const TypedIdx elem : variadic::range(ref)) {
 			}
 			assert(false);
 		} break;
-		case Type_T(Op::named_fn): {
+		case Type_T(Variadic::named_fn): {
 			for (const TypedIdx param : fn::range(ref)) {
 			}
 			assert(false);
@@ -47,10 +41,10 @@
 		case Type_T(Leaf::complex): {
 			assert(false);
 		} break;
-		case Type_T(PnNode::tree_match): if constexpr (pattern) {
+		case Type_T(PnNode::tree_match): {
 			assert(false);
 		} break;
-		case Type_T(PnNode::value_match): if constexpr (pattern) {
+		case Type_T(PnNode::value_match): {
 			pattern::ValueMatchVariable& var = *ref;
 			assert(false);
 		} break;
@@ -85,14 +79,13 @@ namespace bmath::intern {
 	//this approach guarantees a possible match to succeed, if a pattern has only up to a single sum / product one level below the root and none deeper.
 	//side note: as every type has a unique rematchability value, sorting by rematchability if types are different produces a strong order.
 	constexpr auto unique_rematchability_table = std::to_array<std::pair<Type, int>>({
-		{ Type(Leaf::complex           ), 100 }, 
-		{ Type(PnNode::value_match      ), 101 }, 
-		{ Type(PnNode::value_proxy), 102 }, 
-		{ Type(PnNode::tree_match       ), 103 }, 
-		{ Type(Leaf::variable          ), 104 },
-		{ Type(Op::named_fn            ), 299 },
-		{ Type(Op::sum                 ), 300 },  
-		{ Type(Op::product             ), 301 }, 
+		{ Type(Leaf::complex        ), 100 }, 
+		{ Type(PnNode::value_match  ), 101 }, 
+		{ Type(PnNode::value_proxy  ), 102 }, 
+		{ Type(PnNode::tree_match   ), 103 }, 
+		{ Type(Leaf::variable       ), 104 },
+		{ Type(Variadic::sum              ), 300 },  
+		{ Type(Variadic::product          ), 301 }, 
 		{ Type(MultiPn::summands    ), 302 }, //kinda special, as they always succeed in matching -> need to be matched last 
 		{ Type(MultiPn::factors     ), 303 }, //kinda special, as they always succeed in matching -> need to be matched last 
 	});
@@ -166,40 +159,37 @@ namespace bmath::intern {
 				}
 			}
 			else if (param_count(type) == 2u) {
-				if (param_vals[0]->imag() == 0.0 && param_vals[1]->imag() == 0.0) {
-					const double real_0 = param_vals[0]->real();
-					const double real_1 = param_vals[1]->real();
-					switch (type) {
-					case Fn::pow  : return (real_1 == 0.5 ? std::sqrt(real_0) : std::pow(real_0, real_1));
-					case Fn::log  : return std::log(real_1) / std::log(real_0);
-					default: assert(false);
+				switch (type) {
+				case Fn::pow: 
+					if (*param_vals[1] == 0.5) {
+						return (param_vals[0]->imag() == 0.0 && param_vals[0]->real() >= 0.0) ?
+							std::sqrt(param_vals[0]->real()) :
+							std::sqrt(*param_vals[0]);
 					}
-				}
-				else if (param_vals[0]->imag() == 0.0) {
-					const double real_0 = param_vals[0]->real();
-					switch (type) {
-					case Fn::pow  : return std::pow(real_0, *param_vals[1]);
-					case Fn::log  : return std::log(*param_vals[1]) / std::log(real_0); 
-					default: assert(false);
+					else {
+						return std::pow(*param_vals[0], *param_vals[1]);
 					}
-				}
-				else if (param_vals[1]->imag() == 0.0) {
-					const double real_1 = param_vals[1]->real();
-					switch (type) {
-					case Fn::pow  : return (real_1 == 0.5 ? std::sqrt(*param_vals[0]) : std::pow(*param_vals[0], real_1));
-					case Fn::log  : return std::log(real_1) / std::log(*param_vals[0]); 
-					default: assert(false);
+				case Fn::log: 
+					//https://en.wikipedia.org/wiki/Complex_logarithm#Generalizations
+					if (param_vals[0]->imag() == 0.0 && param_vals[1]->imag() == 0.0) {
+						return std::log(param_vals[1]->real()) / std::log(param_vals[0]->real());
 					}
-				}
-				else {
-					switch (type) {
-					case Fn::pow  : return std::pow(*param_vals[0], *param_vals[1]);
-					case Fn::log  : return std::log(*param_vals[1]) / std::log(*param_vals[0]); //https://en.wikipedia.org/wiki/Complex_logarithm#Generalizations
-					default: assert(false);
+					else {
+						const OptComplex num = (param_vals[1]->imag() == 0.0) ?
+							std::log(param_vals[1]->real()) :
+							std::log(*param_vals[1]);
+						const OptComplex denom = (param_vals[0]->imag() == 0.0) ?
+							std::log(param_vals[0]->real()) :
+							std::log(*param_vals[0]);
+						return num / denom;
 					}
+				case Fn::diff:
+					[[fallthrough]];
+				default:
+					return {};
 				}
 			}
-			assert(false);
+			//parameter count of three or higher
 			return {};
 		} //eval
 
@@ -221,7 +211,7 @@ namespace bmath::intern {
 			case Restriction(Restr::nn1):
 				return (ref.type != Leaf::complex) || (ref->complex != -1.0);
 			case Restriction(Restr::function):
-				return ref.type.is<Op>() || ref.type.is<Fn>();
+				return ref.type.is<Variadic>() || ref.type.is<Fn>();
 			default:
 				assert(restr.is<MathType>());
 				return restr == ref.type;
@@ -294,9 +284,9 @@ namespace bmath::intern {
 			//if params occurs in Fn, true is returned (as term is illegal and can not be made legal)
 			const auto contains_illegal_params = [](const MutRef head) -> bool {
 				const auto inspect_branches = [](const MutRef ref) -> fold::FindBool {
-					if (ref.type == Op::sum || ref.type == Op::product) {
-						const Type result_type = ref.type == Op::sum ? MultiPn::summands : MultiPn::factors;
-						for (TypedIdx& elem : vc::range(ref)) {
+					if (ref.type == Variadic::sum || ref.type == Variadic::product) {
+						const Type result_type = ref.type == Variadic::sum ? MultiPn::summands : MultiPn::factors;
+						for (TypedIdx& elem : variadic::range(ref)) {
 							if (elem.get_type() == MultiPn::params) {
 								elem = TypedIdx(elem.get_index(), result_type); //params can convert to summands / factors
 							}
@@ -319,9 +309,9 @@ namespace bmath::intern {
 
 			const auto contains_illegal_value_match = [](const Ref head) -> bool {
 				const auto inspect_variadic = [](const Ref ref) -> fold::FindBool {
-					if (ref.type == Op::sum || ref.type == Op::product) {
+					if (ref.type == Variadic::sum || ref.type == Variadic::product) {
 						std::size_t nr_value_matches = 0u;
-						for (const TypedIdx elem : vc::range(ref)) {
+						for (const TypedIdx elem : variadic::range(ref)) {
 							nr_value_matches += (elem.get_type() == PnNode::value_match);
 						}
 						return nr_value_matches > 1u;
@@ -335,9 +325,9 @@ namespace bmath::intern {
 
 			const auto contains_illegal_multi_match = [](const Ref head) -> bool {
 				const auto inspect_variadic = [](const Ref ref) -> fold::FindBool {
-					if (ref.type == Op::sum || ref.type == Op::product) {
+					if (ref.type == Variadic::sum || ref.type == Variadic::product) {
 						std::size_t nr_multi_matches = 0u;
-						for (const TypedIdx elem : vc::range(ref)) {
+						for (const TypedIdx elem : variadic::range(ref)) {
 							nr_multi_matches += elem.get_type().is<MultiPn>();
 						}
 						return nr_multi_matches > 1u;
@@ -410,16 +400,13 @@ namespace bmath::intern {
 							:acc({ .has_match = false, .computable = true })
 						{
 							switch (ref.type) {
-							case Type(Op::sum):     break;
-							case Type(Op::product): break;
+							case Type(Variadic::sum):     break;
+							case Type(Variadic::product): break;
 							case Type(Fn::pow):     break;// for now only allow these Fn to be computed in value
 							case Type(Fn::sqrt):    break;// for now only allow these Fn to be computed in value  
 							default:
 								assert(ref.type.is<Fn>()); 
 								[[fallthrough]];
-							case Type(Op::named_fn):
-								this->acc = MatchTraits{ .has_match = false, .computable = false };
-								break;
 							case Type(PnNode::value_match): {
 								const bool is_right_match = TypedIdx(ref.index, ref.type) == value;
 								this->acc = MatchTraits{ .has_match = is_right_match, .computable = is_right_match };
@@ -454,18 +441,11 @@ namespace bmath::intern {
 
 				const auto [index, type] = head.split();
 				switch (type) {
-				case Type(Op::sum): 
+				case Type(Variadic::sum): 
 					[[fallthrough]];
-				case Type(Op::product): {
-					for (TypedIdx& elem : vc::range(MutRef(store, head))) {
+				case Type(Variadic::product): {
+					for (TypedIdx& elem : variadic::range(MutRef(store, head))) {
 						if (TypedIdx* const elem_res = find_value_match_subtree(store, elem, value)) {
-							return elem_res;
-						}
-					}
-				} break;
-				case Type(Op::named_fn): {
-					for (TypedIdx& param : fn::range(MutRef(store, head))) {
-						if (TypedIdx* const elem_res = find_value_match_subtree(store, param, value)) {
 							return elem_res;
 						}
 					}
@@ -532,27 +512,27 @@ namespace bmath::intern {
 
 					const auto [lhs_index, lhs_type] = eq.lhs_head.split();
 					switch (lhs_type) {
-					case Type(Op::sum): 
+					case Type(Variadic::sum): 
 						[[fallthrough]];
-					case Type(Op::product): {
-						std::uint32_t last_node_idx = store.insert(TypedIdxSLC{ eq.rhs_head });
-						eq.rhs_head = TypedIdx(last_node_idx, lhs_type); //new eq.rhs_head is product (sum) of old eq.rhs_head divided by (minus) eq.lhs_head factors (summands).
-						for (const TypedIdx elem : vc::range(Ref(store, eq.lhs_head))) {
+					case Type(Variadic::product):
+					{
+						StupidBufferVector<TypedIdx, 8> result_buffer = { eq.rhs_head };
+						for (const TypedIdx elem : variadic::range(Ref(store, eq.lhs_head))) {
 							if (tree::contains(Ref(store, elem), to_isolate)) {
 								eq.lhs_head = elem; 
 							}
 							else {
-								const TypedIdx new_rhs_elem = (lhs_type == Op::sum ? 
+								const TypedIdx new_rhs_elem = (lhs_type == Variadic::sum ? 
 									build_negated (store, elem) : 
 									build_inverted(store, elem));
-								last_node_idx = TypedIdxSLC::insert_new(store, last_node_idx, new_rhs_elem);
+								result_buffer.push_back(new_rhs_elem);
 							}
 						}
 						//all factors (summands) have been shifted to rhs -> delete SLC (but not recursively, elems have new owner!)
-						free_slc(TypedIdxSLC::SLCMutRef<TypesUnion>(store, lhs_index)); 
+						TypedIdxVector::free(store, lhs_index);
+						//new eq.rhs_head is product (sum) of old eq.rhs_head divided by (minus) eq.lhs_head factors (summands).
+						eq.rhs_head = TypedIdx(TypedIdxVector::build(store, result_buffer), lhs_type);  
 					} break;
-					case Type(Op::named_fn): 
-						assert(false); break;
 					case Type(Leaf::variable): 
 						assert(false); break;
 					case Type(Leaf::complex): 
@@ -630,9 +610,9 @@ namespace bmath::intern {
 				};
 
 				switch (ref.type) {
-				case Type(Op::sum): {
+				case Type(Variadic::sum): {
 					OptComplex result_val = 0.0;
-					for (auto& summand : vc::range(ref)) {
+					for (auto& summand : variadic::range(ref)) {
 						if (const OptComplex summand_val = eval_value_match(ref.new_at(summand), start_val)) {
 							if (const OptComplex res = compute_exact([&] {return result_val + summand_val; })) {
 								result_val = res;
@@ -643,10 +623,10 @@ namespace bmath::intern {
 					}
 					return result_val;
 				} break;
-				case Type(Op::product): {
+				case Type(Variadic::product): {
 					OptComplex result_factor = 1.0;
 					OptComplex result_divisor = 1.0;
-					for (auto& factor : vc::range(ref)) {
+					for (auto& factor : variadic::range(ref)) {
 						if (const std::optional<TypedIdx> divisor = get_divisor(ref.new_at(factor))) {
 							if (const OptComplex divisor_val = eval_value_match(ref.new_at(*divisor), start_val)) {
 								if (const OptComplex res = compute_exact([&] { return result_divisor * divisor_val; })) {
@@ -701,21 +681,13 @@ namespace bmath::intern {
 		void free(const MutRef ref)
 		{
 			switch (ref.type) {
-			case Type(Op::sum): 
+			case Type(Variadic::sum): 
 				[[fallthrough]];
-			case Type(Op::product): {
-				for (const TypedIdx elem : vc::range(ref)) {
+			case Type(Variadic::product): {
+				for (const TypedIdx elem : variadic::range(ref)) {
 					tree::free(ref.new_at(elem));
 				}
-				free_slc(ref.cast<TypedIdxSLC>());
-			} break;
-			case Type(Op::named_fn): {
-				for (const TypedIdx param : fn::range(ref)) {
-					tree::free(ref.new_at(param));
-				}
-				const NamedFn& named_fn = *ref;
-				free_slc(ref.new_as<TypedIdxSLC>(named_fn.params_idx));
-				ref.store->free(ref.index);
+				TypedIdxVector::free(*ref.store, ref.index);
 			} break;
 			default: {
 				assert(ref.type.is<Fn>());
@@ -761,66 +733,60 @@ namespace bmath::intern {
 			};
 
 			switch (ref.type) {
-			case Type(Op::sum): {
+			case Type(Variadic::sum): {
 				OptComplex value_acc = 0.0; //stores sum of values encountered as summands
-				std::uint32_t current_append_node = ref.index; //advances if summand layers are combined
+				StupidBufferVector<TypedIdx, 16> new_sum;
 
-				//if summand_count == 0u only combinable values where encountered -> return only value_acc (put in store), not sum
-				//if summand_count == 1u sum is redundant -> return just the single summand
-				std::uint32_t summand_count = 0u;
-
-				for (TypedIdx& summand : vc::range(ref)) { //reference allowed, as no new elements are pushed in store -> never reallocates
+				for (TypedIdx& summand : variadic::unsave_range(ref)) {
 					summand = tree::combine(ref.new_at(summand), exact);
 					switch (summand.get_type()) {
+					case Type(Variadic::sum):
+						for (const TypedIdx nested_summand : variadic::unsave_range(ref.new_at(summand))) {
+							new_sum.push_back(nested_summand);
+						}						
+						TypedIdxVector::free(*ref.store, summand.get_index()); //free nested sum, but not nested summands
+						break;
 					case Type(Leaf::complex):						
 						if (const OptComplex res = compute([&] { return value_acc + ref.store->at(summand.get_index()).complex; })) {
 							value_acc = res;
 							tree::free(ref.new_at(summand));
-							summand = TypedIdxSLC::null_value;
-							continue;
+							break;
 						}
-						break;
-					case Type(Op::sum):
-						//idea for future: push new summands to front, as they already recieved treatment
-						current_append_node = TypedIdxSLC::append(*ref.store, current_append_node, summand.get_index());
-						summand = TypedIdxSLC::null_value;
+						[[fallthrough]];
+					default:
+						new_sum.push_back(summand);
 						break;
 					}
-					summand_count++; 
 				}
 
-				if (summand_count == 0u) { //catches also (hopefully impossible?) case of zero summands overall
-					free_slc(ref.cast<TypedIdxSLC>()); //might as well call tree::free, but there are no remaining summands anyway.
-					const auto new_summand = build_value(*ref.store, *value_acc);
-					return new_summand;
+				if (*value_acc != 0.0 || new_sum.size() == 0u) { //== 0u also catches (hopefully impossible?) zero summands case
+					new_sum.push_back(build_value(*ref.store, *value_acc));
 				}
-				else if (*value_acc != 0.0) {
-					const auto new_summand = build_value(*ref.store, *value_acc);
-					//note: new_summand is never counted in summand_count, but summand_count will never be read again if this line is executed anyway.
-					TypedIdxSLC::insert_new(*ref.store, ref.index, new_summand); 
+				
+				if (new_sum.size() == 1u) {
+					TypedIdxVector::free(*ref.store, ref.index); //free old sum (but not summands)
+					return new_sum.front();
 				}
-				else if (summand_count == 1u) {
-					const TypedIdx sole_summand = *begin(vc::range(ref));
-					free_slc(ref.cast<TypedIdxSLC>()); //dont call tree::free, as that would also free sole_summand
-					return sole_summand;
+				else if (const auto old_capacity = ref->index_vector.capacity; new_sum.size() <= old_capacity) [[likely]] {
+					TypedIdxVector::emplace(*ref, new_sum, old_capacity);
+				}
+				else {
+					TypedIdxVector::free(*ref.store, ref.index); //free old sum (but not old summands)
+					return TypedIdx(TypedIdxVector::build(*ref.store, new_sum), Type(Variadic::sum));
 				}
 			} break;
-			case Type(Op::product): {
+			case Type(Variadic::product): {
 				//unlike with summands, where an inversion is just flipping the sign bit, not every multiplicativly inverse of a floating point number 
 				//  can be stored as floating point number without rounding -> we need two value accumulators. sigh.
 				OptComplex factor_acc = 1.0;
 				OptComplex divisor_acc = 1.0; 
+				StupidBufferVector<TypedIdx, 16> new_product;
 
-				//if factor_count == 0u only combinable values where encountered
-				//if factor_count == 1u product is redundant -> return only that factor and free product
-				std::uint32_t factor_count = 0u;
-
-				std::uint32_t current_append_node = ref.index; //advances if summand layers are combined
-
-				for (TypedIdx& factor : vc::range(ref)) {
+				for (TypedIdx& factor : variadic::range(ref)) {
 					factor = tree::combine(ref.new_at(factor), exact);
 					switch (factor.get_type()) {
-					case Type(Fn::pow): {
+					case Type(Fn::pow):
+					{
 						FnParams& power = *ref.new_at(factor);
 						if (power[0].get_type() == Leaf::complex && power[1].get_type() == Leaf::complex) {
 							std::array<OptComplex, 4> power_params = {
@@ -832,66 +798,61 @@ namespace bmath::intern {
 								if (const OptComplex res = compute([&] { return divisor_acc * fn::eval(Fn::pow, power_params); })) {
 									divisor_acc = res;
 									tree::free(ref.new_at(factor)); //free whole power
-									factor = TypedIdxSLC::null_value;
-									continue;
+									break;
 								}
 							}
 						}
+						new_product.push_back(factor);
 					} break;
+					case Type(Variadic::product):
+						for (const TypedIdx nested_factor : variadic::unsave_range(ref.new_at(factor))) {
+							new_product.push_back(nested_factor);
+						}
+						TypedIdxVector::free(*ref.store, factor.get_index()); //free nested product, but not nested factors
+						break;
 					case Type(Leaf::complex):
 						if (const OptComplex res = compute([&] { return factor_acc * ref.store->at(factor.get_index()).complex; })) {
 							factor_acc = res;
 							tree::free(ref.new_at(factor));
-							factor = TypedIdxSLC::null_value;
-							continue;
+							break;
 						}
-						break;
-					case Type(Op::product):
-						//idea for future: push new factors to front, as they already recieved treatment
-						current_append_node = TypedIdxSLC::append(*ref.store, current_append_node, factor.get_index());
-						factor = TypedIdxSLC::null_value;
+						[[fallthrough]];
+					default:
+						new_product.push_back(factor);
 						break;
 					}
-					factor_count++;
 				}
+
+				//reinserting the computed value(s)					
+				if (const OptComplex result_val = compute([&] { return factor_acc / divisor_acc; }); 
+					result_val && *result_val != 1.0) 
 				{
-					//reinserting the computed value(s)
-					const OptComplex result_val = compute([&] { return factor_acc / divisor_acc; });
-					if (result_val && *result_val != 1.0) {
-						const auto new_val = build_value(*ref.store, *result_val);
-						TypedIdxSLC::insert_new(*ref.store, ref.index, new_val);
-						factor_count++; //single factor case is tested below -> no need to check (and perhaps return without reinserting) here
+					new_product.push_back(build_value(*ref.store, *result_val));
+				}
+				else {
+					if (*factor_acc != 1.0) {
+						new_product.push_back(build_value(*ref.store, *factor_acc));
 					}
-					else {
-						if (*factor_acc != 1.0) {
-							const auto new_factor = build_value(*ref.store, *factor_acc);
-							TypedIdxSLC::insert_new(*ref.store, ref.index, new_factor);
-							factor_count++;
-						}
-						if (*divisor_acc != 1.0) {
-							const auto new_divisor = build_value(*ref.store, *divisor_acc);
-							const auto new_pow = build_inverted<Store>(*ref.store, new_divisor);
-							TypedIdxSLC::insert_new(*ref.store, ref.index, new_pow);
-							factor_count++; //single factor case is tested below -> no need to check (and perhaps return without reinserting) here
-						}
+					if (*divisor_acc != 1.0) {
+						new_product.push_back(build_value(*ref.store, *divisor_acc));
 					}
 				}
-				if (factor_count == 1u) {
-					const TypedIdx sole_factor = *begin(vc::range(ref));
-					free_slc(ref.cast<TypedIdxSLC>()); //dont call tree::free, as that would also free sole_factor
-					return sole_factor;
+
+				if (new_product.size() == 1u) {
+					TypedIdxVector::free(*ref.store, ref.index); //free old product (but not old factors)
+					return new_product.front();
 				}
-				else if (factor_count == 0u) { 
-					//only neccesairy if empty products are possible (hopefully not?), as in that case the product makes space for the value.
-					free_slc(ref.cast<TypedIdxSLC>()); //might as well call tree::free, but there are no factors anyway.
-					return build_value(*ref.store, 1.0);
+				else if (new_product.size() == 0u) { 
 					//note: it is not sufficient to make ref a complex number with value 1.0, as even an empty product may hold more than one element in store.
+					TypedIdxVector::free(*ref.store, ref.index); //might as well call tree::free, but there are no factors anyway.
+					return build_value(*ref.store, 1.0);
 				}
-			} break;
-			case Type(Op::named_fn): {
-				NamedFn& function = *ref;
-				for (TypedIdx& elem : fn::range(ref)) {
-					elem = tree::combine(ref.new_at(elem), exact);
+				else if (const auto old_capacity = ref->index_vector.capacity; new_product.size() <= old_capacity) [[likely]] {
+					TypedIdxVector::emplace(*ref, new_product, old_capacity);
+				}
+				else {
+					TypedIdxVector::free(*ref.store, ref.index); //free old sum (but not old summands)
+					return TypedIdx(TypedIdxVector::build(*ref.store, new_product), Type(Variadic::product));
 				}
 			} break;
 			case Type(Fn::force): {
@@ -904,7 +865,7 @@ namespace bmath::intern {
 				}
 			} break;
 			default: {
-				assert(ref.type.is<Fn>()); 
+				ASSERT(ref.type.is<Fn>()); 
 				FnParams& params = *ref;
 				std::array<OptComplex, 4> res_vals = { OptComplex{}, {}, {}, {} }; //default initialized to NaN
 				for (std::size_t i = 0; i < fn::param_count(ref.type); i++) {
@@ -946,60 +907,32 @@ namespace bmath::intern {
 		[[nodiscard]] std::strong_ordering compare(const Ref ref_1, const Ref ref_2)
 		{
 			if (ref_1.type != ref_2.type) [[likely]] {
-				static_assert((rematchability(Type(Op::sum)) <=> rematchability(Type(Op::sum))) == std::strong_ordering::equal); //dont wanna mix with std::strong_ordering::equivalent
+				static_assert((rematchability(Type(Variadic::sum)) <=> rematchability(Type(Variadic::sum))) == std::strong_ordering::equal); //dont wanna mix with std::strong_ordering::equivalent
 				return rematchability(ref_1.type) <=> rematchability(ref_2.type);
 			}
 
 			switch (ref_1.type) {
-			case Type(Op::sum):
+			case Type(Variadic::sum):
 				[[fallthrough]];
-			case Type(Op::product): {
-				auto range_1 = vc::range(ref_1);
-				auto range_2 = vc::range(ref_2);
-				auto iter_1 = begin(range_1);
-				auto iter_2 = begin(range_2);
-				const auto end_1 = end(range_1);
-				const auto end_2 = end(range_2);
-				for (; iter_1 != end_1 && iter_2 != end_2; ++iter_1, ++iter_2) {
+			case Type(Variadic::product): {
+				const TypedIdxVector& vector_1 = *ref_1;
+				const TypedIdxVector& vector_2 = *ref_2;
+				if (vector_1.size != vector_2.size) {
+					return vector_1.size <=> vector_2.size;
+				}
+				for (auto iter_1 = vector_1.begin(),
+				          iter_2 = vector_2.begin();
+					iter_1 != vector_1.end() &&
+					iter_2 != vector_2.end();
+					++iter_1,
+					++iter_2) 
+				{
 					const auto iter_compare = tree::compare(ref_1.new_at(*iter_1), ref_2.new_at(*iter_2));
 					if (iter_compare != std::strong_ordering::equal) [[likely]] {
 						return iter_compare;
 					}
 				}
-				if (iter_1 == end_1 && iter_2 == end_2) {
-					return std::strong_ordering::equal;
-				}
-				else {
-					return iter_1 == end_1 ?
-						std::strong_ordering::less :
-						std::strong_ordering::greater;
-				}
-			} break;
-			case Type(Op::named_fn): {
-				const auto name_cmp = compare_arrays(ref_1->named_fn.name, ref_2->named_fn.name, NamedFn::max_name_size);
-				if (name_cmp != std::strong_ordering::equal) {
-					return name_cmp;
-				}
-				auto range_1 = fn::range(ref_1);
-				auto range_2 = fn::range(ref_2);
-				auto iter_1 = begin(range_1);
-				auto iter_2 = begin(range_2);
-				const auto end_1 = end(range_1);
-				const auto end_2 = end(range_2);
-				for (; iter_1 != end_1 && iter_2 != end_2; ++iter_1, ++iter_2) {
-					const auto iter_compare = tree::compare(ref_1.new_at(*iter_1), ref_2.new_at(*iter_2));
-					if (iter_compare != std::strong_ordering::equal) [[likely]] {
-						return iter_compare;
-					}
-				}
-				if (iter_1 == end_1 && iter_2 == end_2) {
-					return std::strong_ordering::equal;
-				}
-				else {
-					return iter_1 == end_1 ?
-						std::strong_ordering::less :
-						std::strong_ordering::greater;
-				}
+				return std::strong_ordering::equal;
 			} break;
 			default: {
 				assert(ref_1.type.is<Fn>() && ref_2.type.is<Fn>());
@@ -1069,8 +1002,9 @@ namespace bmath::intern {
 					return tree::compare(Ref(*ref.store, lhs), Ref(*ref.store, rhs)) == std::strong_ordering::less;
 				};
 
-				if (ref.type == Op::sum || ref.type == Op::product) {
-					sort_slc(ref.cast<TypedIdxSLC>(), compare_function);						
+				if (ref.type == Variadic::sum || ref.type == Variadic::product) {
+					TypedIdxVector& operation = *ref;
+					std::sort(operation.begin(), operation.end(), compare_function);
 				}
 				return fold::Void{};
 			};
@@ -1095,29 +1029,27 @@ namespace bmath::intern {
 		[[nodiscard]] TypedIdx copy(const Ref src_ref, Store& dst_store)
 		{
 			switch (src_ref.type) {
-			case Type(Op::sum): 
+			case Type(Variadic::sum): 
 				[[fallthrough]];
-			case Type(Op::product): {
-				const std::uint32_t dst_index = dst_store.insert(TypedIdxSLC());
-				std::uint32_t last_node_idx = dst_index;
-				for (const auto src_elem : vc::range(src_ref)) {
-					const TypedIdx dst_elem = tree::copy(src_ref.new_at(src_elem), dst_store);
-					last_node_idx = TypedIdxSLC::insert_new(dst_store, last_node_idx, dst_elem);
-				}
-				return TypedIdx(dst_index, src_ref.type);
-			} break;
-			case Type(Op::named_fn): {
-				const NamedFn src_function = *src_ref; //no reference, as src and dst could be same store -> may reallocate
-				NamedFn dst_function;
-				std::uint32_t last_node_idx = dst_store.insert(TypedIdxSLC());
-				dst_function.params_idx = last_node_idx;
-				for (const auto src_param : fn::range(src_ref)) {
-					const TypedIdx dst_param = tree::copy(src_ref.new_at(src_param), dst_store);
-					last_node_idx = TypedIdxSLC::insert_new(dst_store, last_node_idx, dst_param);
+			case Type(Variadic::product): {
+				const std::uint32_t size = src_ref->index_vector.size;
+				const std::uint32_t capacity = src_ref->index_vector.capacity;
+				const std::uint32_t node_count = TypedIdxVector::node_count(capacity);
+
+				const std::uint32_t dst_index = dst_store.allocate_n(node_count);
+				dst_store.at(dst_index) = TypedIdxVector(size, capacity);
+
+				auto src_iter = save_begin(src_ref.cast<TypedIdxVector>());
+				auto dst_iter = begin(MutRef(dst_store, dst_index).cast<TypedIdxVector>());
+				const auto end = stored_vector::MutEndIndicator{ size };
+				while (dst_iter != end) {
+					const TypedIdx dst_elem = tree::copy(src_ref.new_at(*src_iter), dst_store);
+					*dst_iter = dst_elem;
+					++src_iter;
+					++dst_iter;
 				}
 
-				std::copy(src_function.name, src_function.name + NamedFn::max_name_size, dst_function.name);
-				return TypedIdx(dst_store.insert(dst_function), src_ref.type);
+				return TypedIdx(dst_index, src_ref.type);
 			} break;
 			default: {
 				assert(src_ref.type.is<Fn>());
@@ -1133,7 +1065,7 @@ namespace bmath::intern {
 			} break;
 			case Type(Leaf::variable): {
 				const Variable& src_var = *src_ref;
-				const auto src_name = std::string_view(src_var.data, src_var.size);
+				const auto src_name = std::string(src_var.data, src_var.size);
 				const std::size_t dst_index = Variable::build(dst_store, src_name);
 				return TypedIdx(dst_index, src_ref.type);
 			} break;
@@ -1191,19 +1123,12 @@ namespace bmath::intern {
 			else {
 				const auto [index, type] = head.split();
 				switch (type) {
-				case Type(Op::sum): 
+				case Type(Variadic::sum): 
 					[[fallthrough]];
-				case Type(Op::product): {
-					for (TypedIdx& elem : vc::range(MutRef(store, head))) {
+				case Type(Variadic::product): {
+					for (TypedIdx& elem : variadic::range(MutRef(store, head))) {
 						if (TypedIdx* const elem_res = tree::find_subtree_owner(store, elem, subtree)) {
 							return elem_res;
-						}
-					}
-				} break;
-				case Type(Op::named_fn): {
-					for (TypedIdx& param : fn::range(MutRef(store, head))) {
-						if (TypedIdx* const param_res = tree::find_subtree_owner(store, param, subtree)) {
-							return param_res;
 						}
 					}
 				} break;
@@ -1272,49 +1197,17 @@ namespace bmath::intern {
 		{
 			using namespace pattern;
 
-			if (!pn_ref.type.is<MatchType>()) {
+			if (pn_ref.type.is<MathType>()) {
 				if (pn_ref.type != ref.type) [[likely]] {
 					return false;
 				}
 				else {
 					switch (pn_ref.type) {
-					case Type(Op::sum): 
+					case Type(Variadic::sum): 
 						[[fallthrough]];
-					case Type(Op::product): {
+					case Type(Variadic::product): {
 						const auto [matched, not_matched] = match::permutation_equals(pn_ref, ref, match_data);
 						return matched.size() > 0u && not_matched.size() == 0u;
-					} break;
-					case Type(Op::named_fn): {
-						if (compare_arrays(ref->named_fn.name, pn_ref->named_fn.name, NamedFn::max_name_size) != std::strong_ordering::equal) {
-							return false;
-						}
-						auto pn_range = fn::range(pn_ref);
-						auto pn_iter = begin(pn_range);
-						const auto pn_stop = end(pn_range);
-						auto range = fn::range(ref);
-						auto iter = begin(range);
-						const auto stop = end(range);
-						for (; pn_iter != pn_stop && iter != stop; ++pn_iter, ++iter) {
-							const auto pn_iter_ref = pn_ref.new_at(*pn_iter);
-							const auto iter_ref = ref.new_at(*iter);
-							if (pn_iter_ref.type == MultiPn::params) {
-								SharedMultiDatum& info = match_data.multi_info(pn_iter_ref.index);
-								assert(info.match_indices.size() == 0u);
-								while (iter != stop) {
-									info.match_indices.push_back(*iter);
-									++iter;
-								}
-								return true;
-							}
-							if (!match::equals(pn_iter_ref, iter_ref, match_data)) {
-								return false;
-							}
-						}
-
-						if (iter == stop) {
-							return pn_iter == pn_stop || pn_iter->get_type() == MultiPn::params;
-						}
-						return false;
 					} break;
 					default: {
 						assert(pn_ref.type.is<Fn>());
@@ -1344,6 +1237,7 @@ namespace bmath::intern {
 				}
 			}
 			else {
+				assert(pn_ref.type.is<MatchType>());
 
 				switch (pn_ref.type) {
 				case Type(PnNode::tree_match): {
@@ -1385,20 +1279,20 @@ namespace bmath::intern {
 					assert(false);
 					return false;
 				case Type(MultiPn::summands):
-					if (ref.type == Op::sum) {
+					if (ref.type == Variadic::sum) {
 						SharedMultiDatum& info = match_data.multi_info(pn_ref.index);
 						assert(info.match_indices.size() == 0u);
-						for (const TypedIdx elem : vc::range(ref)) {
+						for (const TypedIdx elem : variadic::range(ref)) {
 							info.match_indices.push_back(elem);
 						}
 						return true;
 					}
 					return false;
 				case Type(MultiPn::factors):
-					if (ref.type == Op::product) {
+					if (ref.type == Variadic::product) {
 						SharedMultiDatum& info = match_data.multi_info(pn_ref.index);
 						assert(info.match_indices.size() == 0u);
-						for (const TypedIdx elem : vc::range(ref)) {
+						for (const TypedIdx elem : variadic::range(ref)) {
 							info.match_indices.push_back(elem);
 						}
 						return true;
@@ -1420,7 +1314,7 @@ namespace bmath::intern {
 		PermutationEqualsRes permutation_equals(const Ref pn_ref, const Ref ref, pattern::MatchData& match_data)
 		{
 			using namespace pattern;
-			assert(pn_ref.type == ref.type && (is_one_of<Op::sum, Op::product>(ref.type)));
+			assert(pn_ref.type == ref.type && (is_one_of<Variadic::sum, Variadic::product>(ref.type)));
 
 			const auto reset_own_matches = [&match_data](const Ref pn_ref) {
 				const auto reset_single = [&match_data](const Ref ref) -> fold::Void {
@@ -1451,7 +1345,7 @@ namespace bmath::intern {
 
 			PermutationEqualsRes result;
 			auto& [matched, not_matched] = result;
-			for (const TypedIdx elem : vc::range(ref)) {
+			for (const TypedIdx elem : variadic::range(ref)) {
 				not_matched.push_back(elem);
 			}
 
@@ -1461,7 +1355,7 @@ namespace bmath::intern {
 				std::uint32_t result_idx = -1u; //index in not_matched where current match used to reside (if current match exists, it is stored in matched)
 			};
 			StupidBufferVector<PnElemData, 8> pn_elements;
-			for (const TypedIdx elem : vc::range(pn_ref)) {
+			for (const TypedIdx elem : variadic::range(pn_ref)) {
 				pn_elements.emplace_back(elem, -1u);
 			}
 
@@ -1471,8 +1365,8 @@ namespace bmath::intern {
 			std::uint32_t start_k = 0u; //all elements in not_matched bevore index start_k are ignored
 			while (pn_i < pn_elements.size()) {
 				const PnElemData pn_data_i = pn_elements[pn_i];
-				if (ref.type == Op::sum     && pn_data_i.elem.get_type() == MultiPn::summands ||
-					ref.type == Op::product && pn_data_i.elem.get_type() == MultiPn::factors ) [[unlikely]]
+				if (ref.type == Variadic::sum     && pn_data_i.elem.get_type() == MultiPn::summands ||
+					ref.type == Variadic::product && pn_data_i.elem.get_type() == MultiPn::factors ) [[unlikely]]
 				{
 					not_matched.shorten_to(std::remove(not_matched.begin(), not_matched.end(), null_value)); //remove null_value's from not_matched
 					for (const TypedIdx elem : not_matched) {
@@ -1532,38 +1426,25 @@ namespace bmath::intern {
 			using namespace pattern;
 
 			switch (pn_ref.type) {
-			case Type(Op::sum): 
+			case Type(Variadic::sum): 
 				[[fallthrough]];
-			case Type(Op::product): {
-				const std::uint32_t res_idx = dst_store.insert(TypedIdxSLC());
-				std::uint32_t last_node_idx = res_idx;
-				for (const TypedIdx elem : vc::range(pn_ref)) {
-					const TypedIdx dst_elem = match::copy(pn_ref.new_at(elem), match_data, src_store, dst_store);
-					last_node_idx = TypedIdxSLC::insert_new(dst_store, last_node_idx, dst_elem);
-				}
-				return TypedIdx(res_idx, pn_ref.type);
-			} break;
-			case Type(Op::named_fn): {
-				const NamedFn& src_function = *pn_ref;
-				NamedFn dst_function;
-				std::uint32_t last_node_idx = dst_store.insert(TypedIdxSLC());
-				dst_function.params_idx = last_node_idx;
-				for (const TypedIdx param : fn::range(pn_ref)) {
-					const auto param_ref = pn_ref.new_at(param);
-					if (param_ref.type == MultiPn::params) {
-						for (const TypedIdx matched_param : match_data.multi_info(param_ref.index).match_indices) {
-							const TypedIdx dst_param = tree::copy(Ref(src_store, matched_param), dst_store); //call normal copy!
-							last_node_idx = TypedIdxSLC::insert_new(dst_store, last_node_idx, dst_param);
-						}
-					}
-					else {
-						const TypedIdx dst_param = match::copy(param_ref, match_data, src_store, dst_store);
-						last_node_idx = TypedIdxSLC::insert_new(dst_store, last_node_idx, dst_param);
-					}
-				}
+			case Type(Variadic::product): {
+				const std::uint32_t size = pn_ref->index_vector.size;
+				const std::uint32_t capacity = pn_ref->index_vector.capacity;
+				const std::uint32_t node_count = TypedIdxVector::node_count(capacity);
 
-				std::copy_n(src_function.name, NamedFn::max_name_size, dst_function.name);
-				return TypedIdx(dst_store.insert(dst_function), pn_ref.type);
+				assert(pn_ref.store != &src_store);
+				const std::uint32_t dst_index = dst_store.allocate_n(node_count);
+				dst_store.at(dst_index) = TypedIdxVector(size, capacity);
+				auto dst_iter = begin(MutRef(dst_store, dst_index).cast<TypedIdxVector>());
+
+				for (const TypedIdx pn_elem : variadic::range(pn_ref)) {
+					const TypedIdx dst_elem = match::copy(pn_ref.new_at(pn_elem), match_data, src_store, dst_store);
+					*dst_iter = dst_elem;
+					++dst_iter;
+
+				}
+				return TypedIdx(dst_index, pn_ref.type);
 			} break;
 			default: {
 				assert(pn_ref.type.is<Fn>());
@@ -1576,7 +1457,7 @@ namespace bmath::intern {
 			} break;
 			case Type(Leaf::variable): {
 				const Variable& src_var = *pn_ref;
-				const auto src_name = std::string_view(src_var.data, src_var.size);
+				const auto src_name = std::string(src_var.data, src_var.size);
 				const std::size_t dst_index = Variable::build(dst_store, src_name);
 				return TypedIdx(dst_index, pn_ref.type);
 			} break;
@@ -1597,14 +1478,20 @@ namespace bmath::intern {
 			case Type(MultiPn::summands):
 				[[fallthrough]];
 			case Type(MultiPn::factors): {
-				const std::uint32_t res_idx = dst_store.insert(TypedIdxSLC());
-				std::uint32_t last_node_idx = res_idx;
 				const SharedMultiDatum& info = match_data.multi_info(pn_ref.index);
+				const std::uint32_t capacity = TypedIdxVector::smallest_fit_capacity(info.match_indices.size());
+				const std::uint32_t nodes_count = TypedIdxVector::node_count(capacity);
+
+				const std::uint32_t res_idx = dst_store.allocate_n(nodes_count);
+				dst_store.at(res_idx) = TypedIdxVector(info.match_indices.size(), capacity);
+				auto dst_iter = begin(MutRef(dst_store, res_idx).cast<TypedIdxVector>());
+
 				for (const TypedIdx elem : info.match_indices) {
 					const TypedIdx dst_elem = tree::copy(Ref(src_store, elem), dst_store); //call to different copy!
-					last_node_idx = TypedIdxSLC::insert_new(dst_store, last_node_idx, dst_elem);
+					*dst_iter = dst_elem;
+					++dst_iter;
 				}
-				return TypedIdx(res_idx, pn_ref.type == MultiPn::summands ? Type(Op::sum) : Type(Op::product));			
+				return TypedIdx(res_idx, pn_ref.type == MultiPn::summands ? Type(Variadic::sum) : Type(Variadic::product));			
 			} break;
 			case Type(MultiPn::params):  //already handeled in named_fn
 				assert(false);
@@ -1615,23 +1502,19 @@ namespace bmath::intern {
 		std::optional<TypedIdx> match_and_replace(const Ref from, const Ref to, const MutRef ref)
 		{		
 
-			if ((from.type == Op::sum || from.type == Op::product) && (from.type == ref.type)) {
+			if ((from.type == Variadic::sum || from.type == Variadic::product) && (from.type == ref.type)) {
 				pattern::MatchData match_data;
-				const auto [matched_elems, remaining_elems] = match::permutation_equals(from, ref, match_data);
+				auto [matched_elems, remaining_elems] = match::permutation_equals(from, ref, match_data);
 				if (matched_elems.size() > 0u) {
 					Store copy_buffer;
 					copy_buffer.reserve(32u);
-					free_slc(ref.cast<TypedIdxSLC>()); //shallow deletion only of initial sum / product itself, not of its operands
+					TypedIdxVector::free(*ref.store, ref.index);  //shallow deletion only of initial sum / product itself, not of its operands
 					const TypedIdx buffer_head = match::copy(to, match_data, *ref.store, copy_buffer);
 					for (const TypedIdx elem : matched_elems) { //delete each summand / factor occuring in match
 						tree::free(ref.new_at(elem));
 					}
-					const TypedIdx pattern_copy_head = tree::copy(Ref(copy_buffer, buffer_head), *ref.store);
-					const std::uint32_t res_idx = ref.store->insert(TypedIdxSLC({ pattern_copy_head }));
-					std::uint32_t last_node_idx = res_idx;
-					for (const TypedIdx elem : remaining_elems) { //copy back all summands / factors not part of match
-						last_node_idx = TypedIdxSLC::insert_new(*ref.store, last_node_idx, elem);
-					}
+					remaining_elems.push_back(tree::copy(Ref(copy_buffer, buffer_head), *ref.store));
+					const std::uint32_t res_idx = TypedIdxVector::build(*ref.store, remaining_elems);
 					return { TypedIdx(res_idx, ref.type) };
 				}
 			}
@@ -1652,31 +1535,16 @@ namespace bmath::intern {
 		std::pair<std::optional<TypedIdx>, bool> recursive_match_and_replace(const Ref in, const Ref out, const MutRef ref)
 		{
 			switch (ref.type) {
-			case Type(Op::sum): 
+			case Type(Variadic::sum): 
 				[[fallthrough]];
-			case Type(Op::product): {
-				auto range = vc::range(ref);
+			case Type(Variadic::product): {
+				auto range = variadic::range(ref);
 				auto iter = begin(range);
 				const auto stop = end(range);
 				for (; iter != stop; ++iter) {
 					const auto [new_elem, matched_deeper] = recursive_match_and_replace(in, out, ref.new_at(*iter));
 					if (new_elem) {
 						*iter = *new_elem;
-						return std::make_pair(std::nullopt, true);
-					}
-					else if (matched_deeper) {
-						return std::make_pair(std::nullopt, true);
-					}
-				}
-			} break;
-			case Type(Op::named_fn): {
-				auto range = fn::range(ref);
-				auto iter = begin(range);
-				const auto stop = end(range);
-				for (; iter != stop; ++iter) {
-					const auto [new_param, matched_deeper] = recursive_match_and_replace(in, out, ref.new_at(*iter));
-					if (new_param) {
-						*iter = *new_param;
 						return std::make_pair(std::nullopt, true);
 					}
 					else if (matched_deeper) {
@@ -1719,18 +1587,12 @@ namespace bmath::intern {
 			constexpr bool return_early_possible = ReturnEarlyPossible<Res_T>::value;
 
 			switch (ref.type) {
-			case Type_T(Op::sum): 
+			case Type_T(Variadic::sum): 
 				[[fallthrough]];
-			case Type_T(Op::product): {
-				for (const auto elem : vc::range(ref)) {
+			case Type_T(Variadic::product): {
+				for (const auto elem : variadic::range(ref)) {
 					const Res_T elem_res = fold::simple_fold<Res_T>(ref.new_at(elem), apply);
 					if constexpr (return_early_possible) { if (elem_res.return_early()) { return elem_res; } }
-				}
-			} break;
-			case Type_T(Op::named_fn): {
-				for (const auto param : fn::range(ref)) {
-					const Res_T param_res = fold::simple_fold<Res_T>(ref.new_at(param), apply);
-					if constexpr (return_early_possible) { if (param_res.return_early()) { return param_res; } }
 				}
 			} break;
 			default: {
@@ -1771,19 +1633,12 @@ namespace bmath::intern {
 			constexpr bool pattern = std::is_same_v<Type_T, Type>;
 
 			switch (ref.type) {
-			case Type_T(Op::sum): 
+			case Type_T(Variadic::sum): 
 				[[fallthrough]];
-			case Type_T(Op::product): {
+			case Type_T(Variadic::product): {
 				OpAccumulator acc(ref, init...);
-				for (const auto elem : vc::range(ref)) {
+				for (const auto elem : variadic::range(ref)) {
 					acc.consume(fold::tree_fold<Res_T, OpAccumulator>(ref.new_at(elem), leaf_apply, init...));
-				}
-				return acc.result();
-			} 
-			case Type_T(Op::named_fn): {
-				OpAccumulator acc(ref, init...);
-				for (const auto param : fn::range(ref)) {
-					acc.consume(fold::tree_fold<Res_T, OpAccumulator>(ref.new_at(param), leaf_apply, init...));
 				}
 				return acc.result();
 			} 

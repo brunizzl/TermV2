@@ -8,7 +8,6 @@
 
 #include "typedIndex.hpp"
 #include "termStore.hpp"
-#include "termColony.hpp"
 #include "parseTerm.hpp"
 #include "termVector.hpp"
 
@@ -21,11 +20,10 @@ namespace bmath::intern {
 		COUNT
 	};
 
-	enum class Op //Short for Operation (Fn's are operations as well, but not listed here, because organisation stuff)
+	enum class Variadic
 	{
 		sum,
 		product,
-		named_fn,
 		COUNT
 	};
 
@@ -33,8 +31,9 @@ namespace bmath::intern {
 	//behavior for every specific element in Fn is (at least) defined at these places:
 	//  1. function fn::eval specifies how (and if at all) to evaluate
 	//  2. array fn::props_table specifies name and parameter count
-	enum class Fn //short for Function (note that named_fn is not listed here, at it's behavior is more complicated)
+	enum class Fn //short for Function
 	{
+		diff,   //params[0] := function  params[1] := variable the derivation is done in respect to
 		pow,    //params[0] := base      params[1] := expo    
 		log,	//params[0] := base      params[1] := argument
 		sqrt,	//params[0] := argument
@@ -60,7 +59,7 @@ namespace bmath::intern {
 		COUNT
 	};
 
-	using MathType = SumEnum<Fn, Leaf, Op>;
+	using MathType = SumEnum<Fn, Leaf, Variadic>;
 
 
 
@@ -91,21 +90,10 @@ namespace bmath::intern {
 
 	using TypedIdx = BasicTypedIdx<Type>;
 
-	using TypedIdxSLC = TermSLC<TypedIdx>;
 	using FnParams = std::array<TypedIdx, 4>;
-	using Variable = StoredVector<char, 16>;
+	using TypedIdxVector = StoredVector<TypedIdx>;
+	using Variable = StoredVector<char>;
 	using Complex = std::complex<double>;
-
-	struct NamedFn
-	{
-		static constexpr std::size_t max_name_size = 12u; 
-
-		std::uint32_t params_idx = 0; //points to TypedIdxSLC containing the parameters
-		char name[max_name_size] = {}; //short name seems sufficient for internal purposes
-
-		constexpr std::size_t name_size() const noexcept { return std::min(std::strlen(this->name), max_name_size); }
-		constexpr std::string_view name_view() const noexcept { return { this->name, this->name_size() }; }
-	};
 
 	namespace pattern {
 
@@ -192,17 +180,15 @@ namespace bmath::intern {
 	union TypesUnion
 	{
 		FnParams fn_params;
-		NamedFn named_fn;
 		Complex complex;
-		TypedIdxSLC index_slc; //representing NamedFn's extra parameters and Sum and Product 
+		TypedIdxVector index_vector; //representing NamedFn's extra parameters and Sum and Product 
 		Variable variable;
 		pattern::TreeMatchVariable tree_match;    //only expected as part of pattern
 		pattern::ValueMatchVariable value_match;  //only expected as part of pattern
 
 		constexpr TypesUnion(const FnParams                   & val) noexcept :fn_params(val)   {}
-		constexpr TypesUnion(const NamedFn                    & val) noexcept :named_fn(val)    {}
 		constexpr TypesUnion(const Complex                    & val) noexcept :complex(val)     {}
-		constexpr TypesUnion(const TypedIdxSLC                & val) noexcept :index_slc(val)   {}
+		constexpr TypesUnion(const TypedIdxVector             & val) noexcept :index_vector(val)   {}
 		constexpr TypesUnion(const Variable                   & val) noexcept :variable(val)    {} 
 		constexpr TypesUnion(const pattern::TreeMatchVariable & val) noexcept :tree_match(val)  {} 
 		constexpr TypesUnion(const pattern::ValueMatchVariable& val) noexcept :value_match(val) {} 
@@ -211,17 +197,15 @@ namespace bmath::intern {
 		constexpr auto operator<=>(const TypesUnion&) const = default;
 
 		constexpr operator const FnParams                    &() const noexcept { return this->fn_params; }
-		constexpr operator const NamedFn                     &() const noexcept { return this->named_fn; }
 		constexpr operator const Complex                     &() const noexcept { return this->complex; }
-		constexpr operator const TypedIdxSLC                 &() const noexcept { return this->index_slc; }
+		constexpr operator const TypedIdxVector              &() const noexcept { return this->index_vector; }
 		constexpr operator const Variable                    &() const noexcept { return this->variable; }
 		constexpr operator const pattern::TreeMatchVariable  &() const noexcept { return this->tree_match; }
 		constexpr operator const pattern::ValueMatchVariable &() const noexcept { return this->value_match; }
 
 		constexpr operator FnParams                    &() noexcept { return this->fn_params; }
-		constexpr operator NamedFn                     &() noexcept { return this->named_fn; }
 		constexpr operator Complex                     &() noexcept { return this->complex; }
-		constexpr operator TypedIdxSLC                 &() noexcept { return this->index_slc; }
+		constexpr operator TypedIdxVector              &() noexcept { return this->index_vector; }
 		constexpr operator Variable                    &() noexcept { return this->variable; }
 		constexpr operator pattern::TreeMatchVariable  &() noexcept { return this->tree_match; }
 		constexpr operator pattern::ValueMatchVariable &() noexcept { return this->value_match; }
@@ -352,6 +336,7 @@ namespace bmath::intern {
 
 		//every item enumerated in Fn (except COUNT) may be listed here in order of apperance in Fn
 		constexpr auto props_table = std::to_array<FnProps>({
+			{ Fn::diff , "diff" , 2u },   
 			{ Fn::pow  , "pow"  , 2u },   
 			{ Fn::log  , "log"  , 2u }, 
 			{ Fn::sqrt , "sqrt" , 1u },	
@@ -398,22 +383,16 @@ namespace bmath::intern {
 		constexpr std::span<const TypedIdx> range(const FnParams& params, const Type type) noexcept
 		{ return { params.data(), param_count(type) }; }
 
-
-		template<Const is_const>
-		constexpr auto range(const BasicRef<TypesUnion, Type, is_const> ref) noexcept 
-		{ 
-			assert(ref.type == Op::named_fn);
-			return ref.new_as<TypedIdxSLC>(ref->named_fn.params_idx); 
-		}
-
 	} //namespace fn
 
 	//utility for variadic types (Sum and Product)
-	namespace vc {
+	namespace variadic {
 
-		inline auto range(const MutRef ref) noexcept { return ref.cast<TypedIdxSLC>(); }
-		inline auto range(const    Ref ref) noexcept { return ref.cast<TypedIdxSLC>(); }
-	} //namespace vc
+		inline auto         range(const MutRef ref) noexcept { return ref.cast<TypedIdxVector>(); }
+		inline auto& unsave_range(const MutRef ref) noexcept { return ref->index_vector; }
+		inline auto&        range(const    Ref ref) noexcept { return ref->index_vector; }
+
+	} //namespace variadic
 
 	//general purpose recursive tree traversal
 	namespace tree {
@@ -544,7 +523,7 @@ namespace bmath::intern {
 		template<typename Res_T, typename Union_T, typename Type_T, Const is_const, typename Apply>
 		Res_T simple_fold(const BasicRef<Union_T, Type_T, is_const> ref, Apply apply);
 
-		//this fold differentiates between recursive nodes (Op's, Fn's and ValueMatchVariable) and Leafes (values and variables)
+		//this fold differentiates between recursive nodes (Variadic's, Fn's and ValueMatchVariable) and Leafes (values and variables)
 		//OpAccumulator is constructed before a recursive call is made and consumes each recursive result. It thus needs to at least
 		//  have a Constructor taking as arguments (BasicRef<Union_T, Type_T, Const> ref, AccInit... init) 
 		//  and a consume method taking as single parameter (Res_T elem_res)

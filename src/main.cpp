@@ -35,7 +35,7 @@ idea status:
 
 int main()
 {
-	//debug::enumerate_pn_type();
+	debug::enumerate_pn_type();
 	//debug::test_rechner();
 	//test::combine_exact();
 	//test::pattern_term();
@@ -46,7 +46,7 @@ int main()
 	//test::match();
 	//test::combine();
 	//test::alloc_n();
-	test::term_array();
+	//test::term_array();
 }
 
 

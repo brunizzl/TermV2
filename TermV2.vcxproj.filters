@@ -38,9 +38,6 @@
     <ClInclude Include="src\arithmeticTerm.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\termColony.hpp">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="src\typedIndex.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
