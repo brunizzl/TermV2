@@ -24,14 +24,9 @@
 			}
 			assert(false);
 		} break;
-		case Type_T(Variadic::named_fn): {
-			for (const TypedIdx param : fn::range(ref)) {
-			}
-			assert(false);
-		} break;
 		default: {
 			assert(ref.type.is<Fn>());
-			for (const TypedIdx param : fn::range(ref->fn_params, ref.type)) {
+			for (const TypedIdx param : fn::range(ref)) {
 			}
 			assert(false);
 		} break;
@@ -1206,8 +1201,12 @@ namespace bmath::intern {
 					case Type(Variadic::sum): 
 						[[fallthrough]];
 					case Type(Variadic::product): {
-						const auto [matched, not_matched] = match::permutation_equals(pn_ref, ref, match_data);
-						return matched.size() > 0u && not_matched.size() == 0u;
+						if (pn_ref->variadic.size > ref->variadic.size) {
+							return false;
+						}
+						return find_matching_permutation(pn_ref, ref, match_data, 0u, 0u) == FindPermutationRes::matched_all;
+						//const auto [matched, not_matched] = match::permutation_equals(pn_ref, ref, match_data);
+						//return matched.size() > 0u && not_matched.size() == 0u;
 					} break;
 					default: {
 						assert(pn_ref.type.is<Fn>());
@@ -1308,40 +1307,90 @@ namespace bmath::intern {
 
 		} //equals
 
+		void reset_own_matches(const Ref pn_ref, pattern::MatchData& match_data) {
+			using namespace pattern;
+			const auto reset_single = [&match_data](const Ref ref) -> fold::Void {
+				switch (ref.type) {
+				case Type(PnNode::tree_match): {
+					SharedTreeDatum& info = match_data.info(ref->tree_match);
+					if (info.responsible == ref.typed_idx()) {
+						info = SharedTreeDatum();
+					}
+				} break;
+				case Type(PnNode::value_match): {
+					SharedValueDatum& info = match_data.info(ref->value_match);
+					if (info.responsible == ref.typed_idx()) {
+						info = SharedValueDatum();
+					}
+				} break;
+				case Type(MultiPn::summands):
+					[[fallthrough]];
+				case Type(MultiPn::factors): {
+					SharedMultiDatum& info = match_data.multi_info(ref.index);
+					info.match_indices.clear();
+				} break;
+				}
+				return fold::Void{};
+			};
+			fold::simple_fold<fold::Void>(pn_ref, reset_single);
+		} //reset_own_matches
+
+		bool succeeding_permutation_equals(const Ref pn_ref, const Ref ref, pattern::MatchData& match_data)
+		{
+			using namespace pattern;
+
+			if (pn_ref.type.is<MathType>()) {
+				assert(pn_ref.type == ref.type);
+				switch (pn_ref.type) {
+				case Type(Variadic::sum): 
+					[[fallthrough]];
+				case Type(Variadic::product): {
+					SharedVariadicDatum& variadic_datum = match_data.variadic_data.at(pn_ref.index);
+					const VariadicParams& pn_params = *pn_ref;
+					assert(variadic_datum.currenty_matched.count() > 0u); //assert this variadic is already matched
+					std::uint32_t pn_i = pn_params.size - 1u;
+					if (pn_params[pn_i].get_type().is<MultiPn>()) {
+						pn_i--;
+					} 
+					assert(!pn_params[pn_i].get_type().is<MultiPn>()); //there may only be a single one in each sum / product
+					const std::uint32_t last_haystack_k = variadic_datum.match_positions[pn_i];
+					variadic_datum.currenty_matched.reset(last_haystack_k);
+					reset_own_matches(pn_ref, match_data);
+					return find_matching_permutation(pn_ref, ref, match_data, pn_i, last_haystack_k + 1u) == FindPermutationRes::matched_all;
+				} break;
+				default: {
+					assert(pn_ref.type.is<Fn>());
+					auto pn_range = fn::range(pn_ref);
+					auto pn_iter = pn_range.begin();
+					const auto pn_stop = end(pn_range);
+					auto range = fn::range(ref);
+					auto iter = range.begin();
+					for (; pn_iter != pn_stop; ++pn_iter, ++iter) { //iter and pn_iter both go over same number of params
+						if (match::succeeding_permutation_equals(pn_ref.new_at(*pn_iter), ref.new_at(*iter), match_data)) {
+							return true;
+						}
+					}
+					return false;
+				} break;
+				case Type(Leaf::variable): 
+					[[fallthrough]];
+				case Type(Leaf::complex): 
+					return false;
+				}
+			}
+			else {
+				assert(pn_ref.type.is<MatchType>());
+				return false;
+			}
+
+		} //succeeding_permutation_equals
+
 		//this function currently has complexity O(m^n) where m is count of ref's elements and n is count of pn_ref's elements.
 		//in principle it could be turend to O(m*n), but i have not yet turned this into a working algorithm.
-		//the tricky part is to ensure, that one will never 
 		PermutationEqualsRes permutation_equals(const Ref pn_ref, const Ref ref, pattern::MatchData& match_data)
 		{
 			using namespace pattern;
 			assert(pn_ref.type == ref.type && (is_one_of<Variadic::sum, Variadic::product>(ref.type)));
-
-			const auto reset_own_matches = [&match_data](const Ref pn_ref) {
-				const auto reset_single = [&match_data](const Ref ref) -> fold::Void {
-					switch (ref.type) {
-					case Type(PnNode::tree_match): {
-						SharedTreeDatum& info = match_data.info(ref->tree_match);
-						if (info.responsible == ref.typed_idx()) {
-							info = SharedTreeDatum();
-						}
-					} break;
-					case Type(PnNode::value_match): {
-						SharedValueDatum& info = match_data.info(ref->value_match);
-						if (info.responsible == ref.typed_idx()) {
-							info = SharedValueDatum();
-						}
-					} break;
-					case Type(MultiPn::summands):
-						[[fallthrough]];
-					case Type(MultiPn::factors): {
-						SharedMultiDatum& info = match_data.multi_info(ref.index);
-						info.match_indices.clear();
-					} break;
-					}
-					return fold::Void{};
-				};
-				fold::simple_fold<fold::Void>(pn_ref, reset_single);
-			};
 
 			PermutationEqualsRes result;
 			auto& [matched, not_matched] = result;
@@ -1391,7 +1440,7 @@ namespace bmath::intern {
 						goto found_match; //this is considered harmful >:) hehehehe
 					}
 					else {
-						reset_own_matches(pn_elem_i_ref);
+						reset_own_matches(pn_elem_i_ref, match_data);
 					}
 				}
 
@@ -1404,7 +1453,7 @@ namespace bmath::intern {
 					start_k = matched_at_idx + 1u;
 
 					const Ref pn_elem_i_ref = pn_ref.new_at(pn_elements[pn_i].elem);
-					reset_own_matches(pn_elem_i_ref); //here could a call to equals_another_way be happening
+					reset_own_matches(pn_elem_i_ref, match_data); //here could a call to equals_another_way be happening
 					continue;
 				}
 				else {
@@ -1420,6 +1469,80 @@ namespace bmath::intern {
 			not_matched.shorten_to(std::remove(not_matched.begin(), not_matched.end(), null_value)); //remove null_value's from not_matched
 			return result;
 		} //permutation_equals
+
+
+
+		FindPermutationRes find_matching_permutation(const Ref pn_ref, const Ref haystack_ref, pattern::MatchData& match_data, std::uint32_t pn_i, std::uint32_t haystack_k)
+		{
+			using namespace pattern;
+			assert(pn_ref.type == haystack_ref.type && (is_one_of<Variadic::sum, Variadic::product>(haystack_ref.type)));
+
+			const VariadicParams& pn_params = *pn_ref;
+			const VariadicParams& haystack_params = *haystack_ref;
+
+			SharedVariadicDatum& variadic_datum = match_data.variadic_data.at_or_insert(pn_ref.index);
+			variadic_datum.currenty_matched.set_to_n_false(haystack_params.size); 
+
+		match_pn_i:
+			while (pn_i < pn_params.size) {
+				if (pn_params[pn_i].get_type().is<MultiPn>()) [[unlikely]] {
+					assert(haystack_ref.type == Variadic::sum && pn_params[pn_i].get_type() == MultiPn::summands && "Variadic::sum may only contain MultiPn::summands" ||
+					haystack_ref.type == Variadic::product && pn_params[pn_i].get_type() == MultiPn::factors && "Variadic::product may only contain MultiPn::product");
+					assert(pn_i + 1u == pn_params.size && "MultiPn is only valid as last element");
+
+					SharedMultiDatum& info = match_data.multi_info(pn_params[pn_i].get_index());
+					info.match_indices.clear();
+					for (std::size_t k = 0u; k < haystack_params.size; k++) {
+						if (!variadic_datum.currenty_matched.test(k)) {
+							info.match_indices.push_back(haystack_params[k]);
+						}
+					}
+					return FindPermutationRes::matched_all;
+				}
+				else {
+					const Ref pn_i_ref = pn_ref.new_at(pn_params[pn_i]);
+					for (; haystack_k < haystack_params.size; haystack_k++) {
+						if (variadic_datum.currenty_matched.test(haystack_k)) {
+							continue;
+						}
+						if (match::equals(pn_i_ref, haystack_ref.new_at(haystack_params[haystack_k]), match_data)) {
+							variadic_datum.currenty_matched.set(haystack_k);
+							variadic_datum.match_positions[pn_i] = haystack_k;
+							pn_i++;
+							goto match_pn_i; //next while iteration
+						}
+						reset_own_matches(pn_i_ref, match_data);
+					}
+				}
+				//got here -> could not match element nr pn_i of pattern with any currently unmatched element in haystack
+				if (pn_i == 0u) {
+					//matching the first element in pattern failed -> there is no hope
+					return FindPermutationRes::failed;
+				}
+				else {
+					//this while loop iteration tried matching some element after the first in pattern (and failed)
+					// -> perhaps an element preceding the current one could be matched differently
+					// -> try that
+					pn_i--;
+					const Ref pn_i_ref = pn_ref.new_at(pn_params[pn_i]);
+					haystack_k = variadic_datum.match_positions[pn_i];
+					//try rematching the last successfully matched element in pattern with same part it matched with previously
+					// (but it can not match any way that was already tried, duh)
+					if (succeeding_permutation_equals(pn_i_ref, haystack_ref.new_at(haystack_params[haystack_k]), match_data)) {
+						//success -> try matching the element not matchable this while iteration with (perhaps) now differenty set match variables
+						pn_i++;						
+					}
+					else {
+						//could not rematch last successfully matched element with same element in haystack 
+						//  -> try succeeding elements in haystack in next loop iteration
+						reset_own_matches(pn_i_ref, match_data);
+						variadic_datum.currenty_matched.reset(haystack_k);
+						haystack_k++;
+					}
+				}
+			}
+			return pn_params.size == haystack_params.size ? FindPermutationRes::matched_all : FindPermutationRes::matched_some;
+		} //find_matching_permutation
 
 		TypedIdx copy(const Ref pn_ref, const pattern::MatchData& match_data, const Store& src_store, Store& dst_store)
 		{
@@ -1442,7 +1565,6 @@ namespace bmath::intern {
 					const TypedIdx dst_elem = match::copy(pn_ref.new_at(pn_elem), match_data, src_store, dst_store);
 					*dst_iter = dst_elem;
 					++dst_iter;
-
 				}
 				return TypedIdx(dst_index, pn_ref.type);
 			} break;

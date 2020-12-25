@@ -82,6 +82,10 @@ namespace bmath::intern {
 		//this is constant -> these are save to use
 		constexpr const Value_T* begin() const noexcept { return this->data; }
 		constexpr const Value_T* end() const noexcept { return this->data + this->size; }
+
+		//kinda unsave, as always :o
+		constexpr Value_T& operator[](const std::uint32_t at) noexcept { return *(this->data + at); }
+		constexpr const Value_T& operator[](const std::uint32_t at) const noexcept { return *(this->data + at); }
 	}; //struct StoredVector
 
 	namespace stored_vector {

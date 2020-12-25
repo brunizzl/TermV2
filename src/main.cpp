@@ -33,6 +33,7 @@ idea status:
 */
 
 
+
 int main()
 {
 	debug::enumerate_pn_type();
@@ -42,7 +43,6 @@ int main()
 	//test::arithmetic_term();
 	//test::copy();
 	//test::bit_set();
-	//test::bit_vector2();
 	//test::match();
 	//test::combine();
 	//test::alloc_n();

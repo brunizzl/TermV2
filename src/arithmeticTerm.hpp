@@ -257,16 +257,29 @@ namespace bmath::intern {
 			}
 		};
 
+		struct SharedVariadicDatum
+		{
+			//no sum or product in a pattern may have more summands / factors than max_pn_variadic_size many
+			static constexpr std::size_t max_pn_variadic_size = 8u;
+			//if currenty_matched.test(i), then element i in term to match is currently matched by an element in pattern.
+			BitVector currenty_matched = {}; 
+			//every element in pattern (except all MultiPn) has own entry which logs, 
+			//  with which element in term to match it currently is associated with.
+			std::array<decltype(VariadicParams::size), max_pn_variadic_size> match_positions = {};
+		};
+
 		//to allow a constant PnTerm to be matched against, all match info is stored here
 		struct MatchData
 		{
 			static constexpr std::size_t max_value_match_count = 2u; //maximal number of unrelated ValueMatchVariables allowed per pattern
 			static constexpr std::size_t max_tree_match_count = 4u;	 //maximal number of unrelated TreeMatchVariables allowed per pattern
-			static constexpr std::size_t max_multi_match_count = 2u; //maximal number of unrelated MultiMatchVariables allowed per pattern
+			static constexpr std::size_t max_multi_match_count = 2u; //maximal number of MultiMatchVariables allowed per pattern
+			static constexpr std::size_t max_variadic_count = 3u;    //maximal number of sums and products allowed per pattern
 
 			std::array<SharedValueDatum, max_value_match_count> value_match_data = {};
 			std::array<SharedTreeDatum, max_tree_match_count> tree_match_data = {};
 			std::array<SharedMultiDatum, max_multi_match_count> multi_match_data = {};
+			StupidLinearMap<std::uint32_t, SharedVariadicDatum, max_variadic_count> variadic_data = {};
 
 			constexpr auto& info(const TreeMatchVariable& var) noexcept { return this->tree_match_data[var.match_data_idx]; }
 			constexpr auto& info(const ValueMatchVariable& var) noexcept { return this->value_match_data[var.match_data_idx]; }
@@ -460,6 +473,16 @@ namespace bmath::intern {
 		//  PermutationEqualsRes.not_matched will contain the leftovers (-> empty if MultiPn paticipated).
 		//it is assumed, that pn_ref and ref are both the same variadic type (eighter sum and sum or product and product)
 		PermutationEqualsRes permutation_equals(const Ref pn_ref, const Ref ref, pattern::MatchData& match_data);
+
+		enum class FindPermutationRes { matched_all, failed, matched_some };
+
+		//determines weather there is a way to match pn_ref in haystack_ref (thus pn_ref is assumed to part of a pattern)
+		//pn_i is the index of the first element in pn_ref to be matched. 
+		//if pn_i is not zero, it is assumed, that all previous elements in pn_ref are already matched.
+		//the first haystack_k elements of haystack_ref will be skipped for the first match attemt.
+		//it is assumed, that pn_ref and haystack_ref are both the same variadic type (eighter both sum or both product)
+		FindPermutationRes find_matching_permutation(const Ref pn_ref, const Ref haystack_ref, 
+			pattern::MatchData& match_data,	std::uint32_t pn_i, std::uint32_t haystack_k);
 
 		//copies pn_ref with match_data into store, returns head of copied result.
 		[[nodiscard]] TypedIdx copy(const Ref pn_ref, const pattern::MatchData& match_data, 
