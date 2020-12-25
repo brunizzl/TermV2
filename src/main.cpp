@@ -6,6 +6,7 @@ using namespace bmath::intern;
 TODO:
 
 important:
+ - check tree::copy and match::copy weather they work with two identical stores
  - deprecate SLC and introduce vector like type
  - use templates to allow multiple stores
  - write data structure one abstraction layer above PnTerm to group multiple pattens

@@ -69,24 +69,24 @@ namespace bmath::intern {
 	}
 
 
-	template<typename Key_T, typename Val_T, std::size_t Size>
+	template<typename Key_T, Key_T NullKey, typename Val_T, std::size_t Size>
 	struct StupidLinearMap
 	{
-		static constexpr Key_T null_key = Key_T();
-
 		std::array<Key_T, Size> keys;
 		std::array<Val_T, Size> vals;
 
-		constexpr StupidLinearMap() noexcept :keys{}, vals{} {}
+		constexpr StupidLinearMap() noexcept :vals{} {
+			keys.fill(NullKey);
+		}
 
 		constexpr Val_T& at_or_insert(const Key_T& key) noexcept
 		{
-			assert(key != null_key);
+			assert(key != NullKey);
 			for (std::size_t i = 0; i < Size; i++) {
 				if (this->keys[i] == key) {
 					return this->vals[i];
 				}
-				if (this->keys[i] == null_key) {
+				if (this->keys[i] == NullKey) {
 					this->keys[i] = key;
 					return this->vals[i];
 				}
@@ -97,7 +97,7 @@ namespace bmath::intern {
 
 		constexpr Val_T& at(const Key_T& key) noexcept
 		{
-			assert(key != null_key);
+			assert(key != NullKey);
 			const auto key_iter = std::find(this->keys.begin(), this->keys.end(), key);
 			assert(key_iter != this->keys.end());
 			return this->vals[std::distance(this->keys.begin(), key_iter)];

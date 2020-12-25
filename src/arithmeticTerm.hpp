@@ -279,7 +279,7 @@ namespace bmath::intern {
 			std::array<SharedValueDatum, max_value_match_count> value_match_data = {};
 			std::array<SharedTreeDatum, max_tree_match_count> tree_match_data = {};
 			std::array<SharedMultiDatum, max_multi_match_count> multi_match_data = {};
-			StupidLinearMap<std::uint32_t, SharedVariadicDatum, max_variadic_count> variadic_data = {};
+			StupidLinearMap<std::uint32_t, -1u, SharedVariadicDatum, max_variadic_count> variadic_data = {};
 
 			constexpr auto& info(const TreeMatchVariable& var) noexcept { return this->tree_match_data[var.match_data_idx]; }
 			constexpr auto& info(const ValueMatchVariable& var) noexcept { return this->value_match_data[var.match_data_idx]; }
@@ -460,19 +460,6 @@ namespace bmath::intern {
 		//if match is succsessfull, match_data stores what pattern's match variables matched and true is returned.
 		//if match was not succsessfull, match_data is NOT reset and false is returned
 		bool equals(const Ref pn_ref, const Ref ref, pattern::MatchData& match_data);
-
-		struct PermutationEqualsRes
-		{
-			StupidBufferVector<TypedIdx, 12> matched;
-			StupidBufferVector<TypedIdx, 12> not_matched;
-		};
-
-		//allows to match a sum / product pn_ref in a sum / product ref regardless of order
-		//if no match was found, both PermutationEqualsRes.matched and PermutationEqualsRes.not_matched will be empty, 
-		//  else PermutationEqualsRes.matched will contain the elements in term where a corrensponding part in pattern was found and
-		//  PermutationEqualsRes.not_matched will contain the leftovers (-> empty if MultiPn paticipated).
-		//it is assumed, that pn_ref and ref are both the same variadic type (eighter sum and sum or product and product)
-		PermutationEqualsRes permutation_equals(const Ref pn_ref, const Ref ref, pattern::MatchData& match_data);
 
 		enum class FindPermutationRes { matched_all, failed, matched_some };
 

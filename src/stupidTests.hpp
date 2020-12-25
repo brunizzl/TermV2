@@ -76,9 +76,9 @@ namespace bmath::intern::debug {
 			{ "a, b          | a^2 - 2 a b   + b^2 = (a - b)^2" }, 
 			{ "a :complex, b | a^2 + (2 a) b + b^2 = (a + b)^2" }, 
 			
-			{ "a, bs :factors, cs :factors | a bs + a cs = a (bs + cs)" }, //will only work very few times for now (no rematch implemented yet)
-			{ "a, bs :factors | a*bs + a = a (bs + 1)" }, 
-			{ "a | a + a = 2 a" }, 
+			{ "a, bs :factors, cs :factors | a bs + a cs = a (bs + cs)" },
+			{ "a, bs :factors              | a*bs + a    = a (bs + 1)" }, 
+			{ "a                           | a + a       = 2 a" }, 
 			
 			{ "a, b | a a^b = 2 a" }, 
 			{ "a | a + a = 2 a" }, 
@@ -108,8 +108,6 @@ namespace bmath::intern::debug {
 			{ "x :variable, f :any              | diff(cos(f), x) = diff(f, x) (-sin(f))" },
 			{ "x :variable, f :any              | diff(exp(f), x) = diff(f, x) exp(f)" },
 			{ "x :variable, f :any              | diff(ln(f), x)  = diff(f, x) 1/f" },
-
-			{ "a, bs :factors, cs :factors | force(a bs + a cs) = a (bs + cs)" },
 		});
 
 		for (const auto& p : patterns) {

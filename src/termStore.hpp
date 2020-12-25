@@ -175,7 +175,7 @@ namespace bmath::intern {
 
 		constexpr inline [[nodiscard]] Payload_T& at(const std::size_t idx) noexcept
 		{
-			assert(this->valid_idx(idx));
+			ASSERT(this->valid_idx(idx));
 			return this->data()[idx];
 		}
 

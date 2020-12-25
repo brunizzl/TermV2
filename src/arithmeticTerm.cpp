@@ -1385,93 +1385,6 @@ namespace bmath::intern {
 
 		} //succeeding_permutation_equals
 
-		//this function currently has complexity O(m^n) where m is count of ref's elements and n is count of pn_ref's elements.
-		//in principle it could be turend to O(m*n), but i have not yet turned this into a working algorithm.
-		PermutationEqualsRes permutation_equals(const Ref pn_ref, const Ref ref, pattern::MatchData& match_data)
-		{
-			using namespace pattern;
-			assert(pn_ref.type == ref.type && (is_one_of<Variadic::sum, Variadic::product>(ref.type)));
-
-			PermutationEqualsRes result;
-			auto& [matched, not_matched] = result;
-			for (const TypedIdx elem : variadic::range(ref)) {
-				not_matched.push_back(elem);
-			}
-
-			struct PnElemData
-			{
-				TypedIdx elem;
-				std::uint32_t result_idx = -1u; //index in not_matched where current match used to reside (if current match exists, it is stored in matched)
-			};
-			StupidBufferVector<PnElemData, 8> pn_elements;
-			for (const TypedIdx elem : variadic::range(pn_ref)) {
-				pn_elements.emplace_back(elem, -1u);
-			}
-
-			constexpr auto null_value = TypedIdx();
-
-			std::uint32_t pn_i = 0u; //index in pn_elements
-			std::uint32_t start_k = 0u; //all elements in not_matched bevore index start_k are ignored
-			while (pn_i < pn_elements.size()) {
-				const PnElemData pn_data_i = pn_elements[pn_i];
-				if (ref.type == Variadic::sum     && pn_data_i.elem.get_type() == MultiPn::summands ||
-					ref.type == Variadic::product && pn_data_i.elem.get_type() == MultiPn::factors ) [[unlikely]]
-				{
-					not_matched.shorten_to(std::remove(not_matched.begin(), not_matched.end(), null_value)); //remove null_value's from not_matched
-					for (const TypedIdx elem : not_matched) {
-						matched.emplace_back(elem);
-					}
-					SharedMultiDatum& info = match_data.multi_info(pn_data_i.elem.get_index());
-					info.match_indices = std::move(not_matched);
-					return result;
-				}
-
-				const Ref pn_elem_i_ref = pn_ref.new_at(pn_data_i.elem);
-
-				for (std::uint32_t k = start_k; k < not_matched.size(); k++) {
-					const TypedIdx elem_k = not_matched[k];
-					if (elem_k == null_value) {
-						continue; //elem_k is currently matched by some other pattern variable -> ignore it for now
-					}
-					else if (match::equals(pn_elem_i_ref, ref.new_at(elem_k), match_data)) {
-						matched.push_back(elem_k);
-						pn_elements[pn_i].result_idx = k;
-						not_matched[k] = null_value;
-						goto found_match; //this is considered harmful >:) hehehehe
-					}
-					else {
-						reset_own_matches(pn_elem_i_ref, match_data);
-					}
-				}
-
-				//if we get here, no match for pn_elem_i_ref was found in all of not_matched. 
-				//now we need to rematch previous pn_elem's and test if this frees some spot for our current pn_elem_i_ref
-				if (pn_i > 0u) {
-					pn_i--;
-					const std::uint32_t matched_at_idx = std::exchange(pn_elements[pn_i].result_idx, -1u);
-					not_matched[matched_at_idx] = matched.pop_back();
-					start_k = matched_at_idx + 1u;
-
-					const Ref pn_elem_i_ref = pn_ref.new_at(pn_elements[pn_i].elem);
-					reset_own_matches(pn_elem_i_ref, match_data); //here could a call to equals_another_way be happening
-					continue;
-				}
-				else {
-					matched.clear();
-					not_matched.clear();
-					return result;
-				}
-
-			found_match:
-				pn_i++;
-			}
-
-			not_matched.shorten_to(std::remove(not_matched.begin(), not_matched.end(), null_value)); //remove null_value's from not_matched
-			return result;
-		} //permutation_equals
-
-
-
 		FindPermutationRes find_matching_permutation(const Ref pn_ref, const Ref haystack_ref, pattern::MatchData& match_data, std::uint32_t pn_i, std::uint32_t haystack_k)
 		{
 			using namespace pattern;
@@ -1626,17 +1539,26 @@ namespace bmath::intern {
 
 			if ((from.type == Variadic::sum || from.type == Variadic::product) && (from.type == ref.type)) {
 				pattern::MatchData match_data;
-				auto [matched_elems, remaining_elems] = match::permutation_equals(from, ref, match_data);
-				if (matched_elems.size() > 0u) {
+				if (match::find_matching_permutation(from, ref, match_data, 0u, 0u) != FindPermutationRes::failed) {
 					Store copy_buffer;
 					copy_buffer.reserve(32u);
-					VariadicParams::free(*ref.store, ref.index);  //shallow deletion only of initial sum / product itself, not of its operands
 					const TypedIdx buffer_head = match::copy(to, match_data, *ref.store, copy_buffer);
-					for (const TypedIdx elem : matched_elems) { //delete each summand / factor occuring in match
-						tree::free(ref.new_at(elem));
-					}
-					remaining_elems.push_back(tree::copy(Ref(copy_buffer, buffer_head), *ref.store));
-					const std::uint32_t res_idx = VariadicParams::build(*ref.store, remaining_elems);
+					StupidBufferVector<TypedIdx, 12> result_variadic;
+					{
+						const BitVector& matched = match_data.variadic_data.at(from.index).currenty_matched;
+						const VariadicParams& src_params = *ref; //no allocations in ref.store during src_params livetime -> reference allowed
+						for (std::uint32_t k = 0u; k < src_params.size; k++) {
+							if (matched.test(k)) {
+								tree::free(ref.new_at(src_params[k])); //delete matched parts
+							}
+							else {
+								result_variadic.push_back(src_params[k]); //keep unmatched parts
+							}
+						}
+					}					
+					VariadicParams::free(*ref.store, ref.index);  //shallow deletion only of initial sum / product itself, not of its operands
+					result_variadic.push_back(tree::copy(Ref(copy_buffer, buffer_head), *ref.store));
+					const std::uint32_t res_idx = VariadicParams::build(*ref.store, result_variadic);
 					return { TypedIdx(res_idx, ref.type) };
 				}
 			}
