@@ -24,13 +24,14 @@ namespace bmath::intern {
 	{
 		sum,
 		product,
+		named_fn, //all functions known at compile time will not store their name as part of the program. this does.
 		COUNT
 	};
 
 	//these are lumped together, because they behave the same in most cases -> can be seperated easily from rest
 	//behavior for every specific element in Fn is (at least) defined at these places:
 	//  1. function fn::eval specifies how (and if at all) to evaluate
-	//  2. array fn::props_table specifies name and parameter count
+	//  2. array fn::props_table specifies name and arity (required to not be variadic)
 	enum class Fn //short for Function
 	{
 		diff,   //params[0] := function  params[1] := variable the derivation is done in respect to
@@ -59,7 +60,7 @@ namespace bmath::intern {
 		COUNT
 	};
 
-	using MathType = SumEnum<Fn, Leaf, Variadic>;
+	using MathType = SumEnum<Leaf, Fn, Variadic>;
 
 
 
@@ -101,7 +102,7 @@ namespace bmath::intern {
 			any,
 			nn1, //compact for "not negative one" (basically any, but the exact term "-1" will not be accepted)
 			no_val, //basically any, but Leaf::complex is forbidden    
-			function, //packs named_fn and all in Fn together
+			function, //packs Variadic Fn together
 			COUNT
 		};
 
@@ -214,14 +215,14 @@ namespace bmath::intern {
 	using Ref = BasicRef<TypesUnion, Type>;
 
 
-	//utility for both NamedFn and the types in Fn 
+	//utility for types in Fn 
 	namespace fn {
 
 		struct FnProps //short for Function Properties
 		{
 			Fn type = Fn::COUNT;
 			std::string_view name = "";
-			std::size_t param_count = 0u;
+			std::size_t arity = 0u; //number of arguments the function expects
 		};
 
 		//every item enumerated in Fn (except COUNT) may be listed here in order of apperance in Fn
@@ -259,11 +260,9 @@ namespace bmath::intern {
 		//returns Fn::COUNT if name is not in props_table
 		constexpr Fn type_of(const std::string_view name) noexcept { return search(props_table, &FnProps::name, name).type; }
 
-		constexpr std::size_t param_count(const Fn type) noexcept 
-		{ return props_table[static_cast<unsigned>(type)].param_count; }
+		constexpr std::size_t arity(const Fn type) noexcept { return props_table[static_cast<unsigned>(type)].arity; }
 
-		constexpr std::size_t param_count(const Type type) noexcept 
-		{ return props_table[static_cast<unsigned>(type.to<Fn>())].param_count; }
+		constexpr std::size_t arity(const Type type) noexcept { return props_table[static_cast<unsigned>(type.to<Fn>())].arity; }
 
 	} //namespace fn
 
@@ -316,6 +315,10 @@ namespace bmath::intern {
 		//only the non-const return value requires this function to not take a const store, 
 		//  else handing in a reference as head might not be desired.
 		TypedIdx* find_subtree_owner(Store& store, TypedIdx& head, const TypedIdx subtree);
+
+		//expects ref to be head of term and ref.store to house ref exclusively 
+		//(-> every position in store eighter free or used by (children of) ref exactly once)
+		bool valid_storage(const Ref ref);
 
 	} //namespace tree
 

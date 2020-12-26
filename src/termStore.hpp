@@ -19,9 +19,14 @@ namespace bmath::intern {
 		static constexpr std::size_t bits_per_table = sizeof(Payload_T) * 8u;
 		static_assert(bits_per_table % 64u == 0u);
 
-		static constexpr std::size_t tables_per_capacity(const std::size_t cap) 
+		static constexpr std::size_t tables_per_capacity(const std::size_t cap) noexcept
 		{ 
 			return (cap + bits_per_table - 1u) / bits_per_table;
+		}
+
+		static constexpr std::size_t bitsets_per_capacity(const std::size_t cap) noexcept
+		{
+			return tables_per_capacity(cap) * bits_per_table / 64u;
 		}
 
 		struct Table
@@ -275,15 +280,12 @@ namespace bmath::intern {
 			bitset &= ~last_mask;
 		} //free_n()
 
-		[[nodiscard]] std::vector<std::size_t> enumerate_free_slots() const noexcept
+		//returns copy of BitSets managing storage (bit is set) means (position is currently in use) 
+		[[nodiscard]] BitVector storage_occupancy() const noexcept
 		{
-			std::vector<std::size_t> result;
-			for (std::size_t i = 0u; i < this->size_; i++) {
-				if (!this->occupancy_data()[i / 64u].test(i % 64u)) {
-					result.push_back(i);
-				}
-			}
-			return result;
+			const auto begin = this->occupancy_data();
+			const auto end = begin + bitsets_per_capacity(this->size_);
+			return BitVector(begin, end, this->size_);
 		}
 
 		[[nodiscard]] std::size_t nr_used_slots() const noexcept

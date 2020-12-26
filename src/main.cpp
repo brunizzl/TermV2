@@ -20,13 +20,10 @@ important:
 
 nice to have:
  - introduce "intrinsic" type and use index in intrinsic typed_idx to specify witch (have all stored at central function pointer array)
- - add pattern variable catching functions with other pattern variables beeing parameters of these functions (perhaps two types, one index_vec?)
+ - add a pattern variable type catching functions with other pattern variables beeing parameters of these functions (perhaps two types, one index_vec?)
  - const term_slc iterator dereferences to Ref, not typed_idx
  - match::permutation_equals: abort earlier (use fact that both terms are (assumed to be) sorted, not only pattern)
-      idea: remember what was matched / tried to be matched already in bitset, also have bitset recording currently matched summands / factors
- - add (perhaps untyped?, perhaps only TypedIdx needed) Ref for sub-index references in store (needed below)
- - avoid copying pattern::MultiPn entries (needs to know original storage location of each entry, to steal it from there)
- - write nonrecursive copy with queue for better locality in store (challenge: children are allocated after parents, need to keep (sub) index where child reference is to be held)
+ - avoid copying pattern::MultiPn entries (needs to know original storage location of each entry, to steal it from there)x where child reference is to be held)
  - seperate utility in different files, create utility folder
 
 idea status:
@@ -41,7 +38,7 @@ idea status:
 
 int main()
 {
-	//debug::enumerate_type();
+	debug::enumerate_type();
 	debug::test_rechner();
 	//test::combine_exact();
 	//test::pattern_term();

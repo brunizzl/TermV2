@@ -16,13 +16,9 @@ namespace bmath::intern::debug {
 	void enumerate_type()
 	{
 		using namespace pattern;
-		static_assert(unsigned(Type::COUNT) == unsigned(Type(Type::COUNT)), "else at least a second version of this function is needed");
 		std::cout
 			<< "Type(Variadic::sum)            = " << unsigned(Type(Variadic::sum))            << "\n"
 			<< "Type(Variadic::product)        = " << unsigned(Type(Variadic::product))        << "\n"
-			                                                                                   << "\n"
-			<< "Type(Leaf::variable)           = " << unsigned(Type(Leaf::variable))           << "\n"
-			<< "Type(Leaf::complex)            = " << unsigned(Type(Leaf::complex))            << "\n"
 			                                                                                   << "\n"
 			<< "Type(Fn::pow)                  = " << unsigned(Type(Fn::pow))                  << "\n"
 			<< "Type(Fn::log)                  = " << unsigned(Type(Fn::log))                  << "\n"
@@ -46,6 +42,9 @@ namespace bmath::intern::debug {
 			<< "Type(Fn::re)                   = " << unsigned(Type(Fn::re))                   << "\n"
 			<< "Type(Fn::im)                   = " << unsigned(Type(Fn::im))                   << "\n"
 			<< "Type(Fn::force)                = " << unsigned(Type(Fn::force))                << "\n"
+			                                                                                   << "\n"
+			<< "Type(Leaf::variable)           = " << unsigned(Type(Leaf::variable))           << "\n"
+			<< "Type(Leaf::complex)            = " << unsigned(Type(Leaf::complex))            << "\n"
 			                                                                                   << "\n"
 			<< "Type(PnNode::tree_match)       = " << unsigned(Type(PnNode::tree_match))       << "\n"
 			<< "Type(PnNode::value_match)      = " << unsigned(Type(PnNode::value_match))      << "\n"
@@ -80,6 +79,12 @@ namespace bmath::intern::debug {
 			{ "a :no_val, bs :factors, cs :factors | a bs + a cs = a (bs + cs)" },
 			{ "a :no_val, bs :factors              | a bs + a    = a (bs + 1)" }, 
 			{ "a :no_val                           | a    + a    = 2 a" }, 
+			{ "a :value, b, cs :factors            | a (b + cs)  = a b + a cs" }, 
+			
+			{ "a, as :summands |  -(a + as) =  -a - as" },
+			{ "a, as :factors  | 1/(a as)   = 1/a 1/as" },
+			//{ " as :sum      | -as       =     sum:{ -a | a <- as}" }, //not yet writable, will perhaps never happen :|
+			//{ " as :product  | 1/as      = product:{1/a | a <- as}" }, //not yet writable, will perhaps never happen :|
 			
 			{ "x | sin(x)^2 + cos(x)^2 = 1" },
 			
@@ -109,9 +114,11 @@ namespace bmath::intern::debug {
 		});
 
 		for (const auto& p : patterns) {
+			std::cout << p.to_string() << "\n";
+			assert(tree::valid_storage(p.lhs_ref()));
+			assert(tree::valid_storage(p.rhs_ref()));
 			//std::cout << p.lhs_memory_layout() << "\n";
 			//std::cout << p.rhs_memory_layout() << "\n";
-			std::cout << p.to_string() << "\n";
 			//std::cout << "lhs:\n" << p.lhs_tree() << "\n";
 			//std::cout << "rhs:\n" << p.rhs_tree() << "\n\n\n";
 		}
@@ -133,6 +140,7 @@ namespace bmath::intern::debug {
 							//std::cout << "matched: " << p.to_string() << "\n";
 							changed = true;
 							test.establish_order();
+							assert(tree::valid_storage(test.ref()));
 							std::cout << "    = " << test.to_string() << "\n";
 							//std::cout << test.to_memory_layout() << "\n";
 							break;

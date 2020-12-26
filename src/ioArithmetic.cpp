@@ -454,7 +454,7 @@ namespace bmath::intern {
 				const auto param_view = input.steal_prefix(comma);
 				result_buffer.push_back(build_any(store, param_view));
 			}
-			if (result_buffer.size() != fn::param_count(type)) [[unlikely]] throw ParseFailure{ input.offset, "wrong numer of function parameters" };
+			if (result_buffer.size() != fn::arity(type)) [[unlikely]] throw ParseFailure{ input.offset, "wrong numer of function parameters" };
 			return TypedIdx(IndexVector::build(store, result_buffer), Type(type));
 		}
 	} //build_function
@@ -970,11 +970,9 @@ namespace bmath::intern {
 					print::append_memory_row(Ref(store, head), rows);
 				}
 				result += "\n";
-			}
-			for (const auto i : store.enumerate_free_slots()) {
-				rows[i].append("-----free slot-----");
-			}
+			}	
 			{
+				const BitVector used_positions = store.storage_occupancy();
 				int i = 0;
 				for (auto& elem : rows) {
 					if (i < 10) { //please std::format, i need you :(
@@ -983,6 +981,9 @@ namespace bmath::intern {
 					result += std::to_string(i);
 					result += " | ";
 					result += elem;
+					if (!used_positions.test(i)) {
+						result += "-----free slot-----";
+					}
 					result += "\n";
 					i++;
 				}

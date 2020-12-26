@@ -64,36 +64,36 @@ namespace bmath::intern {
 	/////////////////////////////////////////////////////////////////////local definitions//////////////////////////////////////////////////////////////////////////////////
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	//if one pattern may compare equal to a term multiple ways (e.g. sum or product), it has high rematchability.
-	//there are only 3 real levels of rematchability:
-	//  - none    (value 1xx): pattern is not recursive 
-	//  - unknown (value 2xx): pattern is recursive, but has strong operands order (e.g. all in Fn), thus can not rematch on outhermost level, but may hold sum / product as operand
-	//  - likely  (value 3xx): pattern is sum or product and is rematchable, as long as two or more tree_match variables are held as operands directly
-	//by sorting sum and product to the end, they are matched last in match::permutation_equals, 
-	//  thus likely already having their tree_match operands assocciated with something and only permitting up to a single match.
-	//this approach guarantees a possible match to succeed, if a pattern has only up to a single sum / product one level below the root and none deeper.
-	//side note: as every type has a unique rematchability value, sorting by rematchability if types are different produces a strong order.
-	constexpr auto unique_rematchability_table = std::to_array<std::pair<Type, int>>({
+	//if one pattern may compare equal to a term multiple ways (e.g. sum or product), it has high generality.
+	//there are 3 main levels of generality:
+	//  - unique (value 1xx): pattern only matches one exact term e.g. pattern "2 'pi'" (note: everything without pattern variables falls tecnically in this category)
+	//  - low    (value 2xx): pattern is recursive, but has strong operands order (e.g. all in Fn), thus matches unique on outhermost level, but may hold general operands
+	//  - high   (value 3xx): sums / products containing pattern variables can match not only multiple terms, but may also match specific terms in more than one way (also tree variables, duh)
+	//the table only differentiates between types, however (as described above) the real generality of a given term may be lower, than that of its outermost node listed here.
+	//as the goal of this endavour is (mostly) to sort the most general summands / factors in a pattern to the end, 
+	//  the sorting required for efficiently matching patterns may use this table, but has to check more.
+	constexpr auto type_generality_table = std::to_array<std::pair<Type, int>>({
 		{ Type(Leaf::complex        ), 100 }, 
-		{ Type(PnNode::value_match  ), 101 }, 
-		{ Type(PnNode::value_proxy  ), 102 }, 
-		{ Type(PnNode::tree_match   ), 103 }, 
-		{ Type(Leaf::variable       ), 104 },
+		{ Type(Leaf::variable       ), 101 },
+		{ Type(PnNode::value_match  ), 102 }, //may match different subsets of complex numbers, but always requires an actual value to match against
+		{ Type(PnNode::value_proxy  ), 103 }, //dont care really where this sits, as it never ist used in matching anyway
+		//values 2xx are not present, as that would require every item in Fn to be listed here (instead look at function generality() below)
 		{ Type(Variadic::sum        ), 300 },  
 		{ Type(Variadic::product    ), 301 }, 
-		{ Type(MultiPn::summands    ), 302 }, //kinda special, as they always succeed in matching -> need to be matched last 
-		{ Type(MultiPn::factors     ), 303 }, //kinda special, as they always succeed in matching -> need to be matched last 
+		{ Type(PnNode::tree_match   ), 302 }, 
+		{ Type(MultiPn::summands    ), 303 }, //kinda special, as they always succeed in matching -> need to be matched last 
+		{ Type(MultiPn::factors     ), 304 }, //kinda special, as they always succeed in matching -> need to be matched last 
 	});
-	static_assert(std::is_sorted(unique_rematchability_table.begin(), unique_rematchability_table.end(), [](auto a, auto b) { return a.second < b.second; }));
-	static_assert(unsigned(Fn::COUNT) < 99u); //else named_fn's rematchability of 300 is already occupied by element of Fn
+	static_assert(std::is_sorted(type_generality_table.begin(), type_generality_table.end(), [](auto a, auto b) { return a.second < b.second; }));
+	static_assert(unsigned(Fn::COUNT) < 99u); //else generality of 300 is used twice
 
-	constexpr int rematchability(Type type) noexcept 
+	constexpr int generality(Type type) noexcept 
 	{ 
 		if (type.is<Fn>()) {
 			return 200 + static_cast<unsigned>(type.to<Fn>());
 		}
 		else {
-			return find(unique_rematchability_table, &std::pair<Type, int>::first, type).second; 
+			return find(type_generality_table, &std::pair<Type, int>::first, type).second; 
 		}
 	}
 
@@ -102,7 +102,7 @@ namespace bmath::intern {
 
 		OptComplex eval(Fn type, const std::array<OptComplex, 4>& param_vals)
 		{
-			if (param_count(type) == 1u) {
+			if (arity(type) == 1u) {
 				if (param_vals[0]->imag() == 0.0) {
 					const double real_val = param_vals[0]->real();
 					switch (type) {
@@ -153,7 +153,7 @@ namespace bmath::intern {
 					}
 				}
 			}
-			else if (param_count(type) == 2u) {
+			else if (arity(type) == 2u) {
 				switch (type) {
 				case Fn::pow: 
 					if (*param_vals[1] == 0.5) {
@@ -382,7 +382,7 @@ namespace bmath::intern {
 				assert(ref.type.is<Fn>()); 
 				IndexVector& params = *ref;
 				std::array<OptComplex, 4> res_vals = { OptComplex{}, {}, {}, {} }; //default initialized to NaN
-				for (std::size_t i = 0; i < fn::param_count(ref.type); i++) {
+				for (std::size_t i = 0; i < fn::arity(ref.type); i++) {
 					params[i] = tree::combine(ref.new_at(params[i]), exact);
 					if (params[i].get_type() == Leaf::complex) {
 						res_vals[i] = ref.store->at(params[i].get_index()).complex;
@@ -421,8 +421,8 @@ namespace bmath::intern {
 		[[nodiscard]] std::strong_ordering compare(const Ref ref_1, const Ref ref_2)
 		{
 			if (ref_1.type != ref_2.type) [[likely]] {
-				static_assert((rematchability(Type(Variadic::sum)) <=> rematchability(Type(Variadic::sum))) == std::strong_ordering::equal); //dont wanna mix with std::strong_ordering::equivalent
-				return rematchability(ref_1.type) <=> rematchability(ref_2.type);
+				static_assert((generality(Type(Variadic::sum)) <=> generality(Type(Variadic::sum))) == std::strong_ordering::equal); //dont wanna mix with std::strong_ordering::equivalent
+				return generality(ref_1.type) <=> generality(ref_2.type);
 			}
 
 			switch (ref_1.type) {
@@ -500,7 +500,7 @@ namespace bmath::intern {
 
 		void sort(const MutRef ref)
 		{
-			const auto sort_variadic = [&](MutRef ref) {
+			const auto sort_variadic = [](const MutRef ref) {
 				const auto compare_function = [&](const TypedIdx lhs, const TypedIdx rhs) {
 					return tree::compare(Ref(*ref.store, lhs), Ref(*ref.store, rhs)) == std::strong_ordering::less;
 				};
@@ -658,10 +658,48 @@ namespace bmath::intern {
 
 		} //find_subtree_owner
 
+		bool valid_storage(const Ref ref)
+		{
+			BitVector store_positions = ref.store->storage_occupancy(); //every index in store is represented as bit here. false -> currently free	
+			const auto set_used_position = [&store_positions](const Ref ref) -> fold::FindBool { //doubles in function as 
+				if (!ref.type.is<MultiPn>() && !(ref.type == PnNode::value_proxy)) { //else index does not point in store anyway
+					if (store_positions.test(ref.index) == false) { //meaning eighter free or already reset by some other node
+						return true; //return found double use
+					}
+					store_positions.reset(ref.index);
+
+					if (ref.type.is<Variadic>() || ref.type.is<Fn>()) {
+						const IndexVector& vec = *ref;
+						for (std::size_t offset = 1u; offset < IndexVector::node_count(vec.capacity()); offset++) { //already did 0 above -> start at 1
+							if (store_positions.test(ref.index + offset) == false) { //meaning eighter free or already reset by some other node
+								return true; //return found double use
+							}
+							store_positions.reset(ref.index + offset);
+						}
+					}
+					if (ref.type == Variadic::named_fn) {
+						assert(false); //need to check and reset name part (not yet done)
+					}
+					if (ref.type == Leaf::variable) {
+						const CharVector& vec = *ref;
+						for (std::size_t offset = 1u; offset < CharVector::node_count(vec.capacity()); offset++) { //already did 0 above -> start at 1
+							if (store_positions.test(ref.index + offset) == false) { //meaning eighter free or already reset by some other node
+								return true; //return found double use
+							}
+							store_positions.reset(ref.index + offset);
+						}
+					}
+				}
+				return false; //found no double use (here anyway)
+			};
+			const bool found_double_use = fold::simple_fold<fold::FindBool>(ref, set_used_position);
+			return !found_double_use && store_positions.none();
+		} //valid_storage
+
 		bool contains_variables(const Ref ref)
 		{
 			using namespace pattern;
-			const auto test_for_variables = [](Ref ref) -> fold::FindBool {
+			const auto test_for_variables = [](const Ref ref) -> fold::FindBool {
 				return ref.type == Leaf::variable || ref.type.is<MatchType>();
 			};
 			return fold::simple_fold<fold::FindBool>(ref, test_for_variables);
@@ -751,10 +789,65 @@ namespace bmath::intern {
 					pn_tree::rearrange_value_match(rhs_temp, this->rhs_head, rhs_instance);
 				}
 			}
-			//establish basic order after rearanging value match to allow constructs 
+
+			//sorting and combining is done after rearanging value match to allow constructs 
 			//  like "a :real, b | (a+2)+b = ..." to take summands / factors into their value_match match part
-			this->lhs_head = tree::establish_basic_order(MutRef(lhs_temp, this->lhs_head));
-			this->rhs_head = tree::establish_basic_order(MutRef(rhs_temp, this->rhs_head));
+			this->lhs_head = tree::combine(MutRef(lhs_temp, this->lhs_head), true);
+			this->rhs_head = tree::combine(MutRef(rhs_temp, this->rhs_head), true);
+
+			const auto sort_pattern = [](const MutRef ref) {
+				const auto sort_variadic = [&](MutRef ref) {
+					const auto compare_patterns = [&](const TypedIdx lhs, const TypedIdx rhs) {
+						const Ref lhs_ref = Ref(*ref.store, lhs);
+						const Ref rhs_ref = Ref(*ref.store, rhs);					
+						{
+							const auto contains_general_match_variables = [](const Ref ref) -> bool {
+								const auto is_general_match_variable = [](const Ref ref) -> fold::FindBool {
+									return ref.type.is<MultiPn>() || ref.type == PnNode::tree_match;
+								};
+								return fold::simple_fold<fold::FindBool>(ref, is_general_match_variable);
+							};
+							const bool lhs_contains = contains_general_match_variables(lhs_ref);
+							const bool rhs_contains = contains_general_match_variables(rhs_ref);
+							if (lhs_contains != rhs_contains) {
+								return lhs_contains < rhs_contains;
+							}
+						}
+						{
+							const auto highest_value_literal_depth = [](const Ref ref) -> int {
+								struct Accumulator
+								{
+									int min_operand_depth = std::numeric_limits<int>::max();
+									constexpr Accumulator(const Ref) noexcept {}
+									void consume(const int child_depth) noexcept { this->min_operand_depth = std::min(this->min_operand_depth, child_depth); }
+									auto result() noexcept { return std::max(this->min_operand_depth, this->min_operand_depth + 1); } // +1 might cause overflow
+								};
+								const auto leaf_apply = [](const Ref ref) {
+									return ref.type == Leaf::complex ? 0 : std::numeric_limits<int>::max();
+								};
+								return fold::tree_fold<int, Accumulator>(ref, leaf_apply);
+							};
+							const int lhs_depth = highest_value_literal_depth(lhs_ref);
+							const int rhs_depth = highest_value_literal_depth(rhs_ref);
+							if (lhs_depth != rhs_depth) {
+								return lhs_depth < rhs_depth;
+							}
+						}
+
+						return tree::compare(lhs_ref, rhs_ref) == std::strong_ordering::less;
+					};
+
+					if (ref.type == Variadic::sum || ref.type == Variadic::product) {
+						IndexVector& operation = *ref;
+						std::sort(operation.begin(), operation.end(), compare_patterns);
+					}
+					return fold::Void{};
+				};
+
+				fold::simple_fold<fold::Void>(ref, sort_variadic);
+			};
+			sort_pattern(MutRef(lhs_temp, this->lhs_head));
+			sort_pattern(MutRef(rhs_temp, this->rhs_head));
 
 			for (const auto& multi_match : table.multi_table) {
 				throw_if(multi_match.lhs_count > 1u, "pattern only allows single use of each Multimatch in lhs.");
@@ -1135,7 +1228,7 @@ namespace bmath::intern {
 					}
 					const IndexVector& params = *ref;
 					std::array<OptComplex, 4> res_vals;
-					for (std::size_t i = 0; i < fn::param_count(ref.type); i++) {
+					for (std::size_t i = 0; i < fn::arity(ref.type); i++) {
 						res_vals[i] = eval_value_match(ref.new_at(params[i]), start_val);
 						if (!res_vals[i]) {
 							return {};
@@ -1384,6 +1477,7 @@ namespace bmath::intern {
 						if (match::equals(pn_i_ref, haystack_ref.new_at(haystack_params[haystack_k]), match_data)) {
 							variadic_datum.currenty_matched.set(haystack_k);
 							variadic_datum.match_positions[pn_i] = haystack_k;
+							haystack_k = 0u;
 							pn_i++;
 							goto match_pn_i; //next while iteration
 						}
@@ -1572,7 +1666,7 @@ namespace bmath::intern {
 
 			switch (ref.type) {
 			default:
-				ASSERT(ref.type.is<Fn>());
+				assert(ref.type.is<Fn>());
 				[[fallthrough]];
 			case Type_T(Variadic::sum): 
 				[[fallthrough]];
@@ -1629,7 +1723,7 @@ namespace bmath::intern {
 				acc.consume(fold::tree_fold<Res_T, OpAccumulator>(ref.new_at(var.mtch_idx), leaf_apply, init...));
 				acc.consume(fold::tree_fold<Res_T, OpAccumulator>(ref.new_at(var.copy_idx), leaf_apply, init...));
 				return acc.result();
-			} [[fallthrough]];
+			}
 			case Type_T(Leaf::variable): 
 				[[fallthrough]];
 			case Type_T(Leaf::complex):

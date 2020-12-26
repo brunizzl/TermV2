@@ -512,6 +512,7 @@ namespace bmath::intern {
 
 	public:
 		using Base::Base;
+
 		constexpr SumEnum(const Enum e) noexcept :Base(static_cast<unsigned>(e) + this_offset) {}
 
 		//this constructor applies if Enum itself is WrapEnum<E> or SumEnum<...> that contains E (directly or deeper within)
@@ -764,14 +765,25 @@ namespace bmath::intern {
 			assert(size <= local_max_size); 
 		}
 
-		BitVector(const BitVector& snd) noexcept 
-			:size_(snd.size_), local_data{ snd.local_data[0], snd.local_data[1] }
+		BitVector(BitVector&& snd) noexcept 
+			:size_(std::exchange(snd.size_, 0u)), local_data{ snd.local_data[0], snd.local_data[1] }
 		{
-			assert(snd.data_ == snd.local_data); //obviously not sufficient, but will do for now
+			if (snd.data_ != snd.local_data) {
+				this->data_ = std::exchange(snd.data_, nullptr);
+			}
+		}
+
+		BitVector(const BitSet64* const begin, const BitSet64* const end, const std::size_t new_size) noexcept 
+			:size_(new_size), local_data{ *begin, 0ull }
+		{
+			const std::size_t needed_capacity = (end - begin) * 64u;
+			if (needed_capacity > local_max_size) {
+				this->unsave_reallocate(needed_capacity);
+			}
+			std::copy(begin, end, this->data_);
 		}
 
 		//not yet needed -> not yet thought about
-		BitVector(BitVector&&) = delete;
 		BitVector& operator=(const BitVector&) = delete;
 		BitVector& operator=(BitVector&&) = delete;
 
