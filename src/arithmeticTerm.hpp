@@ -225,72 +225,6 @@ namespace bmath::intern {
 
 		bool has_form(const Complex& nr, const Form form);
 
-		//all MatchVariables of same name in pattern (e.g. "a" in pattern "a*b+a" share the same SharedTreeDatum to know 
-		//whitch actually matched, and if the name "a" is already matched, even if the current instance is not.
-		struct SharedTreeDatum
-		{
-			TypedIdx match_idx = TypedIdx{}; //indexes in Term to simplify
-			TypedIdx responsible = TypedIdx{}; //the instance of TreeMatchVariable that was setting match_idx
-
-			constexpr bool is_set() const noexcept
-			{
-				assert(equivalent(this->responsible != TypedIdx{}, this->match_idx != TypedIdx{}));
-				return  this->responsible != TypedIdx{};
-			}
-		};
-
-		struct SharedMultiDatum
-		{
-			StupidBufferVector<TypedIdx, 8> match_indices; //indexes in Term to simplify
-		};
-
-		struct SharedValueDatum
-		{
-			Complex value = 0.0;
-			TypedIdx mtch_idx = TypedIdx{}; //indexes in Term to simplify (only usefull during rematch to only match later elements)
-			TypedIdx responsible = TypedIdx{}; //the instance of ValueMatchVariable that was setting value_match
-
-			constexpr bool is_set() const noexcept
-			{
-				assert(equivalent(this->value != 0.0, this->responsible != TypedIdx{}, this->mtch_idx != TypedIdx{}));
-				return  this->responsible != TypedIdx{};
-			}
-		};
-
-		struct SharedVariadicDatum
-		{
-			//no sum or product in a pattern may have more summands / factors than max_pn_variadic_size many
-			static constexpr std::size_t max_pn_variadic_size = 8u;
-			//if currenty_matched.test(i), then element i in term to match is currently matched by an element in pattern.
-			BitVector currenty_matched = {}; 
-			//every element in pattern (except all MultiPn) has own entry which logs, 
-			//  with which element in term to match it currently is associated with.
-			std::array<decltype(VariadicParams::size), max_pn_variadic_size> match_positions = {};
-		};
-
-		//to allow a constant PnTerm to be matched against, all match info is stored here
-		struct MatchData
-		{
-			static constexpr std::size_t max_value_match_count = 2u; //maximal number of unrelated ValueMatchVariables allowed per pattern
-			static constexpr std::size_t max_tree_match_count = 4u;	 //maximal number of unrelated TreeMatchVariables allowed per pattern
-			static constexpr std::size_t max_multi_match_count = 2u; //maximal number of MultiMatchVariables allowed per pattern
-			static constexpr std::size_t max_variadic_count = 4u;    //maximal number of sums and products allowed per pattern
-
-			std::array<SharedValueDatum, max_value_match_count> value_match_data = {};
-			std::array<SharedTreeDatum, max_tree_match_count> tree_match_data = {};
-			std::array<SharedMultiDatum, max_multi_match_count> multi_match_data = {};
-			//key is index of sum / product in pattern beeing matched
-			StupidLinearMap<std::uint32_t, -1u, SharedVariadicDatum, max_variadic_count> variadic_data = {};
-
-			constexpr auto& info(const TreeMatchVariable& var) noexcept { return this->tree_match_data[var.match_data_idx]; }
-			constexpr auto& info(const ValueMatchVariable& var) noexcept { return this->value_match_data[var.match_data_idx]; }
-			constexpr auto& info(const TreeMatchVariable& var) const noexcept { return this->tree_match_data[var.match_data_idx]; }
-			constexpr auto& info(const ValueMatchVariable& var) const noexcept { return this->value_match_data[var.match_data_idx]; }
-
-			constexpr auto& multi_info(const std::uint32_t idx) noexcept { return this->multi_match_data[idx]; }
-			constexpr auto& multi_info(const std::uint32_t idx) const noexcept { return this->multi_match_data[idx]; }
-		};
-
 		struct PnTerm
 		{
 			TypedIdx lhs_head;
@@ -455,13 +389,87 @@ namespace bmath::intern {
 	} //namespace tree
 
 	//algorithms to compare pattern to usual term and find match
-	namespace match {
+	namespace pattern::match {
+
+		//all MatchVariables of same name in pattern (e.g. "a" in pattern "a*b+a" share the same SharedTreeDatum to know 
+		//whitch actually matched, and if the name "a" is already matched, even if the current instance is not.
+		struct SharedTreeDatum
+		{
+			TypedIdx match_idx = TypedIdx{}; //indexes in Term to simplify
+			TypedIdx responsible = TypedIdx{}; //the instance of TreeMatchVariable that was setting match_idx
+
+			constexpr bool is_set() const noexcept
+			{
+				assert(equivalent(this->responsible != TypedIdx{}, this->match_idx != TypedIdx{}));
+				return  this->responsible != TypedIdx{};
+			}
+		};
+
+		struct SharedMultiDatum
+		{
+			StupidBufferVector<TypedIdx, 8> match_indices; //indexes in Term to simplify
+		};
+
+		struct SharedValueDatum
+		{
+			Complex value = 0.0;
+			TypedIdx mtch_idx = TypedIdx{}; //indexes in Term to simplify (only usefull during rematch to only match later elements)
+			TypedIdx responsible = TypedIdx{}; //the instance of ValueMatchVariable that was setting value_match
+
+			constexpr bool is_set() const noexcept
+			{
+				assert(equivalent(this->value != 0.0, this->responsible != TypedIdx{}, this->mtch_idx != TypedIdx{}));
+				return  this->responsible != TypedIdx{};
+			}
+		};
+
+		struct SharedVariadicDatum
+		{
+			//no sum or product in a pattern may have more summands / factors than max_pn_variadic_size many
+			static constexpr std::size_t max_pn_variadic_size = 8u;
+			//if currenty_matched.test(i), then element i in term to match is currently matched by an element in pattern.
+			BitVector currenty_matched = {}; 
+			//every element in pattern (except all MultiPn) has own entry which logs, 
+			//  with which element in term to match it currently is associated with.
+			std::array<decltype(VariadicParams::Info::size), max_pn_variadic_size> match_positions = {};
+		};
+
+		//to allow a constant PnTerm to be matched against, all match info is stored here
+		struct MatchData
+		{
+			static constexpr std::size_t max_value_match_count = 2u; //maximal number of unrelated ValueMatchVariables allowed per pattern
+			static constexpr std::size_t max_tree_match_count = 4u;	 //maximal number of unrelated TreeMatchVariables allowed per pattern
+			static constexpr std::size_t max_multi_match_count = 2u; //maximal number of MultiMatchVariables allowed per pattern
+			static constexpr std::size_t max_variadic_count = 4u;    //maximal number of sums and products allowed per pattern
+
+			std::array<SharedValueDatum, max_value_match_count> value_match_data = {};
+			std::array<SharedTreeDatum, max_tree_match_count> tree_match_data = {};
+			std::array<SharedMultiDatum, max_multi_match_count> multi_match_data = {};
+			//key is index of sum / product in pattern beeing matched
+			StupidLinearMap<std::uint32_t, -1u, SharedVariadicDatum, max_variadic_count> variadic_data = {};
+
+			constexpr auto& info(const TreeMatchVariable& var) noexcept { return this->tree_match_data[var.match_data_idx]; }
+			constexpr auto& info(const ValueMatchVariable& var) noexcept { return this->value_match_data[var.match_data_idx]; }
+			constexpr auto& info(const TreeMatchVariable& var) const noexcept { return this->tree_match_data[var.match_data_idx]; }
+			constexpr auto& info(const ValueMatchVariable& var) const noexcept { return this->value_match_data[var.match_data_idx]; }
+
+			constexpr auto& multi_info(const std::uint32_t idx) noexcept { return this->multi_match_data[idx]; }
+			constexpr auto& multi_info(const std::uint32_t idx) const noexcept { return this->multi_match_data[idx]; }
+		};
 
 		//compares term starting at ref.index in ref.store with pattern starting at pn_ref.index in pn_ref.store
 		//if match is succsessfull, match_data stores what pattern's match variables matched and true is returned.
 		//if match was not succsessfull, match_data is NOT reset and false is returned
-		bool equals(const Ref pn_ref, const Ref ref, pattern::MatchData& match_data);
+		bool equals(const Ref pn_ref, const Ref ref, MatchData& match_data);
 
+		//resets not all matched variables appearing in pn_ref, but only the ones also set by pn_ref
+		//example: in whole pattern "a+a*b" "a" may be matched as single summand, 
+		//  thus resetting own variables in part "a*b" will only reset "b".
+		void reset_own_matches(const Ref pn_ref, MatchData& match_data);
+
+		//if not all summands / factors in pattern could be matched, failed is returned.
+		//if not all summands / factors in the haystack are matched, matched_some is returned
+		//(relevant if the current variadic is the outhermost, as then only a partial match may be successfull)
 		enum class FindPermutationRes { matched_all, failed, matched_some };
 
 		//determines weather there is a way to match pn_ref in haystack_ref (thus pn_ref is assumed to part of a pattern)
@@ -470,10 +478,15 @@ namespace bmath::intern {
 		//the first haystack_k elements of haystack_ref will be skipped for the first match attemt.
 		//it is assumed, that pn_ref and haystack_ref are both the same variadic type (eighter both sum or both product)
 		FindPermutationRes find_matching_permutation(const Ref pn_ref, const Ref haystack_ref, 
-			pattern::MatchData& match_data,	std::uint32_t pn_i, std::uint32_t haystack_k);
+			MatchData& match_data,	std::uint32_t pn_i, std::uint32_t haystack_k);
+
+		//expects pn_ref to already be matched to ref via match_data
+		//if one exists, this function finds a different match of pn_ref in ref, appearing after the current one
+		//  in all permutations
+		bool succeeding_permutation_equals(const Ref pn_ref, const Ref ref, MatchData& match_data);
 
 		//copies pn_ref with match_data into store, returns head of copied result.
-		[[nodiscard]] TypedIdx copy(const Ref pn_ref, const pattern::MatchData& match_data, 
+		[[nodiscard]] TypedIdx copy(const Ref pn_ref, const MatchData& match_data, 
 			const Store& src_store, Store& dst_store);
 
 		//this function is the primary function designed to be called from outside of this namespace.
@@ -490,7 +503,7 @@ namespace bmath::intern {
 		[[nodiscard]] std::pair<std::optional<TypedIdx>, bool> recursive_match_and_replace(
 			const Ref in, const Ref out, const MutRef ref);
 
-	} //namespace match
+	} //namespace pattern::match
 
 	namespace fold {
 

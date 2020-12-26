@@ -12,30 +12,58 @@
 
 namespace bmath::intern {
 
+	//unlike containers like std::vector and the like, there is no proxy managing data on the heap here.
+	//all management lies directly with the data.
+	//as C++ does not allow structs of size only known at runtime, it is not possible to directly represent the idea
+	//  in the data structure.
+	//what is done instead, is to allocate an array of StoredVector, where only the Info part of the first one is 
+	//  used, and all succeeding ones just act as an elongation of StoredVector::data of the first.
 	template<typename Value_T, std::size_t AllocNodeSize = sizeof(std::complex<double>)>
 	struct StoredVector
 	{
+	public:
 		static_assert(std::is_trivially_destructible_v<Value_T>);
 		static_assert(std::is_trivially_copyable_v<Value_T>);
 
-		static constexpr std::size_t min_capacity = (AllocNodeSize - 2u * sizeof(std::uint16_t)) / sizeof(Value_T);
+		static constexpr std::size_t min_capacity = (AllocNodeSize - sizeof(Info)) / sizeof(Value_T);
 		static constexpr std::size_t values_per_node = AllocNodeSize / sizeof(Value_T);
-		static_assert(min_capacity > 0u && values_per_node > 0u);
+		static constexpr std::size_t values_per_info = values_per_node - min_capacity;
+		static_assert(values_per_node > 0u, "AllocNodeSize may at least be sizeof(Value_T)");
 
-		std::uint16_t size = 0u;
-		std::uint16_t capacity = min_capacity;
+		struct Info
+		{
+			std::uint16_t size = 0u;
+			std::uint16_t capacity = min_capacity;
+		}; 
 
-		Value_T data[min_capacity];
+	private:
+		//note: subsequent_data_part is never read directly, only as an offset of StoredVector::data pointing in there.
+		//this union mainly serves illustration purposes, but may also help a bit with debugging
+		// (as subsequent_data_part allows a direct view in these elements)
+		union
+		{
+			Info info; //active in first StoredVector object of array
+			Value_T subsequent_data_part[values_per_info]; //active in all but first object in StoredVector array
+		};
 
+		Value_T data_[min_capacity];
+
+	public:
 		constexpr StoredVector(const std::uint16_t new_size, const std::uint16_t new_capacity) noexcept 
-			:size(new_size), capacity(new_capacity)
+			:info{ .size = new_size, .capacity = new_capacity }
 		{}
 
+		constexpr std::size_t size() const noexcept { return this->info.size; }
+		constexpr std::size_t capacity() const noexcept { return this->info.capacity; }
+
+		constexpr Value_T* data() noexcept { return this->data_; }
+		constexpr const Value_T* data() const noexcept { return this->data_; }
+
 		constexpr StoredVector(std::initializer_list<Value_T> init) noexcept 
-			:size(init.size()), capacity(min_capacity)
+			:info{ .size = static_cast<decltype(Info::size)>(init.size()), .capacity = min_capacity }
 		{
 			assert(init.size() <= min_capacity);
-			std::copy(init.begin(), init.end(), this->data);
+			std::copy(init.begin(), init.end(), this->data_);
 		}
 
 		static constexpr std::size_t node_count(const std::size_t capacity_) noexcept 
@@ -55,10 +83,10 @@ namespace bmath::intern {
 		static constexpr void emplace(Union_T& at, const Init_T& init, 
 			const std::size_t new_capacity) noexcept
 		{
-			assert(new_capacity <= std::numeric_limits<decltype(StoredVector::capacity)>::max());
+			assert(new_capacity <= std::numeric_limits<decltype(Info::capacity)>::max());
 			StoredVector& dest_vec = static_cast<StoredVector&>(at);
 			new (&dest_vec) StoredVector(init.size(), new_capacity);
-			std::copy_n(init.data(), init.size(), +dest_vec.data);
+			std::copy_n(init.data(), init.size(), +dest_vec.data_);
 		}
 
 		template<typename Store_T, typename Init_T>
@@ -73,29 +101,32 @@ namespace bmath::intern {
 		template<typename Store_T>
 		static constexpr void free(Store_T& store, std::size_t index)
 		{
-			const std::size_t capacity_ = static_cast<const StoredVector&>(store.at(index)).capacity;
+			const std::size_t capacity_ = static_cast<const StoredVector&>(store.at(index)).info.capacity;
 			store.free_n(index, node_count(capacity_));
 		}
 
 		//these are to be used with caution, as vector might reallocate while in use.
-		constexpr Value_T* begin() noexcept { return this->data; }
-		constexpr Value_T* end() noexcept { return this->data + this->size; }
+		constexpr Value_T* begin() noexcept { return this->data_; }
+		constexpr Value_T* end() noexcept { return this->data_ + this->info.size; }
 
-		//this is constant -> these are save to use
-		constexpr const Value_T* begin() const noexcept { return this->data; }
-		constexpr const Value_T* end() const noexcept { return this->data + this->size; }
+		//this is constant -> these are (in most circumstances) save to use
+		constexpr const Value_T* begin() const noexcept { return this->data_; }
+		constexpr const Value_T* end() const noexcept { return this->data_ + this->info.size; }
 
 		//kinda unsave, as always :o
-		constexpr Value_T& operator[](const std::uint32_t at) noexcept { return *(this->data + at); }
-		constexpr const Value_T& operator[](const std::uint32_t at) const noexcept { return *(this->data + at); }
+		constexpr Value_T& operator[](const std::uint32_t at) noexcept { return *(this->data_ + at); }
+		constexpr const Value_T& operator[](const std::uint32_t at) const noexcept { return *(this->data_ + at); }
 	}; //struct StoredVector
 
 	namespace stored_vector {
 
-		struct MutEndIndicator { std::uint32_t idx; };
+		struct SaveEndIndicator { std::uint32_t idx; };
 
+		//this iterator does not hold the position pointed at directly, but always takes the way via the store,
+		//  where the StoredVector we walk along is held.
+		//The Store is thus allowed to move its data elsewhere during StoredVector traversal.
 		template<typename Value_T, std::size_t AllocNodeSize, typename Store_T>
-		class MutIterator
+		class SaveIterator
 		{
 			using StoredVector_T = std::conditional_t <std::is_const_v<Value_T>,
 				const StoredVector<std::remove_const_t<Value_T>, AllocNodeSize>,
@@ -106,10 +137,10 @@ namespace bmath::intern {
 
 			constexpr Value_T* raw_pointer() noexcept
 			{
-				return static_cast<StoredVector_T&>(this->store.at(this->store_idx)).data + this->array_idx; 
+				return static_cast<StoredVector_T&>(this->store.at(this->store_idx)).data() + this->array_idx; 
 			}
 
-			static constexpr bool valid_interaction(const MutIterator& fst, const MutIterator& snd) noexcept 
+			static constexpr bool valid_interaction(const SaveIterator& fst, const SaveIterator& snd) noexcept 
 			{
 				return (&fst.store == &snd.store) && (fst.store_idx == snd.store_idx);
 			}
@@ -126,26 +157,26 @@ namespace bmath::intern {
 			using reference       = Value_T&;
 			using iterator_category = std::contiguous_iterator_tag;
 
-			constexpr MutIterator& operator++() noexcept { ++this->array_idx; return *this; }  
-			constexpr MutIterator operator++(int) noexcept { auto result = *this; ++(*this); return result; }
-			constexpr MutIterator& operator+=(Diff_T n) noexcept { this->array_idx += n; return *this; }  
-			constexpr MutIterator operator+(Diff_T n) const noexcept { auto result = *this; result += n; return result; }
+			constexpr SaveIterator& operator++() noexcept { ++this->array_idx; return *this; }  
+			constexpr SaveIterator operator++(int) noexcept { auto result = *this; ++(*this); return result; }
+			constexpr SaveIterator& operator+=(Diff_T n) noexcept { this->array_idx += n; return *this; }  
+			constexpr SaveIterator operator+(Diff_T n) const noexcept { auto result = *this; result += n; return result; }
 
-			constexpr MutIterator operator+(const MutIterator& snd) const noexcept 
+			constexpr SaveIterator operator+(const SaveIterator& snd) const noexcept 
 			{ 
 				assert(valid_interaction(*this, snd));
-				return MutIterator{ this->store, this->store_idx, this->array_idx + snd.array_idx };
+				return SaveIterator{ this->store, this->store_idx, this->array_idx + snd.array_idx };
 			}
 
-			constexpr MutIterator& operator--() noexcept { --this->array_idx; return *this; }  
-			constexpr MutIterator operator--(int) noexcept { auto result = *this; --(*this); return result; }
-			constexpr MutIterator& operator-=(Diff_T n) noexcept { this->array_idx -= n; return *this; }  
-			constexpr MutIterator operator-(Diff_T n) const noexcept { auto result = *this; result -= n; return result; }
+			constexpr SaveIterator& operator--() noexcept { --this->array_idx; return *this; }  
+			constexpr SaveIterator operator--(int) noexcept { auto result = *this; --(*this); return result; }
+			constexpr SaveIterator& operator-=(Diff_T n) noexcept { this->array_idx -= n; return *this; }  
+			constexpr SaveIterator operator-(Diff_T n) const noexcept { auto result = *this; result -= n; return result; }
 
-			constexpr MutIterator operator-(const MutIterator& snd) noexcept 
+			constexpr SaveIterator operator-(const SaveIterator& snd) noexcept 
 			{ 
 				assert(valid_interaction(*this, snd) && this->array_idx >= snd.array_idx);
-				return MutIterator{ this->store, this->store_idx, this->array_idx - snd.array_idx };
+				return SaveIterator{ this->store, this->store_idx, this->array_idx - snd.array_idx };
 			}
 
 			constexpr const Value_T& operator*()  const noexcept { return *this->raw_pointer(); }
@@ -155,27 +186,27 @@ namespace bmath::intern {
 			constexpr Value_T* operator->() noexcept { return this->raw_pointer(); }
 			constexpr Value_T& operator[](Diff_T n) noexcept { return *(this->raw_pointer() + n); }
 
-			constexpr bool operator==(const MutIterator& snd) const noexcept
+			constexpr bool operator==(const SaveIterator& snd) const noexcept
 			{
 				assert(valid_interaction(*this, snd));
 				return this->offset == snd.offset;
 			}
 
-			constexpr std::strong_ordering operator<=>(const MutIterator& snd) const noexcept
+			constexpr std::strong_ordering operator<=>(const SaveIterator& snd) const noexcept
 			{
 				assert(valid_interaction(*this, snd));
 				return this->offset <=> snd.offset;
 			}
 
-			constexpr bool operator==(const MutEndIndicator& end_) const noexcept { return this->array_idx == end_.idx; }
-		}; //struct MutIterator
+			constexpr bool operator==(const SaveEndIndicator& end_) const noexcept { return this->array_idx == end_.idx; }
+		}; //struct SaveIterator
 
 	} //namespace stored_vector
 
 	template<typename Union_T, typename Value_T, std::size_t AllocNodeSize>
 	constexpr auto begin(const BasicNodeRef<Union_T, StoredVector<Value_T, AllocNodeSize>, Const::no>& ref)
 	{
-		using Iter = stored_vector::MutIterator<Value_T, AllocNodeSize, BasicStore<Union_T>>;
+		using Iter = stored_vector::SaveIterator<Value_T, AllocNodeSize, BasicStore<Union_T>>;
 		using Vec_T = StoredVector<Value_T, AllocNodeSize>;
 		return Iter(*ref.store, ref.index, 0u);
 	}
@@ -183,13 +214,13 @@ namespace bmath::intern {
 	template<typename Union_T, typename Value_T, std::size_t AllocNodeSize>
 	constexpr auto end(const BasicNodeRef<Union_T, StoredVector<Value_T, AllocNodeSize>, Const::no>& ref)
 	{
-		return stored_vector::MutEndIndicator(ref->size);
+		return stored_vector::SaveEndIndicator(ref->size());
 	}
 
 	template<typename Union_T, typename Value_T, std::size_t AllocNodeSize>
 	constexpr auto save_begin(const BasicNodeRef<Union_T, StoredVector<Value_T, AllocNodeSize>, Const::yes>& ref)
 	{
-		using Iter = stored_vector::MutIterator<const Value_T, AllocNodeSize, const BasicStore<Union_T>>;
+		using Iter = stored_vector::SaveIterator<const Value_T, AllocNodeSize, const BasicStore<Union_T>>;
 		using Vec_T = StoredVector<Value_T, AllocNodeSize>;
 		return Iter(*ref.store, ref.index, 0u);
 	}
@@ -197,7 +228,7 @@ namespace bmath::intern {
 	template<typename Union_T, typename Value_T, std::size_t AllocNodeSize>
 	constexpr auto save_end(const BasicNodeRef<Union_T, StoredVector<Value_T, AllocNodeSize>, Const::yes>& ref)
 	{
-		return stored_vector::MutEndIndicator(ref->size);
+		return stored_vector::SaveEndIndicator(ref->size());
 	}
 
 } //namespace bmath::intern

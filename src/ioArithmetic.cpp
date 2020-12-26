@@ -653,7 +653,7 @@ namespace bmath::intern {
 				}
 			} break;
 			case Type(Leaf::variable): {
-				str += std::string_view(ref->variable.data, ref->variable.size);
+				str += std::string_view(ref->variable.data(), ref->variable.size());
 			} break;
 			case Type(Leaf::complex): {
 				append_complex(ref->complex, str, parent_infixr);
@@ -840,7 +840,7 @@ namespace bmath::intern {
 				str.push_back(')');
 			} break;
 			case Type(Leaf::variable): {
-				str += std::string_view(ref->variable.data, ref->variable.size);
+				str += std::string_view(ref->variable.data(), ref->variable.size());
 			} break;
 			case Type(Leaf::complex): {
 				append_complex(ref->complex, str, parent_infixr);
@@ -859,7 +859,7 @@ namespace bmath::intern {
 		{
 			const auto show_typedidx_vec_nodes = [&ref, &rows](std::uint32_t idx, bool show_first) {
 				const VariadicParams& vec = ref.store->at(idx).variadic;
-				const std::size_t end = idx + VariadicParams::node_count(vec.capacity);
+				const std::size_t end = idx + VariadicParams::node_count(vec.capacity());
 				if (!show_first) {
 					idx++;
 				}
@@ -870,7 +870,7 @@ namespace bmath::intern {
 			};
 			const auto show_string_nodes = [&ref, &rows](std::uint32_t idx, bool show_first) {
 				const Variable& var = ref.store->at(idx);
-				const std::size_t end = idx + Variable::node_count(var.capacity);
+				const std::size_t end = idx + Variable::node_count(var.capacity());
 				if (!show_first) {
 					idx++;
 				}
@@ -1043,7 +1043,7 @@ namespace bmath::intern {
 			} break;
 			case Type(Leaf::variable): {
 				current_str += ' ';
-				current_str += std::string_view(ref->variable.data, ref->variable.size);
+				current_str += std::string_view(ref->variable.data(), ref->variable.size());
 			} break;
 			case Type(Leaf::complex): {
 				current_str += ' ';

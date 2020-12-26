@@ -347,8 +347,8 @@ namespace bmath::intern::test {
 		std::string t_name = "a / 0";
 		auto t = Term(t_name);
 		t.establish_order();
-		auto m = pattern::MatchData{};
-		std::cout << "match lhs of \"" << p.to_string() << "\" with \"" << t.to_string() << ": " << match::equals(p.lhs_ref(), t.ref(), m) << "\n";
+		auto m = pattern::match::MatchData{};
+		std::cout << "match lhs of \"" << p.to_string() << "\" with \"" << t.to_string() << ": " << pattern::match::equals(p.lhs_ref(), t.ref(), m) << "\n";
 	}
 
 	void combine()
