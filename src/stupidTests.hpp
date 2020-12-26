@@ -13,7 +13,7 @@
 
 namespace bmath::intern::debug {
 
-	void enumerate_pn_type()
+	void enumerate_type()
 	{
 		using namespace pattern;
 		static_assert(unsigned(Type::COUNT) == unsigned(Type(Type::COUNT)), "else at least a second version of this function is needed");
@@ -57,13 +57,14 @@ namespace bmath::intern::debug {
 			                                                                                   << "\n"
 			                                                                                   << "\n"
 			;
-	} //enumerate_pn_type
+	} //enumerate_type
 
 	void test_rechner() 
 	{
 		static const auto patterns = std::to_array<pattern::PnTerm>({ 
 			{ "x :factors | 0 x = 0" },
 			{ "x          | 0^x = 0" },
+			{ "x          | x^0 = 1" },
 			{ "x          | x^1 = x" },
 			
 			{ "x, a, b | (x^a)^b = x^(a*b)" },
@@ -76,12 +77,9 @@ namespace bmath::intern::debug {
 			{ "a, b          | a^2 - 2 a b   + b^2 = (a - b)^2" }, 
 			{ "a :complex, b | a^2 + (2 a) b + b^2 = (a + b)^2" }, 
 			
-			{ "a, bs :factors, cs :factors | a bs + a cs = a (bs + cs)" },
-			{ "a, bs :factors              | a*bs + a    = a (bs + 1)" }, 
-			{ "a                           | a + a       = 2 a" }, 
-			
-			{ "a, b | a a^b = 2 a" }, 
-			{ "a | a + a = 2 a" }, 
+			{ "a :no_val, bs :factors, cs :factors | a bs + a cs = a (bs + cs)" },
+			{ "a :no_val, bs :factors              | a bs + a    = a (bs + 1)" }, 
+			{ "a :no_val                           | a    + a    = 2 a" }, 
 			
 			{ "x | sin(x)^2 + cos(x)^2 = 1" },
 			

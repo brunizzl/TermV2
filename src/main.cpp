@@ -20,7 +20,7 @@ important:
 
 nice to have:
  - introduce "intrinsic" type and use index in intrinsic typed_idx to specify witch (have all stored at central function pointer array)
- - add pattern variable catching functions with other pattern variables beeing parameters of these functions (perhaps two types, one variadic?)
+ - add pattern variable catching functions with other pattern variables beeing parameters of these functions (perhaps two types, one index_vec?)
  - const term_slc iterator dereferences to Ref, not typed_idx
  - match::permutation_equals: abort earlier (use fact that both terms are (assumed to be) sorted, not only pattern)
       idea: remember what was matched / tried to be matched already in bitset, also have bitset recording currently matched summands / factors
@@ -41,7 +41,7 @@ idea status:
 
 int main()
 {
-	debug::enumerate_pn_type();
+	//debug::enumerate_type();
 	debug::test_rechner();
 	//test::combine_exact();
 	//test::pattern_term();

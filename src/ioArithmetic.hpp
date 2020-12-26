@@ -67,7 +67,7 @@ namespace bmath::intern {
 	{
 		const TypedIdx minus_1 = build_value(store, -1.0);
 		const std::size_t result_idx = store.allocate();
-		new (&store.at(result_idx)) TypesUnion(VariadicParams({ minus_1, to_negate }));
+		new (&store.at(result_idx)) TypesUnion(IndexVector({ minus_1, to_negate }));
 		return TypedIdx(result_idx, Type(Variadic::product));
 	}
 
@@ -76,7 +76,7 @@ namespace bmath::intern {
 	{
 		const TypedIdx minus_1 = build_value(store, -1.0);
 		const std::size_t result_idx = store.allocate();
-		new (&store.at(result_idx)) TypesUnion(FnParams({ to_invert, minus_1, TypedIdx(), TypedIdx() }));
+		new (&store.at(result_idx)) TypesUnion(IndexVector({ to_invert, minus_1 }));
 		return TypedIdx(result_idx, Type(Fn::pow));
 	}
 

@@ -90,9 +90,8 @@ namespace bmath::intern {
 
 	using TypedIdx = BasicTypedIdx<Type>;
 
-	using FnParams = std::array<TypedIdx, 4>;
-	using VariadicParams = StoredVector<TypedIdx>;
-	using Variable = StoredVector<char>;
+	using IndexVector = StoredVector<TypedIdx>;
+	using CharVector = StoredVector<char>;
 	using Complex = std::complex<double>;
 
 	namespace pattern {
@@ -179,34 +178,30 @@ namespace bmath::intern {
 
 	union TypesUnion
 	{
-		FnParams fn_params;
 		Complex complex;
-		VariadicParams variadic; //Sum and Product 
-		Variable variable;
+		IndexVector index_vec; //Sum and Product 
+		CharVector char_vec;
 		pattern::TreeMatchVariable tree_match;    //only expected as part of pattern
 		pattern::ValueMatchVariable value_match;  //only expected as part of pattern
 
-		constexpr TypesUnion(const FnParams                   & val) noexcept :fn_params(val)   {}
 		constexpr TypesUnion(const Complex                    & val) noexcept :complex(val)     {}
-		constexpr TypesUnion(const VariadicParams             & val) noexcept :variadic(val)    {}
-		constexpr TypesUnion(const Variable                   & val) noexcept :variable(val)    {} 
+		constexpr TypesUnion(const IndexVector                & val) noexcept :index_vec(val)   {}
+		constexpr TypesUnion(const CharVector                 & val) noexcept :char_vec(val)    {} 
 		constexpr TypesUnion(const pattern::TreeMatchVariable & val) noexcept :tree_match(val)  {} 
 		constexpr TypesUnion(const pattern::ValueMatchVariable& val) noexcept :value_match(val) {} 
 		constexpr TypesUnion()                                       noexcept :complex(0.0)     {} 
 
 		constexpr auto operator<=>(const TypesUnion&) const = default;
 
-		constexpr operator const FnParams                    &() const noexcept { return this->fn_params; }
 		constexpr operator const Complex                     &() const noexcept { return this->complex; }
-		constexpr operator const VariadicParams              &() const noexcept { return this->variadic; }
-		constexpr operator const Variable                    &() const noexcept { return this->variable; }
+		constexpr operator const IndexVector                 &() const noexcept { return this->index_vec; }
+		constexpr operator const CharVector                  &() const noexcept { return this->char_vec; }
 		constexpr operator const pattern::TreeMatchVariable  &() const noexcept { return this->tree_match; }
 		constexpr operator const pattern::ValueMatchVariable &() const noexcept { return this->value_match; }
 
-		constexpr operator FnParams                    &() noexcept { return this->fn_params; }
 		constexpr operator Complex                     &() noexcept { return this->complex; }
-		constexpr operator VariadicParams              &() noexcept { return this->variadic; }
-		constexpr operator Variable                    &() noexcept { return this->variable; }
+		constexpr operator IndexVector                 &() noexcept { return this->index_vec; }
+		constexpr operator CharVector                  &() noexcept { return this->char_vec; }
 		constexpr operator pattern::TreeMatchVariable  &() noexcept { return this->tree_match; }
 		constexpr operator pattern::ValueMatchVariable &() noexcept { return this->value_match; }
 	};
@@ -218,59 +213,6 @@ namespace bmath::intern {
 	using MutRef = BasicMutRef<TypesUnion, Type>;
 	using Ref = BasicRef<TypesUnion, Type>;
 
-
-	namespace pattern {
-
-		bool meets_restriction(const Ref ref, const Restriction restr);
-
-		bool has_form(const Complex& nr, const Form form);
-
-		struct PnTerm
-		{
-			TypedIdx lhs_head;
-			TypedIdx rhs_head;
-			Store lhs_store;
-			Store rhs_store;
-
-			PnTerm(std::string name);
-			std::string to_string() const;
-			std::string lhs_memory_layout() const;
-			std::string rhs_memory_layout() const;
-			std::string lhs_tree(const std::size_t offset = 0u) const;
-			std::string rhs_tree(const std::size_t offset = 0u) const;
-
-			MutRef lhs_mut_ref() noexcept { return MutRef(this->lhs_store, this->lhs_head); }
-			MutRef rhs_mut_ref() noexcept { return MutRef(this->rhs_store, this->rhs_head); }
-			Ref lhs_ref() const noexcept { return Ref(this->lhs_store, this->lhs_head); }
-			Ref rhs_ref() const noexcept { return Ref(this->rhs_store, this->rhs_head); }
-		};
-
-		//algorithms specific to patterns
-		namespace pn_tree {
-
-			//returns pointer to position in parent of value_match, where value_match is to be held in future
-			// (currently value_match is only somewhere in the subtree that it will own, not nesseccarily at the root.
-			//assumes head to be passed at reference to its own storage position
-			TypedIdx* find_value_match_subtree(Store& store, TypedIdx& head, const TypedIdx value_match);
-
-			//changes value_match from its state holding two value_proxy directly to actually
-			//having copy_idx and match_idx initialized (thus value_match also bubbles up a bit in term)
-			void rearrange_value_match(Store& store, TypedIdx& head, const TypedIdx value_match);
-
-			struct Equation { TypedIdx lhs_head, rhs_head; };
-
-			//reorders lhs and rhs until to_isolate is lhs_head, returns updated lhs_head and rhs_head
-			//(possible other subtrees identical to to_isolate are not considered, thus the name prefix)
-			//currently only used in rearrange_value_match, thus quite specialized
-			[[nodiscard]] Equation stupid_solve_for(Store& store, Equation eq, const TypedIdx to_isolate);
-
-			//mostly stripped down version of tree::combine_values_exact to find calculate SharedValueDatum.value
-			// from the start_val taken out of matched term
-			OptComplex eval_value_match(const Ref ref, const Complex& start_val);
-
-		} //namespace pn_tree
-
-	} //namespace pattern
 
 	//utility for both NamedFn and the types in Fn 
 	namespace fn {
@@ -323,28 +265,17 @@ namespace bmath::intern {
 		constexpr std::size_t param_count(const Type type) noexcept 
 		{ return props_table[static_cast<unsigned>(type.to<Fn>())].param_count; }
 
-
-
-		constexpr std::span<const TypedIdx> range(const Ref ref) noexcept
-		{ 
-			return { ref->fn_params.data(), param_count(ref.type) }; 
-		}
-
-		constexpr std::span<TypedIdx> range(FnParams& params, const Type type) noexcept
-		{ 
-			return { params.data(), param_count(type) }; 
-		}
-
 	} //namespace fn
 
-	//utility for variadic types (Sum and Product)
+	//utility for index_vec types (Sum and Product)
 	namespace variadic {
 
-		inline auto         range(const MutRef ref) noexcept { return ref.cast<VariadicParams>(); }
-		inline auto& unsave_range(const MutRef ref) noexcept { return ref->variadic; }
-		inline auto&        range(const    Ref ref) noexcept { return ref->variadic; }
+		inline auto         range(const MutRef ref) noexcept { return ref.cast<IndexVector>(); }
+		inline auto& unsave_range(const MutRef ref) noexcept { return ref->index_vec; }
+		inline auto&        range(const    Ref ref) noexcept { return ref->index_vec; }
+		inline auto    save_range(const    Ref ref) noexcept { return ref.cast<IndexVector>(); }
 
-	} //namespace variadic
+	} //namespace index_vec
 
 	//general purpose recursive tree traversal
 	namespace tree {
@@ -358,10 +289,10 @@ namespace bmath::intern {
 		//returns new location and type of ref
 		[[nodiscard]] TypedIdx combine(const MutRef ref, const bool exact);
 
-		//compares two subterms of perhaps different stores, assumes both to have their variadic parts sorted
+		//compares two subterms of perhaps different stores, assumes both to have their index_vec parts sorted
 		[[nodiscard]] std::strong_ordering compare(const Ref ref_1, const Ref ref_2);
 
-		//sorts variadic parts by compare
+		//sorts index_vec parts by compare
 		void sort(const MutRef ref);
 
 		//counts number of logical nodes of subtree (note: logical nodes might be fewer than used slots in store)
@@ -389,121 +320,180 @@ namespace bmath::intern {
 	} //namespace tree
 
 	//algorithms to compare pattern to usual term and find match
-	namespace pattern::match {
+	namespace pattern {
 
-		//all MatchVariables of same name in pattern (e.g. "a" in pattern "a*b+a" share the same SharedTreeDatum to know 
-		//whitch actually matched, and if the name "a" is already matched, even if the current instance is not.
-		struct SharedTreeDatum
+		bool meets_restriction(const Ref ref, const Restriction restr);
+
+		bool has_form(const Complex& nr, const Form form);
+
+		struct PnTerm
 		{
-			TypedIdx match_idx = TypedIdx{}; //indexes in Term to simplify
-			TypedIdx responsible = TypedIdx{}; //the instance of TreeMatchVariable that was setting match_idx
+			TypedIdx lhs_head;
+			TypedIdx rhs_head;
+			Store lhs_store;
+			Store rhs_store;
 
-			constexpr bool is_set() const noexcept
+			PnTerm(std::string name);
+			std::string to_string() const;
+			std::string lhs_memory_layout() const;
+			std::string rhs_memory_layout() const;
+			std::string lhs_tree(const std::size_t offset = 0u) const;
+			std::string rhs_tree(const std::size_t offset = 0u) const;
+
+			MutRef lhs_mut_ref() noexcept { return MutRef(this->lhs_store, this->lhs_head); }
+			MutRef rhs_mut_ref() noexcept { return MutRef(this->rhs_store, this->rhs_head); }
+			Ref lhs_ref() const noexcept { return Ref(this->lhs_store, this->lhs_head); }
+			Ref rhs_ref() const noexcept { return Ref(this->rhs_store, this->rhs_head); }
+		};
+
+		//algorithms specific to patterns
+		namespace pn_tree {
+
+			//returns pointer to position in parent of value_match, where value_match is to be held in future
+			// (currently value_match is only somewhere in the subtree that it will own, not nesseccarily at the root.
+			//assumes head to be passed at reference to its own storage position
+			TypedIdx* find_value_match_subtree(Store& store, TypedIdx& head, const TypedIdx value_match);
+
+			//changes value_match from its state holding two value_proxy directly to actually
+			//having copy_idx and match_idx initialized (thus value_match also bubbles up a bit in term)
+			void rearrange_value_match(Store& store, TypedIdx& head, const TypedIdx value_match);
+
+			struct Equation { TypedIdx lhs_head, rhs_head; };
+
+			//reorders lhs and rhs until to_isolate is lhs_head, returns updated lhs_head and rhs_head
+			//(possible other subtrees identical to to_isolate are not considered, thus the name prefix)
+			//currently only used in rearrange_value_match, thus quite specialized
+			[[nodiscard]] Equation stupid_solve_for(Store& store, Equation eq, const TypedIdx to_isolate);
+
+			//mostly stripped down version of tree::combine_values_exact to find calculate SharedValueDatum.value
+			// from the start_val taken out of matched term
+			OptComplex eval_value_match(const Ref ref, const Complex& start_val);
+
+		} //namespace pn_tree
+
+		namespace match {
+
+			//all MatchVariables of same name in pattern (e.g. "a" in pattern "a*b+a" share the same SharedTreeDatum to know 
+			//whitch actually matched, and if the name "a" is already matched, even if the current instance is not.
+			struct SharedTreeDatum
 			{
-				assert(equivalent(this->responsible != TypedIdx{}, this->match_idx != TypedIdx{}));
-				return  this->responsible != TypedIdx{};
-			}
-		};
+				TypedIdx match_idx = TypedIdx{}; //indexes in Term to simplify
+				TypedIdx responsible = TypedIdx{}; //the instance of TreeMatchVariable that was setting match_idx
 
-		struct SharedMultiDatum
-		{
-			StupidBufferVector<TypedIdx, 8> match_indices; //indexes in Term to simplify
-		};
+				constexpr bool is_set() const noexcept
+				{
+					assert(equivalent(this->responsible != TypedIdx{}, this->match_idx != TypedIdx{}));
+					return  this->responsible != TypedIdx{};
+				}
+			};
 
-		struct SharedValueDatum
-		{
-			Complex value = 0.0;
-			TypedIdx mtch_idx = TypedIdx{}; //indexes in Term to simplify (only usefull during rematch to only match later elements)
-			TypedIdx responsible = TypedIdx{}; //the instance of ValueMatchVariable that was setting value_match
-
-			constexpr bool is_set() const noexcept
+			struct SharedMultiDatum
 			{
-				assert(equivalent(this->value != 0.0, this->responsible != TypedIdx{}, this->mtch_idx != TypedIdx{}));
-				return  this->responsible != TypedIdx{};
-			}
-		};
+				StupidBufferVector<TypedIdx, 8> match_indices; //indexes in Term to simplify
+			};
 
-		struct SharedVariadicDatum
-		{
-			//no sum or product in a pattern may have more summands / factors than max_pn_variadic_size many
-			static constexpr std::size_t max_pn_variadic_size = 8u;
-			//if currenty_matched.test(i), then element i in term to match is currently matched by an element in pattern.
-			BitVector currenty_matched = {}; 
-			//every element in pattern (except all MultiPn) has own entry which logs, 
-			//  with which element in term to match it currently is associated with.
-			std::array<decltype(VariadicParams::Info::size), max_pn_variadic_size> match_positions = {};
-		};
+			struct SharedValueDatum
+			{
+				Complex value = 0.0;
+				//indexes in Term to simplify (only usefull during rematch to only match later elements)
+				TypedIdx mtch_idx = TypedIdx{}; 
+				//the instance of ValueMatchVariable that was setting value_match (thus is also responsible for resetting)
+				TypedIdx responsible = TypedIdx{};
 
-		//to allow a constant PnTerm to be matched against, all match info is stored here
-		struct MatchData
-		{
-			static constexpr std::size_t max_value_match_count = 2u; //maximal number of unrelated ValueMatchVariables allowed per pattern
-			static constexpr std::size_t max_tree_match_count = 4u;	 //maximal number of unrelated TreeMatchVariables allowed per pattern
-			static constexpr std::size_t max_multi_match_count = 2u; //maximal number of MultiMatchVariables allowed per pattern
-			static constexpr std::size_t max_variadic_count = 4u;    //maximal number of sums and products allowed per pattern
+				constexpr bool is_set() const noexcept
+				{
+					assert(equivalent(this->value != 0.0, this->responsible != TypedIdx{}, this->mtch_idx != TypedIdx{}));
+					return  this->responsible != TypedIdx{};
+				}
+			};
 
-			std::array<SharedValueDatum, max_value_match_count> value_match_data = {};
-			std::array<SharedTreeDatum, max_tree_match_count> tree_match_data = {};
-			std::array<SharedMultiDatum, max_multi_match_count> multi_match_data = {};
-			//key is index of sum / product in pattern beeing matched
-			StupidLinearMap<std::uint32_t, -1u, SharedVariadicDatum, max_variadic_count> variadic_data = {};
+			struct SharedVariadicDatum
+			{
+				//no sum or product in a pattern may have more summands / factors than max_pn_variadic_size many
+				static constexpr std::size_t max_pn_variadic_size = 8u;
+				//if currenty_matched.test(i), then element i in term to match is currently matched by an element in pattern.
+				BitVector currenty_matched = {}; 
+				//every element in pattern (except all MultiPn) has own entry which logs, 
+				//  with which element in term to match it currently is associated with.
+				std::array<decltype(IndexVector::Info::size), max_pn_variadic_size> match_positions = {};
+			};
 
-			constexpr auto& info(const TreeMatchVariable& var) noexcept { return this->tree_match_data[var.match_data_idx]; }
-			constexpr auto& info(const ValueMatchVariable& var) noexcept { return this->value_match_data[var.match_data_idx]; }
-			constexpr auto& info(const TreeMatchVariable& var) const noexcept { return this->tree_match_data[var.match_data_idx]; }
-			constexpr auto& info(const ValueMatchVariable& var) const noexcept { return this->value_match_data[var.match_data_idx]; }
+			//to allow a constant PnTerm to be matched against, all match info is stored here
+			struct MatchData
+			{
+				//maximal number of unrelated ValueMatchVariables allowed per pattern
+				static constexpr std::size_t max_value_match_count = 2u; 
+				//maximal number of unrelated TreeMatchVariables allowed per pattern
+				static constexpr std::size_t max_tree_match_count = 4u;	 
+				//maximal number of MultiMatchVariables allowed per pattern
+				static constexpr std::size_t max_multi_match_count = 2u; 
+				//maximal number of sums and products allowed per pattern
+				static constexpr std::size_t max_variadic_count = 4u;    
 
-			constexpr auto& multi_info(const std::uint32_t idx) noexcept { return this->multi_match_data[idx]; }
-			constexpr auto& multi_info(const std::uint32_t idx) const noexcept { return this->multi_match_data[idx]; }
-		};
+				std::array<SharedValueDatum, max_value_match_count> value_match_data = {};
+				std::array<SharedTreeDatum, max_tree_match_count> tree_match_data = {};
+				std::array<SharedMultiDatum, max_multi_match_count> multi_match_data = {};
+				//key is index of sum / product in pattern beeing matched
+				StupidLinearMap<std::uint32_t, -1u, SharedVariadicDatum, max_variadic_count> variadic_data = {};
 
-		//compares term starting at ref.index in ref.store with pattern starting at pn_ref.index in pn_ref.store
-		//if match is succsessfull, match_data stores what pattern's match variables matched and true is returned.
-		//if match was not succsessfull, match_data is NOT reset and false is returned
-		bool equals(const Ref pn_ref, const Ref ref, MatchData& match_data);
+				constexpr auto& info(const TreeMatchVariable& var) noexcept { return this->tree_match_data[var.match_data_idx]; }
+				constexpr auto& info(const ValueMatchVariable& var) noexcept { return this->value_match_data[var.match_data_idx]; }
+				constexpr auto& info(const TreeMatchVariable& var) const noexcept { return this->tree_match_data[var.match_data_idx]; }
+				constexpr auto& info(const ValueMatchVariable& var) const noexcept { return this->value_match_data[var.match_data_idx]; }
 
-		//resets not all matched variables appearing in pn_ref, but only the ones also set by pn_ref
-		//example: in whole pattern "a+a*b" "a" may be matched as single summand, 
-		//  thus resetting own variables in part "a*b" will only reset "b".
-		void reset_own_matches(const Ref pn_ref, MatchData& match_data);
+				constexpr auto& multi_info(const std::uint32_t idx) noexcept { return this->multi_match_data[idx]; }
+				constexpr auto& multi_info(const std::uint32_t idx) const noexcept { return this->multi_match_data[idx]; }
+			};
 
-		//if not all summands / factors in pattern could be matched, failed is returned.
-		//if not all summands / factors in the haystack are matched, matched_some is returned
-		//(relevant if the current variadic is the outhermost, as then only a partial match may be successfull)
-		enum class FindPermutationRes { matched_all, failed, matched_some };
+			//compares term starting at ref.index in ref.store with pattern starting at pn_ref.index in pn_ref.store
+			//if match is succsessfull, match_data stores what pattern's match variables matched and true is returned.
+			//if match was not succsessfull, match_data is NOT reset and false is returned
+			bool equals(const Ref pn_ref, const Ref ref, MatchData& match_data);
 
-		//determines weather there is a way to match pn_ref in haystack_ref (thus pn_ref is assumed to part of a pattern)
-		//pn_i is the index of the first element in pn_ref to be matched. 
-		//if pn_i is not zero, it is assumed, that all previous elements in pn_ref are already matched.
-		//the first haystack_k elements of haystack_ref will be skipped for the first match attemt.
-		//it is assumed, that pn_ref and haystack_ref are both the same variadic type (eighter both sum or both product)
-		FindPermutationRes find_matching_permutation(const Ref pn_ref, const Ref haystack_ref, 
-			MatchData& match_data,	std::uint32_t pn_i, std::uint32_t haystack_k);
+			//resets not all matched variables appearing in pn_ref, but only the ones also set by pn_ref
+			//example: in whole pattern "a+a*b" "a" may be matched as single summand, 
+			//  thus resetting own variables in part "a*b" will only reset "b".
+			void reset_own_matches(const Ref pn_ref, MatchData& match_data);
 
-		//expects pn_ref to already be matched to ref via match_data
-		//if one exists, this function finds a different match of pn_ref in ref, appearing after the current one
-		//  in all permutations
-		bool succeeding_permutation_equals(const Ref pn_ref, const Ref ref, MatchData& match_data);
+			//if not all summands / factors in pattern could be matched, failed is returned.
+			//if not all summands / factors in the haystack are matched, matched_some is returned
+			//(relevant if the current index_vec is the outhermost, as then only a partial match may be successfull)
+			enum class FindPermutationRes { matched_all, failed, matched_some };
 
-		//copies pn_ref with match_data into store, returns head of copied result.
-		[[nodiscard]] TypedIdx copy(const Ref pn_ref, const MatchData& match_data, 
-			const Store& src_store, Store& dst_store);
+			//determines weather there is a way to match pn_ref in haystack_ref (thus pn_ref is assumed to part of a pattern)
+			//pn_i is the index of the first element in pn_ref to be matched. 
+			//if pn_i is not zero, it is assumed, that all previous elements in pn_ref are already matched.
+			//the first haystack_k elements of haystack_ref will be skipped for the first match attemt.
+			//it is assumed, that pn_ref and haystack_ref are both the same index_vec type (eighter both sum or both product)
+			FindPermutationRes find_matching_permutation(const Ref pn_ref, const Ref haystack_ref, 
+				MatchData& match_data,	std::uint32_t pn_i, std::uint32_t haystack_k);
 
-		//this function is the primary function designed to be called from outside of this namespace.
-		//the function will try to match the head of in with the head of ref and if so, replace the matched part with out.
-		//if a transformation happened, Just the new subterm is returned to replace the TypedIdx of the old subterm in its parent,
-		//  else nothing.
-		//if the result contains something, ref is no longer valid.
-		[[nodiscard]] std::optional<TypedIdx> match_and_replace(const Ref in, const Ref out, const MutRef ref);
+			//expects pn_ref to already be matched to ref via match_data
+			//if one exists, this function finds a different match of pn_ref in ref, appearing after the current one
+			//  in all permutations
+			bool succeeding_permutation_equals(const Ref pn_ref, const Ref ref, MatchData& match_data);
 
-		//tries to match in (in postoreder) against every subterm of ref and finally ref itself. if a deeper match was found, 
-		// snd of return value is true. 
-		//if fst of return value is valid, ref could be matched and got replaced by *fst of return value, meaning ref is no longer valid
-		// and caller needs to replace ref with *return_value.first  
-		[[nodiscard]] std::pair<std::optional<TypedIdx>, bool> recursive_match_and_replace(
-			const Ref in, const Ref out, const MutRef ref);
+			//copies pn_ref with match_data into store, returns head of copied result.
+			[[nodiscard]] TypedIdx copy(const Ref pn_ref, const MatchData& match_data, 
+				const Store& src_store, Store& dst_store);
 
-	} //namespace pattern::match
+			//this function is the primary function designed to be called from outside of this namespace.
+			//the function will try to match the head of in with the head of ref and if so, replace the matched part with out.
+			//if a transformation happened, Just the new subterm is returned to replace the TypedIdx 
+			//  of the old subterm in its parent, else nothing.
+			//if the result contains something, ref is no longer valid.
+			[[nodiscard]] std::optional<TypedIdx> match_and_replace(const Ref in, const Ref out, const MutRef ref);
+
+			//tries to match in (in postoreder) against every subterm of ref and finally ref itself. if a deeper match was found, 
+			// snd of return value is true. 
+			//if fst of return value is valid, ref could be matched and got replaced by *fst of return value, 
+			//  meaning ref is no longer valid and caller needs to replace ref with *return_value.first  
+			[[nodiscard]] std::pair<std::optional<TypedIdx>, bool> recursive_match_and_replace(
+				const Ref in, const Ref out, const MutRef ref);
+
+		} //namespace match
+
+	} //namespace pattern
 
 	namespace fold {
 

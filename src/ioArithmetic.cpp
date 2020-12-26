@@ -30,7 +30,7 @@ namespace bmath::intern {
 			static constexpr Token operator_token = token::product;
 		};
 
-	} //namespace variadic
+	} //namespace index_vec
 
 	//VariadicTraits must include:
 	//unsing declaration Object_T: type to construct (e.g. Sum)
@@ -62,8 +62,8 @@ namespace bmath::intern {
 		};
 
 		constexpr auto type_table = std::to_array<TypeProps>({
-			{ Variadic::sum             , "sum"           },
-			{ Variadic::product         , "product"       },
+			{ Variadic::sum       , "sum"           },
+			{ Variadic::product   , "product"       },
 			{ Leaf::variable      , "variable"      },
 			{ Leaf::complex       , "value"         }, //not to be mistaken for Form::complex
 			{ Restr::function     , "fn"            },
@@ -355,7 +355,7 @@ namespace bmath::intern {
 			input.remove_prefix(1u); //remove hat
 			const TypedIdx base = build(store, base_view);
 			const TypedIdx expo = build(store, input);
-			return TypedIdx(store.insert(FnParams{ base, expo, TypedIdx(), TypedIdx() }), Type(Fn::pow));
+			return TypedIdx(store.insert(IndexVector{ base, expo }), Type(Fn::pow));
 		} break;
 		case Head::Type::complex_computable: {
 			return build_value(store, compute::eval_complex(input));
@@ -374,7 +374,7 @@ namespace bmath::intern {
 			return build_function(store, input, head.where, build);
 		} break;
 		case Head::Type::variable: {
-			return TypedIdx(Variable::build(store, input.to_string_view()), Type(Leaf::variable));
+			return TypedIdx(CharVector::build(store, input.to_string_view()), Type(Leaf::variable));
 		} break;
 		default: 
 			assert(false); 
@@ -406,7 +406,7 @@ namespace bmath::intern {
 			default: assert(false);
 			}
 		}
-		return TypedIdx(VariadicParams::build(store, result_buffer), VariadicTraits::type_name);
+		return TypedIdx(IndexVector::build(store, result_buffer), VariadicTraits::type_name);
 	} //build_variadic
 
 	template<typename Store_T, typename BuildAny>
@@ -436,26 +436,26 @@ namespace bmath::intern {
 			//	const auto param_view = input.steal_prefix(comma);
 			//	result_buffer.push_back(build_any(store, param_view));
 			//}
-			//return TypedIdx(VariadicParams::build(store, result_buffer), Type(Variadic::named_fn));
+			//return TypedIdx(IndexVector::build(store, result_buffer), Type(Variadic::named_fn));
 			throw ParseFailure { input.offset, "function name unknown" };
 		}
 		else { //build known function
-			const std::size_t result_index = store.allocate(); //allocate function node first -> better positioning in store
-			FnParams result{ TypedIdx(), TypedIdx(), TypedIdx(), TypedIdx() };
+			StupidBufferVector<TypedIdx, 8> result_buffer;
 			input.remove_suffix(1u);
 			input.remove_prefix(open_par + 1u);	//only arguments are left
-			std::size_t comma = find_first_of_skip_pars(input.tokens, token::comma);
-			auto param_view = input.steal_prefix(comma);
-			for (auto& param : fn::range(result, Type(type))) {
-				if (param_view.size() == 0u) [[unlikely]] throw ParseFailure{ input.offset, "too few function parameters" };
-				param = build_any(store, param_view);
-				input.remove_prefix(1u); // remove comma
-				comma = find_first_of_skip_pars(input.tokens, token::comma);
-				param_view = input.steal_prefix(comma);
+			if (input.size()) [[likely]] { //else no parameters at all
+				const std::size_t comma = find_first_of_skip_pars(input.tokens, token::comma);
+				const auto param_view = input.steal_prefix(comma); //now input starts with comma
+				result_buffer.push_back(build_any(store, param_view));
 			}
-			if (param_view.size() > 0u) [[unlikely]] throw ParseFailure{ input.offset, "too many function parameters" };
-			store.at(result_index) = result;
-			return TypedIdx(result_index, Type(type));
+			while (input.size()) {
+				input.remove_prefix(1u); //erase leading comma
+				const std::size_t comma = find_first_of_skip_pars(input.tokens, token::comma);
+				const auto param_view = input.steal_prefix(comma);
+				result_buffer.push_back(build_any(store, param_view));
+			}
+			if (result_buffer.size() != fn::param_count(type)) [[unlikely]] throw ParseFailure{ input.offset, "wrong numer of function parameters" };
+			return TypedIdx(IndexVector::build(store, result_buffer), Type(type));
 		}
 	} //build_function
 
@@ -571,7 +571,7 @@ namespace bmath::intern {
 				input.remove_prefix(1u); //remove hat
 				const TypedIdx base = this->operator()(store, base_view);
 				const TypedIdx expo = this->operator()(store, input);
-				return TypedIdx(store.insert(FnParams{ base, expo, TypedIdx(), TypedIdx() }), Type(Fn::pow));
+				return TypedIdx(store.insert(IndexVector{ base, expo }), Type(Fn::pow));
 			} break;
 			case Head::Type::complex_computable: {
 				return build_value(store, compute::eval_complex(input));
@@ -592,7 +592,7 @@ namespace bmath::intern {
 			case Head::Type::variable: {
 				if (input.chars[0u] == '\'') {
 					if (input.chars[input.size() - 1u] != '\'') [[unlikely]] throw ParseFailure{ input.offset + 1u, "found no matching \"'\"" };
-					return TypedIdx(Variable::build(store, input.to_string_view(1u, input.size() - 1u)), Type(Leaf::variable));
+					return TypedIdx(CharVector::build(store, input.to_string_view(1u, input.size() - 1u)), Type(Leaf::variable));
 				}
 				else {
 					return this->table.insert_instance(store, input);
@@ -636,7 +636,7 @@ namespace bmath::intern {
 				}
 			} break;
 			case Type(Fn::pow): {
-				const FnParams& params = *ref;
+				const IndexVector& params = *ref;
 				print::append_to_string(ref.new_at(params[0]), str, own_infixr);
 				str.push_back('^');
 				print::append_to_string(ref.new_at(params[1]), str, own_infixr);
@@ -647,13 +647,13 @@ namespace bmath::intern {
 				str.append(fn::name_of(ref.type.to<Fn>()));
 				str.push_back('(');
 				const char* seperator = "";
-				for (const auto param : fn::range(ref)) {
+				for (const auto param : variadic::range(ref)) {
 					str.append(std::exchange(seperator, ", "));
 					print::append_to_string(ref.new_at(param), str, own_infixr);
 				}
 			} break;
 			case Type(Leaf::variable): {
-				str += std::string_view(ref->variable.data(), ref->variable.size());
+				str += std::string_view(ref->char_vec.data(), ref->char_vec.size());
 			} break;
 			case Type(Leaf::complex): {
 				append_complex(ref->complex, str, parent_infixr);
@@ -724,7 +724,7 @@ namespace bmath::intern {
 			 //returns base, if ref is actually <base>^(-1)
 			const auto get_pow_neg1 = [get_negative_real](const Ref ref) -> std::optional<TypedIdx> {
 				if (ref.type == Fn::pow) {
-					const FnParams& params = *ref;
+					const IndexVector& params = *ref;
 					if (const auto expo = get_negative_real(ref.new_at(params[1]))) {
 						if (*expo == -1.0) {
 							return { params[0] };
@@ -812,7 +812,7 @@ namespace bmath::intern {
 				append_product(variadic::range(ref));
 			} break;
 			case Type(Fn::pow): {
-				const FnParams& params = *ref;
+				const IndexVector& params = *ref;
 				if (const OptDouble negative_expo = get_negative_real(ref.new_at(params[1]))) {
 					str += "1/";
 					str += print::to_pretty_string(ref.new_at(params[0]), infixr(Type(Fn::pow)));
@@ -833,14 +833,14 @@ namespace bmath::intern {
 				str.append(fn::name_of(ref.type.to<Fn>()));
 				str.push_back('(');
 				const char* separator = "";
-				for (const auto param : fn::range(ref)) {
+				for (const auto param : variadic::range(ref)) {
 					str += std::exchange(separator, ", ");
 					str += print::to_pretty_string(ref.new_at(param), infixr(ref.type));
 				}
 				str.push_back(')');
 			} break;
 			case Type(Leaf::variable): {
-				str += std::string_view(ref->variable.data(), ref->variable.size());
+				str += std::string_view(ref->char_vec.data(), ref->char_vec.size());
 			} break;
 			case Type(Leaf::complex): {
 				append_complex(ref->complex, str, parent_infixr);
@@ -858,8 +858,8 @@ namespace bmath::intern {
 		void append_memory_row(const Ref ref, std::vector<std::string>& rows)
 		{
 			const auto show_typedidx_vec_nodes = [&ref, &rows](std::uint32_t idx, bool show_first) {
-				const VariadicParams& vec = ref.store->at(idx).variadic;
-				const std::size_t end = idx + VariadicParams::node_count(vec.capacity());
+				const IndexVector& vec = ref.store->at(idx).index_vec;
+				const std::size_t end = idx + IndexVector::node_count(vec.capacity());
 				if (!show_first) {
 					idx++;
 				}
@@ -869,8 +869,8 @@ namespace bmath::intern {
 				}
 			};
 			const auto show_string_nodes = [&ref, &rows](std::uint32_t idx, bool show_first) {
-				const Variable& var = ref.store->at(idx);
-				const std::size_t end = idx + Variable::node_count(var.capacity());
+				const CharVector& var = ref.store->at(idx);
+				const std::size_t end = idx + CharVector::node_count(var.capacity());
 				if (!show_first) {
 					idx++;
 				}
@@ -901,7 +901,7 @@ namespace bmath::intern {
 			case Type(Variadic::product): {
 				current_str.append("product    : {");
 				const char* separator = "";
-				const VariadicParams test = *ref;
+				const IndexVector test = *ref;
 				for (const auto elem : variadic::range(ref)) {
 					current_str.append(std::exchange(separator, ", "));
 					current_str.append(std::to_string(elem.get_index()));
@@ -914,7 +914,7 @@ namespace bmath::intern {
 				assert(ref.type.is<Fn>());
 				current_str.append("function   : {");
 				const char* separator = "";
-				for (const auto param : fn::range(ref)) {
+				for (const auto param : variadic::range(ref)) {
 					current_str.append(std::exchange(separator, ", "));
 					current_str.append(std::to_string(param.get_index()));
 					print::append_memory_row(ref.new_at(param), rows);
@@ -1037,13 +1037,13 @@ namespace bmath::intern {
 			default: {
 				assert(ref.type.is<Fn>());
 				current_str += fn::name_of(ref.type.to<Fn>());
-				for (const TypedIdx param : fn::range(ref)) {
+				for (const TypedIdx param : variadic::range(ref)) {
 					print::append_tree_row(ref.new_at(param), rows, offset + tab_width);
 				}
 			} break;
 			case Type(Leaf::variable): {
 				current_str += ' ';
-				current_str += std::string_view(ref->variable.data(), ref->variable.size());
+				current_str += std::string_view(ref->char_vec.data(), ref->char_vec.size());
 			} break;
 			case Type(Leaf::complex): {
 				current_str += ' ';

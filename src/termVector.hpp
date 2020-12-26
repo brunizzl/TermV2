@@ -25,16 +25,16 @@ namespace bmath::intern {
 		static_assert(std::is_trivially_destructible_v<Value_T>);
 		static_assert(std::is_trivially_copyable_v<Value_T>);
 
-		static constexpr std::size_t min_capacity = (AllocNodeSize - sizeof(Info)) / sizeof(Value_T);
-		static constexpr std::size_t values_per_node = AllocNodeSize / sizeof(Value_T);
-		static constexpr std::size_t values_per_info = values_per_node - min_capacity;
-		static_assert(values_per_node > 0u, "AllocNodeSize may at least be sizeof(Value_T)");
-
 		struct Info
 		{
 			std::uint16_t size = 0u;
 			std::uint16_t capacity = min_capacity;
 		}; 
+
+		static constexpr std::size_t min_capacity = (AllocNodeSize - sizeof(Info)) / sizeof(Value_T);
+		static constexpr std::size_t values_per_node = AllocNodeSize / sizeof(Value_T);
+		static constexpr std::size_t values_per_info = values_per_node - min_capacity;
+		static_assert(values_per_node > 0u, "AllocNodeSize may at least be sizeof(Value_T)");
 
 	private:
 		//note: subsequent_data_part is never read directly, only as an offset of StoredVector::data pointing in there.
@@ -53,8 +53,9 @@ namespace bmath::intern {
 			:info{ .size = new_size, .capacity = new_capacity }
 		{}
 
-		constexpr std::size_t size() const noexcept { return this->info.size; }
 		constexpr std::size_t capacity() const noexcept { return this->info.capacity; }
+		constexpr std::size_t size() const noexcept { return this->info.size; }
+		constexpr auto& size() noexcept { return this->info.size; }
 
 		constexpr Value_T* data() noexcept { return this->data_; }
 		constexpr const Value_T* data() const noexcept { return this->data_; }
@@ -212,21 +213,15 @@ namespace bmath::intern {
 	}
 
 	template<typename Union_T, typename Value_T, std::size_t AllocNodeSize>
-	constexpr auto end(const BasicNodeRef<Union_T, StoredVector<Value_T, AllocNodeSize>, Const::no>& ref)
-	{
-		return stored_vector::SaveEndIndicator(ref->size());
-	}
-
-	template<typename Union_T, typename Value_T, std::size_t AllocNodeSize>
-	constexpr auto save_begin(const BasicNodeRef<Union_T, StoredVector<Value_T, AllocNodeSize>, Const::yes>& ref)
+	constexpr auto begin(const BasicNodeRef<Union_T, StoredVector<Value_T, AllocNodeSize>, Const::yes>& ref)
 	{
 		using Iter = stored_vector::SaveIterator<const Value_T, AllocNodeSize, const BasicStore<Union_T>>;
 		using Vec_T = StoredVector<Value_T, AllocNodeSize>;
 		return Iter(*ref.store, ref.index, 0u);
 	}
 
-	template<typename Union_T, typename Value_T, std::size_t AllocNodeSize>
-	constexpr auto save_end(const BasicNodeRef<Union_T, StoredVector<Value_T, AllocNodeSize>, Const::yes>& ref)
+	template<typename Union_T, typename Value_T, std::size_t AllocNodeSize, Const is_const>
+	constexpr auto end(const BasicNodeRef<Union_T, StoredVector<Value_T, AllocNodeSize>, is_const>& ref)
 	{
 		return stored_vector::SaveEndIndicator(ref->size());
 	}
