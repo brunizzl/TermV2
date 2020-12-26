@@ -274,11 +274,12 @@ namespace bmath::intern {
 			static constexpr std::size_t max_value_match_count = 2u; //maximal number of unrelated ValueMatchVariables allowed per pattern
 			static constexpr std::size_t max_tree_match_count = 4u;	 //maximal number of unrelated TreeMatchVariables allowed per pattern
 			static constexpr std::size_t max_multi_match_count = 2u; //maximal number of MultiMatchVariables allowed per pattern
-			static constexpr std::size_t max_variadic_count = 3u;    //maximal number of sums and products allowed per pattern
+			static constexpr std::size_t max_variadic_count = 4u;    //maximal number of sums and products allowed per pattern
 
 			std::array<SharedValueDatum, max_value_match_count> value_match_data = {};
 			std::array<SharedTreeDatum, max_tree_match_count> tree_match_data = {};
 			std::array<SharedMultiDatum, max_multi_match_count> multi_match_data = {};
+			//key is index of sum / product in pattern beeing matched
 			StupidLinearMap<std::uint32_t, -1u, SharedVariadicDatum, max_variadic_count> variadic_data = {};
 
 			constexpr auto& info(const TreeMatchVariable& var) noexcept { return this->tree_match_data[var.match_data_idx]; }

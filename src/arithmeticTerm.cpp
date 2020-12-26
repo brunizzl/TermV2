@@ -274,65 +274,77 @@ namespace bmath::intern {
 				throw_if(multi_match.lhs_count > 1u, "pattern only allows single use of each Multimatch in lhs.");
 				throw_if(multi_match.rhs_count > 1u, "pattern only allows single use of each Multimatch in rhs.");
 			}
-
-			//if params occurs in variadic, it is replaced py legal and matching MultiPn version.
-			//if params occurs in Fn, true is returned (as term is illegal and can not be made legal)
-			const auto contains_illegal_params = [](const MutRef head) -> bool {
-				const auto inspect_branches = [](const MutRef ref) -> fold::FindBool {
-					if (ref.type == Variadic::sum || ref.type == Variadic::product) {
-						const Type result_type = ref.type == Variadic::sum ? MultiPn::summands : MultiPn::factors;
-						for (TypedIdx& elem : variadic::range(ref)) {
-							if (elem.get_type() == MultiPn::params) {
-								elem = TypedIdx(elem.get_index(), result_type); //params can convert to summands / factors
+			{
+				//if params occurs in variadic, it is replaced py legal and matching MultiPn version.
+				//if params occurs in Fn, true is returned (as term is illegal and can not be made legal)
+				const auto contains_illegal_params = [](const MutRef head) -> bool {
+					const auto inspect_branches = [](const MutRef ref) -> fold::FindBool {
+						if (ref.type == Variadic::sum || ref.type == Variadic::product) {
+							const Type result_type = ref.type == Variadic::sum ? MultiPn::summands : MultiPn::factors;
+							for (TypedIdx& elem : variadic::range(ref)) {
+								if (elem.get_type() == MultiPn::params) {
+									elem = TypedIdx(elem.get_index(), result_type); //params can convert to summands / factors
+								}
 							}
 						}
-					}
-					if (ref.type.is<Fn>()) {
-						for (const TypedIdx param : fn::range(ref->fn_params, ref.type)) {
-							if (param.get_type() == MultiPn::params) {
-								return true; //found illegal
+						if (ref.type.is<Fn>()) {
+							for (const TypedIdx param : fn::range(ref->fn_params, ref.type)) {
+								if (param.get_type() == MultiPn::params) {
+									return true; //found illegal
+								}
 							}
 						}
-					}
-					return false;
+						return false;
+					};
+					return fold::simple_fold<fold::FindBool>(head, inspect_branches);
 				};
-				return fold::simple_fold<fold::FindBool>(head, inspect_branches);
-			};
-
-			throw_if(contains_illegal_params(MutRef(lhs_temp, this->lhs_head)), "pattern variable of type params may not occur in Fn.");
-			throw_if(contains_illegal_params(MutRef(rhs_temp, this->rhs_head)), "pattern variable of type params may not occur in Fn.");
-
-			const auto contains_illegal_value_match = [](const Ref head) -> bool {
-				const auto inspect_variadic = [](const Ref ref) -> fold::FindBool {
-					if (ref.type == Variadic::sum || ref.type == Variadic::product) {
-						std::size_t nr_value_matches = 0u;
-						for (const TypedIdx elem : variadic::range(ref)) {
-							nr_value_matches += (elem.get_type() == PnNode::value_match);
+				throw_if(contains_illegal_params(MutRef(lhs_temp, this->lhs_head)), "pattern variable of type params may not occur in Fn.");
+				throw_if(contains_illegal_params(MutRef(rhs_temp, this->rhs_head)), "pattern variable of type params may not occur in Fn.");
+			}
+			{
+				const auto contains_illegal_value_match = [](const Ref head) -> bool {
+					const auto inspect_variadic = [](const Ref ref) -> fold::FindBool {
+						if (ref.type == Variadic::sum || ref.type == Variadic::product) {
+							std::size_t nr_value_matches = 0u;
+							for (const TypedIdx elem : variadic::range(ref)) {
+								nr_value_matches += (elem.get_type() == PnNode::value_match);
+							}
+							return nr_value_matches > 1u;
 						}
-						return nr_value_matches > 1u;
-					}
-					return false;
+						return false;
+					};
+					return fold::simple_fold<fold::FindBool>(head, inspect_variadic);
 				};
-				return fold::simple_fold<fold::FindBool>(head, inspect_variadic);
-			};
-
-			throw_if(contains_illegal_value_match(Ref(lhs_temp, this->lhs_head)), "no two value match variables may share the same sum / product in lhs.");
-
-			const auto contains_illegal_multi_match = [](const Ref head) -> bool {
-				const auto inspect_variadic = [](const Ref ref) -> fold::FindBool {
-					if (ref.type == Variadic::sum || ref.type == Variadic::product) {
-						std::size_t nr_multi_matches = 0u;
-						for (const TypedIdx elem : variadic::range(ref)) {
-							nr_multi_matches += elem.get_type().is<MultiPn>();
+				throw_if(contains_illegal_value_match(Ref(lhs_temp, this->lhs_head)), "no two value match variables may share the same sum / product in lhs.");
+			}
+			{
+				const auto contains_illegal_multi_match = [](const Ref head) -> bool {
+					const auto inspect_variadic = [](const Ref ref) -> fold::FindBool {
+						if (ref.type == Variadic::sum || ref.type == Variadic::product) {
+							std::size_t nr_multi_matches = 0u;
+							for (const TypedIdx elem : variadic::range(ref)) {
+								nr_multi_matches += elem.get_type().is<MultiPn>();
+							}
+							return nr_multi_matches > 1u;
 						}
-						return nr_multi_matches > 1u;
-					}
-					return false;
+						return false;
+					};
+					return fold::simple_fold<fold::FindBool>(head, inspect_variadic);
 				};
-				return fold::simple_fold<fold::FindBool>(head, inspect_variadic);
-			};
-
-			throw_if(contains_illegal_multi_match(Ref(lhs_temp, this->lhs_head)), "no two multi match variables may share the same sum / product in lhs.");
+				throw_if(contains_illegal_multi_match(Ref(lhs_temp, this->lhs_head)), "no two multi match variables may share the same sum / product in lhs.");
+			}			
+			{
+				const auto contains_to_long_variadic = [](const Ref head) -> bool {
+					const auto inspect_variadic = [](const Ref ref) -> fold::FindBool {
+						if (ref.type == Variadic::sum || ref.type == Variadic::product) {
+							return ref->variadic.size > SharedVariadicDatum::max_pn_variadic_size;
+						}
+						return false;
+					};
+					return fold::simple_fold<fold::FindBool>(head, inspect_variadic);
+				};
+				throw_if(contains_to_long_variadic(Ref(lhs_temp, this->lhs_head)), "a sum / product in lhs contains to many operands.");
+			}		
 
 			this->lhs_store.reserve(lhs_temp.nr_used_slots());
 			this->rhs_store.reserve(rhs_temp.nr_used_slots());
@@ -1400,7 +1412,7 @@ namespace bmath::intern {
 			while (pn_i < pn_params.size) {
 				if (pn_params[pn_i].get_type().is<MultiPn>()) [[unlikely]] {
 					assert(haystack_ref.type == Variadic::sum && pn_params[pn_i].get_type() == MultiPn::summands && "Variadic::sum may only contain MultiPn::summands" ||
-					haystack_ref.type == Variadic::product && pn_params[pn_i].get_type() == MultiPn::factors && "Variadic::product may only contain MultiPn::product");
+					haystack_ref.type == Variadic::product && pn_params[pn_i].get_type() == MultiPn::factors && "Variadic::product may only contain MultiPn::factors");
 					assert(pn_i + 1u == pn_params.size && "MultiPn is only valid as last element");
 
 					SharedMultiDatum& info = match_data.multi_info(pn_params[pn_i].get_index());

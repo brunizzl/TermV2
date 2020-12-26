@@ -6,16 +6,20 @@ using namespace bmath::intern;
 TODO:
 
 important:
+ - seperate match and replace into multiple functions
+ - add concept of "easy pattern" with every pattern variable occuring only once, match these in guaranteed linear time
+ - write memory leak detection function
+ - throw if MatchData::max_variadic_count is succeeded in lhs of pattern (but ignore sums / products beneath value match variable)
  - check tree::copy and match::copy weather they work with two identical stores
- - deprecate SLC and introduce vector like type
  - use templates to allow multiple stores
  - write data structure one abstraction layer above PnTerm to group multiple pattens
- - enable rematch or write factorisation per hand (if per hand, perhaps introduce some way to call such routines as pattern?)
-     idea: introduce "intrinsic" type and use index in intrinsic typed_idx to specify witch (have all stored at central function pointer array)
  - restructure everything to use modules (basically needed to constexprfy all the things)
  - allow to restrict a variables possibility space e.g. natural, integer, real, complex (split Leaf::variable in own enum?)
+ - reintroduce named_fn / variadic_fn, but make them better compatible with Fn (and sum / product)
+     idea: also store Fn in StoredVector and append name of named_fn after parameters
 
 nice to have:
+ - introduce "intrinsic" type and use index in intrinsic typed_idx to specify witch (have all stored at central function pointer array)
  - add pattern variable catching functions with other pattern variables beeing parameters of these functions (perhaps two types, one variadic?)
  - const term_slc iterator dereferences to Ref, not typed_idx
  - match::permutation_equals: abort earlier (use fact that both terms are (assumed to be) sorted, not only pattern)

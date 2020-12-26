@@ -6,6 +6,7 @@
 #include <cassert>
 #include <algorithm>
 #include <type_traits>
+#include <limits>
 
 #include "termStore.hpp"
 
@@ -54,6 +55,7 @@ namespace bmath::intern {
 		static constexpr void emplace(Union_T& at, const Init_T& init, 
 			const std::size_t new_capacity) noexcept
 		{
+			assert(new_capacity <= std::numeric_limits<decltype(StoredVector::capacity)>::max());
 			StoredVector& dest_vec = static_cast<StoredVector&>(at);
 			new (&dest_vec) StoredVector(init.size(), new_capacity);
 			std::copy_n(init.data(), init.size(), +dest_vec.data);
