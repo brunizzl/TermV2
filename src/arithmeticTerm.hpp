@@ -638,10 +638,10 @@ namespace bmath {
 
 	class Term
 	{
+	public:
 		intern::Store store;
 		intern::TypedIdx head;
 
-	public:
 		Term(std::string& name); //allows whitespace and implicit product
 		Term(const std::string_view simple_name); //simple_name may not contain any whitespace
 

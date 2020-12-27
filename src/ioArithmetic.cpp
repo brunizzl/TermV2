@@ -910,7 +910,7 @@ namespace bmath::intern {
 					idx++;
 				}
 				while (idx < end) {
-					rows[idx].append("(node part of index " + std::to_string(ref.index) + ')');
+					rows[idx].append("(IndexVector)");
 					idx++;
 				}
 			};
@@ -921,7 +921,7 @@ namespace bmath::intern {
 					idx++;
 				}
 				while (idx < end) {
-					rows[idx].append("(node part of index " + std::to_string(ref.index) + ')');
+					rows[idx].append("(CharVector)");
 					idx++;
 				}
 			};
@@ -957,6 +957,9 @@ namespace bmath::intern {
 				show_typedidx_vec_nodes(ref.index, false);
 			} break;
 			default: {
+				if (ref.type == NamedFn{}) {
+					show_string_nodes(fn::named_fn_name_index(ref), true);
+				}
 				assert(fn::is_function(ref.type));
 				current_str.append("function   : {");
 				const char* separator = "";
@@ -966,6 +969,7 @@ namespace bmath::intern {
 					print::append_memory_row(ref.new_at(param), rows);
 				}
 				current_str.push_back('}');
+				show_typedidx_vec_nodes(ref.index, false);
 			} break;
 			case Type(Leaf::variable): {
 				current_str.append("variable   : ");

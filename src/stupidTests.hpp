@@ -170,8 +170,8 @@ namespace bmath::intern::debug {
 							//std::cout << "matched: " << p.to_string() << "\n";
 							changed = true;
 							test.establish_order();
-							assert(tree::valid_storage(test.ref()));
-							std::cout << "    = " << test.to_string() << "\n";
+							//assert(tree::valid_storage(test.ref()));
+							//std::cout << "    = " << test.to_string() << "\n";
 							//std::cout << test.to_memory_layout() << "\n";
 							break;
 						}
@@ -181,6 +181,9 @@ namespace bmath::intern::debug {
 				//std::cout << test.to_memory_layout() << "\n";
 				//std::cout << test.to_tree() << "\n";
 				std::cout << "\n";
+
+				tree::free(test.mut_ref());
+				assert(test.store.storage_occupancy().none());
 			}
 			catch (bmath::ParseFailure failure) {
 				std::cout << "parse failure: " << failure.what << '\n';

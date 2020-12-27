@@ -35,7 +35,8 @@ idea status:
  - always keep -1 at some known index in store and never allocate new -1 in build_negated and build_inverted (problem: identify bevore copy)
 */
 
-
+#include <iomanip>
+#include <bitset>
 
 int main()
 {

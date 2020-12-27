@@ -186,7 +186,7 @@ namespace bmath::intern {
 
 		constexpr inline [[nodiscard]] const Payload_T& at(const std::size_t idx) const noexcept
 		{
-			assert(this->valid_idx(idx));
+			ASSERT(this->valid_idx(idx));
 			return this->data()[idx];
 		}
 
@@ -226,34 +226,39 @@ namespace bmath::intern {
 		[[nodiscard]] std::size_t allocate_n(const std::size_t n) noexcept
 		{
 			assert(n != 0u);
-
 			if (n == 1u) { //quite a lot faster for that case
 				return this->allocate(); 
 			}
-			if (n <= 16u) {
-				const auto build_check_bits = []() {};
-			}
-			if (n <= 64u) { //allows mask to be single std::uint64_t
-				const std::size_t n_ceil = std::bit_ceil(n);
-				const std::uint64_t mask = -1ull >> (64u - n);
-				std::size_t bitset_index = 0u;
-				for (; bitset_index < this->size_ / 64u; bitset_index++) { //test all but last bitset (also last if all of it is used)
-					BitSet64& bitset = this->occupancy_data()[bitset_index];
-					if (bitset.all()) {
-						continue;
-					}
-					for (std::size_t offset = 0u; offset < 64u; offset += n_ceil) {
-						if (!(bitset & (mask << offset))) {
-							bitset |= (mask << offset);
-							return bitset_index * 64u + offset;
+			if (n < 64u) { //finds the first n consecutive free bits contained in a single bitset (thus better working for small n)				
+				//every bit set to true will also set the (n-1) bits below. (the nonexisting 65'th bit is assumed as true)
+				const auto spread_truth = [n](std::uint64_t to_spread) {
+					std::uint64_t result = -1ull << (65u - n); //start with the (n-1) last bits already set. note: requires n >= 2
+					for (std::size_t power = 1u; power <= n; power *= 2u) { //go through all powers of 2 not larger than n
+						if ((n & power)) { //if the current power is used to compose n, use it to compose the result
+							result |= to_spread;
+							to_spread >>= power;
 						}
+						to_spread |= (to_spread >> power);
 					}
-				}
-				for (std::size_t offset = 0u; offset + n_ceil < this->size_ % 64u; offset += n_ceil) { //test used part of last bitset
-					BitSet64& bitset = this->occupancy_data()[bitset_index];
-					if (!(bitset & (mask << offset))) {
-						bitset |= (mask << offset);
-						return bitset_index * 64u + offset;
+					return result;
+				};
+
+				const std::size_t bitset_end_index = (this->size_ + 63u) / 64u;
+				//as unused bits after logical end of bit array are guaranteed to be zero, no special case for the last bitset is required
+				for (std::size_t bitset_index = 0u; bitset_index < bitset_end_index; bitset_index++) {
+					const BitSet64 search_area = spread_truth(this->occupancy_data()[bitset_index]);
+					const std::size_t bit_index = search_area.find_first_false();
+					if (bit_index != BitSet64::npos) { 
+						const std::uint64_t first_n_bit = -1ull >> (64u - n);
+						this->occupancy_data()[bitset_index] |= first_n_bit << bit_index; //set bit in table
+
+						const std::size_t result_index = bitset_index * 64u + bit_index;
+						const std::size_t end_of_allocated = result_index + n;
+						if (end_of_allocated > this->capacity) {
+							this->unsave_change_capacity(std::bit_ceil(end_of_allocated));
+						}
+						this->size_ = std::max(this->size_, end_of_allocated);
+						return result_index;
 					}
 				}
 			}
@@ -263,17 +268,26 @@ namespace bmath::intern {
 
 		constexpr void free_n(const std::size_t start, const std::size_t n) noexcept
 		{
-			assert(start % std::min(std::bit_ceil(n), 64ull) == 0u || n <= 16u); //check if start is alligned
-
-			std::size_t bit_index = start;
-			for (; bit_index + 64u < start + n; bit_index += 64u) { //reset completely set bitsets 
-				assert(this->occupancy_data()[bit_index / 64u].all()); //check if all elements actually where used
-				this->occupancy_data()[bit_index / 64u] = 0ull; //reset all in first (n / 64u) tables responsible for the n freed elements 
+			if (n < 64u) {
+				const std::uint64_t first_n_bit = -1ull >> (64u - n);
+				const std::uint64_t mask = first_n_bit << (start % 64u);
+				BitSet64& bitset = this->occupancy_data()[start / 64u];
+				assert((bitset & mask) == mask); //check if all elements actually where used
+				bitset &= ~mask;
 			}
-			const std::uint64_t last_mask = (-1ull >> (64u - (n % 64u))) << (start % 64u);
-			BitSet64& bitset = this->occupancy_data()[bit_index / 64u];
-			assert((bitset & last_mask) == last_mask); //check if all elements actually where used
-			bitset &= ~last_mask;
+			else {
+				assert(start % std::min(std::bit_ceil(n), 64ull) == 0u); //check if start is alligned
+
+				std::size_t bit_index = start;
+				for (; bit_index + 64u < start + n; bit_index += 64u) { //reset completely set bitsets 
+					assert(this->occupancy_data()[bit_index / 64u].all()); //check if all elements actually where used
+					this->occupancy_data()[bit_index / 64u] = 0ull; //reset all in first (n / 64u) tables responsible for the n freed elements 
+				}
+				const std::uint64_t last_mask = (-1ull >> (64u - (n % 64u))) << (start % 64u);
+				BitSet64& bitset = this->occupancy_data()[bit_index / 64u];
+				assert((bitset & last_mask) == last_mask); //check if all elements actually where used
+				bitset &= ~last_mask;
+			}
 		} //free_n()
 
 		//returns copy of BitSets managing storage (bit is set) means (position is currently in use) 
