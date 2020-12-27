@@ -1609,18 +1609,27 @@ namespace bmath::intern {
 					const TypedIdx buffer_head = match::copy(to, match_data, *ref.store, copy_buffer);
 					StupidBufferVector<TypedIdx, 12> result_variadic;
 					{
-						const BitVector& matched = match_data.variadic_data.at(from.index).currenty_matched;
-						const IndexVector& src_params = *ref; //no allocations in ref.store during src_params livetime -> reference allowed
-						for (std::uint32_t k = 0u; k < src_params.size(); k++) {
-							if (matched.test(k)) {
-								tree::free(ref.new_at(src_params[k])); //delete matched parts
+						const IndexVector& matched_params = *from;
+						const bool no_top_level_multi_pn = std::find_if(matched_params.begin(), matched_params.end(),
+							[](const TypedIdx idx) {return idx.get_type().is<MultiPn>(); }) == matched_params.end();
+
+						if (no_top_level_multi_pn) [[likely]] {
+							const BitVector& matched = match_data.variadic_data.at(from.index).currenty_matched; //has not recorded MultiPn occupations (thus the shenanegans above)
+							const IndexVector& src_params = *ref; //no allocations in ref.store during src_params livetime -> reference allowed
+							for (std::uint32_t k = 0u; k < src_params.size(); k++) {
+								if (matched.test(k)) {
+									tree::free(ref.new_at(src_params[k])); //delete matched parts
+								}
+								else {
+									result_variadic.push_back(src_params[k]); //keep unmatched parts
+								}
 							}
-							else {
-								result_variadic.push_back(src_params[k]); //keep unmatched parts
-							}
+							IndexVector::free(*ref.store, ref.index);  //shallow deletion only of initial sum / product itself, not of its operands
+						}
+						else {
+							tree::free(ref);
 						}
 					}					
-					IndexVector::free(*ref.store, ref.index);  //shallow deletion only of initial sum / product itself, not of its operands
 					result_variadic.push_back(tree::copy(Ref(copy_buffer, buffer_head), *ref.store));
 					const std::uint32_t res_idx = IndexVector::build(*ref.store, result_variadic);
 					return { TypedIdx(res_idx, ref.type) };

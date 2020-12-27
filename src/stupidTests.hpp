@@ -19,6 +19,8 @@ namespace bmath::intern::debug {
 		std::cout
 			<< "Type(Variadic::sum)            = " << unsigned(Type(Variadic::sum))            << "\n"
 			<< "Type(Variadic::product)        = " << unsigned(Type(Variadic::product))        << "\n"
+		                                                                                       << "\n"
+			<< "Type(NamedFn{})                = " << unsigned(Type(NamedFn{}))                << "\n"
 			                                                                                   << "\n"
 			<< "Type(Fn::pow)                  = " << unsigned(Type(Fn::pow))                  << "\n"
 			<< "Type(Fn::log)                  = " << unsigned(Type(Fn::log))                  << "\n"
@@ -56,7 +58,7 @@ namespace bmath::intern::debug {
 			<< "Type(MultiPn::params)          = " << unsigned(Type(MultiPn::params))          << "\n"
 			                                                                                   << "\n"
 			                                                                                   << "\n"
-			;
+		;
 	} //enumerate_type
 
 	void test_rechner() 
@@ -113,34 +115,34 @@ namespace bmath::intern::debug {
 			{ "x :variable, f :any              | diff(exp(f), x) = diff(f, x) exp(f)" },
 			{ "x :variable, f :any              | diff(ln(f), x)  = diff(f, x) 1/f" },
 			
-			//exponential runtime fibonacci implementation:
-			{ "fib(0) = 0" },
-			{ "fib(1) = 1" },
-			{ "n :nat | fib(n) = fib(n - 1) + fib(n - 2)" },
-			
-			//reversing a list:
-			{ "xs :params | reverse(list{xs}) = reverse'(list{}, list{xs})" },
-			{ "xs :params, y, ys :params | reverse'(list{xs}, list{y, ys}) = reverse'(list{y, xs}, list{ys})" },
-			{ "xs :params,               | reverse'(list{xs}, list{})      = list{xs}" },
-			
-			//listing first n fibonacci numbers:
-			{ "n :nat0                    | fib_n(n + 2)                   = reverse(list_fibs(n, list{1, 0}))" },
-			{ "n :nat, a, b, tail :params | list_fibs(n, list{a, b, tail}) = list_fibs(n - 1, list{force(a + b), a, b, tail})" },
-			{ "              tail :params | list_fibs(0, list{tail})       = list{tail}" },
-			
-			//sorting numbers:
-			{ "cond :not_positive, true_res, false_res | if_positive(cond, true_res, false_res) = false_res" },
-			{ "cond :positive,     true_res, false_res | if_positive(cond, true_res, false_res) = true_res" },
-			
-			{ "p :real, xs :params, y :real, ys :params | filter_le(p, list{xs}, list{y, ys}) = filter_le(p, if_positive[force(p - y), list{xs}, list{xs, y}], list{ys})" },
-			{ "p :real, xs :params,                     | filter_le(p, list{xs}, list{})      = list{xs}" },
-			
-			{ "p :real, xs :params, y :real, ys :params | filter_s(p, list{xs}, list{y, ys}) = filter_s(p, if_positive[force(p - y), list{xs, y}, list{xs}], list{ys})" },
-			{ "p :real, xs :params,                     | filter_s(p, list{xs}, list{})      = list{xs}" },
-			
-			{ "p :real, xs :params | sort(list{p, xs}) = weird_concat(sort(filter_s(p, list{}, list{xs})), p, sort(filter_le(p, list{}, list{xs})))" },
-			{ "                    | sort(list{})      = list{}" },
-			{ "xs :params, y, zs :params | weird_concat(list{xs}, y, list{zs}) = list{xs, y, zs}" }, 		
+			////exponential runtime fibonacci implementation:
+			//{ "fib(0) = 0" },
+			//{ "fib(1) = 1" },
+			//{ "n :nat | fib(n) = fib(n - 1) + fib(n - 2)" },
+			//
+			////reversing a list:
+			//{ "xs :params | reverse(list{xs}) = reverse'(list{}, list{xs})" },
+			//{ "xs :params, y, ys :params | reverse'(list{xs}, list{y, ys}) = reverse'(list{y, xs}, list{ys})" },
+			//{ "xs :params,               | reverse'(list{xs}, list{})      = list{xs}" },
+			//
+			////listing first n fibonacci numbers:
+			//{ "n :nat0                    | fib_n(n + 2)                   = reverse(list_fibs(n, list{1, 0}))" },
+			//{ "n :nat, a, b, tail :params | list_fibs(n, list{a, b, tail}) = list_fibs(n - 1, list{force(a + b), a, b, tail})" },
+			//{ "              tail :params | list_fibs(0, list{tail})       = list{tail}" },
+			//
+			////sorting numbers:
+			//{ "cond :not_positive, true_res, false_res | if_positive(cond, true_res, false_res) = false_res" },
+			//{ "cond :positive,     true_res, false_res | if_positive(cond, true_res, false_res) = true_res" },
+			//
+			//{ "p :real, xs :params, y :real, ys :params | filter_le(p, list{xs}, list{y, ys}) = filter_le(p, if_positive[force(p - y), list{xs}, list{xs, y}], list{ys})" },
+			//{ "p :real, xs :params,                     | filter_le(p, list{xs}, list{})      = list{xs}" },
+			//
+			//{ "p :real, xs :params, y :real, ys :params | filter_s(p, list{xs}, list{y, ys}) = filter_s(p, if_positive[force(p - y), list{xs, y}, list{xs}], list{ys})" },
+			//{ "p :real, xs :params,                     | filter_s(p, list{xs}, list{})      = list{xs}" },
+			//
+			//{ "p :real, xs :params | sort(list{p, xs}) = weird_concat(sort(filter_s(p, list{}, list{xs})), p, sort(filter_le(p, list{}, list{xs})))" },
+			//{ "                    | sort(list{})      = list{}" },
+			//{ "xs :params, y, zs :params | weird_concat(list{xs}, y, list{zs}) = list{xs, y, zs}" }, 		
 		});
 
 		for (const auto& p : patterns) {
@@ -167,18 +169,19 @@ namespace bmath::intern::debug {
 					changed = false;
 					for (const auto& p : patterns) {
 						if (test.match_and_replace(p)) {
-							//std::cout << "matched: " << p.to_string() << "\n";
+							std::cout << "matched: " << p.to_string() << "\n";
 							changed = true;
 							test.establish_order();
-							//assert(tree::valid_storage(test.ref()));
-							//std::cout << "    = " << test.to_string() << "\n";
+							assert(tree::valid_storage(test.ref()));
+							std::cout << "    = " << test.to_string() << "\n";
+							//std::cout << test.to_tree() << "\n";
 							//std::cout << test.to_memory_layout() << "\n";
 							break;
 						}
 					}
 				} while (changed);
 				std::cout << "result:   " << test.to_pretty_string() << "\n";
-				//std::cout << test.to_memory_layout() << "\n";
+				std::cout << test.to_memory_layout() << "\n";
 				//std::cout << test.to_tree() << "\n";
 				std::cout << "\n";
 

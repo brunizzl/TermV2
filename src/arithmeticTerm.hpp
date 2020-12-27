@@ -109,13 +109,13 @@ namespace bmath::intern {
 			any,
 			nn1, //compact for "not negative one" (basically any, but the exact term "-1" will not be accepted)
 			no_val, //basically any, but Leaf::complex is forbidden    
-			function, //packs Variadic Fn together
+			function, //packs Variadic, NamedFn and Fn together
 			COUNT
 		};
 
 		//note: of Type, only sum, product, complex or variable may be used, as there is (currently)
 		//  no need to differentiate between any of the functions of Fn and unknown_function.
-		using Restriction = SumEnum<MathType, Restr>; 
+		using Restriction = SumEnum<Restr, MathType>; 
 
 		//in a valid pattern, all TreeMatchVariables of same name share the same restr and the same match_data_idx.
 		//it is allowed to have multiple instances of the same TreeMatchVariable per side.
