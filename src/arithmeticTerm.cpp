@@ -20,7 +20,7 @@
 		case Type_T(Variadic::sum): 
 			[[fallthrough]];
 		case Type_T(Variadic::product): {
-			for (const TypedIdx elem : index_vec::range(ref)) {
+			for (const TypedIdx elem : parameters::range(ref)) {
 			}
 			assert(false);
 		} break;
@@ -78,11 +78,12 @@ namespace bmath::intern {
 		{ Type(PnNode::value_match  ), 102 }, //may match different subsets of complex numbers, but always requires an actual value to match against
 		{ Type(PnNode::value_proxy  ), 103 }, //dont care really where this sits, as it never ist used in matching anyway
 		//values 2xx are not present, as that would require every item in Fn to be listed here (instead look at function generality() below)
-		{ Type(Variadic::sum        ), 300 },  
-		{ Type(Variadic::product    ), 301 }, 
-		{ Type(PnNode::tree_match   ), 302 }, 
-		{ Type(MultiPn::summands    ), 303 }, //kinda special, as they always succeed in matching -> need to be matched last 
-		{ Type(MultiPn::factors     ), 304 }, //kinda special, as they always succeed in matching -> need to be matched last 
+		{ Type(NamedFn{}            ), 300 },
+		{ Type(Variadic::sum        ), 301 },  
+		{ Type(Variadic::product    ), 302 }, 
+		{ Type(PnNode::tree_match   ), 303 }, 
+		{ Type(MultiPn::summands    ), 304 }, //kinda special, as they always succeed in matching -> need to be matched last 
+		{ Type(MultiPn::factors     ), 305 }, //kinda special, as they always succeed in matching -> need to be matched last 
 	});
 	static_assert(std::is_sorted(type_generality_table.begin(), type_generality_table.end(), [](auto a, auto b) { return a.second < b.second; }));
 	static_assert(unsigned(Fn::COUNT) < 99u); //else generality of 300 is used twice
@@ -125,7 +126,7 @@ namespace bmath::intern {
 					case Fn::ln   : return std::log  (real_val);
 					case Fn::re   : return real_val;
 					case Fn::im   : return 0.0;
-					default: assert(false);
+					default: return {};
 					}
 				}
 				else {
@@ -149,7 +150,7 @@ namespace bmath::intern {
 					case Fn::ln   : return std::log  (*param_vals[0]);
 					case Fn::re   : return std::real (*param_vals[0]);
 					case Fn::im   : return std::imag (*param_vals[0]);
-					default: assert(false);
+					default: return {};
 					}
 				}
 			}
@@ -199,26 +200,25 @@ namespace bmath::intern {
 		void free(const MutRef ref)
 		{
 			switch (ref.type) {
-			default:
-				assert(ref.type.is<Fn>());
+			case Type(NamedFn{}):
+				CharVector::free(*ref.store, fn::named_fn_name_index(ref));
 				[[fallthrough]];
-			case Type(Variadic::sum): 
-				[[fallthrough]];
-			case Type(Variadic::product): {
-				for (const TypedIdx elem : variadic::range(ref)) {
+			default: 
+				assert(ref.type.is<Fn>() || ref.type.is<Variadic>());
+				for (const TypedIdx elem : fn::range(ref)) {
 					tree::free(ref.new_at(elem));
 				}
 				IndexVector::free(*ref.store, ref.index);
-			} break;
-			case Type(Leaf::variable): {
+				break;
+			case Type(Leaf::variable): 
 				CharVector::free(*ref.store, ref.index);
-			} break;
-			case Type(Leaf::complex): {
+				break;
+			case Type(Leaf::complex):
 				ref.store->free(ref.index);
-			} break;
-			case Type(PnNode::tree_match): {
+				break;
+			case Type(PnNode::tree_match):
 				ref.store->free(ref.index);
-			} break;
+				break;
 			case Type(PnNode::value_match): {
 				pattern::ValueMatchVariable& var = *ref;
 				tree::free(ref.new_at(var.mtch_idx));
@@ -251,11 +251,11 @@ namespace bmath::intern {
 				OptComplex value_acc = 0.0; //stores sum of values encountered as summands
 				StupidBufferVector<TypedIdx, 16> new_sum;
 
-				for (TypedIdx& summand : variadic::unsave_range(ref)) {
+				for (TypedIdx& summand : fn::unsave_range(ref)) {
 					summand = tree::combine(ref.new_at(summand), exact);
 					switch (summand.get_type()) {
 					case Type(Variadic::sum):
-						for (const TypedIdx nested_summand : variadic::unsave_range(ref.new_at(summand))) {
+						for (const TypedIdx nested_summand : fn::unsave_range(ref.new_at(summand))) {
 							new_sum.push_back(nested_summand);
 						}						
 						IndexVector::free(*ref.store, summand.get_index()); //free nested sum, but not nested summands
@@ -281,7 +281,7 @@ namespace bmath::intern {
 					IndexVector::free(*ref.store, ref.index); //free old sum (but not summands)
 					return new_sum.front();
 				}
-				else if (const auto old_capacity = ref->index_vec.capacity(); new_sum.size() <= old_capacity) [[likely]] {
+				else if (const auto old_capacity = ref->parameters.capacity(); new_sum.size() <= old_capacity) [[likely]] {
 					IndexVector::emplace(*ref, new_sum, old_capacity);
 				}
 				else {
@@ -296,11 +296,10 @@ namespace bmath::intern {
 				OptComplex divisor_acc = 1.0; 
 				StupidBufferVector<TypedIdx, 16> new_product;
 
-				for (TypedIdx& factor : variadic::range(ref)) {
+				for (TypedIdx& factor : fn::unsave_range(ref)) {
 					factor = tree::combine(ref.new_at(factor), exact);
 					switch (factor.get_type()) {
-					case Type(Fn::pow):
-					{
+					case Type(Fn::pow): {
 						IndexVector& power = *ref.new_at(factor);
 						if (power[0].get_type() == Leaf::complex && power[1].get_type() == Leaf::complex) {
 							std::array<OptComplex, 4> power_params = {
@@ -319,7 +318,7 @@ namespace bmath::intern {
 						new_product.push_back(factor);
 					} break;
 					case Type(Variadic::product):
-						for (const TypedIdx nested_factor : variadic::unsave_range(ref.new_at(factor))) {
+						for (const TypedIdx nested_factor : fn::unsave_range(ref.new_at(factor))) {
 							new_product.push_back(nested_factor);
 						}
 						IndexVector::free(*ref.store, factor.get_index()); //free nested product, but not nested factors
@@ -361,7 +360,7 @@ namespace bmath::intern {
 					IndexVector::free(*ref.store, ref.index); //might as well call tree::free, but there are no factors anyway.
 					return build_value(*ref.store, 1.0);
 				}
-				else if (const auto old_capacity = ref->index_vec.capacity(); new_product.size() <= old_capacity) [[likely]] {
+				else if (const auto old_capacity = ref->parameters.capacity(); new_product.size() <= old_capacity) [[likely]] {
 					IndexVector::emplace(*ref, new_product, old_capacity);
 				}
 				else {
@@ -370,7 +369,7 @@ namespace bmath::intern {
 				}
 			} break;
 			case Type(Fn::force): {
-				TypedIdx& param = ref->index_vec[0];
+				TypedIdx& param = ref->parameters[0];
 				param = tree::combine(ref.new_at(param), false);
 				if (param.get_type() == Leaf::complex) {
 					const TypedIdx result_val = param;
@@ -378,21 +377,30 @@ namespace bmath::intern {
 					return result_val;
 				}
 			} break;
-			default: {
-				assert(ref.type.is<Fn>()); 
-				IndexVector& params = *ref;
-				std::array<OptComplex, 4> res_vals = { OptComplex{}, {}, {}, {} }; //default initialized to NaN
-				for (std::size_t i = 0; i < fn::arity(ref.type); i++) {
-					params[i] = tree::combine(ref.new_at(params[i]), exact);
-					if (params[i].get_type() == Leaf::complex) {
-						res_vals[i] = ref.store->at(params[i].get_index()).complex;
+			default: 
+				if (ref.type.is<Fn>()) {
+					IndexVector& params = *ref;
+					std::array<OptComplex, 4> res_vals = { OptComplex{}, {}, {}, {} }; //default initialized to NaN
+					for (std::size_t i = 0; i < fn::arity(ref.type); i++) {
+						params[i] = tree::combine(ref.new_at(params[i]), exact);
+						if (params[i].get_type() == Leaf::complex) {
+							res_vals[i] = ref.store->at(params[i].get_index()).complex;
+						}
 					}
+					if (const OptComplex res = compute([&] { return fn::eval(ref.type.to<Fn>(), res_vals); })) {
+						tree::free(ref);
+						return build_value(*ref.store, *res);
+					}
+					break;
+				} 
+				else {
+					assert(ref.type.is<Variadic>() || ref.type.is<NamedFn>()); 
+					for (TypedIdx& param : fn::unsave_range(ref)) {
+						param = tree::combine(ref.new_at(param), exact);
+
+					}
+					break;
 				}
-				if (const OptComplex res = compute([&] { return fn::eval(ref.type.to<Fn>(), res_vals); })) {
-					tree::free(ref);
-					return build_value(*ref.store, *res);
-				}
-			} break;
 			case Type(Leaf::variable): 
 				break;
 			case Type(Leaf::complex): 
@@ -420,27 +428,39 @@ namespace bmath::intern {
 
 		[[nodiscard]] std::strong_ordering compare(const Ref ref_1, const Ref ref_2)
 		{
+			const auto compare_char_vecs = [](const CharVector& vec_1, const CharVector& vec_2) {
+				const std::size_t size = std::min(vec_1.size(), vec_2.size());
+				if (const std::strong_ordering cmp = compare_arrays(vec_1.data(), vec_2.data(), size); 
+					cmp != std::strong_ordering::equal) 
+				{
+					return cmp;
+				}
+				return vec_1.size() <=> vec_1.size();
+			};
+
+
 			if (ref_1.type != ref_2.type) [[likely]] {
-				static_assert((generality(Type(Variadic::sum)) <=> generality(Type(Variadic::sum))) == std::strong_ordering::equal); //dont wanna mix with std::strong_ordering::equivalent
 				return generality(ref_1.type) <=> generality(ref_2.type);
 			}
 
 			switch (ref_1.type) {
-			default:
-				assert(ref_1.type.is<Fn>() && ref_2.type.is<Fn>());
-				[[fallthrough]];
-			case Type(Variadic::sum):
-				[[fallthrough]];
-			case Type(Variadic::product): {
+			case Type(NamedFn{}): {
+				const CharVector& name_1 = fn::named_fn_name(ref_1);
+				const CharVector& name_2 = fn::named_fn_name(ref_2);
+				if (const auto cmp = compare_char_vecs(name_1, name_2); cmp != std::strong_ordering::equal) {
+					return cmp;
+				}
+			} [[fallthrough]];
+			default: {
+				assert(fn::is_function(ref_1.type));
 				const IndexVector& vector_1 = *ref_1;
 				const IndexVector& vector_2 = *ref_2;
-				if (auto cmp = vector_1.size() <=> vector_2.size(); cmp != std::strong_ordering::equal) {
+				if (const auto cmp = vector_1.size() <=> vector_2.size(); cmp != std::strong_ordering::equal) {
 					return cmp;
 				}
 				for (auto iter_1 = vector_1.begin(),
 				          iter_2 = vector_2.begin();
-					iter_1 != vector_1.end() &&
-					iter_2 != vector_2.end();
+					iter_1 != vector_1.end(); //both are of equal length
 					++iter_1,
 					++iter_2) 
 				{
@@ -454,11 +474,7 @@ namespace bmath::intern {
 			case Type(Leaf::variable): {
 				const CharVector& var_1 = *ref_1;
 				const CharVector& var_2 = *ref_2;
-				const std::size_t size = std::min(var_1.size(), var_2.size());
-				if (const std::strong_ordering cmp = compare_arrays(var_1.data(), var_2.data(), size); cmp != std::strong_ordering::equal) {
-					return cmp;
-				}
-				return var_1.size() <=> var_2.size();
+				return compare_char_vecs(var_1, var_2);
 			} break;
 			case Type(Leaf::complex): {
 				const Complex& complex_1 = *ref_1;
@@ -505,7 +521,7 @@ namespace bmath::intern {
 					return tree::compare(Ref(*ref.store, lhs), Ref(*ref.store, rhs)) == std::strong_ordering::less;
 				};
 
-				if (ref.type == Variadic::sum || ref.type == Variadic::product) {
+				if (ref.type.is<Variadic>() && fn::is_unordered(ref.type)) {
 					IndexVector& operation = *ref;
 					std::sort(operation.begin(), operation.end(), compare_function);
 				}
@@ -531,31 +547,22 @@ namespace bmath::intern {
 
 		[[nodiscard]] TypedIdx copy(const Ref src_ref, Store& dst_store)
 		{
-			switch (src_ref.type) {
-			default:
-				assert(src_ref.type.is<Fn>());
-				[[fallthrough]];
-			case Type(Variadic::sum): 
-				[[fallthrough]];
-			case Type(Variadic::product): {
-				const std::uint32_t size = src_ref->index_vec.size();
-				const std::uint32_t capacity = src_ref->index_vec.capacity();
-				const std::uint32_t node_count = IndexVector::node_count(capacity);
-
-				const std::uint32_t dst_index = dst_store.allocate_n(node_count);
-				dst_store.at(dst_index) = IndexVector(size, capacity);
-
-				auto src_iter = begin(src_ref.cast<IndexVector>());
-				auto dst_iter = begin(MutRef(dst_store, dst_index).cast<IndexVector>());
-				const auto end = stored_vector::SaveEndIndicator{ size };
-				while (dst_iter != end) {
-					const TypedIdx dst_elem = tree::copy(src_ref.new_at(*src_iter), dst_store);
-					*dst_iter = dst_elem;
-					++src_iter;
-					++dst_iter;
+			switch (src_ref.type) {			
+			default: {
+				assert(fn::is_function(src_ref.type));
+				StupidBufferVector<TypedIdx, 12> dst_parameters;
+				for (const TypedIdx src_param : fn::save_range(src_ref)) {
+					const TypedIdx dst_param = tree::copy(src_ref.new_at(src_param), dst_store);
+					dst_parameters.push_back(dst_param);
 				}
-
-				return TypedIdx(dst_index, src_ref.type);
+				if (src_ref.type == NamedFn{}) {
+					const CharVector& name_ref = fn::named_fn_name(src_ref);
+					std::string name = std::string(name_ref.begin(), name_ref.end());
+					return fn::build_named_fn(dst_store, std::move(name), dst_parameters);
+				}
+				else {
+					return TypedIdx(IndexVector::build(dst_store, dst_parameters), src_ref.type);
+				}
 			} break;
 			case Type(Leaf::variable): {
 				const CharVector& src_var = *src_ref;
@@ -563,20 +570,19 @@ namespace bmath::intern {
 				const std::size_t dst_index = CharVector::build(dst_store, src_name);
 				return TypedIdx(dst_index, src_ref.type);
 			} break;
-			case Type(Leaf::complex): {
-				const std::size_t dst_index = dst_store.insert(*src_ref);
-				return TypedIdx(dst_index, src_ref.type);
-			} break;
+			case Type(Leaf::complex): 
+				[[fallthrough]];
 			case Type(PnNode::tree_match): {
-				const std::size_t dst_index = dst_store.insert(*src_ref); //shallow copy of var
+				const std::size_t dst_index = dst_store.allocate();
+				dst_store.at(dst_index) = *src_ref; //bitwise copy of src
 				return TypedIdx(dst_index, src_ref.type);
 			} break;
 			case Type(PnNode::value_match): {
 				const pattern::ValueMatchVariable src_var = *src_ref;
-				const std::size_t dst_index = dst_store.allocate(); //allocate early to have better placement order in store
 				auto dst_var = pattern::ValueMatchVariable(src_var.match_data_idx, src_var.form);
 				dst_var.mtch_idx = tree::copy(src_ref.new_at(src_var.mtch_idx), dst_store);
 				dst_var.copy_idx = tree::copy(src_ref.new_at(src_var.copy_idx), dst_store);
+				const std::size_t dst_index = dst_store.allocate();
 				dst_store.at(dst_index) = dst_var;
 				return TypedIdx(dst_index, src_ref.type);
 			} break;
@@ -584,7 +590,7 @@ namespace bmath::intern {
 				[[fallthrough]];
 			case Type(MultiPn::summands):
 				[[fallthrough]];
-			case Type(MultiPn::factors):	//return same ref, as multi_match does not own any nodes in src_store anyway (index has different meaning)
+			case Type(MultiPn::factors):
 				[[fallthrough]];
 			case Type(MultiPn::params):
 				return src_ref.typed_idx();
@@ -617,13 +623,9 @@ namespace bmath::intern {
 			else {
 				const auto [index, type] = head.split();
 				switch (type) {
-				default:
-					assert(type.is<Fn>());
-					[[fallthrough]];
-				case Type(Variadic::sum): 
-					[[fallthrough]];
-				case Type(Variadic::product): {
-					for (TypedIdx& elem : variadic::range(MutRef(store, head))) {
+				default: {
+					assert(fn::is_function(type));
+					for (TypedIdx& elem : fn::range(MutRef(store, head))) {
 						if (TypedIdx* const elem_res = tree::find_subtree_owner(store, elem, subtree)) {
 							return elem_res;
 						}
@@ -661,38 +663,38 @@ namespace bmath::intern {
 		bool valid_storage(const Ref ref)
 		{
 			BitVector store_positions = ref.store->storage_occupancy(); //every index in store is represented as bit here. false -> currently free	
-			const auto set_used_position = [&store_positions](const Ref ref) -> fold::FindBool { //doubles in function as 
+			const auto reset_and_check_position = [&store_positions](const Ref ref) -> fold::FindBool { //doubles in function as 
 				if (!ref.type.is<MultiPn>() && !(ref.type == PnNode::value_proxy)) { //else index does not point in store anyway
-					if (store_positions.test(ref.index) == false) { //meaning eighter free or already reset by some other node
-						return true; //return found double use
-					}
-					store_positions.reset(ref.index);
-
-					if (ref.type.is<Variadic>() || ref.type.is<Fn>()) {
+					const auto set_all_in_range = [&store_positions](std::size_t index, const std::size_t end) {
+						while (index < end) {
+							if (store_positions.test(index) == false) { //meaning eighter free or already reset by some other node
+								return true; //return found double use
+							}
+							store_positions.reset(index);
+							index++;
+						}
+						return false;
+					};
+					if (fn::is_function(ref.type)) {
 						const IndexVector& vec = *ref;
-						for (std::size_t offset = 1u; offset < IndexVector::node_count(vec.capacity()); offset++) { //already did 0 above -> start at 1
-							if (store_positions.test(ref.index + offset) == false) { //meaning eighter free or already reset by some other node
-								return true; //return found double use
-							}
-							store_positions.reset(ref.index + offset);
+						if (set_all_in_range(ref.index, ref.index + vec.node_count())) return true;
+						if (ref.type == NamedFn{}) {
+							const std::size_t name_index = fn::named_fn_name_index(ref);
+							const std::size_t name_node_count = fn::named_fn_name(ref).node_count();
+							if (set_all_in_range(name_index, name_index + name_node_count)) return true;
 						}
-					}
-					if (ref.type == Variadic::named_fn) {
-						assert(false); //need to check and reset name part (not yet done)
-					}
-					if (ref.type == Leaf::variable) {
+					}					
+					else if (ref.type == Leaf::variable) {
 						const CharVector& vec = *ref;
-						for (std::size_t offset = 1u; offset < CharVector::node_count(vec.capacity()); offset++) { //already did 0 above -> start at 1
-							if (store_positions.test(ref.index + offset) == false) { //meaning eighter free or already reset by some other node
-								return true; //return found double use
-							}
-							store_positions.reset(ref.index + offset);
-						}
+						if (set_all_in_range(ref.index, ref.index + vec.node_count())) return true;
+					}
+					else {
+						if (set_all_in_range(ref.index, ref.index + 1ull)) return true;
 					}
 				}
-				return false; //found no double use (here anyway)
+				return false; //found no double use (not at this node anyway)
 			};
-			const bool found_double_use = fold::simple_fold<fold::FindBool>(ref, set_used_position);
+			const bool found_double_use = fold::simple_fold<fold::FindBool>(ref, reset_and_check_position);
 			return !found_double_use && store_positions.none();
 		} //valid_storage
 
@@ -814,30 +816,36 @@ namespace bmath::intern {
 							}
 						}
 						{
-							const auto highest_value_literal_depth = [](const Ref ref) -> int {
+							const auto highest_literal_depth = [](const Ref ref) -> int {
 								struct Accumulator
 								{
 									int min_operand_depth = std::numeric_limits<int>::max();
-									constexpr Accumulator(const Ref) noexcept {}
+									Type ref_type;
+									constexpr Accumulator(const Ref ref) noexcept :ref_type(ref.type) {}
 									void consume(const int child_depth) noexcept { this->min_operand_depth = std::min(this->min_operand_depth, child_depth); }
-									auto result() noexcept { return std::max(this->min_operand_depth, this->min_operand_depth + 1); } // +1 might cause overflow
+
+									auto result() noexcept 
+									{ 
+										return this->ref_type == PnNode::value_match ? //literals held by value match dont count >:|
+											std::numeric_limits<int>::max() :
+											std::max(this->min_operand_depth, this->min_operand_depth + 1);  //std::max because +1 might cause overflow
+									}
 								};
 								const auto leaf_apply = [](const Ref ref) {
-									return ref.type == Leaf::complex ? 0 : std::numeric_limits<int>::max();
+									return ref.type.is<Leaf>() ? 0 : std::numeric_limits<int>::max();
 								};
 								return fold::tree_fold<int, Accumulator>(ref, leaf_apply);
 							};
-							const int lhs_depth = highest_value_literal_depth(lhs_ref);
-							const int rhs_depth = highest_value_literal_depth(rhs_ref);
+							const int lhs_depth = highest_literal_depth(lhs_ref);
+							const int rhs_depth = highest_literal_depth(rhs_ref);
 							if (lhs_depth != rhs_depth) {
 								return lhs_depth < rhs_depth;
 							}
 						}
-
 						return tree::compare(lhs_ref, rhs_ref) == std::strong_ordering::less;
 					};
 
-					if (ref.type == Variadic::sum || ref.type == Variadic::product) {
+					if (ref.type.is<Variadic>() && fn::is_unordered(ref.type)) {
 						IndexVector& operation = *ref;
 						std::sort(operation.begin(), operation.end(), compare_patterns);
 					}
@@ -850,33 +858,38 @@ namespace bmath::intern {
 			sort_pattern(MutRef(rhs_temp, this->rhs_head));
 
 			for (const auto& multi_match : table.multi_table) {
-				throw_if(multi_match.lhs_count > 1u, "pattern only allows single use of each Multimatch in lhs.");
-				throw_if(multi_match.rhs_count > 1u, "pattern only allows single use of each Multimatch in rhs.");
+				throw_if(multi_match.lhs_count > 1u, "pattern only allows single use of each MultiPn in lhs.");
+				throw_if(multi_match.rhs_count > 1u, "pattern only allows single use of each MultiPn in rhs.");
 			}
-			//if MultiPn::params occurs in index_vec, it is replaced py legal and matching MultiPn version.
-			const auto replace_params = [](const MutRef head) {
-				const auto inspect_variadic = [](const MutRef ref) -> fold::Void {
-					if (ref.type == Variadic::sum || ref.type == Variadic::product) {
-						const Type result_type = ref.type == Variadic::sum ? MultiPn::summands : MultiPn::factors;
-						for (TypedIdx& elem : variadic::unsave_range(ref)) {
-							if (elem.get_type() == MultiPn::params) {
-								elem = TypedIdx(elem.get_index(), result_type); //params can convert to summands / factors
+			{
+				//if MultiPn::params occurs in sum / product, it is replaced by legal and matching MultiPn version.
+				const auto test_and_replace_multi_pn = [](const MutRef head, const bool do_testing) -> bool {
+					const auto inspect_variadic = [do_testing](const MutRef ref) -> fold::FindBool {
+						if (ref.type == Variadic::sum || ref.type == Variadic::product) {
+							const Type result_type = ref.type == Variadic::sum ? MultiPn::summands : MultiPn::factors;
+							for (TypedIdx& elem : fn::unsave_range(ref)) {
+								const Type elem_type = elem.get_type();
+								if (elem_type == MultiPn::params) {
+									elem = TypedIdx(elem.get_index(), result_type); //params can convert to summands / factors
+								}
+								else if (do_testing && elem_type.is<MultiPn>() && elem_type != result_type) {
+									return true;
+								}
 							}
 						}
-					}
-					return fold::Void{};
+						return false;
+					};
+					return fold::simple_fold<fold::FindBool>(head, inspect_variadic);
 				};
-				fold::simple_fold<fold::Void>(head, inspect_variadic);
-			};
-			replace_params(MutRef(lhs_temp, this->lhs_head));
-			replace_params(MutRef(rhs_temp, this->rhs_head));
-
+				throw_if(test_and_replace_multi_pn(MutRef(lhs_temp, this->lhs_head), true), "wrong MultiPn in sum / product in lhs");
+				test_and_replace_multi_pn(MutRef(rhs_temp, this->rhs_head), false);
+			}
 			{
 				const auto contains_illegal_value_match = [](const Ref head) -> bool {
 					const auto inspect_variadic = [](const Ref ref) -> fold::FindBool {
 						if (ref.type == Variadic::sum || ref.type == Variadic::product) {
 							std::size_t nr_value_matches = 0u;
-							for (const TypedIdx elem : variadic::range(ref)) {
+							for (const TypedIdx elem : fn::range(ref)) {
 								nr_value_matches += (elem.get_type() == PnNode::value_match);
 							}
 							return nr_value_matches > 1u;
@@ -892,7 +905,7 @@ namespace bmath::intern {
 					const auto inspect_variadic = [](const Ref ref) -> fold::FindBool {
 						if (ref.type == Variadic::sum || ref.type == Variadic::product) {
 							std::size_t nr_multi_matches = 0u;
-							for (const TypedIdx elem : variadic::range(ref)) {
+							for (const TypedIdx elem : fn::range(ref)) {
 								nr_multi_matches += elem.get_type().is<MultiPn>();
 							}
 							return nr_multi_matches > 1u;
@@ -902,12 +915,12 @@ namespace bmath::intern {
 					return fold::simple_fold<fold::FindBool>(head, inspect_variadic);
 				};
 				throw_if(contains_illegal_multi_match(Ref(lhs_temp, this->lhs_head)), "no two multi match variables may share the same sum / product in lhs.");
-			}			
+			}	
 			{
 				const auto contains_to_long_variadic = [](const Ref head) -> bool {
 					const auto inspect_variadic = [](const Ref ref) -> fold::FindBool {
 						if (ref.type == Variadic::sum || ref.type == Variadic::product) {
-							return ref->index_vec.size() > match::SharedVariadicDatum::max_pn_variadic_size;
+							return ref->parameters.size() > match::SharedVariadicDatum::max_pn_variadic_size;
 						}
 						return false;
 					};
@@ -967,7 +980,7 @@ namespace bmath::intern {
 					}
 				}; //struct MatchTraits	
 
-				   //Yaaa in kow. Big O hates this implementation. I tried it in efficient and it looked so mutch worse. this is better. trust me.
+				//Yaaa in kow. Big O hates this implementation. I tried it in efficient and it looked so mutch worse. this is better. trust me.
 				const auto classify_subterm = [&store, value](const TypedIdx head) -> MatchTraits {
 					struct OpAccumulator
 					{
@@ -982,7 +995,7 @@ namespace bmath::intern {
 							case Type(Fn::pow):     break;// for now only allow these Fn to be computed in value
 							case Type(Fn::sqrt):    break;// for now only allow these Fn to be computed in value  
 							default:
-								assert(ref.type.is<Fn>()); 
+								assert(fn::is_function(ref.type)); 
 								[[fallthrough]];
 							case Type(PnNode::value_match): {
 								const bool is_right_match = TypedIdx(ref.index, ref.type) == value;
@@ -1006,46 +1019,18 @@ namespace bmath::intern {
 					return fold::tree_fold<MatchTraits, OpAccumulator>(Ref(store, head), leaf_apply, value, var.copy_idx);
 				}; //classify_subterm
 
-				{
-					const MatchTraits this_traits = classify_subterm(head);
-					if (this_traits.computable && this_traits.has_match) {
-						return &head;
-					}
-					else if (!this_traits.has_match) {
-						return nullptr;
-					}
+				const MatchTraits this_traits = classify_subterm(head);
+				if (this_traits.computable && this_traits.has_match) {
+					return &head;
 				}
-
-				const auto [index, type] = head.split();
-				switch (type) {
-				default:
-					assert(type.is<Fn>());
-					[[fallthrough]];
-				case Type(Variadic::sum): 
-					[[fallthrough]];
-				case Type(Variadic::product): {
-					for (TypedIdx& elem : variadic::range(MutRef(store, head))) {
+				else if (this_traits.has_match) { //this contains match, but also other junk -> just return part with match
+					assert(fn::is_function(head.get_type()));
+					for (TypedIdx& elem : fn::unsave_range(MutRef(store, head))) {
 						if (TypedIdx* const elem_res = find_value_match_subtree(store, elem, value)) {
 							return elem_res;
 						}
 					}
-				} break;
-				case Type(Leaf::variable): 
-					break;
-				case Type(Leaf::complex): 
-					break;
-				case Type(PnNode::tree_match): 
-					break;
-				case Type(PnNode::value_match): 
-					break;
-				case Type(PnNode::value_proxy):
-					break;
-				case Type(MultiPn::summands):
-					break;
-				case Type(MultiPn::factors):
-					break;
-				case Type(MultiPn::params):
-					break;
+					assert(false); //we have match -> we will find it in operands
 				}
 				return nullptr;
 			} //find_value_match_subtree
@@ -1087,7 +1072,7 @@ namespace bmath::intern {
 					case Type(Variadic::product):
 					{
 						StupidBufferVector<TypedIdx, 8> result_buffer = { eq.rhs_head };
-						for (const TypedIdx elem : variadic::range(MutRef(store, eq.lhs_head))) {
+						for (const TypedIdx elem : fn::range(MutRef(store, eq.lhs_head))) {
 							if (tree::contains(Ref(store, elem), to_isolate)) {
 								eq.lhs_head = elem; 
 							}
@@ -1120,7 +1105,7 @@ namespace bmath::intern {
 					case Type(MultiPn::params):
 						assert(false); break;
 					case Type(Fn::pow): {
-						IndexVector* params = &store.at(lhs_index).index_vec;
+						IndexVector* params = &store.at(lhs_index).parameters;
 						if (tree::contains(Ref(store, (*params)[0u]), to_isolate)) { //case <contains var>^<computable>
 							if ((*params)[1u].get_type() == Leaf::complex && MutRef(store, (*params)[1u])->complex == 2.0) { //special case <contains var>^2 -> use sqrt, not <...>^0.5
 								tree::free(MutRef(store, (*params)[1u]));
@@ -1133,7 +1118,7 @@ namespace bmath::intern {
 								eq.lhs_head = (*params)[0u];
 								(*params)[0u] = eq.rhs_head;	
 								const TypedIdx inverse_expo = build_inverted(store, (*params)[1u]);
-								params = &store.at(lhs_index).index_vec;
+								params = &store.at(lhs_index).parameters;
 								(*params)[1u] = inverse_expo;
 								eq.rhs_head = TypedIdx(lhs_index, Type(Fn::pow));
 							}
@@ -1145,11 +1130,11 @@ namespace bmath::intern {
 						}
 					} break;
 					case Type(Fn::sqrt): { //repurpose params from lhs as pow in "<prev. rhs> ^ 2"
-						IndexVector* params = &store.at(lhs_index).index_vec;
+						IndexVector* params = &store.at(lhs_index).parameters;
 						eq.lhs_head = (*params)[0u];
 						(*params)[0u] = eq.rhs_head;
 						const TypedIdx square = build_value(store, 2.0);
-						params = &store.at(lhs_index).index_vec;
+						params = &store.at(lhs_index).parameters;
 						(*params)[1u] = square;	
 						eq.rhs_head = TypedIdx(lhs_index, Type(Fn::pow));
 					} break;
@@ -1183,7 +1168,7 @@ namespace bmath::intern {
 				switch (ref.type) {
 				case Type(Variadic::sum): {
 					OptComplex result_val = 0.0;
-					for (auto& summand : variadic::range(ref)) {
+					for (auto& summand : fn::range(ref)) {
 						if (const OptComplex summand_val = eval_value_match(ref.new_at(summand), start_val)) {
 							if (const OptComplex res = compute_exact([&] {return result_val + summand_val; })) {
 								result_val = res;
@@ -1197,7 +1182,7 @@ namespace bmath::intern {
 				case Type(Variadic::product): {
 					OptComplex result_factor = 1.0;
 					OptComplex result_divisor = 1.0;
-					for (auto& factor : variadic::range(ref)) {
+					for (auto& factor : fn::range(ref)) {
 						if (const std::optional<TypedIdx> divisor = get_divisor(ref.new_at(factor))) {
 							if (const OptComplex divisor_val = eval_value_match(ref.new_at(*divisor), start_val)) {
 								if (const OptComplex res = compute_exact([&] { return result_divisor * divisor_val; })) {
@@ -1249,7 +1234,7 @@ namespace bmath::intern {
 
 	namespace pattern::match {
 
-		bool equals(const Ref pn_ref, const Ref ref, MatchData& match_data)
+		bool permutation_equals(const Ref pn_ref, const Ref ref, MatchData& match_data)
 		{
 			if (pn_ref.type.is<MathType>()) {
 				if (pn_ref.type != ref.type) [[likely]] {
@@ -1257,29 +1242,58 @@ namespace bmath::intern {
 				}
 				else {
 					switch (pn_ref.type) {
-					case Type(Variadic::sum): 
-						[[fallthrough]];
-					case Type(Variadic::product): {
-						if (pn_ref->index_vec.size() > ref->index_vec.size()) {
+					case Type(NamedFn{}): {
+						const CharVector& name = fn::named_fn_name(ref);
+						const CharVector& pn_name = fn::named_fn_name(pn_ref);
+						if (std::string_view(name.data(), name.size()) != std::string_view(pn_name.data(), pn_name.size())) {
 							return false;
 						}
-						return find_matching_permutation(pn_ref, ref, match_data, 0u, 0u) == FindPermutationRes::matched_all;
-						//const auto [matched, not_matched] = match::permutation_equals(pn_ref, ref, match_data);
-						//return matched.size() > 0u && not_matched.size() == 0u;
-					} break;
+					} [[fallthrough]];				
 					default: {
-						assert(pn_ref.type.is<Fn>());
-						const auto& pn_range = variadic::range(pn_ref);
-						auto pn_iter = pn_range.begin();
-						const auto& pn_stop = pn_range.end();
-						auto& range = variadic::range(ref);
-						auto iter = range.begin();
-						for (; pn_iter != pn_stop; ++pn_iter, ++iter) { //iter and pn_iter both go over same number of params
-							if (!match::equals(pn_ref.new_at(*pn_iter), ref.new_at(*iter), match_data)) {
+						assert(fn::is_function(pn_ref.type));
+						if (pn_ref.type.is<Variadic>() && fn::is_unordered(pn_ref.type)) {
+							if (pn_ref->parameters.size() > ref->parameters.size()) {
 								return false;
 							}
+							return find_matching_permutation(pn_ref, ref, match_data, 0u, 0u) == FindPermutationRes::matched_all;
 						}
-						return true;
+						else if (pn_ref.type.is<Fn>()) {
+							const IndexVector& pn_range = fn::range(pn_ref);
+							const IndexVector& range = fn::range(ref);
+							auto pn_iter = pn_range.begin();
+							const auto pn_stop = pn_range.end();
+							auto iter = range.begin();
+							for (; pn_iter != pn_stop; ++pn_iter, ++iter) { //iter and pn_iter both go over same number of params
+								if (!match::permutation_equals(pn_ref.new_at(*pn_iter), ref.new_at(*iter), match_data)) {
+									return false;
+								}
+							}
+							return true;
+						}
+						else {
+							assert((pn_ref.type.is<Variadic>() && !fn::is_unordered(pn_ref.type)) || pn_ref.type == NamedFn{});
+							const IndexVector& pn_range = fn::range(pn_ref);
+							const IndexVector& range = fn::range(ref);
+							auto pn_iter = pn_range.begin();
+							auto iter = range.begin();
+							const auto pn_stop = pn_range.end();
+							const auto stop = range.end();
+							for (; pn_iter != pn_stop && iter != stop; ++pn_iter, ++iter) {
+								if (pn_iter->get_type().is<MultiPn>()) {
+									SharedMultiDatum& info = match_data.multi_info(pn_iter->get_index());
+									assert(info.match_indices.size() == 0u);
+									while (iter != stop) {
+										info.match_indices.push_back(*iter);
+										++iter;
+									}
+									return true;
+								}
+								else if (!match::permutation_equals(pn_ref.new_at(*pn_iter), ref.new_at(*iter), match_data)) {
+									return false;
+								}
+							}
+							return true;
+						}
 					} break;
 					case Type(Leaf::variable): {
 						const CharVector& var = *ref;
@@ -1333,14 +1347,14 @@ namespace bmath::intern {
 						return true;
 					}
 				} break;
-				case Type(PnNode::value_proxy): //may only be encountered in pn_tree::eval_value_match (as value_match does no equals call)
+				case Type(PnNode::value_proxy): //may only be encountered in pn_tree::eval_value_match (as value_match does no permutation_equals call)
 					assert(false);
 					return false;
 				case Type(MultiPn::summands):
 					if (ref.type == Variadic::sum) {
 						SharedMultiDatum& info = match_data.multi_info(pn_ref.index);
 						assert(info.match_indices.size() == 0u);
-						for (const TypedIdx elem : variadic::range(ref)) {
+						for (const TypedIdx elem : fn::range(ref)) {
 							info.match_indices.push_back(elem);
 						}
 						return true;
@@ -1350,13 +1364,13 @@ namespace bmath::intern {
 					if (ref.type == Variadic::product) {
 						SharedMultiDatum& info = match_data.multi_info(pn_ref.index);
 						assert(info.match_indices.size() == 0u);
-						for (const TypedIdx elem : variadic::range(ref)) {
+						for (const TypedIdx elem : fn::range(ref)) {
 							info.match_indices.push_back(elem);
 						}
 						return true;
 					}
 					return false;
-				case Type(MultiPn::params): //assumed to be handeled only as param in named_fn
+				case Type(MultiPn::params): //assumed to be handeled only as param of named_fn or ordered elements in Variadic 
 					[[fallthrough]];
 				default:
 					assert(false);
@@ -1364,7 +1378,7 @@ namespace bmath::intern {
 				}
 			}
 
-		} //equals
+		} //permutation_equals
 
 		void reset_own_matches(const Ref pn_ref, MatchData& match_data) 
 		{
@@ -1394,53 +1408,39 @@ namespace bmath::intern {
 			fold::simple_fold<fold::Void>(pn_ref, reset_single);
 		} //reset_own_matches
 
-		bool succeeding_permutation_equals(const Ref pn_ref, const Ref ref, MatchData& match_data)
+		bool subsequent_permutation_equals(const Ref pn_ref, const Ref ref, MatchData& match_data)
 		{
-			if (pn_ref.type.is<MathType>()) {
-				assert(pn_ref.type == ref.type);
-				switch (pn_ref.type) {
-				case Type(Variadic::sum): 
-					[[fallthrough]];
-				case Type(Variadic::product): {
-					SharedVariadicDatum& variadic_datum = match_data.variadic_data.at(pn_ref.index);
-					const IndexVector& pn_params = *pn_ref;
-					assert(variadic_datum.currenty_matched.count() > 0u); //assert this index_vec is already matched
-					std::uint32_t pn_i = pn_params.size() - 1u;
-					if (pn_params[pn_i].get_type().is<MultiPn>()) {
-						pn_i--;
-					} 
-					assert(!pn_params[pn_i].get_type().is<MultiPn>()); //there may only be a single one in each sum / product
-					const std::uint32_t last_haystack_k = variadic_datum.match_positions[pn_i];
-					variadic_datum.currenty_matched.reset(last_haystack_k);
-					reset_own_matches(pn_ref, match_data);
-					return find_matching_permutation(pn_ref, ref, match_data, pn_i, last_haystack_k + 1u) == FindPermutationRes::matched_all;
-				} break;
-				default: {
-					assert(pn_ref.type.is<Fn>());
-					const auto& pn_range = variadic::range(pn_ref);
-					const auto& range = variadic::range(ref);
-					const auto pn_stop = pn_range.end();
-					auto pn_iter = pn_range.begin();
-					auto iter = range.begin();
-					for (; pn_iter != pn_stop; ++pn_iter, ++iter) { //iter and pn_iter both go over same number of params
-						if (match::succeeding_permutation_equals(pn_ref.new_at(*pn_iter), ref.new_at(*iter), match_data)) {
-							return true;
-						}
-					}
-					return false;
-				} break;
-				case Type(Leaf::variable): 
-					[[fallthrough]];
-				case Type(Leaf::complex): 
-					return false;
-				}
+			if (!fn::is_function(pn_ref.type)) {
+				return false; //can not rematch at all
+			}
+			if (pn_ref.type.is<Variadic>() && fn::is_unordered(pn_ref.type)) {
+				SharedVariadicDatum& variadic_datum = match_data.variadic_data.at(pn_ref.index);
+				const IndexVector& pn_params = *pn_ref;
+				assert(variadic_datum.currenty_matched.count() > 0u); //assert this parameters are already matched
+				std::uint32_t pn_i = pn_params.size() - 1u;
+				if (pn_params[pn_i].get_type().is<MultiPn>()) {
+					pn_i--;
+				} 
+				assert(!pn_params[pn_i].get_type().is<MultiPn>()); //there may only be a single one in each variadic
+				const std::uint32_t last_haystack_k = variadic_datum.match_positions[pn_i];
+				variadic_datum.currenty_matched.reset(last_haystack_k);
+				reset_own_matches(pn_ref, match_data);
+				return find_matching_permutation(pn_ref, ref, match_data, pn_i, last_haystack_k + 1u) == FindPermutationRes::matched_all;
 			}
 			else {
-				assert(pn_ref.type.is<MatchType>());
+				const auto& pn_range = fn::range(pn_ref);
+				const auto& range = fn::range(ref);
+				const auto pn_stop = pn_range.end();
+				auto pn_iter = pn_range.begin();
+				auto iter = range.begin();
+				for (; pn_iter != pn_stop; ++pn_iter, ++iter) { //iter and pn_iter both go over same number of params
+					if (match::subsequent_permutation_equals(pn_ref.new_at(*pn_iter), ref.new_at(*iter), match_data)) {
+						return true;
+					}
+				}
 				return false;
 			}
-
-		} //succeeding_permutation_equals
+		} //subsequent_permutation_equals
 
 		FindPermutationRes find_matching_permutation(const Ref pn_ref, const Ref haystack_ref, MatchData& match_data, std::uint32_t pn_i, std::uint32_t haystack_k)
 		{
@@ -1455,8 +1455,13 @@ namespace bmath::intern {
 		match_pn_i:
 			while (pn_i < pn_params.size()) {
 				if (pn_params[pn_i].get_type().is<MultiPn>()) [[unlikely]] {
-					assert(haystack_ref.type == Variadic::sum && pn_params[pn_i].get_type() == MultiPn::summands && "Variadic::sum may only contain MultiPn::summands" ||
-					haystack_ref.type == Variadic::product && pn_params[pn_i].get_type() == MultiPn::factors && "Variadic::product may only contain MultiPn::factors");
+					assert(haystack_ref.type == Variadic::sum     && pn_params[pn_i].get_type() == MultiPn::summands || // Variadic::sum     may only contain MultiPn::summands
+					       haystack_ref.type == Variadic::product && pn_params[pn_i].get_type() == MultiPn::factors  || // Variadic::product may only contain MultiPn::factors
+
+					       haystack_ref.type != Variadic::sum && 
+					       haystack_ref.type != Variadic::product && 
+					       pn_params[pn_i].get_type() == MultiPn::params
+					);
 					assert(pn_i + 1ull == pn_params.size() && "MultiPn is only valid as last element");
 
 					SharedMultiDatum& info = match_data.multi_info(pn_params[pn_i].get_index());
@@ -1474,7 +1479,7 @@ namespace bmath::intern {
 						if (variadic_datum.currenty_matched.test(haystack_k)) {
 							continue;
 						}
-						if (match::equals(pn_i_ref, haystack_ref.new_at(haystack_params[haystack_k]), match_data)) {
+						if (match::permutation_equals(pn_i_ref, haystack_ref.new_at(haystack_params[haystack_k]), match_data)) {
 							variadic_datum.currenty_matched.set(haystack_k);
 							variadic_datum.match_positions[pn_i] = haystack_k;
 							haystack_k = 0u;
@@ -1498,7 +1503,7 @@ namespace bmath::intern {
 					haystack_k = variadic_datum.match_positions[pn_i];
 					//try rematching the last successfully matched element in pattern with same part it matched with previously
 					// (but it can not match any way that was already tried, duh)
-					if (succeeding_permutation_equals(pn_i_ref, haystack_ref.new_at(haystack_params[haystack_k]), match_data)) {
+					if (subsequent_permutation_equals(pn_i_ref, haystack_ref.new_at(haystack_params[haystack_k]), match_data)) {
 						//success -> try matching the element not matchable this while iteration with (perhaps) now differenty set match variables
 						pn_i++;						
 					}
@@ -1517,36 +1522,33 @@ namespace bmath::intern {
 		TypedIdx copy(const Ref pn_ref, const MatchData& match_data, const Store& src_store, Store& dst_store)
 		{
 			switch (pn_ref.type) {
-			default:
-				assert(pn_ref.type.is<Fn>());
-				[[fallthrough]];
-			case Type(Variadic::sum): 
-				[[fallthrough]];
-			case Type(Variadic::product): {
-				const std::uint32_t size = pn_ref->index_vec.size();
-				const std::uint32_t capacity = pn_ref->index_vec.capacity();
-				const std::uint32_t node_count = IndexVector::node_count(capacity);
-
-				assert(pn_ref.store != &src_store);
-				const std::uint32_t dst_index = dst_store.allocate_n(node_count);
-				dst_store.at(dst_index) = IndexVector(size, capacity);
-				auto dst_iter = begin(MutRef(dst_store, dst_index).cast<IndexVector>());
-
-				for (const TypedIdx pn_elem : variadic::save_range(pn_ref)) {
-					const TypedIdx dst_elem = match::copy(pn_ref.new_at(pn_elem), match_data, src_store, dst_store);
-					*dst_iter = dst_elem;
-					++dst_iter;
+			default: {
+				assert(fn::is_function(pn_ref.type));
+				StupidBufferVector<TypedIdx, 12> dst_parameters;
+				for (const TypedIdx pn_param : fn::save_range(pn_ref)) {
+					const TypedIdx dst_param = match::copy(pn_ref.new_at(pn_param), match_data, src_store, dst_store);
+					dst_parameters.push_back(dst_param);
 				}
-				return TypedIdx(dst_index, pn_ref.type);
-			} break;			
+				if (pn_ref.type == NamedFn{}) {
+					const CharVector& name_ref = fn::named_fn_name(pn_ref);
+					std::string name = std::string(name_ref.begin(), name_ref.end());
+					return fn::build_named_fn(dst_store, std::move(name), dst_parameters);
+				}
+				else {
+					return TypedIdx(IndexVector::build(dst_store, dst_parameters), pn_ref.type);
+				}
+			} break;
 			case Type(Leaf::variable): {
 				const CharVector& src_var = *pn_ref;
 				const auto src_name = std::string(src_var.data(), src_var.size());
 				const std::size_t dst_index = CharVector::build(dst_store, src_name);
 				return TypedIdx(dst_index, pn_ref.type);
 			} break;
-			case Type(Leaf::complex): 
-				return TypedIdx(dst_store.insert(pn_ref->complex), pn_ref.type);
+			case Type(Leaf::complex): {
+				const std::size_t dst_index = dst_store.allocate();
+				dst_store.at(dst_index) = *pn_ref; //bitwise copy
+				return TypedIdx(dst_index, pn_ref.type);
+			} break;
 			case Type(PnNode::tree_match): {
 				const SharedTreeDatum& info = match_data.info(pn_ref->tree_match);
 				return tree::copy(Ref(src_store, info.match_idx), dst_store); //call to different copy!
@@ -1557,14 +1559,16 @@ namespace bmath::intern {
 			} break;
 			case Type(PnNode::value_proxy): {
 				const Complex& val = match_data.value_match_data[pn_ref.index].value;
-				return TypedIdx(dst_store.insert(val), Type(Leaf::complex));
+				const std::size_t dst_index = dst_store.allocate();
+				dst_store.at(dst_index) = val;
+				return TypedIdx(dst_index, Type(Leaf::complex));
 			} break;
 			case Type(MultiPn::summands):
 				[[fallthrough]];
 			case Type(MultiPn::factors): {
 				const SharedMultiDatum& info = match_data.multi_info(pn_ref.index);
 				const std::uint32_t capacity = IndexVector::smallest_fit_capacity(info.match_indices.size());
-				const std::uint32_t nodes_count = IndexVector::node_count(capacity);
+				const std::uint32_t nodes_count = IndexVector::_node_count(capacity);
 
 				const std::uint32_t res_idx = dst_store.allocate_n(nodes_count);
 				dst_store.at(res_idx) = IndexVector(info.match_indices.size(), capacity);
@@ -1585,7 +1589,7 @@ namespace bmath::intern {
 
 		std::optional<TypedIdx> match_and_replace(const Ref from, const Ref to, const MutRef ref)
 		{		
-			if ((from.type == Variadic::sum || from.type == Variadic::product) && (from.type == ref.type)) {
+			if (from.type.is<Variadic>() && fn::is_unordered(from.type) && (from.type == ref.type)) {
 				MatchData match_data;
 				if (match::find_matching_permutation(from, ref, match_data, 0u, 0u) != FindPermutationRes::failed) {
 					Store copy_buffer;
@@ -1612,7 +1616,7 @@ namespace bmath::intern {
 			}
 			else {
 				MatchData match_data;
-				if (match::equals(from, ref, match_data)) {
+				if (match::permutation_equals(from, ref, match_data)) {
 					Store copy_buffer;
 					copy_buffer.reserve(32u);
 					const TypedIdx buffer_head = match::copy(to, match_data, *ref.store, copy_buffer);
@@ -1626,14 +1630,9 @@ namespace bmath::intern {
 
 		std::pair<std::optional<TypedIdx>, bool> recursive_match_and_replace(const Ref in, const Ref out, const MutRef ref)
 		{
-			switch (ref.type) {
-			default:
-				assert(ref.type.is<Fn>());
-				[[fallthrough]];
-			case Type(Variadic::sum): 
-				[[fallthrough]];
-			case Type(Variadic::product): {
-				auto range = variadic::range(ref);
+			assert(ref.type.is<MathType>());
+			if (fn::is_function(ref.type)) {
+				auto range = fn::range(ref);
 				auto iter = begin(range);
 				const auto stop = end(range);
 				for (; iter != stop; ++iter) {
@@ -1646,11 +1645,6 @@ namespace bmath::intern {
 						return std::make_pair(std::nullopt, true);
 					}
 				}
-			} break;			
-			case Type(Leaf::variable): 
-				break;
-			case Type(Leaf::complex): 
-				break;
 			}
 			return std::make_pair(match_and_replace(in, out, ref), false);
 		} //recursive_match_and_replace
@@ -1664,39 +1658,18 @@ namespace bmath::intern {
 		{
 			constexpr bool return_early_possible = ReturnEarlyPossible<Res_T>::value;
 
-			switch (ref.type) {
-			default:
-				assert(ref.type.is<Fn>());
-				[[fallthrough]];
-			case Type_T(Variadic::sum): 
-				[[fallthrough]];
-			case Type_T(Variadic::product): {
-				for (const auto elem : variadic::range(ref)) {
+			if (fn::is_function(ref.type)) {
+				for (const auto elem : fn::range(ref)) {
 					const Res_T elem_res = fold::simple_fold<Res_T>(ref.new_at(elem), apply);
 					if constexpr (return_early_possible) { if (elem_res.return_early()) { return elem_res; } }
 				}
-			} break;			
-			case Type_T(Leaf::variable): 
-				break;
-			case Type_T(Leaf::complex): 
-				break;
-			case Type_T(PnNode::tree_match): 
-				break;
-			case Type_T(PnNode::value_match): {
+			}
+			else if (ref.type == PnNode::value_match) {
 				const pattern::ValueMatchVariable var = *ref;
 				const Res_T elem_res_1 = fold::simple_fold<Res_T>(ref.new_at(var.mtch_idx), apply);
 				if constexpr (return_early_possible) { if (elem_res_1.return_early()) { return elem_res_1; } }
 				const Res_T elem_res_2 = fold::simple_fold<Res_T>(ref.new_at(var.copy_idx), apply);
 				if constexpr (return_early_possible) { if (elem_res_2.return_early()) { return elem_res_2; } }
-			} break;
-			case Type_T(PnNode::value_proxy):
-				break;
-			case Type_T(MultiPn::summands):
-				break;
-			case Type_T(MultiPn::factors):
-				break;
-			case Type_T(MultiPn::params):
-				break;
 			}
 			return apply(ref); 
 		} //simple_fold
@@ -1704,39 +1677,21 @@ namespace bmath::intern {
 		template<typename Res_T, typename OpAccumulator, typename Union_T, typename Type_T, Const is_const, typename LeafApply, typename... AccInit>
 		Res_T tree_fold(const BasicRef<Union_T, Type_T, is_const> ref, LeafApply leaf_apply, const AccInit... init)
 		{
-			switch (ref.type) {
-			default:
-				assert(ref.type.is<Fn>());
-				[[fallthrough]];
-			case Type_T(Variadic::sum): 
-				[[fallthrough]];
-			case Type_T(Variadic::product): {
+			if (fn::is_function(ref.type)) {
 				OpAccumulator acc(ref, init...);
-				for (const auto elem : variadic::range(ref)) {
+				for (const auto elem : fn::range(ref)) {
 					acc.consume(fold::tree_fold<Res_T, OpAccumulator>(ref.new_at(elem), leaf_apply, init...));
 				}
 				return acc.result();
-			} 			
-			case Type_T(PnNode::value_match): {
+			}
+			else if (ref.type == PnNode::value_match) {
 				OpAccumulator acc(ref, init...);
 				const pattern::ValueMatchVariable var = *ref;
 				acc.consume(fold::tree_fold<Res_T, OpAccumulator>(ref.new_at(var.mtch_idx), leaf_apply, init...));
 				acc.consume(fold::tree_fold<Res_T, OpAccumulator>(ref.new_at(var.copy_idx), leaf_apply, init...));
 				return acc.result();
 			}
-			case Type_T(Leaf::variable): 
-				[[fallthrough]];
-			case Type_T(Leaf::complex):
-				[[fallthrough]];
-			case Type_T(PnNode::tree_match): 
-				[[fallthrough]];
-			case Type_T(PnNode::value_proxy):
-				[[fallthrough]];
-			case Type_T(MultiPn::summands):
-				[[fallthrough]];
-			case Type_T(MultiPn::factors):
-				[[fallthrough]];
-			case Type_T(MultiPn::params):
+			else {
 				return leaf_apply(ref);
 			}
 		} //tree_fold

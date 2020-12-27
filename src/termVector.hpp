@@ -38,8 +38,7 @@ namespace bmath::intern {
 
 	private:
 		//note: subsequent_data_part is never read directly, only as an offset of StoredVector::data pointing in there.
-		//this union mainly serves illustration purposes, but may also help a bit with debugging
-		// (as subsequent_data_part allows a direct view in these elements)
+		//this union mainly serves illustration purposes
 		union
 		{
 			Info info; //active in first StoredVector object of array
@@ -49,11 +48,8 @@ namespace bmath::intern {
 		Value_T data_[min_capacity];
 
 	public:
-		constexpr StoredVector(const std::uint16_t new_size, const std::uint16_t new_capacity) noexcept 
-			:info{ .size = new_size, .capacity = new_capacity }
-		{}
-
 		constexpr std::size_t capacity() const noexcept { return this->info.capacity; }
+		constexpr std::size_t node_count() const noexcept { return _node_count(this->info.capacity); }
 		constexpr std::size_t size() const noexcept { return this->info.size; }
 		constexpr auto& size() noexcept { return this->info.size; }
 
@@ -67,7 +63,11 @@ namespace bmath::intern {
 			std::copy(init.begin(), init.end(), this->data_);
 		}
 
-		static constexpr std::size_t node_count(const std::size_t capacity_) noexcept 
+		constexpr StoredVector(const std::uint16_t new_size, const std::uint16_t new_capacity) noexcept 
+			:info{ .size = new_size, .capacity = new_capacity }
+		{}
+
+		static constexpr std::size_t _node_count(const std::size_t capacity_) noexcept 
 		{	
 			assert((capacity_ + values_per_node - min_capacity) % values_per_node == 0u);
 			return (capacity_ + values_per_node - min_capacity) / values_per_node;
@@ -94,7 +94,7 @@ namespace bmath::intern {
 		static constexpr [[nodiscard]] std::size_t build(Store_T& store, const Init_T& init) noexcept
 		{
 			const std::size_t alloc_capacity = smallest_fit_capacity(init.size());
-			const std::size_t alloc_idx = store.allocate_n(node_count(alloc_capacity));
+			const std::size_t alloc_idx = store.allocate_n(_node_count(alloc_capacity));
 			emplace(store.at(alloc_idx), init, alloc_capacity);
 			return alloc_idx;
 		}
@@ -103,7 +103,7 @@ namespace bmath::intern {
 		static constexpr void free(Store_T& store, std::size_t index)
 		{
 			const std::size_t capacity_ = static_cast<const StoredVector&>(store.at(index)).info.capacity;
-			store.free_n(index, node_count(capacity_));
+			store.free_n(index, _node_count(capacity_));
 		}
 
 		//these are to be used with caution, as vector might reallocate while in use.

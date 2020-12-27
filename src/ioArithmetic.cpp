@@ -30,10 +30,9 @@ namespace bmath::intern {
 			static constexpr Token operator_token = token::product;
 		};
 
-	} //namespace index_vec
+	} //namespace variadic
 
 	//VariadicTraits must include:
-	//unsing declaration Object_T: type to construct (e.g. Sum)
 	//<Enum type> type_name: name of operation in enum representing all types in store
 	//char operator_char: the character symbolizing the operation, e.g. '+'
 	//char inverse_operator_char: the character symbolizing the inverse operation, e.g. '-'
@@ -41,7 +40,7 @@ namespace bmath::intern {
 
 	//BuildInverse recieves an already build term (by TypedIdx) and returns the inverse (by TypedIdx)
 	//  e.g. for sum, it should turn "a" -> "a*(-1)", for product "a" -> "a^(-1)"
-	//BuildAny can buld any type of term, this function will very likely already call build_variadic.
+	//BuildAny can build any type of term from a ParseView, this function will very likely already call build_variadic.
 	template<typename VariadicTraits, typename Store_T, typename BuildInverse, typename BuildAny>
 	[[nodiscard]] TypedIdx build_variadic(Store_T& store, ParseView input, std::size_t op_idx, BuildInverse build_inverse, BuildAny build_any);
 
@@ -93,8 +92,9 @@ namespace bmath::intern {
 
 		//operator precedence (used to decide if parentheses are nessecary in out string)
 		constexpr auto infixr_table = std::to_array<std::pair<Type, int>>({
-			{ Type(Variadic::sum            ), 2 },
-			{ Type(Variadic::product        ), 4 },	
+			{ Type(NamedFn{}          ), 0 },
+			{ Type(Variadic::sum      ), 2 },
+			{ Type(Variadic::product  ), 4 },	
 			{ Type(Fn::pow            ), 5 }, //not between other function types -> assumed to be printed with '^'  
 			{ Type(Leaf::variable     ), 6 },
 			{ Type(Leaf::complex      ), 6 }, //may be printed as sum/product itself, then (maybe) has to add parentheses on its own
@@ -355,7 +355,9 @@ namespace bmath::intern {
 			input.remove_prefix(1u); //remove hat
 			const TypedIdx base = build(store, base_view);
 			const TypedIdx expo = build(store, input);
-			return TypedIdx(store.insert(IndexVector{ base, expo }), Type(Fn::pow));
+			const std::size_t result_index = store.allocate();
+			store.at(result_index) = IndexVector{ base, expo };
+			return TypedIdx(result_index, Type(Fn::pow));
 		} break;
 		case Head::Type::complex_computable: {
 			return build_value(store, compute::eval_complex(input));
@@ -412,50 +414,32 @@ namespace bmath::intern {
 	template<typename Store_T, typename BuildAny>
 	[[nodiscard]] TypedIdx build_function(Store_T& store, ParseView input, const std::size_t open_par, BuildAny build_any)
 	{
-		const auto type = fn::type_of(input.to_string_view(0u, open_par));
-		if (type == Fn::COUNT) { //build generic function
-			//const std::size_t result_index = store.allocate(); //allocate function node first -> better positioning in store
-			//NamedFn result;
-			//{//writing name in result
-			//	const auto new_name = std::string_view(input.chars, open_par);
-			//	if (new_name.size() > NamedFn::max_name_size) [[unlikely]] throw ParseFailure{ input.offset, "named_fn name exceeds max length" };
-			//	std::copy(new_name.begin(), new_name.end(), &result.name[0]);
-			//}
-			////writing parameters in result
-			//input.remove_suffix(1u);            //"pow(2,4)" -> "pow(2,4"
-			//input.remove_prefix(open_par + 1u); //"pow(2,4" ->      "2,4"
-			//StupidBufferVector<TypedIdx, 16> result_buffer;
-			//if (input.size()) { //else no parameters at all
-			//	const std::size_t comma = find_first_of_skip_pars(input.tokens, token::comma);
-			//	const auto param_view = input.steal_prefix(comma); //now input starts with comma
-			//	result_buffer.push_back(build_any(store, param_view));
-			//}
-			//while (input.size()) {
-			//	input.remove_prefix(1u); //erase comma
-			//	const std::size_t comma = find_first_of_skip_pars(input.tokens, token::comma);
-			//	const auto param_view = input.steal_prefix(comma);
-			//	result_buffer.push_back(build_any(store, param_view));
-			//}
-			//return TypedIdx(IndexVector::build(store, result_buffer), Type(Variadic::named_fn));
-			throw ParseFailure { input.offset, "function name unknown" };
+		const std::string_view name = input.to_string_view(0u, open_par);
+
+		StupidBufferVector<TypedIdx, 12> result_parameters;
+		input.remove_suffix(1u);
+		input.remove_prefix(open_par + 1u);	//only arguments are left
+		if (input.size()) [[likely]] { //else no parameters at all
+			const std::size_t comma = find_first_of_skip_pars(input.tokens, token::comma);
+			const auto param_view = input.steal_prefix(comma); //now input starts with comma
+			result_parameters.push_back(build_any(store, param_view));
 		}
-		else { //build known function
-			StupidBufferVector<TypedIdx, 8> result_buffer;
-			input.remove_suffix(1u);
-			input.remove_prefix(open_par + 1u);	//only arguments are left
-			if (input.size()) [[likely]] { //else no parameters at all
-				const std::size_t comma = find_first_of_skip_pars(input.tokens, token::comma);
-				const auto param_view = input.steal_prefix(comma); //now input starts with comma
-				result_buffer.push_back(build_any(store, param_view));
-			}
-			while (input.size()) {
-				input.remove_prefix(1u); //erase leading comma
-				const std::size_t comma = find_first_of_skip_pars(input.tokens, token::comma);
-				const auto param_view = input.steal_prefix(comma);
-				result_buffer.push_back(build_any(store, param_view));
-			}
-			if (result_buffer.size() != fn::arity(type)) [[unlikely]] throw ParseFailure{ input.offset, "wrong numer of function parameters" };
-			return TypedIdx(IndexVector::build(store, result_buffer), Type(type));
+		while (input.size()) {
+			input.remove_prefix(1u); //erase leading comma
+			const std::size_t comma = find_first_of_skip_pars(input.tokens, token::comma);
+			const auto param_view = input.steal_prefix(comma);
+			result_parameters.push_back(build_any(store, param_view));
+		}
+
+		if (const Fn type = fn::fn_type_of(name); type != Fn::COUNT) {
+			if (result_parameters.size() != fn::arity(type)) [[unlikely]] throw ParseFailure{ input.offset, "wrong numer of function parameters" };
+			return TypedIdx(IndexVector::build(store, result_parameters), Type(type));
+		}
+		else if (const Variadic type = fn::variadic_type_of(name); type != Variadic::COUNT) {
+			return TypedIdx(IndexVector::build(store, result_parameters), Type(type));
+		}
+		else { //build NamedFn
+			return fn::build_named_fn(store, name, result_parameters);
 		}
 	} //build_function
 
@@ -523,25 +507,27 @@ namespace bmath::intern {
 				return std::find_if(vec.begin(), vec.end(), [name](const auto& x) { return x.name == name; });
 			};
 
-			auto var_idx = TypedIdx();
 			if (const auto iter = search_name(this->tree_table); iter != this->tree_table.end()) {
 				const std::uint32_t match_data_idx = std::distance(this->tree_table.begin(), iter);
-				const TreeMatchVariable var = { match_data_idx, iter->restr };
-				var_idx = TypedIdx(store.insert(var), PnNode::tree_match);
-				(this->build_lhs ? iter->lhs_instances : iter->rhs_instances).push_back(var_idx);
+				const std::size_t result_index = store.allocate();
+				store.at(result_index) = TreeMatchVariable{ match_data_idx, iter->restr };
+				const TypedIdx result_typedidx = TypedIdx(result_index, PnNode::tree_match);
+				(this->build_lhs ? iter->lhs_instances : iter->rhs_instances).push_back(result_typedidx);
+				return result_typedidx;
 			}
 			else if (const auto iter = search_name(this->value_table); iter != this->value_table.end()) {
 				const std::uint32_t match_data_idx = std::distance(this->value_table.begin(), iter);
-				const ValueMatchVariable var(match_data_idx, iter->form);
-				var_idx = TypedIdx(store.insert(var), PnNode::value_match);
-				(this->build_lhs ? iter->lhs_instances : iter->rhs_instances).push_back(var_idx);
+				const std::size_t result_index = store.allocate();
+				store.at(result_index) = ValueMatchVariable{ match_data_idx, iter->form };
+				const TypedIdx result_typedidx = TypedIdx(result_index, PnNode::value_match);
+				(this->build_lhs ? iter->lhs_instances : iter->rhs_instances).push_back(result_typedidx);
+				return result_typedidx;
 			}
 			else if (const auto iter = search_name(this->multi_table); iter != this->multi_table.end()) {
 				const std::uint32_t match_data_idx = std::distance(this->multi_table.begin(), iter);
-				var_idx = TypedIdx(match_data_idx, iter->type);
+				return TypedIdx(match_data_idx, iter->type);
 			}
-			if (var_idx == TypedIdx()) [[unlikely]] throw ParseFailure{ input.offset, "match variable has not been declared" };
-			return var_idx;
+			throw ParseFailure{ input.offset, "match variable has not been declared" };
 		} //NameLookupTable::insert_instance
 
 
@@ -571,7 +557,9 @@ namespace bmath::intern {
 				input.remove_prefix(1u); //remove hat
 				const TypedIdx base = this->operator()(store, base_view);
 				const TypedIdx expo = this->operator()(store, input);
-				return TypedIdx(store.insert(IndexVector{ base, expo }), Type(Fn::pow));
+				const std::size_t result_index = store.allocate();
+				store.at(result_index) = IndexVector{ base, expo };
+				return TypedIdx(result_index, Type(Fn::pow));
 			} break;
 			case Head::Type::complex_computable: {
 				return build_value(store, compute::eval_complex(input));
@@ -623,14 +611,14 @@ namespace bmath::intern {
 			switch (ref.type) {
 			case Type(Variadic::sum): {
 				const char* seperator = "";
-				for (const auto summand : variadic::range(ref)) {
+				for (const auto summand : fn::range(ref)) {
 					str.append(std::exchange(seperator, "+"));
 					print::append_to_string(ref.new_at(summand), str, own_infixr);
 				}
 			} break;
 			case Type(Variadic::product): {
 				const char* seperator = "";
-				for (const auto factor : variadic::range(ref)) {
+				for (const auto factor : fn::range(ref)) {
 					str.append(std::exchange(seperator, "*"));
 					print::append_to_string(ref.new_at(factor), str, own_infixr);
 				}
@@ -642,12 +630,21 @@ namespace bmath::intern {
 				print::append_to_string(ref.new_at(params[1]), str, own_infixr);
 			} break;
 			default: {
-				assert(ref.type.is<Fn>());
 				str.pop_back(); //pop '('
-				str.append(fn::name_of(ref.type.to<Fn>()));
+				if (ref.type == NamedFn{}) {
+					const CharVector& name = fn::named_fn_name(ref);
+					str.append(std::string_view(name.data(), name.size()));
+				}
+				else if (ref.type.is<Fn>()) {
+					str.append(fn::name_of(ref.type.to<Fn>()));
+				}
+				else {
+					assert(ref.type.is<Variadic>());
+					str.append(fn::name_of(ref.type.to<Variadic>()));
+				}
 				str.push_back('(');
 				const char* seperator = "";
-				for (const auto param : variadic::range(ref)) {
+				for (const auto param : fn::range(ref)) {
 					str.append(std::exchange(seperator, ", "));
 					print::append_to_string(ref.new_at(param), str, own_infixr);
 				}
@@ -740,7 +737,7 @@ namespace bmath::intern {
 					StupidBufferVector<TypedIdx, 8> other_factors;
 					double negative_factor;
 					bool found_negative_factor = false;
-					for (const auto factor : variadic::range(ref)) {
+					for (const auto factor : fn::range(ref)) {
 						if (!found_negative_factor) {
 							if (const auto negative_val = get_negative_real(ref.new_at(factor))) {
 								negative_factor = *negative_val;
@@ -781,7 +778,7 @@ namespace bmath::intern {
 			switch (ref.type) {
 			case Type(Variadic::sum): {
 				bool first = true;
-				for (const auto summand : variadic::range(ref)) {
+				for (const auto summand : fn::range(ref)) {
 					if (const auto val = get_negative_real(ref.new_at(summand))) {
 						str += (first ? "" : " ");
 						append_real(*val, str);
@@ -809,7 +806,7 @@ namespace bmath::intern {
 				assert(!first && "found sum with zero summands");
 			} break;
 			case Type(Variadic::product): {
-				append_product(variadic::range(ref));
+				append_product(fn::range(ref));
 			} break;
 			case Type(Fn::pow): {
 				const IndexVector& params = *ref;
@@ -828,12 +825,21 @@ namespace bmath::intern {
 				}
 			} break;
 			default: {
-				assert(ref.type.is<Fn>());
 				need_parentheses = false;
-				str.append(fn::name_of(ref.type.to<Fn>()));
+				if (ref.type == NamedFn{}) {
+					const CharVector& name = fn::named_fn_name(ref);
+					str += std::string_view(name.data(), name.size());
+				}
+				else if (ref.type.is<Fn>()) {
+					str += fn::name_of(ref.type.to<Fn>());
+				}
+				else {
+					assert(ref.type.is<Variadic>());
+					str += fn::name_of(ref.type.to<Variadic>());
+				}
 				str.push_back('(');
 				const char* separator = "";
-				for (const auto param : variadic::range(ref)) {
+				for (const auto param : fn::range(ref)) {
 					str += std::exchange(separator, ", ");
 					str += print::to_pretty_string(ref.new_at(param), infixr(ref.type));
 				}
@@ -858,8 +864,8 @@ namespace bmath::intern {
 		void append_memory_row(const Ref ref, std::vector<std::string>& rows)
 		{
 			const auto show_typedidx_vec_nodes = [&ref, &rows](std::uint32_t idx, bool show_first) {
-				const IndexVector& vec = ref.store->at(idx).index_vec;
-				const std::size_t end = idx + IndexVector::node_count(vec.capacity());
+				const IndexVector& vec = ref.store->at(idx).parameters;
+				const std::size_t end = idx + vec.node_count();
 				if (!show_first) {
 					idx++;
 				}
@@ -870,7 +876,7 @@ namespace bmath::intern {
 			};
 			const auto show_string_nodes = [&ref, &rows](std::uint32_t idx, bool show_first) {
 				const CharVector& var = ref.store->at(idx);
-				const std::size_t end = idx + CharVector::node_count(var.capacity());
+				const std::size_t end = idx + var.node_count();
 				if (!show_first) {
 					idx++;
 				}
@@ -890,7 +896,7 @@ namespace bmath::intern {
 			case Type(Variadic::sum): {
 				current_str.append("sum        : {");
 				const char* separator = "";
-				for (const auto elem : variadic::range(ref)) {
+				for (const auto elem : fn::range(ref)) {
 					current_str.append(std::exchange(separator, ", "));
 					current_str.append(std::to_string(elem.get_index()));
 					print::append_memory_row(ref.new_at(elem), rows);
@@ -902,7 +908,7 @@ namespace bmath::intern {
 				current_str.append("product    : {");
 				const char* separator = "";
 				const IndexVector test = *ref;
-				for (const auto elem : variadic::range(ref)) {
+				for (const auto elem : fn::range(ref)) {
 					current_str.append(std::exchange(separator, ", "));
 					current_str.append(std::to_string(elem.get_index()));
 					print::append_memory_row(ref.new_at(elem), rows);
@@ -911,10 +917,10 @@ namespace bmath::intern {
 				show_typedidx_vec_nodes(ref.index, false);
 			} break;
 			default: {
-				assert(ref.type.is<Fn>());
+				assert(fn::is_function(ref.type));
 				current_str.append("function   : {");
 				const char* separator = "";
-				for (const auto param : variadic::range(ref)) {
+				for (const auto param : fn::range(ref)) {
 					current_str.append(std::exchange(separator, ", "));
 					current_str.append(std::to_string(param.get_index()));
 					print::append_memory_row(ref.new_at(param), rows);
@@ -1023,22 +1029,20 @@ namespace bmath::intern {
 			}
 
 			switch (ref.type) {
-			case Type(Variadic::sum): {
-				current_str += "sum";
-				for (const TypedIdx summand : variadic::range(ref)) {
-					print::append_tree_row(ref.new_at(summand), rows, offset + tab_width);
-				}
-			} break;
-			case Type(Variadic::product): {
-				current_str += "product";
-				for (const TypedIdx factor : variadic::range(ref)) {
-					print::append_tree_row(ref.new_at(factor), rows, offset + tab_width);
-				}
-			} break;
 			default: {
-				assert(ref.type.is<Fn>());
+				if (ref.type == NamedFn{}) {
+					const CharVector& name = fn::named_fn_name(ref);
+					current_str += std::string_view(name.data(), name.size());
+				}
+				else if (ref.type.is<Fn>()) {
+					current_str += fn::name_of(ref.type.to<Fn>());
+				}
+				else {
+					assert(ref.type.is<Variadic>());
+					current_str += fn::name_of(ref.type.to<Variadic>());
+				}
 				current_str += fn::name_of(ref.type.to<Fn>());
-				for (const TypedIdx param : variadic::range(ref)) {
+				for (const TypedIdx param : fn::range(ref)) {
 					print::append_tree_row(ref.new_at(param), rows, offset + tab_width);
 				}
 			} break;

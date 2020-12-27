@@ -217,13 +217,6 @@ namespace bmath::intern {
 			return result_index;
 		} //allocate()
 
-		[[nodiscard]] std::size_t insert(const Payload_T& new_elem) noexcept
-		{
-			const std::size_t result_index = this->allocate();
-			new (&this->at(result_index)) Payload_T(new_elem);
-			return result_index;
-		}
-
 		constexpr void free(const std::size_t idx) noexcept
 		{
 			assert(this->valid_idx(idx));

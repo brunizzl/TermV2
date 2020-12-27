@@ -24,17 +24,23 @@ namespace bmath::intern {
 	{
 		sum,
 		product,
-		named_fn, //all functions known at compile time will not store their name as part of the program. this does.
 		COUNT
 	};
 
+	//all functions known at compile time will not store their name with every instance in the store. this does.
+	//the memory is sectioned in two parts: 
+	//the index points at the IndexVector containing the parameters.
+	//the function name follwos as CharVector in direct succession
+	//(by starting with the parameters, most functions need no extra case for NamedFn)
+	UNIT_ENUM(NamedFn);
+	//using NamedFn = UnitEnum<"NamedFn">;
+
 	//these are lumped together, because they behave the same in most cases -> can be seperated easily from rest
-	//behavior for every specific element in Fn is (at least) defined at these places:
-	//  1. function fn::eval specifies how (and if at all) to evaluate
-	//  2. array fn::props_table specifies name and arity (required to not be variadic)
+	//behavior for every specific element in Fn is (at least) defined at array fn::fn_props_table specifying name and arity
+	// if the element in Fn is of order one (no functions as arguments / results), 
+	//  function fn::eval specifies how to evaluate
 	enum class Fn //short for Function
 	{
-		diff,   //params[0] := function  params[1] := variable the derivation is done in respect to
 		pow,    //params[0] := base      params[1] := expo    
 		log,	//params[0] := base      params[1] := argument
 		sqrt,	//params[0] := argument
@@ -57,10 +63,11 @@ namespace bmath::intern {
 		re,		//params[0] := argument
 		im,		//params[0] := argument
 		force,  //params[0] := argument   forces evaluation even if it is unexact
+		diff,   //params[0] := function  params[1] := variable the derivation is done in respect to
 		COUNT
 	};
 
-	using MathType = SumEnum<Leaf, Fn, Variadic>;
+	using MathType = SumEnum<Leaf, Fn, NamedFn, Variadic>;
 
 
 
@@ -108,7 +115,7 @@ namespace bmath::intern {
 
 		//note: of Type, only sum, product, complex or variable may be used, as there is (currently)
 		//  no need to differentiate between any of the functions of Fn and unknown_function.
-		using Restriction = SumEnum<Restr, MathType>; 
+		using Restriction = SumEnum<MathType, Restr>; 
 
 		//in a valid pattern, all TreeMatchVariables of same name share the same restr and the same match_data_idx.
 		//it is allowed to have multiple instances of the same TreeMatchVariable per side.
@@ -127,7 +134,7 @@ namespace bmath::intern {
 		//but it can match multiple summands / factors in same sum / product, not only a single one.
 		//This behavor can kinda be simulated by TreeMatchVariable, if all matched elements of MultiMatchVariable are packaged 
 		//  together in an extra sum / product.
-		//as match::equals takes a Ref, not a MutRef however, this approach can not be realized here (and is stupid anyway)
+		//as match::permutation_equals takes a Ref, not a MutRef however, this approach can not be realized here (and is stupid anyway)
 		//struct MultiMatchVariable {}; //<- just to help your imagination out a bit.
 		//Note: there may be only a single instance of a given MultiMatchVariable with given name per pattern per side.
 
@@ -180,13 +187,13 @@ namespace bmath::intern {
 	union TypesUnion
 	{
 		Complex complex;
-		IndexVector index_vec; //Sum and Product 
+		IndexVector parameters; //all in Variadic and all in Fn
 		CharVector char_vec;
 		pattern::TreeMatchVariable tree_match;    //only expected as part of pattern
 		pattern::ValueMatchVariable value_match;  //only expected as part of pattern
 
 		constexpr TypesUnion(const Complex                    & val) noexcept :complex(val)     {}
-		constexpr TypesUnion(const IndexVector                & val) noexcept :index_vec(val)   {}
+		constexpr TypesUnion(const IndexVector                & val) noexcept :parameters(val)   {}
 		constexpr TypesUnion(const CharVector                 & val) noexcept :char_vec(val)    {} 
 		constexpr TypesUnion(const pattern::TreeMatchVariable & val) noexcept :tree_match(val)  {} 
 		constexpr TypesUnion(const pattern::ValueMatchVariable& val) noexcept :value_match(val) {} 
@@ -195,13 +202,13 @@ namespace bmath::intern {
 		constexpr auto operator<=>(const TypesUnion&) const = default;
 
 		constexpr operator const Complex                     &() const noexcept { return this->complex; }
-		constexpr operator const IndexVector                 &() const noexcept { return this->index_vec; }
+		constexpr operator const IndexVector                 &() const noexcept { return this->parameters; }
 		constexpr operator const CharVector                  &() const noexcept { return this->char_vec; }
 		constexpr operator const pattern::TreeMatchVariable  &() const noexcept { return this->tree_match; }
 		constexpr operator const pattern::ValueMatchVariable &() const noexcept { return this->value_match; }
 
 		constexpr operator Complex                     &() noexcept { return this->complex; }
-		constexpr operator IndexVector                 &() noexcept { return this->index_vec; }
+		constexpr operator IndexVector                 &() noexcept { return this->parameters; }
 		constexpr operator CharVector                  &() noexcept { return this->char_vec; }
 		constexpr operator pattern::TreeMatchVariable  &() noexcept { return this->tree_match; }
 		constexpr operator pattern::ValueMatchVariable &() noexcept { return this->value_match; }
@@ -215,8 +222,11 @@ namespace bmath::intern {
 	using Ref = BasicRef<TypesUnion, Type>;
 
 
-	//utility for types in Fn 
+	//utility for NamedFn, types in Fn and types in Variadic
 	namespace fn {
+
+		constexpr bool is_function(const Type type) noexcept
+		{ return type.is<Fn>() || type.is<NamedFn>() || type.is<Variadic>(); }
 
 		struct FnProps //short for Function Properties
 		{
@@ -226,8 +236,7 @@ namespace bmath::intern {
 		};
 
 		//every item enumerated in Fn (except COUNT) may be listed here in order of apperance in Fn
-		constexpr auto props_table = std::to_array<FnProps>({
-			{ Fn::diff , "diff" , 2u },   
+		constexpr auto fn_props_table = std::to_array<FnProps>({
 			{ Fn::pow  , "pow"  , 2u },   
 			{ Fn::log  , "log"  , 2u }, 
 			{ Fn::sqrt , "sqrt" , 1u },	
@@ -249,32 +258,99 @@ namespace bmath::intern {
 			{ Fn::arg  , "arg"  , 1u },	
 			{ Fn::re   , "re"   , 1u },	
 			{ Fn::im   , "im"   , 1u },		
-			{ Fn::force, "force", 1u },	
+			{ Fn::force, "force", 1u },
+			{ Fn::diff , "diff" , 2u },   	
 		});
-		static_assert(static_cast<unsigned>(props_table.front().type) == 0u);
-		static_assert(std::is_sorted(props_table.begin(), props_table.end(), [](auto lhs, auto rhs) { return lhs.type < rhs.type; }));
-		static_assert(props_table.size() == static_cast<unsigned>(Fn::COUNT));
+		static_assert(static_cast<unsigned>(fn_props_table.front().type) == 0u);
+		static_assert(std::is_sorted(fn_props_table.begin(), fn_props_table.end(), 
+			[](auto lhs, auto rhs) { return lhs.type < rhs.type; }));
+		static_assert(fn_props_table.size() == static_cast<unsigned>(Fn::COUNT));
 
-		constexpr std::string_view name_of(const Fn type) noexcept { return props_table[static_cast<unsigned>(type)].name; }
+		constexpr std::string_view name_of(const Fn type) noexcept 
+		{ return fn_props_table[static_cast<unsigned>(type)].name; }
 
-		//returns Fn::COUNT if name is not in props_table
-		constexpr Fn type_of(const std::string_view name) noexcept { return search(props_table, &FnProps::name, name).type; }
+		//returns Fn::COUNT if name is not in fn_props_table
+		constexpr Fn fn_type_of(const std::string_view name) noexcept 
+		{ return search(fn_props_table, &FnProps::name, name).type; }
 
-		constexpr std::size_t arity(const Fn type) noexcept { return props_table[static_cast<unsigned>(type)].arity; }
+		constexpr std::size_t arity(const Fn type) noexcept 
+		{ return fn_props_table[static_cast<unsigned>(type)].arity; }
 
-		constexpr std::size_t arity(const Type type) noexcept { return props_table[static_cast<unsigned>(type.to<Fn>())].arity; }
+		constexpr std::size_t arity(const Type type) noexcept 
+		{ return fn_props_table[static_cast<unsigned>(type.to<Fn>())].arity; }
+
+
+		struct VariadicProps
+		{
+			Variadic type = Variadic::COUNT;
+			std::string_view name = "";
+			bool unordered = false; //matching algorithm will try to also match permutations if true
+		};
+
+		//every item enumerated in Variadic (except COUNT) may be listed here in order of apperance in Variadic
+		constexpr auto variadic_props_table = std::to_array<VariadicProps>({
+			{ Variadic::sum    , "sum"    , true },
+			{ Variadic::product, "product", true },
+		});
+		static_assert(static_cast<unsigned>(variadic_props_table.front().type) == 0u);
+		static_assert(std::is_sorted(variadic_props_table.begin(), variadic_props_table.end(), 
+			[](auto lhs, auto rhs) { return lhs.type < rhs.type; }));
+		static_assert(variadic_props_table.size() == static_cast<unsigned>(Variadic::COUNT));
+
+		constexpr std::string_view name_of(const Variadic type) noexcept 
+		{ return variadic_props_table[static_cast<unsigned>(type)].name; }
+
+		//returns Variadic::COUNT if name is not in variadic_props_table
+		constexpr Variadic variadic_type_of(const std::string_view name) noexcept 
+		{ return search(variadic_props_table, &VariadicProps::name, name).type; }
+
+		constexpr bool is_unordered(const Variadic type) noexcept 
+		{ return variadic_props_table[static_cast<unsigned>(type)].unordered; }
+
+		constexpr bool is_unordered(const Type type) noexcept 
+		{ return variadic_props_table[static_cast<unsigned>(type.to<Variadic>())].unordered; }
+
+
+
+		constexpr auto         range(const MutRef ref) noexcept { return ref.cast<IndexVector>(); }
+		constexpr auto& unsave_range(const MutRef ref) noexcept { return ref->parameters; }
+		constexpr auto&        range(const    Ref ref) noexcept { return ref->parameters; }
+		constexpr auto    save_range(const    Ref ref) noexcept { return ref.cast<IndexVector>(); }
+
+
+
+		constexpr std::uint32_t named_fn_name_index(const Ref named_fn) noexcept
+		{
+			const IndexVector& parameters = *named_fn;
+			return named_fn.index + parameters.node_count();
+		}
+
+		constexpr const CharVector& named_fn_name(const Ref named_fn) noexcept
+		{
+			return static_cast<const CharVector&>(named_fn.store->at(named_fn_name_index(named_fn)));
+		}
+
+		constexpr CharVector& named_fn_name(const MutRef named_fn) noexcept
+		{
+			return static_cast<CharVector&>(named_fn.store->at(named_fn_name_index(named_fn)));
+		}
+
+		template<typename Store_T, typename Name_T, typename Parameters_T>
+		inline TypedIdx build_named_fn(Store_T& store, const Name_T name, const Parameters_T& params)
+		{
+			const std::size_t parameter_capacity = IndexVector::smallest_fit_capacity(params.size());
+			const std::size_t nr_parameter_nodes = IndexVector::_node_count(parameter_capacity);
+
+			const std::size_t name_capacity = CharVector::smallest_fit_capacity(name.size());
+			const std::size_t nr_name_nodes = CharVector::_node_count(name_capacity);
+
+			const std::size_t result_index = store.allocate_n(nr_parameter_nodes + nr_name_nodes);
+			IndexVector::emplace(store.at(result_index), params, parameter_capacity);
+			CharVector::emplace(store.at(result_index + nr_parameter_nodes), name, name_capacity);
+			return TypedIdx(result_index, Type(NamedFn{}));
+		}
 
 	} //namespace fn
-
-	//utility for index_vec types (Sum and Product)
-	namespace variadic {
-
-		inline auto         range(const MutRef ref) noexcept { return ref.cast<IndexVector>(); }
-		inline auto& unsave_range(const MutRef ref) noexcept { return ref->index_vec; }
-		inline auto&        range(const    Ref ref) noexcept { return ref->index_vec; }
-		inline auto    save_range(const    Ref ref) noexcept { return ref.cast<IndexVector>(); }
-
-	} //namespace index_vec
 
 	//general purpose recursive tree traversal
 	namespace tree {
@@ -288,10 +364,10 @@ namespace bmath::intern {
 		//returns new location and type of ref
 		[[nodiscard]] TypedIdx combine(const MutRef ref, const bool exact);
 
-		//compares two subterms of perhaps different stores, assumes both to have their index_vec parts sorted
+		//compares two subterms of perhaps different stores, assumes both to have their parameters parts sorted
 		[[nodiscard]] std::strong_ordering compare(const Ref ref_1, const Ref ref_2);
 
-		//sorts index_vec parts by compare
+		//sorts parameters parts by compare
 		void sort(const MutRef ref);
 
 		//counts number of logical nodes of subtree (note: logical nodes might be fewer than used slots in store)
@@ -451,7 +527,7 @@ namespace bmath::intern {
 			//compares term starting at ref.index in ref.store with pattern starting at pn_ref.index in pn_ref.store
 			//if match is succsessfull, match_data stores what pattern's match variables matched and true is returned.
 			//if match was not succsessfull, match_data is NOT reset and false is returned
-			bool equals(const Ref pn_ref, const Ref ref, MatchData& match_data);
+			bool permutation_equals(const Ref pn_ref, const Ref ref, MatchData& match_data);
 
 			//resets not all matched variables appearing in pn_ref, but only the ones also set by pn_ref
 			//example: in whole pattern "a+a*b" "a" may be matched as single summand, 
@@ -460,21 +536,21 @@ namespace bmath::intern {
 
 			//if not all summands / factors in pattern could be matched, failed is returned.
 			//if not all summands / factors in the haystack are matched, matched_some is returned
-			//(relevant if the current index_vec is the outhermost, as then only a partial match may be successfull)
+			//(relevant if the current parameters is the outhermost, as then only a partial match may be successfull)
 			enum class FindPermutationRes { matched_all, failed, matched_some };
 
 			//determines weather there is a way to match pn_ref in haystack_ref (thus pn_ref is assumed to part of a pattern)
 			//pn_i is the index of the first element in pn_ref to be matched. 
 			//if pn_i is not zero, it is assumed, that all previous elements in pn_ref are already matched.
 			//the first haystack_k elements of haystack_ref will be skipped for the first match attemt.
-			//it is assumed, that pn_ref and haystack_ref are both the same index_vec type (eighter both sum or both product)
+			//it is assumed, that pn_ref and haystack_ref are both the same parameters type (eighter both sum or both product)
 			FindPermutationRes find_matching_permutation(const Ref pn_ref, const Ref haystack_ref, 
 				MatchData& match_data,	std::uint32_t pn_i, std::uint32_t haystack_k);
 
 			//expects pn_ref to already be matched to ref via match_data
 			//if one exists, this function finds a different match of pn_ref in ref, appearing after the current one
 			//  in all permutations
-			bool succeeding_permutation_equals(const Ref pn_ref, const Ref ref, MatchData& match_data);
+			bool subsequent_permutation_equals(const Ref pn_ref, const Ref ref, MatchData& match_data);
 
 			//copies pn_ref with match_data into store, returns head of copied result.
 			[[nodiscard]] TypedIdx copy(const Ref pn_ref, const MatchData& match_data, 

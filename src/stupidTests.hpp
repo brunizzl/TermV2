@@ -42,6 +42,7 @@ namespace bmath::intern::debug {
 			<< "Type(Fn::re)                   = " << unsigned(Type(Fn::re))                   << "\n"
 			<< "Type(Fn::im)                   = " << unsigned(Type(Fn::im))                   << "\n"
 			<< "Type(Fn::force)                = " << unsigned(Type(Fn::force))                << "\n"
+			<< "Type(Fn::diff)                 = " << unsigned(Type(Fn::diff))                 << "\n"
 			                                                                                   << "\n"
 			<< "Type(Leaf::variable)           = " << unsigned(Type(Leaf::variable))           << "\n"
 			<< "Type(Leaf::complex)            = " << unsigned(Type(Leaf::complex))            << "\n"
@@ -79,7 +80,7 @@ namespace bmath::intern::debug {
 			{ "a :no_val, bs :factors, cs :factors | a bs + a cs = a (bs + cs)" },
 			{ "a :no_val, bs :factors              | a bs + a    = a (bs + 1)" }, 
 			{ "a :no_val                           | a    + a    = 2 a" }, 
-			{ "a :value, b, cs :factors            | a (b + cs)  = a b + a cs" }, 
+			{ "a :value, b, cs :summands           | a (b + cs)  = a b + a cs" }, 
 			
 			{ "a, as :summands |  -(a + as) =  -a - as" },
 			{ "a, as :factors  | 1/(a as)   = 1/a 1/as" },
@@ -354,7 +355,7 @@ namespace bmath::intern::test {
 		auto t = Term(t_name);
 		t.establish_order();
 		auto m = pattern::match::MatchData{};
-		std::cout << "match lhs of \"" << p.to_string() << "\" with \"" << t.to_string() << ": " << pattern::match::equals(p.lhs_ref(), t.ref(), m) << "\n";
+		std::cout << "match lhs of \"" << p.to_string() << "\" with \"" << t.to_string() << ": " << pattern::match::permutation_equals(p.lhs_ref(), t.ref(), m) << "\n";
 	}
 
 	void combine()

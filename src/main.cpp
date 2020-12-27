@@ -20,11 +20,12 @@ important:
 
 nice to have:
  - introduce "intrinsic" type and use index in intrinsic typed_idx to specify witch (have all stored at central function pointer array)
- - add a pattern variable type catching functions with other pattern variables beeing parameters of these functions (perhaps two types, one index_vec?)
+ - add a pattern variable type catching functions with other pattern variables beeing parameters of these functions (perhaps two types, one parameters?)
  - const term_slc iterator dereferences to Ref, not typed_idx
  - match::permutation_equals: abort earlier (use fact that both terms are (assumed to be) sorted, not only pattern)
  - avoid copying pattern::MultiPn entries (needs to know original storage location of each entry, to steal it from there)x where child reference is to be held)
  - seperate utility in different files, create utility folder
+ - noexceptify everything
 
 idea status:
  - ctor of PnTerm: regroup sums / products if nessecairy to allow value match variables to better catch values
