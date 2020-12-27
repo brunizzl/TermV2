@@ -204,7 +204,7 @@ namespace bmath::intern {
 				CharVector::free(*ref.store, fn::named_fn_name_index(ref));
 				[[fallthrough]];
 			default: 
-				assert(ref.type.is<Fn>() || ref.type.is<Variadic>());
+				assert(fn::is_function(ref.type));
 				for (const TypedIdx elem : fn::range(ref)) {
 					tree::free(ref.new_at(elem));
 				}
@@ -243,7 +243,7 @@ namespace bmath::intern {
 					std::feclearexcept(FE_ALL_EXCEPT);
 				}
 				const OptComplex result = operate();
-				return (!exact || std::fetestexcept(FE_ALL_EXCEPT)) ? OptComplex() : result;
+				return (!exact || !std::fetestexcept(FE_ALL_EXCEPT)) ? result : OptComplex();
 			};
 
 			switch (ref.type) {
@@ -1292,7 +1292,10 @@ namespace bmath::intern {
 									return false;
 								}
 							}
-							return true;
+							if (iter == stop) {
+								return pn_iter == pn_stop || pn_iter->get_type() == MultiPn::params;
+							}
+							return false;
 						}
 					} break;
 					case Type(Leaf::variable): {
@@ -1526,8 +1529,16 @@ namespace bmath::intern {
 				assert(fn::is_function(pn_ref.type));
 				StupidBufferVector<TypedIdx, 12> dst_parameters;
 				for (const TypedIdx pn_param : fn::save_range(pn_ref)) {
-					const TypedIdx dst_param = match::copy(pn_ref.new_at(pn_param), match_data, src_store, dst_store);
-					dst_parameters.push_back(dst_param);
+					if (pn_param.get_type() == MultiPn::params) { //summands and factors need stay their type (summands always to sum...)
+						for (const TypedIdx matched_param : match_data.multi_info(pn_param.get_index()).match_indices) {
+							const TypedIdx dst_param = tree::copy(Ref(src_store, matched_param), dst_store); //call normal copy!
+							dst_parameters.push_back(dst_param);
+						}
+					}
+					else {
+						const TypedIdx dst_param = match::copy(pn_ref.new_at(pn_param), match_data, src_store, dst_store);
+						dst_parameters.push_back(dst_param);
+					}
 				}
 				if (pn_ref.type == NamedFn{}) {
 					const CharVector& name_ref = fn::named_fn_name(pn_ref);
@@ -1551,6 +1562,7 @@ namespace bmath::intern {
 			} break;
 			case Type(PnNode::tree_match): {
 				const SharedTreeDatum& info = match_data.info(pn_ref->tree_match);
+				assert(info.is_set());
 				return tree::copy(Ref(src_store, info.match_idx), dst_store); //call to different copy!
 			} break;
 			case Type(PnNode::value_match): {

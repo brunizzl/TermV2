@@ -230,6 +230,9 @@ namespace bmath::intern {
 			if (n == 1u) { //quite a lot faster for that case
 				return this->allocate(); 
 			}
+			if (n <= 16u) {
+				const auto build_check_bits = []() {};
+			}
 			if (n <= 64u) { //allows mask to be single std::uint64_t
 				const std::size_t n_ceil = std::bit_ceil(n);
 				const std::uint64_t mask = -1ull >> (64u - n);
@@ -246,7 +249,7 @@ namespace bmath::intern {
 						}
 					}
 				}
-				for (std::size_t offset = 0u; offset < this->size_ % 64u; offset += n_ceil) { //test used part of last bitset
+				for (std::size_t offset = 0u; offset + n_ceil < this->size_ % 64u; offset += n_ceil) { //test used part of last bitset
 					BitSet64& bitset = this->occupancy_data()[bitset_index];
 					if (!(bitset & (mask << offset))) {
 						bitset |= (mask << offset);
@@ -260,7 +263,7 @@ namespace bmath::intern {
 
 		constexpr void free_n(const std::size_t start, const std::size_t n) noexcept
 		{
-			assert(start % std::min(std::bit_ceil(n), 64ull) == 0u); //check if start is alligned
+			assert(start % std::min(std::bit_ceil(n), 64ull) == 0u || n <= 16u); //check if start is alligned
 
 			std::size_t bit_index = start;
 			for (; bit_index + 64u < start + n; bit_index += 64u) { //reset completely set bitsets 

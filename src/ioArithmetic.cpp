@@ -834,7 +834,7 @@ namespace bmath::intern {
 					str += fn::name_of(ref.type.to<Fn>());
 				}
 				else {
-					assert(ref.type.is<Variadic>());
+					ASSERT(ref.type.is<Variadic>());
 					str += fn::name_of(ref.type.to<Variadic>());
 				}
 				str.push_back('(');
@@ -850,6 +850,46 @@ namespace bmath::intern {
 			} break;
 			case Type(Leaf::complex): {
 				append_complex(ref->complex, str, parent_infixr);
+			} break;
+			case Type(PnNode::tree_match): {
+				const pattern::TreeMatchVariable& var = *ref;
+				str.append("{T");
+				str.append(std::to_string(var.match_data_idx));
+				if (var.restr != pattern::Restr::any) {
+					str.push_back(':');
+					str.append(name_of(var.restr));
+				}
+				str.push_back('}');
+			} break;
+			case Type(PnNode::value_match): {
+				const pattern::ValueMatchVariable& var = *ref;
+				str.append("{V");
+				str.append(std::to_string(var.match_data_idx));
+				str.push_back(':');
+				str.append(name_of(var.form));
+				str.append(", ");
+				print::append_to_string(ref.new_at(var.mtch_idx), str);
+				str.append(", ");
+				print::append_to_string(ref.new_at(var.copy_idx), str);
+				str.push_back('}');
+			} break;
+			case Type(PnNode::value_proxy): {
+				str.push_back('P');
+			} break;
+			case Type(MultiPn::summands): {
+				str.push_back('S');
+				str.append(std::to_string(ref.index));
+				str.append("...");
+			} break;
+			case Type(MultiPn::factors): {
+				str.push_back('F');
+				str.append(std::to_string(ref.index));
+				str.append("...");
+			} break;
+			case Type(MultiPn::params): {
+				str.push_back('P');
+				str.append(std::to_string(ref.index));
+				str.append("...");
 			} break;
 			}
 
@@ -1041,7 +1081,6 @@ namespace bmath::intern {
 					assert(ref.type.is<Variadic>());
 					current_str += fn::name_of(ref.type.to<Variadic>());
 				}
-				current_str += fn::name_of(ref.type.to<Fn>());
 				for (const TypedIdx param : fn::range(ref)) {
 					print::append_tree_row(ref.new_at(param), rows, offset + tab_width);
 				}

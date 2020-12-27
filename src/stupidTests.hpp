@@ -112,6 +112,35 @@ namespace bmath::intern::debug {
 			{ "x :variable, f :any              | diff(cos(f), x) = diff(f, x) (-sin(f))" },
 			{ "x :variable, f :any              | diff(exp(f), x) = diff(f, x) exp(f)" },
 			{ "x :variable, f :any              | diff(ln(f), x)  = diff(f, x) 1/f" },
+			
+			//exponential runtime fibonacci implementation:
+			{ "fib(0) = 0" },
+			{ "fib(1) = 1" },
+			{ "n :nat | fib(n) = fib(n - 1) + fib(n - 2)" },
+			
+			//reversing a list:
+			{ "xs :params | reverse(list{xs}) = reverse'(list{}, list{xs})" },
+			{ "xs :params, y, ys :params | reverse'(list{xs}, list{y, ys}) = reverse'(list{y, xs}, list{ys})" },
+			{ "xs :params,               | reverse'(list{xs}, list{})      = list{xs}" },
+			
+			//listing first n fibonacci numbers:
+			{ "n :nat0                    | fib_n(n + 2)                   = reverse(list_fibs(n, list{1, 0}))" },
+			{ "n :nat, a, b, tail :params | list_fibs(n, list{a, b, tail}) = list_fibs(n - 1, list{force(a + b), a, b, tail})" },
+			{ "              tail :params | list_fibs(0, list{tail})       = list{tail}" },
+			
+			//sorting numbers:
+			{ "cond :not_positive, true_res, false_res | if_positive(cond, true_res, false_res) = false_res" },
+			{ "cond :positive,     true_res, false_res | if_positive(cond, true_res, false_res) = true_res" },
+			
+			{ "p :real, xs :params, y :real, ys :params | filter_le(p, list{xs}, list{y, ys}) = filter_le(p, if_positive[force(p - y), list{xs}, list{xs, y}], list{ys})" },
+			{ "p :real, xs :params,                     | filter_le(p, list{xs}, list{})      = list{xs}" },
+			
+			{ "p :real, xs :params, y :real, ys :params | filter_s(p, list{xs}, list{y, ys}) = filter_s(p, if_positive[force(p - y), list{xs, y}, list{xs}], list{ys})" },
+			{ "p :real, xs :params,                     | filter_s(p, list{xs}, list{})      = list{xs}" },
+			
+			{ "p :real, xs :params | sort(list{p, xs}) = weird_concat(sort(filter_s(p, list{}, list{xs})), p, sort(filter_le(p, list{}, list{xs})))" },
+			{ "                    | sort(list{})      = list{}" },
+			{ "xs :params, y, zs :params | weird_concat(list{xs}, y, list{zs}) = list{xs, y, zs}" }, 		
 		});
 
 		for (const auto& p : patterns) {
