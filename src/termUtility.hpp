@@ -12,7 +12,7 @@
 #include <concepts>
 #include <compare>
 
-#define ASSERT(expr) if (!(expr)) __debugbreak()
+//#define ASSERT(expr) if (!(expr)) __debugbreak()
 
 namespace bmath::intern {
 

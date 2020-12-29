@@ -91,33 +91,29 @@ namespace bmath::intern {
 	namespace print {
 
 		//operator precedence (used to decide if parentheses are nessecary in out string)
-		constexpr auto infixr_table = std::to_array<std::pair<Type, int>>({
-			{ Type(NamedFn{}          ), 0 },
-			{ Type(Variadic::sum      ), 2 },
-			{ Type(Variadic::product  ), 4 },	
-			{ Type(Fn::pow            ), 5 }, //not between other function types -> assumed to be printed with '^'  
-			{ Type(Leaf::variable     ), 6 },
-			{ Type(Leaf::complex      ), 6 }, //may be printed as sum/product itself, then (maybe) has to add parentheses on its own
-			{ Type(PnNode::tree_match ), 6 },
-			{ Type(PnNode::value_match), 6 },
-			{ Type(PnNode::value_proxy), 6 },
-			{ Type(MultiPn::summands  ), 6 },
-			{ Type(MultiPn::factors   ), 6 },
-			{ Type(MultiPn::params    ), 6 },
-		});
-		static_assert(std::is_sorted(infixr_table.begin(), infixr_table.end(), [](auto a, auto b) { return a.second < b.second; }));
-
 		constexpr int infixr(Type type) 
 		{ 
-			if (type.is<Fn>() && type != Fn::pow) {
-				return 0;
-			}
-			else {
-				return find(infixr_table, &std::pair<Type, int>::first, type).second;
-			}
+			constexpr auto infixr_table = std::to_array<std::pair<Type, int>>({
+				{ Type(NamedFn{}          ), 0 },
+				{ Type(Variadic::sum      ), 2 },
+				{ Type(Variadic::product  ), 4 },	
+				{ Type(Fn::pow            ), 5 }, //not between other function types -> assumed to be printed with '^'  
+				{ Type(Leaf::variable     ), 6 },
+				{ Type(Leaf::complex      ), 6 }, //may be printed as sum/product itself, then (maybe) has to add parentheses on its own
+				{ Type(PnNode::tree_match ), 6 },
+				{ Type(PnNode::value_match), 6 },
+				{ Type(PnNode::value_proxy), 6 },
+				{ Type(MultiPn::summands  ), 6 },
+				{ Type(MultiPn::factors   ), 6 },
+				{ Type(MultiPn::params    ), 6 },
+			});
+			static_assert(std::is_sorted(infixr_table.begin(), infixr_table.end(), [](auto a, auto b) { return a.second < b.second; }));
+
+			constexpr std::pair<Type, int> default_infixr = std::make_pair(Type(0u), 0);
+			return search(infixr_table, &std::pair<Type, int>::first, type, default_infixr).second;
 		}
 
-		void append_complex(const std::complex<double> val, std::string& dest, int parent_operator_precedence)
+		void append_complex(const std::complex<double> val, std::string& dest, int parent_infixr)
 		{
 			std::stringstream buffer;
 
@@ -140,17 +136,17 @@ namespace bmath::intern {
 			bool parentheses = false;
 
 			if (val.real() != 0.0 && val.imag() != 0.0) {
-				parentheses = parent_operator_precedence > infixr(Type(Variadic::sum));
+				parentheses = parent_infixr > infixr(Type(Variadic::sum));
 				buffer << val.real();
 				add_im_to_stream(val.imag(), Flag::showpos);		
 			}
 			else if (val.real() != 0.0 && val.imag() == 0.0) {
-				parentheses = val.real() < 0.0 && parent_operator_precedence >= infixr(Type(Variadic::sum));	//leading '-'
+				parentheses = val.real() < 0.0 && parent_infixr >= infixr(Type(Variadic::sum));	//leading '-'
 				buffer << val.real();
 			}
 			else if (val.real() == 0.0 && val.imag() != 0.0) {
-				parentheses = val.imag() < 0.0 && parent_operator_precedence >= infixr(Type(Variadic::sum));	//leading '-'	
-				parentheses |= parent_operator_precedence > infixr(Type(Variadic::product));	//*i
+				parentheses = val.imag() < 0.0 && parent_infixr >= infixr(Type(Variadic::sum));	//leading '-'	
+				parentheses |= parent_infixr > infixr(Type(Variadic::product));	//*i
 				add_im_to_stream(val.imag(), Flag::noshowpos);
 			}
 			else {
@@ -834,7 +830,7 @@ namespace bmath::intern {
 					str += fn::name_of(ref.type.to<Fn>());
 				}
 				else {
-					ASSERT(ref.type.is<Variadic>());
+					assert(ref.type.is<Variadic>());
 					str += fn::name_of(ref.type.to<Variadic>());
 				}
 				str.push_back('(');

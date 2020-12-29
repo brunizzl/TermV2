@@ -180,13 +180,13 @@ namespace bmath::intern {
 
 		constexpr inline [[nodiscard]] Payload_T& at(const std::size_t idx) noexcept
 		{
-			ASSERT(this->valid_idx(idx));
+			assert(this->valid_idx(idx));
 			return this->data()[idx];
 		}
 
 		constexpr inline [[nodiscard]] const Payload_T& at(const std::size_t idx) const noexcept
 		{
-			ASSERT(this->valid_idx(idx));
+			assert(this->valid_idx(idx));
 			return this->data()[idx];
 		}
 

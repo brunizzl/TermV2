@@ -13,51 +13,6 @@
 #include "arithmeticTerm.hpp"
 #include "ioArithmetic.hpp"
 
-/*
-	void prototype(const Ref ref)
-	{
-		switch (ref.type) {
-		case Type_T(Variadic::sum): 
-			[[fallthrough]];
-		case Type_T(Variadic::product): {
-			for (const TypedIdx elem : parameters::range(ref)) {
-			}
-			assert(false);
-		} break;
-		default: {
-			assert(ref.type.is<Fn>());
-			for (const TypedIdx param : fn::range(ref)) {
-			}
-			assert(false);
-		} break;
-		case Type_T(Leaf::variable): {
-			assert(false);
-		} break;
-		case Type_T(Leaf::complex): {
-			assert(false);
-		} break;
-		case Type_T(PnNode::tree_match): {
-			assert(false);
-		} break;
-		case Type_T(PnNode::value_match): {
-			pattern::ValueMatchVariable& var = *ref;
-			assert(false);
-		} break;
-		case Type_T(PnNode::value_proxy):
-			assert(false);
-			break;
-		case Type_T(MultiPn::summands):
-			assert(false);
-			break;
-		case Type_T(MultiPn::factors):
-			assert(false);
-			break;
-		}
-		assert(false);
-		return;
-	} //prototype
-*/
-
 namespace bmath::intern {
 
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -66,36 +21,34 @@ namespace bmath::intern {
 
 	//if one pattern may compare equal to a term multiple ways (e.g. sum or product), it has high generality.
 	//there are 3 main levels of generality:
-	//  - unique (value 1xx): pattern only matches one exact term e.g. pattern "2 'pi'" (note: everything without pattern variables falls tecnically in this category)
-	//  - low    (value 2xx): pattern is recursive, but has strong operands order (e.g. all in Fn), thus matches unique on outhermost level, but may hold general operands
-	//  - high   (value 3xx): sums / products containing pattern variables can match not only multiple terms, but may also match specific terms in more than one way (also tree variables, duh)
+	//  - unique (value 1xxx): pattern only matches one exact term e.g. pattern "2 'pi'" (note: everything without pattern variables falls tecnically in this category)
+	//  - low    (value 2xxx): pattern is recursive, but has strong operands order (e.g. all in Fn), thus matches unique on outhermost level, but may hold general operands
+	//  - high   (value 3xxx): sums / products containing pattern variables can match not only multiple terms, but may also match specific terms in more than one way (also tree variables, duh)
 	//the table only differentiates between types, however (as described above) the real generality of a given term may be lower, than that of its outermost node listed here.
 	//as the goal of this endavour is (mostly) to sort the most general summands / factors in a pattern to the end, 
 	//  the sorting required for efficiently matching patterns may use this table, but has to check more.
-	constexpr auto type_generality_table = std::to_array<std::pair<Type, int>>({
-		{ Type(Leaf::complex        ), 100 }, 
-		{ Type(Leaf::variable       ), 101 },
-		{ Type(PnNode::value_match  ), 102 }, //may match different subsets of complex numbers, but always requires an actual value to match against
-		{ Type(PnNode::value_proxy  ), 103 }, //dont care really where this sits, as it never ist used in matching anyway
-		//values 2xx are not present, as that would require every item in Fn to be listed here (instead look at function generality() below)
-		{ Type(NamedFn{}            ), 300 },
-		{ Type(Variadic::sum        ), 301 },  
-		{ Type(Variadic::product    ), 302 }, 
-		{ Type(PnNode::tree_match   ), 303 }, 
-		{ Type(MultiPn::summands    ), 304 }, //kinda special, as they always succeed in matching -> need to be matched last 
-		{ Type(MultiPn::factors     ), 305 }, //kinda special, as they always succeed in matching -> need to be matched last 
-	});
-	static_assert(std::is_sorted(type_generality_table.begin(), type_generality_table.end(), [](auto a, auto b) { return a.second < b.second; }));
-	static_assert(unsigned(Fn::COUNT) < 99u); //else generality of 300 is used twice
-
 	constexpr int generality(Type type) noexcept 
 	{ 
-		if (type.is<Fn>()) {
-			return 200 + static_cast<unsigned>(type.to<Fn>());
-		}
-		else {
-			return find(type_generality_table, &std::pair<Type, int>::first, type).second; 
-		}
+		constexpr auto type_generality_table = std::to_array<std::pair<Type, int>>({
+			{ Type(Leaf::complex        ), 1000 }, 
+			{ Type(Leaf::variable       ), 1001 },
+			{ Type(PnNode::value_match  ), 1002 }, //may match different subsets of complex numbers, but always requires an actual value to match against
+			{ Type(PnNode::value_proxy  ), 1003 }, //dont care really where this sits, as it never ist used in matching anyway
+			//values 2xxx are not present, as that would require every item in Fn to be listed here (instead default_generality kicks in here)
+			{ Type(NamedFn{}            ), 3000 },
+			{ Type(Variadic::list       ), 3001 },  
+			{ Type(Variadic::multiset   ), 3002 },  
+			{ Type(Variadic::sum        ), 3003 },  
+			{ Type(Variadic::product    ), 3004 }, 
+			{ Type(PnNode::tree_match   ), 3005 }, 
+			{ Type(MultiPn::summands    ), 3006 }, //kinda special, as they always succeed in matching -> need to be matched last 
+			{ Type(MultiPn::factors     ), 3007 }, //kinda special, as they always succeed in matching -> need to be matched last 
+		});
+		static_assert(std::is_sorted(type_generality_table.begin(), type_generality_table.end(), [](auto a, auto b) { return a.second < b.second; }));
+		static_assert(static_cast<unsigned>(Type::COUNT) < 1000u, "else the 2xxx generalities may leak into the 3xxx ones in table");
+
+		const std::pair<Type, int> default_generality = { Type(0u), static_cast<unsigned>(type) + 2000 };
+		return search(type_generality_table, &std::pair<Type, int>::first, type, default_generality).second; 
 	}
 
 	//utility for both Function and NamedFn
@@ -479,7 +432,7 @@ namespace bmath::intern {
 			case Type(Leaf::complex): {
 				const Complex& complex_1 = *ref_1;
 				const Complex& complex_2 = *ref_2;
-				return compare_complex(complex_2, complex_1);
+				return compare_complex(complex_1, complex_2);
 			} break;
 			case Type(PnNode::tree_match): {
 				const pattern::TreeMatchVariable& var_1 = *ref_1;
@@ -859,20 +812,20 @@ namespace bmath::intern {
 
 			for (const auto& multi_match : table.multi_table) {
 				throw_if(multi_match.lhs_count > 1u, "pattern only allows single use of each MultiPn in lhs.");
-				throw_if(multi_match.rhs_count > 1u, "pattern only allows single use of each MultiPn in rhs.");
 			}
 			{
 				//if MultiPn::params occurs in sum / product, it is replaced by legal and matching MultiPn version.
-				const auto test_and_replace_multi_pn = [](const MutRef head, const bool do_testing) -> bool {
-					const auto inspect_variadic = [do_testing](const MutRef ref) -> fold::FindBool {
+				const auto test_and_replace_multi_pn = [](const MutRef head, const bool test_lhs) -> bool {
+					const auto inspect_variadic = [test_lhs](const MutRef ref) -> fold::FindBool {
 						if (ref.type == Variadic::sum || ref.type == Variadic::product) {
-							const Type result_type = ref.type == Variadic::sum ? MultiPn::summands : MultiPn::factors;
+							const Type representing_type = ref.type == Variadic::sum ? MultiPn::summands : MultiPn::factors;
 							for (TypedIdx& elem : fn::unsave_range(ref)) {
 								const Type elem_type = elem.get_type();
-								if (elem_type == MultiPn::params) {
-									elem = TypedIdx(elem.get_index(), result_type); //params can convert to summands / factors
+								if (elem_type == representing_type) { 
+									elem = TypedIdx(elem.get_index(), MultiPn::params); //params also represent summands / factors
 								}
-								else if (do_testing && elem_type.is<MultiPn>() && elem_type != result_type) {
+								else if (test_lhs && elem_type.is<MultiPn>() && elem_type != representing_type) {
+									//in lhs a sum may never hold factors directly and vice versa
 									return true;
 								}
 							}
@@ -881,7 +834,7 @@ namespace bmath::intern {
 					};
 					return fold::simple_fold<fold::FindBool>(head, inspect_variadic);
 				};
-				throw_if(test_and_replace_multi_pn(MutRef(lhs_temp, this->lhs_head), true), "wrong MultiPn in sum / product in lhs");
+				throw_if(test_and_replace_multi_pn(MutRef(lhs_temp, this->lhs_head), true), "wrong MultiPn in lhs");
 				test_and_replace_multi_pn(MutRef(rhs_temp, this->rhs_head), false);
 			}
 			{
@@ -1457,16 +1410,8 @@ namespace bmath::intern {
 
 		match_pn_i:
 			while (pn_i < pn_params.size()) {
-				if (pn_params[pn_i].get_type().is<MultiPn>()) [[unlikely]] {
-					assert(haystack_ref.type == Variadic::sum     && pn_params[pn_i].get_type() == MultiPn::summands || // Variadic::sum     may only contain MultiPn::summands
-					       haystack_ref.type == Variadic::product && pn_params[pn_i].get_type() == MultiPn::factors  || // Variadic::product may only contain MultiPn::factors
-
-					       haystack_ref.type != Variadic::sum && 
-					       haystack_ref.type != Variadic::product && 
-					       pn_params[pn_i].get_type() == MultiPn::params
-					);
-					assert(pn_i + 1ull == pn_params.size() && "MultiPn is only valid as last element");
-
+				if (pn_params[pn_i].get_type() == MultiPn::params) [[unlikely]] { //also summands and factors are matched as params
+					assert(pn_i + 1ull == pn_params.size() && "MultiPn is only valid as last element -> only one per variadic");
 					SharedMultiDatum& info = match_data.multi_info(pn_params[pn_i].get_index());
 					info.match_indices.clear();
 					for (std::size_t k = 0u; k < haystack_params.size(); k++) {
@@ -1477,6 +1422,7 @@ namespace bmath::intern {
 					return FindPermutationRes::matched_all;
 				}
 				else {
+					assert(!pn_params[pn_i].get_type().is<MultiPn>());
 					const Ref pn_i_ref = pn_ref.new_at(pn_params[pn_i]);
 					for (; haystack_k < haystack_params.size(); haystack_k++) {
 						if (variadic_datum.currenty_matched.test(haystack_k)) {
@@ -1495,7 +1441,7 @@ namespace bmath::intern {
 				//got here -> could not match element nr pn_i of pattern with any currently unmatched element in haystack
 				if (pn_i == 0u) {
 					//matching the first element in pattern failed -> there is no hope
-					return FindPermutationRes::failed;
+					return FindPermutationRes::unmatchable;
 				}
 				else {
 					//this while loop iteration tried matching some element after the first in pattern (and failed)
@@ -1601,9 +1547,9 @@ namespace bmath::intern {
 
 		std::optional<TypedIdx> match_and_replace(const Ref from, const Ref to, const MutRef ref)
 		{		
-			if (from.type.is<Variadic>() && fn::is_unordered(from.type) && (from.type == ref.type)) {
+			if ((from.type == Variadic::product || from.type == Variadic::sum) && (from.type == ref.type)) {
 				MatchData match_data;
-				if (match::find_matching_permutation(from, ref, match_data, 0u, 0u) != FindPermutationRes::failed) {
+				if (match::find_matching_permutation(from, ref, match_data, 0u, 0u) != FindPermutationRes::unmatchable) {
 					Store copy_buffer;
 					copy_buffer.reserve(32u);
 					const TypedIdx buffer_head = match::copy(to, match_data, *ref.store, copy_buffer);

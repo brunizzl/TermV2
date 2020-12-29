@@ -13,17 +13,12 @@
 
 namespace bmath::intern {
 
-	enum class Leaf
-	{
-		variable,
-		complex,
-		COUNT
-	};
-
 	enum class Variadic
 	{
 		sum,
 		product,
+		multiset,
+		list,
 		COUNT
 	};
 
@@ -31,7 +26,7 @@ namespace bmath::intern {
 	//the memory is sectioned in two parts: 
 	//the index points at the IndexVector containing the parameters.
 	//the function name follwos as CharVector in direct succession
-	//(by starting with the parameters, most functions need no extra case for NamedFn)
+	//(by starting with the parameters, most functions need no extra case to handle NamedFn)
 	UNIT_ENUM(NamedFn);
 	//using NamedFn = UnitEnum<"NamedFn">;
 
@@ -67,6 +62,13 @@ namespace bmath::intern {
 		COUNT
 	};
 
+	enum class Leaf
+	{
+		variable,
+		complex,
+		COUNT
+	};
+
 	using MathType = SumEnum<Leaf, Fn, NamedFn, Variadic>;
 
 
@@ -85,9 +87,9 @@ namespace bmath::intern {
 	//thus all info required in the tree is given in the typed_idx, where the index is repurposed to point elsewhere
 	enum class MultiPn 
 	{ 
-		summands, 
-		factors, 
-		params, 
+		params, //only of MultiPn allowed in valid pattern on lhs (exchanged in PnTerm's constructor)
+		summands, //only expected at rhs of valid pattern, to allow a sum (of all summands) as factor
+		factors,  //only expected at rhs of valid pattern, to allow a product (of all factors) as summand
 		COUNT 
 	};
 
@@ -289,8 +291,10 @@ namespace bmath::intern {
 
 		//every item enumerated in Variadic (except COUNT) may be listed here in order of apperance in Variadic
 		constexpr auto variadic_props_table = std::to_array<VariadicProps>({
-			{ Variadic::sum    , "sum"    , true },
-			{ Variadic::product, "product", true },
+			{ Variadic::sum     , "sum"     , true },
+			{ Variadic::product , "product" , true },
+			{ Variadic::multiset, "multiset", true },
+			{ Variadic::list    , "list"    , false },
 		});
 		static_assert(static_cast<unsigned>(variadic_props_table.front().type) == 0u);
 		static_assert(std::is_sorted(variadic_props_table.begin(), variadic_props_table.end(), 
@@ -534,10 +538,10 @@ namespace bmath::intern {
 			//  thus resetting own variables in part "a*b" will only reset "b".
 			void reset_own_matches(const Ref pn_ref, MatchData& match_data);
 
-			//if not all summands / factors in pattern could be matched, failed is returned.
+			//if not all summands / factors in pattern could be matched, unmatchable is returned.
 			//if not all summands / factors in the haystack are matched, matched_some is returned
 			//(relevant if the current parameters is the outhermost, as then only a partial match may be successfull)
-			enum class FindPermutationRes { matched_all, failed, matched_some };
+			enum class FindPermutationRes { matched_all, unmatchable, matched_some };
 
 			//determines weather there is a way to match pn_ref in haystack_ref (thus pn_ref is assumed to part of a pattern)
 			//pn_i is the index of the first element in pn_ref to be matched. 

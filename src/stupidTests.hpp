@@ -64,85 +64,85 @@ namespace bmath::intern::debug {
 	void test_rechner() 
 	{
 		static const auto patterns = std::to_array<pattern::PnTerm>({ 
-			{ "x :factors | 0 x = 0" },
-			{ "x          | 0^x = 0" },
-			{ "x          | x^0 = 1" },
-			{ "x          | x^1 = x" },
-			
-			{ "x, a, b | (x^a)^b = x^(a*b)" },
-			{ "x       | x x     = x^2" }, 
-			{ "x, a    | x x^a   = x^(a + 1)" },
-			{ "x, a, b | x^a x^b = x^(a + b)" },
-			{ "x :factors, y | exp(x ln(y)) = y^x" },
-			
-			{ "a, b          | a^2 + 2 a b   + b^2 = (a + b)^2" }, 
-			{ "a, b          | a^2 - 2 a b   + b^2 = (a - b)^2" }, 
-			{ "a :complex, b | a^2 + (2 a) b + b^2 = (a + b)^2" }, 
-			
-			{ "a :no_val, bs :factors, cs :factors | a bs + a cs = a (bs + cs)" },
-			{ "a :no_val, bs :factors              | a bs + a    = a (bs + 1)" }, 
-			{ "a :no_val                           | a    + a    = 2 a" }, 
-			{ "a :value, b, cs :summands           | a (b + cs)  = a b + a cs" }, 
-			
-			{ "a, as :summands |  -(a + as) =  -a - as" },
-			{ "a, as :factors  | 1/(a as)   = 1/a 1/as" },
-			//{ " as :sum      | -as       =     sum:{ -a | a <- as}" }, //not yet writable, will perhaps never happen :|
-			//{ " as :product  | 1/as      = product:{1/a | a <- as}" }, //not yet writable, will perhaps never happen :|
-			
-			{ "x | sin(x)^2 + cos(x)^2 = 1" },
-			
-			//roots and extreme points of sin and cos:
-			{ "         cos(            'pi') = -1" },
-			{ "k :int | cos((k + 0.5)   'pi') =  0" },
-			{ "k :int | cos((2 k)       'pi') =  1" },
-			{ "k :int | cos((2 k + 1)   'pi') = -1" },
-			{ "         sin(            'pi') =  0" },
-			{ "k :int | sin(k           'pi') =  0" },
-			{ "k :int | sin((2 k + 0.5) 'pi') =  1" },
-			{ "k :int | sin((2 k + 1.5) 'pi') = -1" },
-			
-			//differentiation rules:
-			{ "x :variable                      | diff(x, x)      = 1" },
-			{ "x :variable, a :variable         | diff(a, x)      = 0" },
-			{ "x :variable, a :value            | diff(a, x)      = 0" },
-			{ "x :variable, a :value, f :any    | diff(f^a, x)    = diff(f, x) a f^(a-1)" },
-			{ "x :variable, a :value, f :any    | diff(a^f, x)    = diff(f, x) ln(a) a^f" },
-			{ "x :variable, g :any, h :any      | diff(g^h, x)    = (diff(h, x) ln(g) + h diff(g, x)/g) g^h" },
-			{ "x :variable, u :any, v :summands | diff(u + v, x)  = diff(u, x) + diff(v, x)" },
-			{ "x :variable, u :any, v :factors  | diff(u v, x)    = diff(u, x) v + u diff(v, x)" },
-			{ "x :variable, f :any              | diff(sin(f), x) = diff(f, x) cos(f)" },
-			{ "x :variable, f :any              | diff(cos(f), x) = diff(f, x) (-sin(f))" },
-			{ "x :variable, f :any              | diff(exp(f), x) = diff(f, x) exp(f)" },
-			{ "x :variable, f :any              | diff(ln(f), x)  = diff(f, x) 1/f" },
+			//{ "x :factors | 0 x = 0" },
+			//{ "x          | 0^x = 0" },
+			//{ "x          | x^0 = 1" },
+			//{ "x          | x^1 = x" },
+			//
+			//{ "x, a, b | (x^a)^b = x^(a*b)" },
+			//{ "x       | x x     = x^2" }, 
+			//{ "x, a    | x x^a   = x^(a + 1)" },
+			//{ "x, a, b | x^a x^b = x^(a + b)" },
+			//{ "x :factors, y | exp(x ln(y)) = y^x" },
+			//
+			//{ "a, b          | a^2 + 2 a b   + b^2 = (a + b)^2" }, 
+			//{ "a, b          | a^2 - 2 a b   + b^2 = (a - b)^2" }, 
+			//{ "a :complex, b | a^2 + (2 a) b + b^2 = (a + b)^2" }, 
+			//
+			//{ "a :no_val, bs :factors, cs :factors | a bs + a cs = a (bs + cs)" },
+			//{ "a :no_val, bs :factors              | a bs + a    = a (bs + 1)" }, 
+			//{ "a :no_val                           | a    + a    = 2 a" }, 
+			//{ "a :value, b, cs :summands           | a (b + cs)  = a b + a cs" }, 
+			//
+			//{ "a, as :summands |  -(a + as) =  -a - as" },
+			//{ "a, as :factors  | 1/(a as)   = 1/a 1/as" },
+			////{ " as :sum      | -as       =     sum:{ -a | a <- as}" }, //not yet writable, will perhaps never happen :|
+			////{ " as :product  | 1/as      = product:{1/a | a <- as}" }, //not yet writable, will perhaps never happen :|
+			//
+			//{ "x | sin(x)^2 + cos(x)^2 = 1" },
+			//
+			////roots and extreme points of sin and cos:
+			//{ "         cos(            'pi') = -1" },
+			//{ "k :int | cos((k + 0.5)   'pi') =  0" },
+			//{ "k :int | cos((2 k)       'pi') =  1" },
+			//{ "k :int | cos((2 k + 1)   'pi') = -1" },
+			//{ "         sin(            'pi') =  0" },
+			//{ "k :int | sin(k           'pi') =  0" },
+			//{ "k :int | sin((2 k + 0.5) 'pi') =  1" },
+			//{ "k :int | sin((2 k + 1.5) 'pi') = -1" },
+			//
+			////differentiation rules:
+			//{ "x :variable                      | diff(x, x)      = 1" },
+			//{ "x :variable, a :variable         | diff(a, x)      = 0" },
+			//{ "x :variable, a :value            | diff(a, x)      = 0" },
+			//{ "x :variable, a :value, f :any    | diff(f^a, x)    = diff(f, x) a f^(a-1)" },
+			//{ "x :variable, a :value, f :any    | diff(a^f, x)    = diff(f, x) ln(a) a^f" },
+			//{ "x :variable, g :any, h :any      | diff(g^h, x)    = (diff(h, x) ln(g) + h diff(g, x)/g) g^h" },
+			//{ "x :variable, u :any, v :summands | diff(u + v, x)  = diff(u, x) + diff(v, x)" },
+			//{ "x :variable, u :any, v :factors  | diff(u v, x)    = diff(u, x) v + u diff(v, x)" },
+			//{ "x :variable, f :any              | diff(sin(f), x) = diff(f, x) cos(f)" },
+			//{ "x :variable, f :any              | diff(cos(f), x) = diff(f, x) (-sin(f))" },
+			//{ "x :variable, f :any              | diff(exp(f), x) = diff(f, x) exp(f)" },
+			//{ "x :variable, f :any              | diff(ln(f), x)  = diff(f, x) 1/f" },
 			
 			////exponential runtime fibonacci implementation:
 			//{ "fib(0) = 0" },
 			//{ "fib(1) = 1" },
 			//{ "n :nat | fib(n) = fib(n - 1) + fib(n - 2)" },
-			//
-			////reversing a list:
-			//{ "xs :params | reverse(list{xs}) = reverse'(list{}, list{xs})" },
-			//{ "xs :params, y, ys :params | reverse'(list{xs}, list{y, ys}) = reverse'(list{y, xs}, list{ys})" },
-			//{ "xs :params,               | reverse'(list{xs}, list{})      = list{xs}" },
-			//
-			////listing first n fibonacci numbers:
-			//{ "n :nat0                    | fib_n(n + 2)                   = reverse(list_fibs(n, list{1, 0}))" },
-			//{ "n :nat, a, b, tail :params | list_fibs(n, list{a, b, tail}) = list_fibs(n - 1, list{force(a + b), a, b, tail})" },
-			//{ "              tail :params | list_fibs(0, list{tail})       = list{tail}" },
-			//
-			////sorting numbers:
-			//{ "cond :not_positive, true_res, false_res | if_positive(cond, true_res, false_res) = false_res" },
-			//{ "cond :positive,     true_res, false_res | if_positive(cond, true_res, false_res) = true_res" },
-			//
-			//{ "p :real, xs :params, y :real, ys :params | filter_le(p, list{xs}, list{y, ys}) = filter_le(p, if_positive[force(p - y), list{xs}, list{xs, y}], list{ys})" },
-			//{ "p :real, xs :params,                     | filter_le(p, list{xs}, list{})      = list{xs}" },
-			//
-			//{ "p :real, xs :params, y :real, ys :params | filter_s(p, list{xs}, list{y, ys}) = filter_s(p, if_positive[force(p - y), list{xs, y}, list{xs}], list{ys})" },
-			//{ "p :real, xs :params,                     | filter_s(p, list{xs}, list{})      = list{xs}" },
-			//
-			//{ "p :real, xs :params | sort(list{p, xs}) = weird_concat(sort(filter_s(p, list{}, list{xs})), p, sort(filter_le(p, list{}, list{xs})))" },
-			//{ "                    | sort(list{})      = list{}" },
-			//{ "xs :params, y, zs :params | weird_concat(list{xs}, y, list{zs}) = list{xs, y, zs}" }, 		
+			
+			//reversing a list:
+			{ "xs :params | reverse(list{xs}) = reverse'(list{}, list{xs})" },
+			{ "xs :params, y, ys :params | reverse'(list{xs}, list{y, ys}) = reverse'(list{y, xs}, list{ys})" },
+			{ "xs :params,               | reverse'(list{xs}, list{})      = list{xs}" },
+			
+			//listing first n fibonacci numbers:
+			{ "n :nat0                    | fib_n(n + 2)                   = reverse(list_fibs(n, list{1, 0}))" },
+			{ "n :nat, a, b, tail :params | list_fibs(n, list{a, b, tail}) = list_fibs(n - 1, list{force(a + b), a, b, tail})" },
+			{ "              tail :params | list_fibs(0, list{tail})       = list{tail}" },
+			
+			//sorting numbers:
+			{ "cond :not_positive, true_res, false_res | if_positive(cond, true_res, false_res) = false_res" },
+			{ "cond :positive,     true_res, false_res | if_positive(cond, true_res, false_res) = true_res" },
+			
+			{ "p :real, xs :params, y :real, ys :params | filter_le(p, list{xs}, list{y, ys}) = filter_le(p, if_positive[force(p - y), list{xs}, list{xs, y}], list{ys})" },
+			{ "p :real, xs :params,                     | filter_le(p, list{xs}, list{})      = list{xs}" },
+			
+			{ "p :real, xs :params, y :real, ys :params | filter_s(p, list{xs}, list{y, ys}) = filter_s(p, if_positive[force(p - y), list{xs, y}, list{xs}], list{ys})" },
+			{ "p :real, xs :params,                     | filter_s(p, list{xs}, list{})      = list{xs}" },
+			
+			{ "p :real, xs :params | sort(list{p, xs}) = weird_concat(sort(filter_s(p, list{}, list{xs})), p, sort(filter_le(p, list{}, list{xs})))" },
+			{ "                    | sort(list{})      = list{}" },
+			{ "xs :params, y, zs :params | weird_concat(list{xs}, y, list{zs}) = list{xs, y, zs}" }, 		
 		});
 
 		for (const auto& p : patterns) {
@@ -169,11 +169,11 @@ namespace bmath::intern::debug {
 					changed = false;
 					for (const auto& p : patterns) {
 						if (test.match_and_replace(p)) {
-							std::cout << "matched: " << p.to_string() << "\n";
+							//std::cout << "matched: " << p.to_string() << "\n";
 							changed = true;
 							test.establish_order();
 							assert(tree::valid_storage(test.ref()));
-							std::cout << "    = " << test.to_string() << "\n";
+							//std::cout << "    = " << test.to_string() << "\n";
 							//std::cout << test.to_tree() << "\n";
 							//std::cout << test.to_memory_layout() << "\n";
 							break;
@@ -181,7 +181,7 @@ namespace bmath::intern::debug {
 					}
 				} while (changed);
 				std::cout << "result:   " << test.to_pretty_string() << "\n";
-				std::cout << test.to_memory_layout() << "\n";
+				//std::cout << test.to_memory_layout() << "\n";
 				//std::cout << test.to_tree() << "\n";
 				std::cout << "\n";
 
