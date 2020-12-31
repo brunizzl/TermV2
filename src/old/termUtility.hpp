@@ -519,6 +519,10 @@ namespace bmath::intern {
 		template<typename E> requires enum_detail::contains_v<E, Enum>
 		constexpr SumEnum(const E e) noexcept : Base(static_cast<unsigned>(static_cast<Enum>(e)) + this_offset) {}
 
+		//this constructor applies if E is contained in Base
+		template<typename E> requires enum_detail::contains_v<E, Base>
+		constexpr SumEnum(const E e) noexcept : Base(e) {}
+
 
 		//E is contained in Base -> hand over to Base
 		template<typename E> requires enum_detail::contains_v<E, Base>

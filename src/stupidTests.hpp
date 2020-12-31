@@ -5,11 +5,14 @@
 #include <cassert>
 #include <numeric>
 
+#include "utility/bit.hpp"
+
 #include "termStore.hpp"
 #include "arithmeticTerm.hpp"
 #include "parseTerm.hpp"
 #include "ioArithmetic.hpp"
 #include "termVector.hpp"
+
 
 namespace bmath::intern::debug {
 
@@ -46,8 +49,8 @@ namespace bmath::intern::debug {
 			<< "Type(Fn::force)                = " << unsigned(Type(Fn::force))                << "\n"
 			<< "Type(Fn::diff)                 = " << unsigned(Type(Fn::diff))                 << "\n"
 			                                                                                   << "\n"
-			<< "Type(Leaf::variable)           = " << unsigned(Type(Leaf::variable))           << "\n"
-			<< "Type(Leaf::complex)            = " << unsigned(Type(Leaf::complex))            << "\n"
+			<< "Type(Leaf::variable)           = " << unsigned(Type(Literal::variable))           << "\n"
+			<< "Type(Leaf::complex)            = " << unsigned(Type(Literal::complex))            << "\n"
 			                                                                                   << "\n"
 			<< "Type(PnNode::tree_match)       = " << unsigned(Type(PnNode::tree_match))       << "\n"
 			<< "Type(PnNode::value_match)      = " << unsigned(Type(PnNode::value_match))      << "\n"
@@ -63,62 +66,62 @@ namespace bmath::intern::debug {
 
 	void test_rechner() 
 	{
-		static const auto patterns = std::to_array<pattern::PnTerm>({ 
-			//{ "x :factors | 0 x = 0" },
-			//{ "x          | 0^x = 0" },
-			//{ "x          | x^0 = 1" },
-			//{ "x          | x^1 = x" },
-			//
-			//{ "x, a, b | (x^a)^b = x^(a*b)" },
-			//{ "x       | x x     = x^2" }, 
-			//{ "x, a    | x x^a   = x^(a + 1)" },
-			//{ "x, a, b | x^a x^b = x^(a + b)" },
-			//{ "x :factors, y | exp(x ln(y)) = y^x" },
-			//
-			//{ "a, b          | a^2 + 2 a b   + b^2 = (a + b)^2" }, 
-			//{ "a, b          | a^2 - 2 a b   + b^2 = (a - b)^2" }, 
-			//{ "a :complex, b | a^2 + (2 a) b + b^2 = (a + b)^2" }, 
-			//
-			//{ "a :no_val, bs :factors, cs :factors | a bs + a cs = a (bs + cs)" },
-			//{ "a :no_val, bs :factors              | a bs + a    = a (bs + 1)" }, 
-			//{ "a :no_val                           | a    + a    = 2 a" }, 
-			//{ "a :value, b, cs :summands           | a (b + cs)  = a b + a cs" }, 
-			//
-			//{ "a, as :summands |  -(a + as) =  -a - as" },
-			//{ "a, as :factors  | 1/(a as)   = 1/a 1/as" },
-			////{ " as :sum      | -as       =     sum:{ -a | a <- as}" }, //not yet writable, will perhaps never happen :|
-			////{ " as :product  | 1/as      = product:{1/a | a <- as}" }, //not yet writable, will perhaps never happen :|
-			//
-			//{ "x | sin(x)^2 + cos(x)^2 = 1" },
-			//
-			////roots and extreme points of sin and cos:
-			//{ "         cos(            'pi') = -1" },
-			//{ "k :int | cos((k + 0.5)   'pi') =  0" },
-			//{ "k :int | cos((2 k)       'pi') =  1" },
-			//{ "k :int | cos((2 k + 1)   'pi') = -1" },
-			//{ "         sin(            'pi') =  0" },
-			//{ "k :int | sin(k           'pi') =  0" },
-			//{ "k :int | sin((2 k + 0.5) 'pi') =  1" },
-			//{ "k :int | sin((2 k + 1.5) 'pi') = -1" },
-			//
-			////differentiation rules:
-			//{ "x :variable                      | diff(x, x)      = 1" },
-			//{ "x :variable, a :variable         | diff(a, x)      = 0" },
-			//{ "x :variable, a :value            | diff(a, x)      = 0" },
-			//{ "x :variable, a :value, f :any    | diff(f^a, x)    = diff(f, x) a f^(a-1)" },
-			//{ "x :variable, a :value, f :any    | diff(a^f, x)    = diff(f, x) ln(a) a^f" },
-			//{ "x :variable, g :any, h :any      | diff(g^h, x)    = (diff(h, x) ln(g) + h diff(g, x)/g) g^h" },
-			//{ "x :variable, u :any, v :summands | diff(u + v, x)  = diff(u, x) + diff(v, x)" },
-			//{ "x :variable, u :any, v :factors  | diff(u v, x)    = diff(u, x) v + u diff(v, x)" },
-			//{ "x :variable, f :any              | diff(sin(f), x) = diff(f, x) cos(f)" },
-			//{ "x :variable, f :any              | diff(cos(f), x) = diff(f, x) (-sin(f))" },
-			//{ "x :variable, f :any              | diff(exp(f), x) = diff(f, x) exp(f)" },
-			//{ "x :variable, f :any              | diff(ln(f), x)  = diff(f, x) 1/f" },
+		static const auto rules = std::to_array<pattern::RewriteRule>({ 
+			{ "x :factors | 0 x = 0" },
+			{ "x          | 0^x = 0" },
+			{ "x          | x^0 = 1" },
+			{ "x          | x^1 = x" },
 			
-			////exponential runtime fibonacci implementation:
-			//{ "fib(0) = 0" },
-			//{ "fib(1) = 1" },
-			//{ "n :nat | fib(n) = fib(n - 1) + fib(n - 2)" },
+			{ "x, a, b | (x^a)^b = x^(a*b)" },
+			{ "x       | x x     = x^2" }, 
+			{ "x, a    | x x^a   = x^(a + 1)" },
+			{ "x, a, b | x^a x^b = x^(a + b)" },
+			{ "x :factors, y | exp(x ln(y)) = y^x" },
+			
+			{ "a, b          | a^2 + 2 a b   + b^2 = (a + b)^2" }, 
+			{ "a, b          | a^2 - 2 a b   + b^2 = (a - b)^2" }, 
+			{ "a :complex, b | a^2 + (2 a) b + b^2 = (a + b)^2" }, 
+			
+			{ "a :no_val, bs :factors, cs :factors | a bs + a cs = a (bs + cs)" },
+			{ "a :no_val, bs :factors              | a bs + a    = a (bs + 1)" }, 
+			{ "a :no_val                           | a    + a    = 2 a" }, 
+			{ "a :value, b, cs :summands           | a (b + cs)  = a b + a cs" }, 
+			
+			{ "a, as :summands |  -(a + as) =  -a - as" },
+			{ "a, as :factors  | 1/(a as)   = 1/a 1/as" },
+			//{ " as :sum      | -as       =     sum:{ -a | a <- as}" }, //not yet writable, will perhaps never happen :|
+			//{ " as :product  | 1/as      = product:{1/a | a <- as}" }, //not yet writable, will perhaps never happen :|
+			
+			{ "x | sin(x)^2 + cos(x)^2 = 1" },
+			
+			//roots and extreme points of sin and cos:
+			{ "         cos(            'pi') = -1" },
+			{ "k :int | cos((k + 0.5)   'pi') =  0" },
+			{ "k :int | cos((2 k)       'pi') =  1" },
+			{ "k :int | cos((2 k + 1)   'pi') = -1" },
+			{ "         sin(            'pi') =  0" },
+			{ "k :int | sin(k           'pi') =  0" },
+			{ "k :int | sin((2 k + 0.5) 'pi') =  1" },
+			{ "k :int | sin((2 k + 1.5) 'pi') = -1" },
+			
+			//differentiation rules:
+			{ "x :variable                      | diff(x, x)      = 1" },
+			{ "x :variable, a :variable         | diff(a, x)      = 0" },
+			{ "x :variable, a :value            | diff(a, x)      = 0" },
+			{ "x :variable, a :value, f :any    | diff(f^a, x)    = diff(f, x) a f^(a-1)" },
+			{ "x :variable, a :value, f :any    | diff(a^f, x)    = diff(f, x) ln(a) a^f" },
+			{ "x :variable, g :any, h :any      | diff(g^h, x)    = (diff(h, x) ln(g) + h diff(g, x)/g) g^h" },
+			{ "x :variable, u :any, v :summands | diff(u + v, x)  = diff(u, x) + diff(v, x)" },
+			{ "x :variable, u :any, v :factors  | diff(u v, x)    = diff(u, x) v + u diff(v, x)" },
+			{ "x :variable, f :any              | diff(sin(f), x) = diff(f, x) cos(f)" },
+			{ "x :variable, f :any              | diff(cos(f), x) = diff(f, x) (-sin(f))" },
+			{ "x :variable, f :any              | diff(exp(f), x) = diff(f, x) exp(f)" },
+			{ "x :variable, f :any              | diff(ln(f), x)  = diff(f, x) 1/f" },
+			
+			//exponential runtime fibonacci implementation:
+			{ "fib(0) = 0" },
+			{ "fib(1) = 1" },
+			{ "n :nat | fib(n) = fib(n - 1) + fib(n - 2)" },
 			
 			//reversing a list:
 			{ "xs :params | reverse(list{xs}) = reverse'(list{}, list{xs})" },
@@ -145,14 +148,14 @@ namespace bmath::intern::debug {
 			{ "xs :params, y, zs :params | weird_concat(list{xs}, y, list{zs}) = list{xs, y, zs}" }, 		
 		});
 
-		for (const auto& p : patterns) {
-			std::cout << p.to_string() << "\n";
-			assert(tree::valid_storage(p.lhs_ref()));
-			assert(tree::valid_storage(p.rhs_ref()));
-			//std::cout << p.lhs_memory_layout() << "\n";
-			//std::cout << p.rhs_memory_layout() << "\n";
-			//std::cout << "lhs:\n" << p.lhs_tree() << "\n";
-			//std::cout << "rhs:\n" << p.rhs_tree() << "\n\n\n";
+		for (const auto& rule : rules) {
+			std::cout << rule.to_string() << "\n";
+			assert(tree::valid_storage(rule.lhs_ref()));
+			assert(tree::valid_storage(rule.rhs_ref()));
+			//std::cout << rule.lhs_memory_layout() << "\n";
+			//std::cout << rule.rhs_memory_layout() << "\n";
+			//std::cout << "lhs:\n" << rule.lhs_tree() << "\n";
+			//std::cout << "rhs:\n" << rule.rhs_tree() << "\n\n\n";
 		}
 		std::cout << "\n\n";
 
@@ -167,13 +170,13 @@ namespace bmath::intern::debug {
 				bool changed;
 				do {
 					changed = false;
-					for (const auto& p : patterns) {
-						if (test.match_and_replace(p)) {
-							//std::cout << "matched: " << p.to_string() << "\n";
+					for (const auto& rule : rules) {
+						if (test.match_and_replace(rule)) {
+							//std::cout << "matched: " << rule.to_string() << "\n";
 							changed = true;
 							test.establish_order();
 							assert(tree::valid_storage(test.ref()));
-							//std::cout << "    = " << test.to_string() << "\n";
+							std::cout << "    = " << test.to_string() << "\n";
 							//std::cout << test.to_tree() << "\n";
 							//std::cout << test.to_memory_layout() << "\n";
 							break;
@@ -337,7 +340,7 @@ namespace bmath::intern::test {
 		};
 		for (auto& s : term_names) {
 			std::cout << "baue aus: \"" << s << "\"\n";
-			const PnTerm pattern(s);
+			const RewriteRule pattern(s);
 			std::cout << "pattern: " << pattern.to_string() << "\n\n";
 			std::cout << "lhs speicher:\n" << pattern.lhs_memory_layout() << "\n\n";
 			std::cout << "rhs speicher:\n" << pattern.rhs_memory_layout() << "\n\n";
@@ -385,7 +388,7 @@ namespace bmath::intern::test {
 	void match()
 	{
 		//{ "x, a    | x x^a   = x^(a + 1)" };
-		auto p = pattern::PnTerm("x       | x x     = x^2");
+		auto p = pattern::RewriteRule("x       | x x     = x^2");
 		std::string t_name = "a / 0";
 		auto t = Term(t_name);
 		t.establish_order();

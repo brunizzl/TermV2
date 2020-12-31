@@ -1,10 +1,14 @@
 #pragma once
 
 #include <complex>
-#include <span>
 #include <optional>
 #include <compare>
 #include <string_view>
+#include <array>
+
+#include "utility/sumEnum.hpp"
+#include "utility/misc.hpp"
+#include "utility/vector.hpp"
 
 #include "typedIndex.hpp"
 #include "termStore.hpp"
@@ -34,7 +38,7 @@ namespace bmath::intern {
 	//behavior for every specific element in Fn is (at least) defined at array fn::fn_props_table specifying name and arity
 	// if the element in Fn is of order one (no functions as arguments / results), 
 	//  function fn::eval specifies how to evaluate
-	enum class Fn //short for Function
+	enum class Fn //most common version of Function with fixed arity and no commutivity
 	{
 		pow,    //params[0] := base      params[1] := expo    
 		log,	//params[0] := base      params[1] := argument
@@ -62,15 +66,17 @@ namespace bmath::intern {
 		COUNT
 	};
 
-	enum class Leaf
+	using Function = SumEnum<Fn, NamedFn, Variadic>;
+
+	//only leaves in MathType
+	enum class Literal
 	{
 		variable,
 		complex,
 		COUNT
 	};
 
-	using MathType = SumEnum<Leaf, Fn, NamedFn, Variadic>;
-
+	using MathType = SumEnum<Literal, Function>;
 
 
 	//not expeced to be present in normal Term, only in Patterns
@@ -87,7 +93,7 @@ namespace bmath::intern {
 	//thus all info required in the tree is given in the typed_idx, where the index is repurposed to point elsewhere
 	enum class MultiPn 
 	{ 
-		params, //only of MultiPn allowed in valid pattern on lhs (exchanged in PnTerm's constructor)
+		params, //only of MultiPn allowed in valid pattern on lhs (exchanged in RewriteRule's constructor)
 		summands, //only expected at rhs of valid pattern, to allow a sum (of all summands) as factor
 		factors,  //only expected at rhs of valid pattern, to allow a product (of all factors) as summand
 		COUNT 
@@ -110,7 +116,7 @@ namespace bmath::intern {
 		{
 			any,
 			nn1, //compact for "not negative one" (basically any, but the exact term "-1" will not be accepted)
-			no_val, //basically any, but Leaf::complex is forbidden    
+			no_val, //basically any, but Literal::complex is forbidden    
 			function, //packs Variadic, NamedFn and Fn together
 			COUNT
 		};
@@ -226,9 +232,6 @@ namespace bmath::intern {
 
 	//utility for NamedFn, types in Fn and types in Variadic
 	namespace fn {
-
-		constexpr bool is_function(const Type type) noexcept
-		{ return type.is<Fn>() || type.is<NamedFn>() || type.is<Variadic>(); }
 
 		struct FnProps //short for Function Properties
 		{
@@ -409,14 +412,14 @@ namespace bmath::intern {
 
 		bool has_form(const Complex& nr, const Form form);
 
-		struct PnTerm
+		struct RewriteRule
 		{
 			TypedIdx lhs_head;
 			TypedIdx rhs_head;
 			Store lhs_store;
 			Store rhs_store;
 
-			PnTerm(std::string name);
+			RewriteRule(std::string name);
 			std::string to_string() const;
 			std::string lhs_memory_layout() const;
 			std::string rhs_memory_layout() const;
@@ -477,7 +480,7 @@ namespace bmath::intern {
 
 			struct SharedValueDatum
 			{
-				Complex value = 0.0;
+				Complex value = std::numeric_limits<double>::quiet_NaN();
 				//indexes in Term to simplify (only usefull during rematch to only match later elements)
 				TypedIdx mtch_idx = TypedIdx{}; 
 				//the instance of ValueMatchVariable that was setting value_match (thus is also responsible for resetting)
@@ -485,7 +488,9 @@ namespace bmath::intern {
 
 				constexpr bool is_set() const noexcept
 				{
-					assert(equivalent(this->value != 0.0, this->responsible != TypedIdx{}, this->mtch_idx != TypedIdx{}));
+					assert(equivalent(!std::isnan(this->value.real()), 
+						this->responsible != TypedIdx{}, 
+						this->mtch_idx != TypedIdx{}));
 					return  this->responsible != TypedIdx{};
 				}
 			};
@@ -501,7 +506,7 @@ namespace bmath::intern {
 				std::array<decltype(IndexVector::Info::size), max_pn_variadic_size> match_positions = {};
 			};
 
-			//to allow a constant PnTerm to be matched against, all match info is stored here
+			//to allow a constant RewriteRule to be matched against, all match info is stored here
 			struct MatchData
 			{
 				//maximal number of unrelated ValueMatchVariables allowed per pattern
@@ -556,7 +561,7 @@ namespace bmath::intern {
 			//  in all permutations
 			bool subsequent_permutation_equals(const Ref pn_ref, const Ref ref, MatchData& match_data);
 
-			//copies pn_ref with match_data into store, returns head of copied result.
+			//copies pn_ref with match_data into dst_store, returns head of copied result.
 			[[nodiscard]] TypedIdx copy(const Ref pn_ref, const MatchData& match_data, 
 				const Store& src_store, Store& dst_store);
 
@@ -659,7 +664,7 @@ namespace bmath {
 
 		intern::MutRef mut_ref() noexcept;
 		intern::Ref ref() const noexcept;
-		bool match_and_replace(const intern::pattern::PnTerm& p) noexcept; //returns true if match was found 
+		bool match_and_replace(const intern::pattern::RewriteRule& p) noexcept; //returns true if match was found 
 	};	//class Term
 
 }	//namespace bmath

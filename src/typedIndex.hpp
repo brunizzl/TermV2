@@ -4,7 +4,7 @@
 #include <type_traits>
 #include <bit>
 
-#include "termUtility.hpp"
+#include "utility/misc.hpp"
 
 namespace bmath::intern {
 

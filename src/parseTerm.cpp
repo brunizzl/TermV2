@@ -2,8 +2,9 @@
 #include <cassert>
 #include <algorithm>
 
+#include "utility/misc.hpp"
+
 #include "parseTerm.hpp"
-#include "termUtility.hpp"
 
 namespace bmath::intern {
 

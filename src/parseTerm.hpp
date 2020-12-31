@@ -4,7 +4,6 @@
 #include <string_view>
 #include <cassert>
 
-#include "termUtility.hpp"
 
 namespace bmath {
 

@@ -59,7 +59,7 @@ namespace bmath::intern {
 	{
 		const std::size_t result_idx = store.allocate();
 		new (&store.at(result_idx)) TypesUnion(complex);
-		return TypedIdx(result_idx, Type(Leaf::complex));
+		return TypedIdx(result_idx, Type(Literal::complex));
 	}
 
 	template<typename Store_T>

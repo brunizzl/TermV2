@@ -9,7 +9,6 @@
 
 #include <iostream>
 
-#include "termUtility.hpp"
 #include "arithmeticTerm.hpp"
 #include "ioArithmetic.hpp"
 
@@ -30,8 +29,8 @@ namespace bmath::intern {
 	constexpr int generality(Type type) noexcept 
 	{ 
 		constexpr auto type_generality_table = std::to_array<std::pair<Type, int>>({
-			{ Type(Leaf::complex        ), 1000 }, 
-			{ Type(Leaf::variable       ), 1001 },
+			{ Type(Literal::complex     ), 1000 }, 
+			{ Type(Literal::variable    ), 1001 },
 			{ Type(PnNode::value_match  ), 1002 }, //may match different subsets of complex numbers, but always requires an actual value to match against
 			{ Type(PnNode::value_proxy  ), 1003 }, //dont care really where this sits, as it never ist used in matching anyway
 			//values 2xxx are not present, as that would require every item in Fn to be listed here (instead default_generality kicks in here)
@@ -157,16 +156,16 @@ namespace bmath::intern {
 				CharVector::free(*ref.store, fn::named_fn_name_index(ref));
 				[[fallthrough]];
 			default: 
-				assert(fn::is_function(ref.type));
+				assert(ref.type.is<Function>());
 				for (const TypedIdx elem : fn::range(ref)) {
 					tree::free(ref.new_at(elem));
 				}
 				IndexVector::free(*ref.store, ref.index);
 				break;
-			case Type(Leaf::variable): 
+			case Type(Literal::variable): 
 				CharVector::free(*ref.store, ref.index);
 				break;
-			case Type(Leaf::complex):
+			case Type(Literal::complex):
 				ref.store->free(ref.index);
 				break;
 			case Type(PnNode::tree_match):
@@ -213,7 +212,7 @@ namespace bmath::intern {
 						}						
 						IndexVector::free(*ref.store, summand.get_index()); //free nested sum, but not nested summands
 						break;
-					case Type(Leaf::complex):						
+					case Type(Literal::complex):						
 						if (const OptComplex res = compute([&] { return value_acc + ref.store->at(summand.get_index()).complex; })) {
 							value_acc = res;
 							tree::free(ref.new_at(summand));
@@ -254,7 +253,7 @@ namespace bmath::intern {
 					switch (factor.get_type()) {
 					case Type(Fn::pow): {
 						IndexVector& power = *ref.new_at(factor);
-						if (power[0].get_type() == Leaf::complex && power[1].get_type() == Leaf::complex) {
+						if (power[0].get_type() == Literal::complex && power[1].get_type() == Literal::complex) {
 							std::array<OptComplex, 4> power_params = {
 								ref.store->at(power[0].get_index()).complex,
 								ref.store->at(power[1].get_index()).complex,
@@ -276,7 +275,7 @@ namespace bmath::intern {
 						}
 						IndexVector::free(*ref.store, factor.get_index()); //free nested product, but not nested factors
 						break;
-					case Type(Leaf::complex):
+					case Type(Literal::complex):
 						if (const OptComplex res = compute([&] { return factor_acc * ref.store->at(factor.get_index()).complex; })) {
 							factor_acc = res;
 							tree::free(ref.new_at(factor));
@@ -324,7 +323,7 @@ namespace bmath::intern {
 			case Type(Fn::force): {
 				TypedIdx& param = ref->parameters[0];
 				param = tree::combine(ref.new_at(param), false);
-				if (param.get_type() == Leaf::complex) {
+				if (param.get_type() == Literal::complex) {
 					const TypedIdx result_val = param;
 					ref.store->free(ref.index);
 					return result_val;
@@ -336,7 +335,7 @@ namespace bmath::intern {
 					std::array<OptComplex, 4> res_vals = { OptComplex{}, {}, {}, {} }; //default initialized to NaN
 					for (std::size_t i = 0; i < fn::arity(ref.type); i++) {
 						params[i] = tree::combine(ref.new_at(params[i]), exact);
-						if (params[i].get_type() == Leaf::complex) {
+						if (params[i].get_type() == Literal::complex) {
 							res_vals[i] = ref.store->at(params[i].get_index()).complex;
 						}
 					}
@@ -354,9 +353,9 @@ namespace bmath::intern {
 					}
 					break;
 				}
-			case Type(Leaf::variable): 
+			case Type(Literal::variable): 
 				break;
-			case Type(Leaf::complex): 
+			case Type(Literal::complex): 
 				break;
 			case Type(PnNode::tree_match): 
 				break;
@@ -364,8 +363,8 @@ namespace bmath::intern {
 				pattern::ValueMatchVariable& var = *ref;
 				var.mtch_idx = tree::combine(ref.new_at(var.mtch_idx), exact);
 				var.copy_idx = tree::combine(ref.new_at(var.copy_idx), exact);
-				assert(var.mtch_idx.get_type() != Leaf::complex); //subtree always contains value_proxy, thus should never be evaluatable    
-				assert(var.copy_idx.get_type() != Leaf::complex);  //subtree always contains value_proxy, thus should never be evaluatable    
+				assert(var.mtch_idx.get_type() != Literal::complex); //subtree always contains value_proxy, thus should never be evaluatable    
+				assert(var.copy_idx.get_type() != Literal::complex);  //subtree always contains value_proxy, thus should never be evaluatable    
 			} break;
 			case Type(PnNode::value_proxy): 
 				break;
@@ -405,7 +404,7 @@ namespace bmath::intern {
 				}
 			} [[fallthrough]];
 			default: {
-				assert(fn::is_function(ref_1.type));
+				assert(ref_1.type.is<Function>());
 				const IndexVector& vector_1 = *ref_1;
 				const IndexVector& vector_2 = *ref_2;
 				if (const auto cmp = vector_1.size() <=> vector_2.size(); cmp != std::strong_ordering::equal) {
@@ -424,12 +423,12 @@ namespace bmath::intern {
 				}
 				return std::strong_ordering::equal;
 			} break;			
-			case Type(Leaf::variable): {
+			case Type(Literal::variable): {
 				const CharVector& var_1 = *ref_1;
 				const CharVector& var_2 = *ref_2;
 				return compare_char_vecs(var_1, var_2);
 			} break;
-			case Type(Leaf::complex): {
+			case Type(Literal::complex): {
 				const Complex& complex_1 = *ref_1;
 				const Complex& complex_2 = *ref_2;
 				return compare_complex(complex_1, complex_2);
@@ -502,7 +501,7 @@ namespace bmath::intern {
 		{
 			switch (src_ref.type) {			
 			default: {
-				assert(fn::is_function(src_ref.type));
+				assert(src_ref.type.is<Function>());
 				StupidBufferVector<TypedIdx, 12> dst_parameters;
 				for (const TypedIdx src_param : fn::save_range(src_ref)) {
 					const TypedIdx dst_param = tree::copy(src_ref.new_at(src_param), dst_store);
@@ -517,13 +516,13 @@ namespace bmath::intern {
 					return TypedIdx(IndexVector::build(dst_store, dst_parameters), src_ref.type);
 				}
 			} break;
-			case Type(Leaf::variable): {
+			case Type(Literal::variable): {
 				const CharVector& src_var = *src_ref;
 				const auto src_name = std::string(src_var.data(), src_var.size());
 				const std::size_t dst_index = CharVector::build(dst_store, src_name);
 				return TypedIdx(dst_index, src_ref.type);
 			} break;
-			case Type(Leaf::complex): 
+			case Type(Literal::complex): 
 				[[fallthrough]];
 			case Type(PnNode::tree_match): {
 				const std::size_t dst_index = dst_store.allocate();
@@ -577,16 +576,16 @@ namespace bmath::intern {
 				const auto [index, type] = head.split();
 				switch (type) {
 				default: {
-					assert(fn::is_function(type));
+					assert(type.is<Function>());
 					for (TypedIdx& elem : fn::range(MutRef(store, head))) {
 						if (TypedIdx* const elem_res = tree::find_subtree_owner(store, elem, subtree)) {
 							return elem_res;
 						}
 					}
 				} break;
-				case Type(Leaf::variable): 
+				case Type(Literal::variable): 
 					break;
-				case Type(Leaf::complex): 
+				case Type(Literal::complex): 
 					break;
 				case Type(PnNode::tree_match): 
 					break;
@@ -628,7 +627,7 @@ namespace bmath::intern {
 						}
 						return false;
 					};
-					if (fn::is_function(ref.type)) {
+					if (ref.type.is<Function>()) {
 						const IndexVector& vec = *ref;
 						if (set_all_in_range(ref.index, ref.index + vec.node_count())) return true;
 						if (ref.type == NamedFn{}) {
@@ -637,7 +636,7 @@ namespace bmath::intern {
 							if (set_all_in_range(name_index, name_index + name_node_count)) return true;
 						}
 					}					
-					else if (ref.type == Leaf::variable) {
+					else if (ref.type == Literal::variable) {
 						const CharVector& vec = *ref;
 						if (set_all_in_range(ref.index, ref.index + vec.node_count())) return true;
 					}
@@ -655,7 +654,7 @@ namespace bmath::intern {
 		{
 			using namespace pattern;
 			const auto test_for_variables = [](const Ref ref) -> fold::FindBool {
-				return ref.type == Leaf::variable || ref.type.is<MatchType>();
+				return ref.type == Literal::variable || ref.type.is<MatchType>();
 			};
 			return fold::simple_fold<fold::FindBool>(ref, test_for_variables);
 		} //contains_variables
@@ -663,7 +662,7 @@ namespace bmath::intern {
 		TypedIdx search_variable(const Ref ref, const std::string_view name)
 		{
 			const auto test_for_name = [name](Ref ref) -> fold::Find<TypedIdx> {
-				return (ref.type == Leaf::variable && std::string_view(ref->char_vec.data(), ref->char_vec.size()) == name) ?
+				return (ref.type == Literal::variable && std::string_view(ref->char_vec.data(), ref->char_vec.size()) == name) ?
 					fold::done(TypedIdx(ref.index, ref.type)) : //name was found -> cut tree evaluation here
 					fold::more(TypedIdx());
 			};
@@ -681,9 +680,9 @@ namespace bmath::intern {
 			case Restriction(Restr::any):
 				return true;
 			case Restriction(Restr::no_val):
-				return ref.type != Leaf::complex;
+				return ref.type != Literal::complex;
 			case Restriction(Restr::nn1):
-				return (ref.type != Leaf::complex) || (ref->complex != -1.0);
+				return (ref.type != Literal::complex) || (ref->complex != -1.0);
 			case Restriction(Restr::function):
 				return ref.type.is<Variadic>() || ref.type.is<Fn>();
 			default:
@@ -719,7 +718,7 @@ namespace bmath::intern {
 			}
 		} //has_form
 
-		PnTerm::PnTerm(std::string name)
+		RewriteRule::RewriteRule(std::string name)
 		{
 			auto parse_string = ParseString(name);
 			parse_string.allow_implicit_product();
@@ -730,8 +729,8 @@ namespace bmath::intern {
 			throw_if(table.value_table.size() > match::MatchData::max_value_match_count, "too many value match variables declared");
 			throw_if(table.multi_table.size() > match::MatchData::max_multi_match_count, "too many multi match variables declared");
 			PatternBuildFunction build_function = { table };
-			decltype(PnTerm::lhs_store) lhs_temp; //exists, because actions like rearrange_value_match might produce free slots in store.
-			decltype(PnTerm::rhs_store) rhs_temp; //exists, because actions like rearrange_value_match might produce free slots in store.
+			decltype(RewriteRule::lhs_store) lhs_temp; //exists, because actions like rearrange_value_match might produce free slots in store.
+			decltype(RewriteRule::rhs_store) rhs_temp; //exists, because actions like rearrange_value_match might produce free slots in store.
 			this->lhs_head = build_function(lhs_temp, parts.lhs);
 			table.build_lhs = false;
 			this->rhs_head = build_function(rhs_temp, parts.rhs);
@@ -785,7 +784,7 @@ namespace bmath::intern {
 									}
 								};
 								const auto leaf_apply = [](const Ref ref) {
-									return ref.type.is<Leaf>() ? 0 : std::numeric_limits<int>::max();
+									return ref.type.is<Literal>() ? 0 : std::numeric_limits<int>::max();
 								};
 								return fold::tree_fold<int, Accumulator>(ref, leaf_apply);
 							};
@@ -888,7 +887,7 @@ namespace bmath::intern {
 			this->rhs_head = tree::copy(Ref(rhs_temp, this->rhs_head), this->rhs_store);
 		}
 
-		std::string PnTerm::to_string() const
+		std::string RewriteRule::to_string() const
 		{
 			std::string str;
 			print::append_to_string(this->lhs_ref(), str);
@@ -897,22 +896,22 @@ namespace bmath::intern {
 			return str;
 		}
 
-		std::string PnTerm::lhs_memory_layout() const
+		std::string RewriteRule::lhs_memory_layout() const
 		{
 			return print::to_memory_layout(this->lhs_store, { this->lhs_head });
 		}
 
-		std::string PnTerm::rhs_memory_layout() const
+		std::string RewriteRule::rhs_memory_layout() const
 		{
 			return print::to_memory_layout(this->rhs_store, { this->rhs_head });
 		}
 
-		std::string PnTerm::lhs_tree(const std::size_t offset) const
+		std::string RewriteRule::lhs_tree(const std::size_t offset) const
 		{
 			return print::to_tree(this->lhs_ref(), offset);
 		}
 
-		std::string PnTerm::rhs_tree(const std::size_t offset) const
+		std::string RewriteRule::rhs_tree(const std::size_t offset) const
 		{
 			return print::to_tree(this->rhs_ref(), offset);
 		}
@@ -948,7 +947,7 @@ namespace bmath::intern {
 							case Type(Fn::pow):     break;// for now only allow these Fn to be computed in value
 							case Type(Fn::sqrt):    break;// for now only allow these Fn to be computed in value  
 							default:
-								assert(fn::is_function(ref.type)); 
+								assert(ref.type.is<Function>()); 
 								[[fallthrough]];
 							case Type(PnNode::value_match): {
 								const bool is_right_match = TypedIdx(ref.index, ref.type) == value;
@@ -963,7 +962,7 @@ namespace bmath::intern {
 					}; //struct OpAccumulator
 
 					const auto leaf_apply = [](const Ref ref) -> MatchTraits {
-						return MatchTraits{ false, is_one_of<Leaf::complex, PnNode::value_proxy>(ref.type) };
+						return MatchTraits{ false, is_one_of<Literal::complex, PnNode::value_proxy>(ref.type) };
 					};
 
 					const ValueMatchVariable& var = store.at(value.get_index()).value_match;
@@ -977,7 +976,7 @@ namespace bmath::intern {
 					return &head;
 				}
 				else if (this_traits.has_match) { //this contains match, but also other junk -> just return part with match
-					assert(fn::is_function(head.get_type()));
+					assert(head.get_type().is<Function>());
 					for (TypedIdx& elem : fn::unsave_range(MutRef(store, head))) {
 						if (TypedIdx* const elem_res = find_value_match_subtree(store, elem, value)) {
 							return elem_res;
@@ -1041,9 +1040,9 @@ namespace bmath::intern {
 						//new eq.rhs_head is product (sum) of old eq.rhs_head divided by (minus) eq.lhs_head factors (summands).
 						eq.rhs_head = TypedIdx(IndexVector::build(store, result_buffer), lhs_type);  
 					} break;
-					case Type(Leaf::variable): 
+					case Type(Literal::variable): 
 						assert(false); break;
-					case Type(Leaf::complex): 
+					case Type(Literal::complex): 
 						assert(false); break;
 					case Type(PnNode::tree_match): 
 						assert(false); break;
@@ -1060,7 +1059,7 @@ namespace bmath::intern {
 					case Type(Fn::pow): {
 						IndexVector* params = &store.at(lhs_index).parameters;
 						if (tree::contains(Ref(store, (*params)[0u]), to_isolate)) { //case <contains var>^<computable>
-							if ((*params)[1u].get_type() == Leaf::complex && MutRef(store, (*params)[1u])->complex == 2.0) { //special case <contains var>^2 -> use sqrt, not <...>^0.5
+							if ((*params)[1u].get_type() == Literal::complex && MutRef(store, (*params)[1u])->complex == 2.0) { //special case <contains var>^2 -> use sqrt, not <...>^0.5
 								tree::free(MutRef(store, (*params)[1u]));
 								(*params)[1u] = TypedIdx();
 								params->size() = 1u;
@@ -1103,7 +1102,7 @@ namespace bmath::intern {
 				const auto get_divisor = [](const Ref ref) -> std::optional<TypedIdx> {
 					if (ref.type == Fn::pow) {
 						const IndexVector& params = *ref;
-						if (params[1].get_type() == Leaf::complex) {
+						if (params[1].get_type() == Literal::complex) {
 							if (ref.new_at(params[1])->complex == -1.0) {
 								return { params[0] }; //return just base
 							}
@@ -1174,7 +1173,7 @@ namespace bmath::intern {
 					}
 					return compute_exact([&] { return fn::eval(ref.type.to<Fn>(), res_vals); });
 				} break;
-				case Type(Leaf::complex): 
+				case Type(Literal::complex): 
 					return ref->complex;
 				case Type(PnNode::value_proxy): 
 					return start_val;
@@ -1203,7 +1202,7 @@ namespace bmath::intern {
 						}
 					} [[fallthrough]];				
 					default: {
-						assert(fn::is_function(pn_ref.type));
+						assert(pn_ref.type.is<Function>());
 						if (pn_ref.type.is<Variadic>() && fn::is_unordered(pn_ref.type)) {
 							if (pn_ref->parameters.size() > ref->parameters.size()) {
 								return false;
@@ -1251,12 +1250,12 @@ namespace bmath::intern {
 							return false;
 						}
 					} break;
-					case Type(Leaf::variable): {
+					case Type(Literal::variable): {
 						const CharVector& var = *ref;
 						const CharVector& pn_var = *pn_ref;
 						return std::string_view(var.data(), var.size()) == std::string_view(pn_var.data(), pn_var.size());
 					} break;
-					case Type(Leaf::complex): {
+					case Type(Literal::complex): {
 						const Complex& complex = *ref;
 						const Complex& pn_complex = *pn_ref;
 						return compare_complex(complex, pn_complex) == std::strong_ordering::equal;
@@ -1284,7 +1283,7 @@ namespace bmath::intern {
 					}
 				} break;
 				case Type(PnNode::value_match): {
-					if (ref.type != Leaf::complex) { //only this test allows us to pass *ref to evaluate this_value
+					if (ref.type != Literal::complex) { //only this test allows us to pass *ref to evaluate this_value
 						return false;
 					}
 					const ValueMatchVariable& var = *pn_ref;
@@ -1366,7 +1365,7 @@ namespace bmath::intern {
 
 		bool subsequent_permutation_equals(const Ref pn_ref, const Ref ref, MatchData& match_data)
 		{
-			if (!fn::is_function(pn_ref.type)) {
+			if (!pn_ref.type.is<Function>()) {
 				return false; //can not rematch at all
 			}
 			if (pn_ref.type.is<Variadic>() && fn::is_unordered(pn_ref.type)) {
@@ -1472,7 +1471,7 @@ namespace bmath::intern {
 		{
 			switch (pn_ref.type) {
 			default: {
-				assert(fn::is_function(pn_ref.type));
+				assert(pn_ref.type.is<Function>());
 				StupidBufferVector<TypedIdx, 12> dst_parameters;
 				for (const TypedIdx pn_param : fn::save_range(pn_ref)) {
 					if (pn_param.get_type() == MultiPn::params) { //summands and factors need stay their type (summands always to sum...)
@@ -1495,13 +1494,13 @@ namespace bmath::intern {
 					return TypedIdx(IndexVector::build(dst_store, dst_parameters), pn_ref.type);
 				}
 			} break;
-			case Type(Leaf::variable): {
+			case Type(Literal::variable): {
 				const CharVector& src_var = *pn_ref;
 				const auto src_name = std::string(src_var.data(), src_var.size());
 				const std::size_t dst_index = CharVector::build(dst_store, src_name);
 				return TypedIdx(dst_index, pn_ref.type);
 			} break;
-			case Type(Leaf::complex): {
+			case Type(Literal::complex): {
 				const std::size_t dst_index = dst_store.allocate();
 				dst_store.at(dst_index) = *pn_ref; //bitwise copy
 				return TypedIdx(dst_index, pn_ref.type);
@@ -1519,7 +1518,7 @@ namespace bmath::intern {
 				const Complex& val = match_data.value_match_data[pn_ref.index].value;
 				const std::size_t dst_index = dst_store.allocate();
 				dst_store.at(dst_index) = val;
-				return TypedIdx(dst_index, Type(Leaf::complex));
+				return TypedIdx(dst_index, Type(Literal::complex));
 			} break;
 			case Type(MultiPn::summands):
 				[[fallthrough]];
@@ -1598,11 +1597,10 @@ namespace bmath::intern {
 		std::pair<std::optional<TypedIdx>, bool> recursive_match_and_replace(const Ref in, const Ref out, const MutRef ref)
 		{
 			assert(ref.type.is<MathType>());
-			if (fn::is_function(ref.type)) {
+			if (ref.type.is<Function>()) {
 				auto range = fn::range(ref);
-				auto iter = begin(range);
 				const auto stop = end(range);
-				for (; iter != stop; ++iter) {
+				for (auto iter = begin(range); iter != stop; ++iter) {
 					const auto [new_elem, matched_deeper] = recursive_match_and_replace(in, out, ref.new_at(*iter));
 					if (new_elem) {
 						*iter = *new_elem;
@@ -1625,7 +1623,7 @@ namespace bmath::intern {
 		{
 			constexpr bool return_early_possible = ReturnEarlyPossible<Res_T>::value;
 
-			if (fn::is_function(ref.type)) {
+			if (ref.type.is<Function>()) {
 				for (const auto elem : fn::range(ref)) {
 					const Res_T elem_res = fold::simple_fold<Res_T>(ref.new_at(elem), apply);
 					if constexpr (return_early_possible) { if (elem_res.return_early()) { return elem_res; } }
@@ -1644,7 +1642,7 @@ namespace bmath::intern {
 		template<typename Res_T, typename OpAccumulator, typename Union_T, typename Type_T, Const is_const, typename LeafApply, typename... AccInit>
 		Res_T tree_fold(const BasicRef<Union_T, Type_T, is_const> ref, LeafApply leaf_apply, const AccInit... init)
 		{
-			if (fn::is_function(ref.type)) {
+			if (ref.type.is<Function>()) {
 				OpAccumulator acc(ref, init...);
 				for (const auto elem : fn::range(ref)) {
 					acc.consume(fold::tree_fold<Res_T, OpAccumulator>(ref.new_at(elem), leaf_apply, init...));
@@ -1741,7 +1739,7 @@ namespace bmath {
 		return Ref(this->store, this->head);
 	}
 
-	bool Term::match_and_replace(const intern::pattern::PnTerm& p) noexcept
+	bool Term::match_and_replace(const intern::pattern::RewriteRule& p) noexcept
 	{
 		const auto [head_match, deeper_match] = pattern::match::recursive_match_and_replace(p.lhs_ref(), p.rhs_ref(), this->mut_ref());
 		if (head_match) {

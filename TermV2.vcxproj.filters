@@ -41,9 +41,6 @@
     <ClInclude Include="src\typedIndex.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\termUtility.hpp">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="src\parseTerm.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -57,6 +54,21 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\termVector.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\utility\bit.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\utility\misc.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\utility\stringLiteral.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\utility\sumEnum.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\utility\vector.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

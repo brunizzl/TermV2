@@ -4,10 +4,10 @@
 #include <type_traits>
 #include <array>
 
-#include <iostream>
+#include "utility/bit.hpp"
 
-#include "termUtility.hpp"
 #include "typedIndex.hpp"
+
 
 namespace bmath::intern {
 
@@ -314,32 +314,6 @@ namespace bmath::intern {
 
 	}; //class BasicStore
 
-
-
-	template<typename Payload_T, typename Vec_T = std::vector<Payload_T>>
-	class BasicMonotonicStore
-	{
-		Vec_T vector;
-
-	public:
-		BasicMonotonicStore() noexcept = default;
-
-		constexpr void reserve(const std::size_t ammount) noexcept { this->vector.reserve(ammount); }
-
-		[[nodiscard]] std::size_t insert(const Payload_T& new_elem)
-		{
-			const std::size_t new_pos = this->vector.size();
-			this->vector.emplace_back(new_elem);
-			return new_pos;
-		}
-
-		[[nodiscard]] std::size_t allocate() noexcept { return this->insert(Payload_T()); }
-
-		[[nodiscard]] Payload_T& at(const std::size_t idx) noexcept { return this->vector[idx]; }
-		[[nodiscard]] const Payload_T& at(const std::size_t idx) const noexcept { return this->vector[idx]; }
-
-		[[nodiscard]] std::size_t size() const noexcept { return vector.size(); }
-	}; //struct BasicMonotonicStore
 
 
 

@@ -11,9 +11,9 @@ important:
  - throw if MatchData::max_variadic_count is succeeded in lhs of pattern (but ignore sums / products beneath value match variable)
  - check tree::copy and match::copy weather they work with two identical stores
  - use templates to allow multiple stores
- - write data structure one abstraction layer above PnTerm to group multiple pattens
+ - write data structure one abstraction layer above RewriteRule to group multiple pattens
  - restructure everything to use modules (basically needed to constexprfy all the things)
- - allow to restrict a variables possibility space e.g. natural, integer, real, complex (split Leaf::variable in own enum?)
+ - allow to restrict a variables possibility space e.g. natural, integer, real, complex (split Literal::variable in own enum?)
 
 nice to have:
  - introduce "intrinsic" type and use index in intrinsic typed_idx to specify witch (have all stored at central function pointer array)
@@ -25,9 +25,9 @@ nice to have:
 
 idea status:
  - const term_slc iterator dereferences to Ref, not typed_idx
- - ctor of PnTerm: regroup sums / products if nessecairy to allow value match variables to better catch values
+ - ctor of RewriteRule: regroup sums / products if nessecairy to allow value match variables to better catch values
  - TermSLC: only allow null_value at end -> SLC_Iterator becomes  simpler (meaning some functions in current form may produce invalid results)
- - let each PnTerm have a name in form of a constant c-string (not what pattern is constructed from, but name of rule, e.g. "differentiation: product rule" or something)
+ - let each RewriteRule have a name in form of a constant c-string (not what pattern is constructed from, but name of rule, e.g. "differentiation: product rule" or something)
  - prettify pattern::Multivar sytax to require (and allow) "..." after variable name 
  - always keep -1 at some known index in store and never allocate new -1 in build_negated and build_inverted (problem: identify bevore copy)
 */

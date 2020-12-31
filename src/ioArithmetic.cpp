@@ -4,7 +4,6 @@
 #include <numeric>
 
 #include "ioArithmetic.hpp"
-#include "termUtility.hpp"
 
 namespace bmath::intern {
 
@@ -63,14 +62,14 @@ namespace bmath::intern {
 		constexpr auto type_table = std::to_array<TypeProps>({
 			{ Variadic::sum       , "sum"           },
 			{ Variadic::product   , "product"       },
-			{ Leaf::variable      , "variable"      },
-			{ Leaf::complex       , "value"         }, //not to be mistaken for Form::complex
+			{ Literal::variable   , "variable"      },
+			{ Literal::complex    , "value"         }, //not to be mistaken for Form::complex
 			{ Restr::function     , "fn"            },
 			{ Form::natural       , "nat"           },
 			{ Form::natural_0     , "nat0"          },
 			{ Form::integer       , "int"           },
 			{ Form::real          , "real"          },
-			{ Form::complex       , "complex"       }, //not to be mistaken for Leaf::complex
+			{ Form::complex       , "complex"       }, //not to be mistaken for Literal::complex
 			{ Form::negative      , "negative"      },
 			{ Form::not_negative  , "not_negative"  },
 			{ Form::positive      , "positive"      },
@@ -98,8 +97,8 @@ namespace bmath::intern {
 				{ Type(Variadic::sum      ), 2 },
 				{ Type(Variadic::product  ), 4 },	
 				{ Type(Fn::pow            ), 5 }, //not between other function types -> assumed to be printed with '^'  
-				{ Type(Leaf::variable     ), 6 },
-				{ Type(Leaf::complex      ), 6 }, //may be printed as sum/product itself, then (maybe) has to add parentheses on its own
+				{ Type(Literal::variable  ), 6 },
+				{ Type(Literal::complex   ), 6 }, //may be printed as sum/product itself, then (maybe) has to add parentheses on its own
 				{ Type(PnNode::tree_match ), 6 },
 				{ Type(PnNode::value_match), 6 },
 				{ Type(PnNode::value_proxy), 6 },
@@ -372,7 +371,7 @@ namespace bmath::intern {
 			return build_function(store, input, head.where, build);
 		} break;
 		case Head::Type::variable: {
-			return TypedIdx(CharVector::build(store, input.to_string_view()), Type(Leaf::variable));
+			return TypedIdx(CharVector::build(store, input.to_string_view()), Type(Literal::variable));
 		} break;
 		default: 
 			assert(false); 
@@ -576,7 +575,7 @@ namespace bmath::intern {
 			case Head::Type::variable: {
 				if (input.chars[0u] == '\'') {
 					if (input.chars[input.size() - 1u] != '\'') [[unlikely]] throw ParseFailure{ input.offset + 1u, "found no matching \"'\"" };
-					return TypedIdx(CharVector::build(store, input.to_string_view(1u, input.size() - 1u)), Type(Leaf::variable));
+					return TypedIdx(CharVector::build(store, input.to_string_view(1u, input.size() - 1u)), Type(Literal::variable));
 				}
 				else {
 					return this->table.insert_instance(store, input);
@@ -645,10 +644,10 @@ namespace bmath::intern {
 					print::append_to_string(ref.new_at(param), str, own_infixr);
 				}
 			} break;
-			case Type(Leaf::variable): {
+			case Type(Literal::variable): {
 				str += std::string_view(ref->char_vec.data(), ref->char_vec.size());
 			} break;
-			case Type(Leaf::complex): {
+			case Type(Literal::complex): {
 				append_complex(ref->complex, str, parent_infixr);
 			} break;
 			case Type(PnNode::tree_match): {
@@ -705,7 +704,7 @@ namespace bmath::intern {
 			bool need_parentheses = infixr(ref.type) <= parent_infixr;
 
 			const auto get_negative_real = [](const Ref ref) ->OptDouble {
-				if (ref.type == Leaf::complex) {
+				if (ref.type == Literal::complex) {
 					const Complex& complex = *ref;
 					if (complex.real() < 0.0 && complex.imag() == 0.0) {
 						return { complex.real() };
@@ -841,10 +840,10 @@ namespace bmath::intern {
 				}
 				str.push_back(')');
 			} break;
-			case Type(Leaf::variable): {
+			case Type(Literal::variable): {
 				str += std::string_view(ref->char_vec.data(), ref->char_vec.size());
 			} break;
-			case Type(Leaf::complex): {
+			case Type(Literal::complex): {
 				append_complex(ref->complex, str, parent_infixr);
 			} break;
 			case Type(PnNode::tree_match): {
@@ -956,7 +955,7 @@ namespace bmath::intern {
 				if (ref.type == NamedFn{}) {
 					show_string_nodes(fn::named_fn_name_index(ref), true);
 				}
-				assert(fn::is_function(ref.type));
+				assert(ref.type.is<Function>());
 				current_str.append("function   : {");
 				const char* separator = "";
 				for (const auto param : fn::range(ref)) {
@@ -967,11 +966,11 @@ namespace bmath::intern {
 				current_str.push_back('}');
 				show_typedidx_vec_nodes(ref.index, false);
 			} break;
-			case Type(Leaf::variable): {
+			case Type(Literal::variable): {
 				current_str.append("variable   : ");
 				show_string_nodes(ref.index, false);
 			} break;
-			case Type(Leaf::complex): {
+			case Type(Literal::complex): {
 				current_str.append("value      : ");
 			} break;
 			case Type(PnNode::tree_match): {
@@ -1085,11 +1084,11 @@ namespace bmath::intern {
 					print::append_tree_row(ref.new_at(param), rows, offset + tab_width);
 				}
 			} break;
-			case Type(Leaf::variable): {
+			case Type(Literal::variable): {
 				current_str += ' ';
 				current_str += std::string_view(ref->char_vec.data(), ref->char_vec.size());
 			} break;
-			case Type(Leaf::complex): {
+			case Type(Literal::complex): {
 				current_str += ' ';
 				print::append_complex(*ref, current_str, 0u);
 			} break;
