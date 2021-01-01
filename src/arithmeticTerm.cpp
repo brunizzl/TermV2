@@ -1231,8 +1231,6 @@ namespace bmath::intern {
 					for (; pn_iter != pn_stop && iter != stop; ++pn_iter, ++iter) {
 						if (pn_iter->get_type().is<MultiPn>()) {
 							SharedMultiDatum& info = match_data.multi_info(pn_iter->get_index());
-							info.match_parent = ref.typed_idx();
-							info.pn_parent = pn_ref.typed_idx();
 							assert(info.match_indices.size() == 0u);
 							while (iter != stop) {
 								info.match_indices.push_back(*iter);
@@ -1298,30 +1296,10 @@ namespace bmath::intern {
 			case Type(PnNode::value_proxy): //may only be encountered in pn_tree::eval_value_match (as value_match does no permutation_equals call)
 				assert(false);
 				return false;
-			case Type(MultiPn::summands):
-				if (ref.type == Variadic::sum) {
-					SharedMultiDatum& info = match_data.multi_info(pn_ref.index);
-					info.match_parent = ref.typed_idx();
-					info.pn_parent = pn_ref.typed_idx();
-					assert(info.match_indices.size() == 0u);
-					for (const TypedIdx elem : fn::range(ref)) {
-						info.match_indices.push_back(elem);
-					}
-					return true;
-				}
-				return false;
-			case Type(MultiPn::factors):
-				if (ref.type == Variadic::product) {
-					SharedMultiDatum& info = match_data.multi_info(pn_ref.index);
-					info.match_parent = ref.typed_idx();
-					info.pn_parent = pn_ref.typed_idx();
-					assert(info.match_indices.size() == 0u);
-					for (const TypedIdx elem : fn::range(ref)) {
-						info.match_indices.push_back(elem);
-					}
-					return true;
-				}
-				return false;
+			case Type(MultiPn::summands): //not expected in matching side of pattern, only in replacement side
+				[[fallthrough]];
+			case Type(MultiPn::factors): //not expected in matching side of pattern, only in replacement side
+				[[fallthrough]];
 			case Type(MultiPn::params): //assumed to be handeled only as param of named_fn or ordered elements in Variadic 
 				assert(false);
 				return false;
@@ -1350,8 +1328,6 @@ namespace bmath::intern {
 					[[fallthrough]];
 				case Type(MultiPn::params): {
 					SharedMultiDatum& info = match_data.multi_info(ref.index);
-					info.match_parent = TypedIdx{};
-					info.pn_parent = TypedIdx{};
 					info.match_indices.clear();
 				} break;
 				}
@@ -1409,8 +1385,6 @@ namespace bmath::intern {
 				if (pn_params[pn_i].get_type() == MultiPn::params) [[unlikely]] { //also summands and factors are matched as params
 					assert(pn_i + 1ull == pn_params.size() && "MultiPn is only valid as last element -> only one per variadic");
 					SharedMultiDatum& info = match_data.multi_info(pn_params[pn_i].get_index());
-					info.match_parent = haystack_ref.typed_idx();
-					info.pn_parent = pn_ref.typed_idx();
 					info.match_indices.clear();
 					for (std::size_t k = 0u; k < haystack_params.size(); k++) {
 						if (!variadic_datum.currenty_matched.test(k)) {

@@ -173,7 +173,13 @@ namespace bmath::intern {
 
 		//not yet needed -> not yet thought about
 		BitVector& operator=(const BitVector&) = delete;
-		BitVector& operator=(BitVector&&) = delete;
+
+		BitVector& operator=(BitVector&& snd) noexcept
+		{
+			this->~BitVector();
+			new (this) BitVector(std::move(snd));
+			return *this;
+		}
 
 		~BitVector() noexcept
 		{

@@ -92,6 +92,14 @@ namespace bmath::intern {
 			assert(key_iter != this->keys.end());
 			return this->vals[std::distance(this->keys.begin(), key_iter)];
 		}
+
+		constexpr const Val_T& at(const Key_T& key) const noexcept
+		{
+			assert(key != NullKey);
+			const auto key_iter = std::find(this->keys.begin(), this->keys.end(), key);
+			assert(key_iter != this->keys.end());
+			return this->vals[std::distance(this->keys.begin(), key_iter)];
+		}
 	}; //struct StupidLinearMap
 
 

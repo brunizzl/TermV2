@@ -476,8 +476,6 @@ namespace bmath::intern {
 			struct SharedMultiDatum
 			{
 				StupidBufferVector<TypedIdx, 8> match_indices; //indexes in Term to simplify
-				TypedIdx match_parent = TypedIdx{}; //index of variadic holding matches of this
-				TypedIdx pn_parent = TypedIdx{}; //index of variadic owning this in pattern
 			};
 
 			struct SharedValueDatum
