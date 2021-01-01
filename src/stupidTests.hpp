@@ -145,7 +145,7 @@ namespace bmath::intern::debug {
 			
 			{ "p :real, xs :params | sort(list{p, xs}) = weird_concat(sort(filter_s(p, list{}, list{xs})), p, sort(filter_le(p, list{}, list{xs})))" },
 			{ "                    | sort(list{})      = list{}" },
-			{ "xs :params, y, zs :params | weird_concat(list{xs}, y, list{zs}) = list{xs, y, zs}" }, 		
+			{ "xs :params, y, zs :params | weird_concat(list{xs}, y, list{zs}) = list{xs, y, zs}" }, 
 		});
 
 		for (const auto& rule : rules) {

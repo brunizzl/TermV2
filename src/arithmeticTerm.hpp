@@ -482,7 +482,7 @@ namespace bmath::intern {
 			{
 				Complex value = std::numeric_limits<double>::quiet_NaN();
 				//indexes in Term to simplify (only usefull during rematch to only match later elements)
-				TypedIdx mtch_idx = TypedIdx{}; 
+				TypedIdx match_idx = TypedIdx{}; 
 				//the instance of ValueMatchVariable that was setting value_match (thus is also responsible for resetting)
 				TypedIdx responsible = TypedIdx{};
 
@@ -490,20 +490,20 @@ namespace bmath::intern {
 				{
 					assert(equivalent(!std::isnan(this->value.real()), 
 						this->responsible != TypedIdx{}, 
-						this->mtch_idx != TypedIdx{}));
+						this->match_idx != TypedIdx{}));
 					return  this->responsible != TypedIdx{};
 				}
 			};
 
 			struct SharedVariadicDatum
 			{
-				//no sum or product in a pattern may have more summands / factors than max_pn_variadic_size many
-				static constexpr std::size_t max_pn_variadic_size = 8u;
+				//no sum or product in a pattern may have more summands / factors than max_pn_variadic_params_count many
+				static constexpr std::size_t max_pn_variadic_params_count = 8u;
 				//if currenty_matched.test(i), then element i in term to match is currently matched by an element in pattern.
 				BitVector currenty_matched = {}; 
 				//every element in pattern (except all MultiPn) has own entry which logs, 
 				//  with which element in term to match it currently is associated with.
-				std::array<decltype(IndexVector::Info::size), max_pn_variadic_size> match_positions = {};
+				std::array<decltype(IndexVector::Info::size), max_pn_variadic_params_count> match_positions = {};
 			};
 
 			//to allow a constant RewriteRule to be matched against, all match info is stored here

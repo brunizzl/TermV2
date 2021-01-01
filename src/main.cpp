@@ -8,14 +8,14 @@ TODO:
 important:
  - seperate match and replace into multiple functions
  - add concept of "easy pattern" with every pattern variable occuring only once, match these in guaranteed linear time
- - throw if MatchData::max_variadic_count is succeeded in lhs of pattern (but ignore sums / products beneath value match variable)
- - check tree::copy and match::copy weather they work with two identical stores
  - use templates to allow multiple stores
  - write data structure one abstraction layer above RewriteRule to group multiple pattens
  - restructure everything to use modules (basically needed to constexprfy all the things)
  - allow to restrict a variables possibility space e.g. natural, integer, real, complex (split Literal::variable in own enum?)
 
 nice to have:
+ - find a way to give every variadic in pattern an index (without skipping any indices), then store index table in match_data and acess variadic_datum by index,
+     then get rid of MultimatchData and let the index of MultiPn refer to the owning variadic_datum (thus the variadic_datum also needs to know the variadic it matches)
  - introduce "intrinsic" type and use index in intrinsic typed_idx to specify witch (have all stored at central function pointer array)
  - add a pattern variable type catching functions with other pattern variables beeing parameters of these functions (perhaps two types, one parameters?)
  - match::permutation_equals: abort earlier (use fact that both terms are (assumed to be) sorted, not only pattern)

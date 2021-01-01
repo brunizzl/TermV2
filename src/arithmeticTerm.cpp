@@ -485,16 +485,16 @@ namespace bmath::intern {
 
 		std::size_t count(const Ref ref)
 		{
-			struct OpAccumulator
+			struct Acc
 			{
 				std::size_t acc;
 
-				constexpr OpAccumulator(const Ref) noexcept :acc(1u) {}
+				constexpr Acc(const Ref) noexcept :acc(1u) {}
 				void consume(const std::size_t child_size) noexcept { this->acc += child_size; }
 				auto result() noexcept { return this->acc; }
 			};
 
-			return fold::tree_fold<std::size_t, OpAccumulator>(ref, [](auto) { return 1u; });
+			return fold::tree_fold<std::size_t, Acc>(ref, [](auto) { return 1u; });
 		} //count
 
 		[[nodiscard]] TypedIdx copy(const Ref src_ref, Store& dst_store)
@@ -872,14 +872,34 @@ namespace bmath::intern {
 				const auto contains_to_long_variadic = [](const Ref head) -> bool {
 					const auto inspect_variadic = [](const Ref ref) -> fold::FindBool {
 						if (ref.type == Variadic::sum || ref.type == Variadic::product) {
-							return ref->parameters.size() > match::SharedVariadicDatum::max_pn_variadic_size;
+							return ref->parameters.size() > match::SharedVariadicDatum::max_pn_variadic_params_count;
 						}
 						return false;
 					};
 					return fold::simple_fold<fold::FindBool>(head, inspect_variadic);
 				};
 				throw_if(contains_to_long_variadic(Ref(lhs_temp, this->lhs_head)), "a sum / product in lhs contains to many operands.");
-			}		
+			}	
+			{
+				const auto contains_to_many_variadics = [](const Ref head) -> bool {
+					struct Acc
+					{
+						int acc;
+
+						constexpr Acc(const Ref ref) noexcept 
+							:acc(ref.type == PnNode::value_match ? 
+									std::numeric_limits<int>::min() : //subterms of value_match dont count -> initialize negative
+									(ref.type.is<Variadic>() || ref.type.is<NamedFn>())) //count only these two
+						{} 
+
+						void consume(const int child_size) noexcept { this->acc += child_size; }
+						auto result() noexcept { return std::max(this->acc, 0); } //always this->acc if type was other than value_match
+					};
+					const int variadic_count = fold::tree_fold<std::size_t, Acc>(head, [](auto) { return 0; });
+					return variadic_count > match::MatchData::max_variadic_count;
+				};
+				throw_if(contains_to_many_variadics(Ref(lhs_temp, this->lhs_head)), "lhs contains to many variadic functions / instances of NamedFn");
+			}
 
 			this->lhs_store.reserve(lhs_temp.nr_used_slots());
 			this->rhs_store.reserve(rhs_temp.nr_used_slots());
@@ -934,11 +954,11 @@ namespace bmath::intern {
 
 				//Yaaa in kow. Big O hates this implementation. I tried it in efficient and it looked so mutch worse. this is better. trust me.
 				const auto classify_subterm = [&store, value](const TypedIdx head) -> MatchTraits {
-					struct OpAccumulator
+					struct Acc
 					{
 						MatchTraits acc;
 
-						constexpr OpAccumulator(const Ref ref, const TypedIdx value, const TypedIdx value_proxy) 
+						constexpr Acc(const Ref ref, const TypedIdx value, const TypedIdx value_proxy) 
 							:acc({ .has_match = false, .computable = true })
 						{
 							switch (ref.type) {
@@ -959,7 +979,7 @@ namespace bmath::intern {
 
 						constexpr void consume(const MatchTraits elem_res) { this->acc.combine(elem_res); }
 						constexpr MatchTraits result() const noexcept { return this->acc; }
-					}; //struct OpAccumulator
+					}; //struct Acc
 
 					const auto leaf_apply = [](const Ref ref) -> MatchTraits {
 						return MatchTraits{ false, is_one_of<Literal::complex, PnNode::value_proxy>(ref.type) };
@@ -968,7 +988,7 @@ namespace bmath::intern {
 					const ValueMatchVariable& var = store.at(value.get_index()).value_match;
 					assert(var.copy_idx == var.mtch_idx);
 
-					return fold::tree_fold<MatchTraits, OpAccumulator>(Ref(store, head), leaf_apply, value, var.copy_idx);
+					return fold::tree_fold<MatchTraits, Acc>(Ref(store, head), leaf_apply, value, var.copy_idx);
 				}; //classify_subterm
 
 				const MatchTraits this_traits = classify_subterm(head);
@@ -1288,7 +1308,7 @@ namespace bmath::intern {
 				}
 				else {
 					match_info.value = *this_value;
-					match_info.mtch_idx = ref.typed_idx();
+					match_info.match_idx = ref.typed_idx();
 					match_info.responsible = pn_ref.typed_idx();
 					return true;
 				}
