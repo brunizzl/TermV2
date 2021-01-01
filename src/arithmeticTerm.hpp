@@ -68,7 +68,7 @@ namespace bmath::intern {
 
 	using Function = SumEnum<Fn, NamedFn, Variadic>;
 
-	//only leaves in MathType
+	//the only leaves in MathType
 	enum class Literal
 	{
 		variable,
@@ -466,8 +466,8 @@ namespace bmath::intern {
 				TypedIdx match_idx = TypedIdx{}; //indexes in Term to simplify
 				TypedIdx responsible = TypedIdx{}; //the instance of TreeMatchVariable that was setting match_idx
 
-				constexpr bool is_set() const noexcept
-				{
+				constexpr bool is_set() const noexcept 
+				{ 
 					assert(equivalent(this->responsible != TypedIdx{}, this->match_idx != TypedIdx{}));
 					return  this->responsible != TypedIdx{};
 				}
@@ -476,6 +476,8 @@ namespace bmath::intern {
 			struct SharedMultiDatum
 			{
 				StupidBufferVector<TypedIdx, 8> match_indices; //indexes in Term to simplify
+				TypedIdx match_parent = TypedIdx{}; //index of variadic holding matches of this
+				TypedIdx pn_parent = TypedIdx{}; //index of variadic owning this in pattern
 			};
 
 			struct SharedValueDatum

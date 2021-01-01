@@ -157,7 +157,7 @@ namespace bmath::intern {
 				[[fallthrough]];
 			default: 
 				assert(ref.type.is<Function>());
-				for (const TypedIdx elem : fn::range(ref)) {
+				for (const TypedIdx elem : fn::unsave_range(ref)) {
 					tree::free(ref.new_at(elem));
 				}
 				IndexVector::free(*ref.store, ref.index);
@@ -1188,151 +1188,144 @@ namespace bmath::intern {
 
 		bool permutation_equals(const Ref pn_ref, const Ref ref, MatchData& match_data)
 		{
-			if (pn_ref.type.is<MathType>()) {
-				if (pn_ref.type != ref.type) [[likely]] {
+			if (pn_ref.type.is<MathType>() && pn_ref.type != ref.type) {
+				return false;
+			}
+			switch (pn_ref.type) {
+			case Type(NamedFn{}): {
+				const CharVector& name = fn::named_fn_name(ref);
+				const CharVector& pn_name = fn::named_fn_name(pn_ref);
+				if (std::string_view(name.data(), name.size()) != std::string_view(pn_name.data(), pn_name.size())) {
 					return false;
 				}
-				else {
-					switch (pn_ref.type) {
-					case Type(NamedFn{}): {
-						const CharVector& name = fn::named_fn_name(ref);
-						const CharVector& pn_name = fn::named_fn_name(pn_ref);
-						if (std::string_view(name.data(), name.size()) != std::string_view(pn_name.data(), pn_name.size())) {
+			} [[fallthrough]];				
+			default: {
+				assert(pn_ref.type.is<Function>());
+				if (pn_ref.type.is<Variadic>() && fn::is_unordered(pn_ref.type)) {
+					if (pn_ref->parameters.size() > ref->parameters.size()) {
+						return false;
+					}
+					return find_matching_permutation(pn_ref, ref, match_data, 0u, 0u) == FindPermutationRes::matched_all;
+				}
+				else if (pn_ref.type.is<Fn>()) {
+					const IndexVector& pn_range = fn::range(pn_ref);
+					const IndexVector& range = fn::range(ref);
+					auto pn_iter = pn_range.begin();
+					const auto pn_stop = pn_range.end();
+					auto iter = range.begin();
+					for (; pn_iter != pn_stop; ++pn_iter, ++iter) { //iter and pn_iter both go over same number of params
+						if (!match::permutation_equals(pn_ref.new_at(*pn_iter), ref.new_at(*iter), match_data)) {
 							return false;
 						}
-					} [[fallthrough]];				
-					default: {
-						assert(pn_ref.type.is<Function>());
-						if (pn_ref.type.is<Variadic>() && fn::is_unordered(pn_ref.type)) {
-							if (pn_ref->parameters.size() > ref->parameters.size()) {
-								return false;
-							}
-							return find_matching_permutation(pn_ref, ref, match_data, 0u, 0u) == FindPermutationRes::matched_all;
-						}
-						else if (pn_ref.type.is<Fn>()) {
-							const IndexVector& pn_range = fn::range(pn_ref);
-							const IndexVector& range = fn::range(ref);
-							auto pn_iter = pn_range.begin();
-							const auto pn_stop = pn_range.end();
-							auto iter = range.begin();
-							for (; pn_iter != pn_stop; ++pn_iter, ++iter) { //iter and pn_iter both go over same number of params
-								if (!match::permutation_equals(pn_ref.new_at(*pn_iter), ref.new_at(*iter), match_data)) {
-									return false;
-								}
+					}
+					return true;
+				}
+				else {
+					assert((pn_ref.type.is<Variadic>() && !fn::is_unordered(pn_ref.type)) || pn_ref.type == NamedFn{});
+					const IndexVector& pn_range = fn::range(pn_ref);
+					const IndexVector& range = fn::range(ref);
+					auto pn_iter = pn_range.begin();
+					auto iter = range.begin();
+					const auto pn_stop = pn_range.end();
+					const auto stop = range.end();
+					for (; pn_iter != pn_stop && iter != stop; ++pn_iter, ++iter) {
+						if (pn_iter->get_type().is<MultiPn>()) {
+							SharedMultiDatum& info = match_data.multi_info(pn_iter->get_index());
+							info.match_parent = ref.typed_idx();
+							info.pn_parent = pn_ref.typed_idx();
+							assert(info.match_indices.size() == 0u);
+							while (iter != stop) {
+								info.match_indices.push_back(*iter);
+								++iter;
 							}
 							return true;
 						}
-						else {
-							assert((pn_ref.type.is<Variadic>() && !fn::is_unordered(pn_ref.type)) || pn_ref.type == NamedFn{});
-							const IndexVector& pn_range = fn::range(pn_ref);
-							const IndexVector& range = fn::range(ref);
-							auto pn_iter = pn_range.begin();
-							auto iter = range.begin();
-							const auto pn_stop = pn_range.end();
-							const auto stop = range.end();
-							for (; pn_iter != pn_stop && iter != stop; ++pn_iter, ++iter) {
-								if (pn_iter->get_type().is<MultiPn>()) {
-									SharedMultiDatum& info = match_data.multi_info(pn_iter->get_index());
-									assert(info.match_indices.size() == 0u);
-									while (iter != stop) {
-										info.match_indices.push_back(*iter);
-										++iter;
-									}
-									return true;
-								}
-								else if (!match::permutation_equals(pn_ref.new_at(*pn_iter), ref.new_at(*iter), match_data)) {
-									return false;
-								}
-							}
-							if (iter == stop) {
-								return pn_iter == pn_stop || pn_iter->get_type() == MultiPn::params;
-							}
+						else if (!match::permutation_equals(pn_ref.new_at(*pn_iter), ref.new_at(*iter), match_data)) {
 							return false;
 						}
-					} break;
-					case Type(Literal::variable): {
-						const CharVector& var = *ref;
-						const CharVector& pn_var = *pn_ref;
-						return std::string_view(var.data(), var.size()) == std::string_view(pn_var.data(), pn_var.size());
-					} break;
-					case Type(Literal::complex): {
-						const Complex& complex = *ref;
-						const Complex& pn_complex = *pn_ref;
-						return compare_complex(complex, pn_complex) == std::strong_ordering::equal;
-					} break;
 					}
-				}
-			}
-			else {
-				assert(pn_ref.type.is<MatchType>());
-
-				switch (pn_ref.type) {
-				case Type(PnNode::tree_match): {
-					const TreeMatchVariable& var = *pn_ref;
-					if (!meets_restriction(ref, var.restr)) {
-						return false;
+					if (iter == stop) {
+						return pn_iter == pn_stop || pn_iter->get_type() == MultiPn::params;
 					}
-					auto& match_info = match_data.info(var);
-					if (match_info.is_set()) {
-						return tree::compare(ref, ref.new_at(match_info.match_idx)) == std::strong_ordering::equal;
-					}
-					else {
-						match_info.match_idx = ref.typed_idx();
-						match_info.responsible = pn_ref.typed_idx();
-						return true;
-					}
-				} break;
-				case Type(PnNode::value_match): {
-					if (ref.type != Literal::complex) { //only this test allows us to pass *ref to evaluate this_value
-						return false;
-					}
-					const ValueMatchVariable& var = *pn_ref;
-					auto& match_info = match_data.info(var);
-					const OptComplex this_value = pn_tree::eval_value_match(pn_ref.new_at(var.mtch_idx), *ref); 
-					if (!this_value || !has_form(*this_value, var.form)) {
-						return false;
-					}
-					else if (match_info.is_set()) {
-						return this_value.val == match_info.value;
-					}
-					else {
-						match_info.value = *this_value;
-						match_info.mtch_idx = ref.typed_idx();
-						match_info.responsible = pn_ref.typed_idx();
-						return true;
-					}
-				} break;
-				case Type(PnNode::value_proxy): //may only be encountered in pn_tree::eval_value_match (as value_match does no permutation_equals call)
-					assert(false);
-					return false;
-				case Type(MultiPn::summands):
-					if (ref.type == Variadic::sum) {
-						SharedMultiDatum& info = match_data.multi_info(pn_ref.index);
-						assert(info.match_indices.size() == 0u);
-						for (const TypedIdx elem : fn::range(ref)) {
-							info.match_indices.push_back(elem);
-						}
-						return true;
-					}
-					return false;
-				case Type(MultiPn::factors):
-					if (ref.type == Variadic::product) {
-						SharedMultiDatum& info = match_data.multi_info(pn_ref.index);
-						assert(info.match_indices.size() == 0u);
-						for (const TypedIdx elem : fn::range(ref)) {
-							info.match_indices.push_back(elem);
-						}
-						return true;
-					}
-					return false;
-				case Type(MultiPn::params): //assumed to be handeled only as param of named_fn or ordered elements in Variadic 
-					[[fallthrough]];
-				default:
-					assert(false);
 					return false;
 				}
+			} break;
+			case Type(Literal::variable): {
+				const CharVector& var = *ref;
+				const CharVector& pn_var = *pn_ref;
+				return std::string_view(var.data(), var.size()) == std::string_view(pn_var.data(), pn_var.size());
+			} break;
+			case Type(Literal::complex): {
+				const Complex& complex = *ref;
+				const Complex& pn_complex = *pn_ref;
+				return compare_complex(complex, pn_complex) == std::strong_ordering::equal;
+			} break;
+			case Type(PnNode::tree_match): {
+				const TreeMatchVariable& var = *pn_ref;
+				if (!meets_restriction(ref, var.restr)) {
+					return false;
+				}
+				auto& match_info = match_data.info(var);
+				if (match_info.is_set()) {
+					return tree::compare(ref, ref.new_at(match_info.match_idx)) == std::strong_ordering::equal;
+				}
+				else {
+					match_info.match_idx = ref.typed_idx();
+					match_info.responsible = pn_ref.typed_idx();
+					return true;
+				}
+			} break;
+			case Type(PnNode::value_match): {
+				if (ref.type != Literal::complex) { //only this test allows us to pass *ref to evaluate this_value
+					return false;
+				}
+				const ValueMatchVariable& var = *pn_ref;
+				auto& match_info = match_data.info(var);
+				const OptComplex this_value = pn_tree::eval_value_match(pn_ref.new_at(var.mtch_idx), *ref); 
+				if (!this_value || !has_form(*this_value, var.form)) {
+					return false;
+				}
+				else if (match_info.is_set()) {
+					return this_value.val == match_info.value;
+				}
+				else {
+					match_info.value = *this_value;
+					match_info.mtch_idx = ref.typed_idx();
+					match_info.responsible = pn_ref.typed_idx();
+					return true;
+				}
+			} break;
+			case Type(PnNode::value_proxy): //may only be encountered in pn_tree::eval_value_match (as value_match does no permutation_equals call)
+				assert(false);
+				return false;
+			case Type(MultiPn::summands):
+				if (ref.type == Variadic::sum) {
+					SharedMultiDatum& info = match_data.multi_info(pn_ref.index);
+					info.match_parent = ref.typed_idx();
+					info.pn_parent = pn_ref.typed_idx();
+					assert(info.match_indices.size() == 0u);
+					for (const TypedIdx elem : fn::range(ref)) {
+						info.match_indices.push_back(elem);
+					}
+					return true;
+				}
+				return false;
+			case Type(MultiPn::factors):
+				if (ref.type == Variadic::product) {
+					SharedMultiDatum& info = match_data.multi_info(pn_ref.index);
+					info.match_parent = ref.typed_idx();
+					info.pn_parent = pn_ref.typed_idx();
+					assert(info.match_indices.size() == 0u);
+					for (const TypedIdx elem : fn::range(ref)) {
+						info.match_indices.push_back(elem);
+					}
+					return true;
+				}
+				return false;
+			case Type(MultiPn::params): //assumed to be handeled only as param of named_fn or ordered elements in Variadic 
+				assert(false);
+				return false;
 			}
-
 		} //permutation_equals
 
 		void reset_own_matches(const Ref pn_ref, MatchData& match_data) 
@@ -1353,8 +1346,12 @@ namespace bmath::intern {
 				} break;
 				case Type(MultiPn::summands):
 					[[fallthrough]];
-				case Type(MultiPn::factors): {
+				case Type(MultiPn::factors): 
+					[[fallthrough]];
+				case Type(MultiPn::params): {
 					SharedMultiDatum& info = match_data.multi_info(ref.index);
+					info.match_parent = TypedIdx{};
+					info.pn_parent = TypedIdx{};
 					info.match_indices.clear();
 				} break;
 				}
@@ -1412,6 +1409,8 @@ namespace bmath::intern {
 				if (pn_params[pn_i].get_type() == MultiPn::params) [[unlikely]] { //also summands and factors are matched as params
 					assert(pn_i + 1ull == pn_params.size() && "MultiPn is only valid as last element -> only one per variadic");
 					SharedMultiDatum& info = match_data.multi_info(pn_params[pn_i].get_index());
+					info.match_parent = haystack_ref.typed_idx();
+					info.pn_parent = pn_ref.typed_idx();
 					info.match_indices.clear();
 					for (std::size_t k = 0u; k < haystack_params.size(); k++) {
 						if (!variadic_datum.currenty_matched.test(k)) {
