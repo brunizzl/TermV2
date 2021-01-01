@@ -6,6 +6,7 @@ using namespace bmath::intern;
 TODO:
 
 important:
+ - add implicit MultiPn variable as extra summand / factor in sum / product patterns without outside MultiPn -> no longer extra case for these patterns required
  - seperate match and replace into multiple functions
  - add concept of "easy pattern" with every pattern variable occuring only once, match these in guaranteed linear time
  - use templates to allow multiple stores

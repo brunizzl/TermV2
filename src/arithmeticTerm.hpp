@@ -19,8 +19,10 @@ namespace bmath::intern {
 
 	enum class Variadic
 	{
-		sum,
-		product,
+		sum,      //associative and commutative
+		product,  //associative and commutative
+		strict_sum,     //associative but not commutative
+		strict_product, //associative but not commutative
 		multiset,
 		list,
 		COUNT
@@ -233,15 +235,15 @@ namespace bmath::intern {
 	//utility for NamedFn, types in Fn and types in Variadic
 	namespace fn {
 
-		struct FnProps //short for Function Properties
+		struct FnProperties
 		{
 			Fn type = Fn::COUNT;
 			std::string_view name = "";
 			std::size_t arity = 0u; //number of arguments the function expects
 		};
 
-		//every item enumerated in Fn (except COUNT) may be listed here in order of apperance in Fn
-		constexpr auto fn_props_table = std::to_array<FnProps>({
+		//every item enumerated in Fn (except COUNT, duh) may be listed here in order of apperance in Fn
+		constexpr auto fn_props_table = std::to_array<FnProperties>({
 			{ Fn::pow  , "pow"  , 2u },   
 			{ Fn::log  , "log"  , 2u }, 
 			{ Fn::sqrt , "sqrt" , 1u },	
@@ -276,7 +278,7 @@ namespace bmath::intern {
 
 		//returns Fn::COUNT if name is not in fn_props_table
 		constexpr Fn fn_type_of(const std::string_view name) noexcept 
-		{ return search(fn_props_table, &FnProps::name, name).type; }
+		{ return search(fn_props_table, &FnProperties::name, name).type; }
 
 		constexpr std::size_t arity(const Fn type) noexcept 
 		{ return fn_props_table[static_cast<unsigned>(type)].arity; }
@@ -284,20 +286,22 @@ namespace bmath::intern {
 		constexpr std::size_t arity(const Type type) noexcept 
 		{ return fn_props_table[static_cast<unsigned>(type.to<Fn>())].arity; }
 
-
-		struct VariadicProps
+		struct VariadicProperties
 		{
 			Variadic type = Variadic::COUNT;
 			std::string_view name = "";
-			bool unordered = false; //matching algorithm will try to also match permutations if true
+			bool commutative = false; //matching algorithm will try to also match permutations if true
+			bool associative = false; //allows to flatten nested instances if true
 		};
 
-		//every item enumerated in Variadic (except COUNT) may be listed here in order of apperance in Variadic
-		constexpr auto variadic_props_table = std::to_array<VariadicProps>({
-			{ Variadic::sum     , "sum"     , true },
-			{ Variadic::product , "product" , true },
-			{ Variadic::multiset, "multiset", true },
-			{ Variadic::list    , "list"    , false },
+		//every item enumerated in Variadic (except COUNT, duh) may be listed here in order of apperance in Variadic
+		constexpr auto variadic_props_table = std::to_array<VariadicProperties>({
+			{ Variadic::sum           , "sum"     , true , true  },
+			{ Variadic::product       , "product" , true , true  },
+			{ Variadic::strict_sum    , "sum'"    , false, true  },
+			{ Variadic::strict_product, "product'", false, true  },
+			{ Variadic::multiset      , "multiset", true , false },
+			{ Variadic::list          , "list"    , false, false },
 		});
 		static_assert(static_cast<unsigned>(variadic_props_table.front().type) == 0u);
 		static_assert(std::is_sorted(variadic_props_table.begin(), variadic_props_table.end(), 
@@ -309,13 +313,19 @@ namespace bmath::intern {
 
 		//returns Variadic::COUNT if name is not in variadic_props_table
 		constexpr Variadic variadic_type_of(const std::string_view name) noexcept 
-		{ return search(variadic_props_table, &VariadicProps::name, name).type; }
+		{ return search(variadic_props_table, &VariadicProperties::name, name).type; }
 
 		constexpr bool is_unordered(const Variadic type) noexcept 
-		{ return variadic_props_table[static_cast<unsigned>(type)].unordered; }
+		{ return variadic_props_table[static_cast<unsigned>(type)].commutative; }
 
 		constexpr bool is_unordered(const Type type) noexcept 
-		{ return variadic_props_table[static_cast<unsigned>(type.to<Variadic>())].unordered; }
+		{ return is_unordered(type.to<Variadic>()); }
+
+		constexpr bool is_associative(const Variadic type) noexcept 
+		{ return variadic_props_table[static_cast<unsigned>(type)].associative; }
+
+		constexpr bool is_associative(const Type type) noexcept 
+		{ return is_associative(type.to<Variadic>()); }
 
 
 
@@ -514,7 +524,7 @@ namespace bmath::intern {
 				//maximal number of unrelated TreeMatchVariables allowed per pattern
 				static constexpr std::size_t max_tree_match_count = 4u;	 
 				//maximal number of MultiMatchVariables allowed per pattern
-				static constexpr std::size_t max_multi_match_count = 2u; 
+				static constexpr std::size_t max_multi_match_count = 4u; 
 				//maximal number of sums and products allowed per pattern
 				static constexpr std::size_t max_variadic_count = 4u;    
 

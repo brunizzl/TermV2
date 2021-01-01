@@ -22,6 +22,8 @@ namespace bmath::intern::debug {
 		std::cout
 			<< "Type(Variadic::sum)            = " << unsigned(Type(Variadic::sum))            << "\n"
 			<< "Type(Variadic::product)        = " << unsigned(Type(Variadic::product))        << "\n"
+			<< "Type(Variadic::multiset)       = " << unsigned(Type(Variadic::multiset))       << "\n"
+			<< "Type(Variadic::list)           = " << unsigned(Type(Variadic::list))           << "\n"
 		                                                                                       << "\n"
 			<< "Type(NamedFn{})                = " << unsigned(Type(NamedFn{}))                << "\n"
 			                                                                                   << "\n"
@@ -49,16 +51,16 @@ namespace bmath::intern::debug {
 			<< "Type(Fn::force)                = " << unsigned(Type(Fn::force))                << "\n"
 			<< "Type(Fn::diff)                 = " << unsigned(Type(Fn::diff))                 << "\n"
 			                                                                                   << "\n"
-			<< "Type(Leaf::variable)           = " << unsigned(Type(Literal::variable))           << "\n"
-			<< "Type(Leaf::complex)            = " << unsigned(Type(Literal::complex))            << "\n"
+			<< "Type(Literal::variable)        = " << unsigned(Type(Literal::variable))        << "\n"
+			<< "Type(Literal::complex)         = " << unsigned(Type(Literal::complex))         << "\n"
 			                                                                                   << "\n"
 			<< "Type(PnNode::tree_match)       = " << unsigned(Type(PnNode::tree_match))       << "\n"
 			<< "Type(PnNode::value_match)      = " << unsigned(Type(PnNode::value_match))      << "\n"
 			<< "Type(PnNode::value_proxy)      = " << unsigned(Type(PnNode::value_proxy))      << "\n"
 			                                                                                   << "\n"
+			<< "Type(MultiPn::params)          = " << unsigned(Type(MultiPn::params))          << "\n"
 			<< "Type(MultiPn::summands)        = " << unsigned(Type(MultiPn::summands))        << "\n"
 			<< "Type(MultiPn::factors)         = " << unsigned(Type(MultiPn::factors))         << "\n"
-			<< "Type(MultiPn::params)          = " << unsigned(Type(MultiPn::params))          << "\n"
 			                                                                                   << "\n"
 			                                                                                   << "\n"
 		;
@@ -134,6 +136,12 @@ namespace bmath::intern::debug {
 			{ "              tail :params | list_fibs(0, list{tail})       = list{tail}" },
 			
 			//sorting numbers:
+			{ "                    | sort(list{})      = list{}" },
+			{ "x                   | sort(list{x})     = list{x}" },			
+			{ "p :real, xs :params | sort(list{p, xs}) = concat3(sort(filter_s(p, list{}, list{xs})), list{p}, sort(filter_le(p, list{}, list{xs})))" },
+
+			{ "xs :params, ys :params, zs :params | concat3(list{xs}, list{ys}, list{zs}) = list{xs, ys, zs}" }, 
+
 			{ "cond :not_positive, true_res, false_res | if_positive(cond, true_res, false_res) = false_res" },
 			{ "cond :positive,     true_res, false_res | if_positive(cond, true_res, false_res) = true_res" },
 			
@@ -142,10 +150,6 @@ namespace bmath::intern::debug {
 			
 			{ "p :real, xs :params, y :real, ys :params | filter_s(p, list{xs}, list{y, ys}) = filter_s(p, if_positive[force(p - y), list{xs, y}, list{xs}], list{ys})" },
 			{ "p :real, xs :params,                     | filter_s(p, list{xs}, list{})      = list{xs}" },
-			
-			{ "p :real, xs :params | sort(list{p, xs}) = weird_concat(sort(filter_s(p, list{}, list{xs})), p, sort(filter_le(p, list{}, list{xs})))" },
-			{ "                    | sort(list{})      = list{}" },
-			{ "xs :params, y, zs :params | weird_concat(list{xs}, y, list{zs}) = list{xs, y, zs}" }, 
 		});
 
 		for (const auto& rule : rules) {

@@ -333,6 +333,7 @@ namespace bmath::intern {
 				if (ref.type.is<Fn>()) {
 					IndexVector& params = *ref;
 					std::array<OptComplex, 4> res_vals = { OptComplex{}, {}, {}, {} }; //default initialized to NaN
+					assert(fn::arity(ref.type) <= 4); //else res_vals size to small
 					for (std::size_t i = 0; i < fn::arity(ref.type); i++) {
 						params[i] = tree::combine(ref.new_at(params[i]), exact);
 						if (params[i].get_type() == Literal::complex) {
@@ -343,16 +344,37 @@ namespace bmath::intern {
 						tree::free(ref);
 						return build_value(*ref.store, *res);
 					}
-					break;
 				} 
+				else if (ref.type.is<Variadic>() && fn::is_associative(ref.type)) { //-> flatten nested instances allowed
+					StupidBufferVector<TypedIdx, 16> new_parameters;
+					for (const TypedIdx param : fn::unsave_range(ref)) {
+						const TypedIdx new_param = tree::combine(ref.new_at(param), exact);
+						if (new_param.get_type() == ref.type) {
+							for (const TypedIdx nested_param : fn::unsave_range(ref.new_at(new_param))) {
+								new_parameters.push_back(nested_param);
+							}
+							IndexVector::free(*ref.store, new_param.get_index()); //free nested variadic itself, but not nested params
+						}
+						else {
+							new_parameters.push_back(new_param);
+						}
+					}
+					if (const auto old_capacity = ref->parameters.capacity(); new_parameters.size() <= old_capacity) [[likely]] {
+						IndexVector::emplace(*ref, new_parameters, old_capacity);
+					}
+					else {
+						IndexVector::free(*ref.store, ref.index); //free old variadic itself, but not its params
+						return TypedIdx(IndexVector::build(*ref.store, new_parameters), ref.type);
+					}
+				}
 				else {
 					assert(ref.type.is<Variadic>() || ref.type.is<NamedFn>()); 
 					for (TypedIdx& param : fn::unsave_range(ref)) {
 						param = tree::combine(ref.new_at(param), exact);
 
 					}
-					break;
 				}
+				break;
 			case Type(Literal::variable): 
 				break;
 			case Type(Literal::complex): 

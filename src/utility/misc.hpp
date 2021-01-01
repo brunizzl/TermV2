@@ -10,7 +10,18 @@
 #include <bit>
 
 
-//#define ASSERT(expr) if (!(expr)) __debugbreak()
+#undef ASSERT
+
+#ifdef NDEBUG
+
+#define ASSERT(expr) ((void)0)
+
+#else
+
+#define ASSERT(expr) if (!(expr)) __debugbreak()
+
+#endif
+
 
 namespace bmath::intern {
     
