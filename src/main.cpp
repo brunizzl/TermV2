@@ -25,6 +25,7 @@ nice to have:
  - noexceptify everything
 
 idea status:
+ - SharedVariadicDatum ohne BitVector, nutze info aus match_positions
  - const term_slc iterator dereferences to Ref, not typed_idx
  - ctor of RewriteRule: regroup sums / products if nessecairy to allow value match variables to better catch values
  - TermSLC: only allow null_value at end -> SLC_Iterator becomes  simpler (meaning some functions in current form may produce invalid results)

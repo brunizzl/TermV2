@@ -742,30 +742,33 @@ namespace bmath::intern {
 
 		RewriteRule::RewriteRule(std::string name)
 		{
-			auto parse_string = ParseString(name);
-			parse_string.allow_implicit_product();
-			parse_string.remove_space();
-			const auto parts = PatternParts(parse_string);
-			auto table = NameLookupTable(parts.declarations);
-			throw_if(table.tree_table.size() >  match::MatchData::max_tree_match_count, "too many tree_match match variables declared");
-			throw_if(table.value_table.size() > match::MatchData::max_value_match_count, "too many value match variables declared");
-			throw_if(table.multi_table.size() > match::MatchData::max_multi_match_count, "too many multi match variables declared");
-			PatternBuildFunction build_function = { table };
 			decltype(RewriteRule::lhs_store) lhs_temp; //exists, because actions like rearrange_value_match might produce free slots in store.
 			decltype(RewriteRule::rhs_store) rhs_temp; //exists, because actions like rearrange_value_match might produce free slots in store.
-			this->lhs_head = build_function(lhs_temp, parts.lhs);
-			table.build_lhs = false;
-			this->rhs_head = build_function(rhs_temp, parts.rhs);
+			{ //parsing and such
+				auto parse_string = ParseString(name);
+				parse_string.allow_implicit_product();
+				parse_string.remove_space();
+				const auto parts = PatternParts(parse_string);
+				auto table = NameLookupTable(parts.declarations);
+				throw_if(table.tree_table.size() >  match::MatchData::max_tree_match_count, "too many tree_match match variables declared");
+				throw_if(table.value_table.size() > match::MatchData::max_value_match_count, "too many value match variables declared");
+				PatternBuildFunction build_function = { table };
+				this->lhs_head = build_function(lhs_temp, parts.lhs);
+				table.build_lhs = false;
+				this->rhs_head = build_function(rhs_temp, parts.rhs);
 
-			for (const auto& value : table.value_table) {
-				for (const auto lhs_instance : value.lhs_instances) {
-					pn_tree::rearrange_value_match(lhs_temp, this->lhs_head, lhs_instance);;
+				for (const auto& value : table.value_table) {
+					for (const auto lhs_instance : value.lhs_instances) {
+						pn_tree::rearrange_value_match(lhs_temp, this->lhs_head, lhs_instance);;
+					}
+					for (const auto rhs_instance : value.rhs_instances) {
+						pn_tree::rearrange_value_match(rhs_temp, this->rhs_head, rhs_instance);
+					}
 				}
-				for (const auto rhs_instance : value.rhs_instances) {
-					pn_tree::rearrange_value_match(rhs_temp, this->rhs_head, rhs_instance);
+				for (const auto& multi_match : table.multi_table) {
+					throw_if(multi_match.lhs_count > 1u, "pattern only allows single use of each MultiPn in lhs.");
 				}
 			}
-
 			//sorting and combining is done after rearanging value match to allow constructs 
 			//  like "a :real, b | (a+2)+b = ..." to take summands / factors into their value_match match part
 			this->lhs_head = tree::combine(MutRef(lhs_temp, this->lhs_head), true);
@@ -831,8 +834,63 @@ namespace bmath::intern {
 			sort_pattern(MutRef(lhs_temp, this->lhs_head));
 			sort_pattern(MutRef(rhs_temp, this->rhs_head));
 
-			for (const auto& multi_match : table.multi_table) {
-				throw_if(multi_match.lhs_count > 1u, "pattern only allows single use of each MultiPn in lhs.");
+			{//adjusting MultiPn indices to SharedVariadicDatum index of each MulitPn on lhs (required to be done bevore changing MultiPn types!)
+
+				//has to be filled in same order as MatchData::variadic_data
+				//index of element in old_multis equals value of corrected MultiPn occurence (plus the type)
+				std::vector<TypedIdx> old_multis; 
+				const auto catalog_lhs_occurences = [&old_multis](const Ref head) {
+					struct Acc
+					{
+						std::vector<TypedIdx>* old_multis; 
+						std::uint32_t own_idx;
+
+						constexpr Acc(const Ref ref, std::vector<TypedIdx>* new_old_multis) noexcept 
+							:old_multis(new_old_multis), own_idx(-1u)
+						{
+							if (ref.type.is<Variadic>() || ref.type == NamedFn{}) { //these may contain MultiPn -> these have SharedVariadicDatum entry 
+								this->own_idx = this->old_multis->size(); //new last element 
+								this->old_multis->emplace_back(TypedIdx{}); //becomes only valid element, once consume found MultiPn
+							}
+						}
+
+						void consume(const TypedIdx child) noexcept 
+						{ 
+							if (child.get_type().is<MultiPn>()) {
+								this->old_multis->at(this->own_idx) = child;
+							}
+						}
+
+						auto result() noexcept { return TypedIdx{}; }
+					};
+					(void) fold::tree_fold<TypedIdx, Acc>(head, [](const Ref ref) { return ref.typed_idx(); }, &old_multis);
+				};
+				catalog_lhs_occurences(Ref(lhs_temp, this->lhs_head));
+
+				const auto replace_occurences = [&old_multis](const MutRef head, const bool test_lhs) -> bool {
+					const auto check_function_params = [&old_multis, test_lhs](const MutRef ref) -> fold::FindBool {
+						if (ref.type.is<Function>()) {
+							for (auto& param : fn::unsave_range(ref)) {
+								if (param.get_type().is<MultiPn>()) {
+									if (!ref.type.is<Variadic>() && !(ref.type == NamedFn{}) && test_lhs) { //only these may carry MultiPn in lhs
+										return true;
+									}
+									const auto new_param_pos = std::find(old_multis.begin(), old_multis.end(), param); //relative to begin() to be precise
+									if (new_param_pos == old_multis.end()) { //not found -> not present in lhs -> illegal!
+										assert(!test_lhs); //we just made old_multis from lhs, thus that should be correct
+										return true;
+									}
+									const std::uint32_t new_param_idx = std::distance(old_multis.begin(), new_param_pos);
+									param = TypedIdx(new_param_idx, param.get_type());
+								}
+							}
+						}
+						return false;
+					};
+					return fold::simple_fold<fold::FindBool>(head, check_function_params);
+				};
+				throw_if(replace_occurences(MutRef(lhs_temp, this->lhs_head), true), "MultiPn in unexpected place in lhs");
+				throw_if(replace_occurences(MutRef(rhs_temp, this->rhs_head), false), "MultiPn only referenced in rhs");
 			}
 			{
 				//if MultiPn::params occurs in sum / product, it is replaced by legal and matching MultiPn version.
@@ -1272,22 +1330,26 @@ namespace bmath::intern {
 					const auto stop = range.end();
 					for (; pn_iter != pn_stop && iter != stop; ++pn_iter, ++iter) {
 						if (pn_iter->get_type().is<MultiPn>()) {
-							SharedMultiDatum& info = match_data.multi_info(pn_iter->get_index());
-							assert(info.match_indices.size() == 0u);
-							while (iter != stop) {
-								info.match_indices.push_back(*iter);
-								++iter;
-							}
-							return true;
+							goto found_multi_pn;
 						}
 						else if (!match::permutation_equals(pn_ref.new_at(*pn_iter), ref.new_at(*iter), match_data)) {
 							return false;
 						}
 					}
 					if (iter == stop) {
-						return pn_iter == pn_stop || pn_iter->get_type() == MultiPn::params;
+						if (pn_iter->get_type() == MultiPn::params) {
+							goto found_multi_pn;
+						}
+						return pn_iter == pn_stop;
 					}
 					return false;
+
+				found_multi_pn:
+					auto& info = match_data.multi_info(pn_iter->get_index());
+					const BitSet64 first_pn_elems_many_true = (1ull << (pn_range.size() - 1u)) - 1u; //more precisly: last elem not counted, as it is MultiPn 
+					info.currenty_matched = BitVector(first_pn_elems_many_true, pn_range.size());
+					info.match_idx = ref.typed_idx();
+					return true;
 				}
 			} break;
 			case Type(Literal::variable): {
@@ -1364,14 +1426,12 @@ namespace bmath::intern {
 						info = SharedValueDatum();
 					}
 				} break;
-				case Type(MultiPn::summands):
-					[[fallthrough]];
+				case Type(MultiPn::summands): //nothing to do for these (done by variadic)
+					break;
 				case Type(MultiPn::factors): 
-					[[fallthrough]];
-				case Type(MultiPn::params): {
-					SharedMultiDatum& info = match_data.multi_info(ref.index);
-					info.match_indices.clear();
-				} break;
+					break;
+				case Type(MultiPn::params): 
+					break;
 				}
 				return fold::Void{};
 			};
@@ -1386,7 +1446,7 @@ namespace bmath::intern {
 			if (pn_ref.type.is<Variadic>() && fn::is_unordered(pn_ref.type)) {
 				SharedVariadicDatum& variadic_datum = match_data.variadic_data.at(pn_ref.index);
 				const IndexVector& pn_params = *pn_ref;
-				assert(variadic_datum.currenty_matched.count() > 0u); //assert this parameters are already matched
+				assert(variadic_datum.match_idx != TypedIdx{}); //assert this parameters are already matched
 				std::uint32_t pn_i = pn_params.size() - 1u;
 				if (pn_params[pn_i].get_type().is<MultiPn>()) {
 					pn_i--;
@@ -1420,19 +1480,14 @@ namespace bmath::intern {
 			const IndexVector& haystack_params = *haystack_ref;
 
 			SharedVariadicDatum& variadic_datum = match_data.variadic_data.at_or_insert(pn_ref.index);
+			variadic_datum.match_idx = haystack_ref.typed_idx();
 			variadic_datum.currenty_matched.set_to_n_false(haystack_params.size()); 
 
 		match_pn_i:
 			while (pn_i < pn_params.size()) {
 				if (pn_params[pn_i].get_type() == MultiPn::params) [[unlikely]] { //also summands and factors are matched as params
 					assert(pn_i + 1ull == pn_params.size() && "MultiPn is only valid as last element -> only one per variadic");
-					SharedMultiDatum& info = match_data.multi_info(pn_params[pn_i].get_index());
-					info.match_indices.clear();
-					for (std::size_t k = 0u; k < haystack_params.size(); k++) {
-						if (!variadic_datum.currenty_matched.test(k)) {
-							info.match_indices.push_back(haystack_params[k]);
-						}
-					}
+					assert(&match_data.multi_info(pn_params[pn_i].get_index()) == &variadic_datum); //just out of paranoia
 					return FindPermutationRes::matched_all;
 				}
 				else {
@@ -1490,9 +1545,15 @@ namespace bmath::intern {
 				StupidBufferVector<TypedIdx, 12> dst_parameters;
 				for (const TypedIdx pn_param : fn::save_range(pn_ref)) {
 					if (pn_param.get_type() == MultiPn::params) { //summands and factors need stay their type (summands always to sum...)
-						for (const TypedIdx matched_param : match_data.multi_info(pn_param.get_index()).match_indices) {
-							const TypedIdx dst_param = tree::copy(Ref(src_store, matched_param), dst_store); //call normal copy!
-							dst_parameters.push_back(dst_param);
+						const SharedVariadicDatum& info = match_data.multi_info(pn_param.get_index());
+						const auto src_range = fn::save_range(Ref(src_store, info.match_idx));
+						const auto src_stop = end(src_range);
+						for (auto src_iter = begin(src_range); src_iter != src_stop; ++src_iter) {
+							assert(src_stop.idx < 128); //else currenty_matched needs better initialisation elsewhere
+							if (!info.currenty_matched.test(src_iter.array_idx)) {
+								const TypedIdx dst_param = tree::copy(Ref(src_store, *src_iter), dst_store); //call normal copy!
+								dst_parameters.push_back(dst_param);
+							}
 						}
 					}
 					else {
@@ -1538,19 +1599,19 @@ namespace bmath::intern {
 			case Type(MultiPn::summands):
 				[[fallthrough]];
 			case Type(MultiPn::factors): {
-				const SharedMultiDatum& info = match_data.multi_info(pn_ref.index);
-				const std::uint32_t capacity = IndexVector::smallest_fit_capacity(info.match_indices.size());
-				const std::uint32_t nodes_count = IndexVector::_node_count(capacity);
-
-				const std::uint32_t res_idx = dst_store.allocate_n(nodes_count);
-				dst_store.at(res_idx) = IndexVector(info.match_indices.size(), capacity);
-				auto dst_iter = begin(MutRef(dst_store, res_idx).cast<IndexVector>());
-
-				for (const TypedIdx elem : info.match_indices) {
-					const TypedIdx dst_elem = tree::copy(Ref(src_store, elem), dst_store); //call to different copy!
-					*dst_iter = dst_elem;
-					++dst_iter;
+				StupidBufferVector<TypedIdx, 12> dst_parameters;
+				const SharedVariadicDatum& info = match_data.multi_info(pn_ref.index);
+				const auto src_range = fn::save_range(Ref(src_store, info.match_idx));
+				const auto src_stop = end(src_range);
+				for (auto src_iter = begin(src_range); src_iter != src_stop; ++src_iter) {
+					assert(src_stop.idx < 128); //else currenty_matched needs better initialisation elsewhere
+					if (!info.currenty_matched.test(src_iter.array_idx)) {
+						const TypedIdx dst_param = tree::copy(Ref(src_store, *src_iter), dst_store); //call normal copy!
+						dst_parameters.push_back(dst_param);
+					}
 				}
+
+				const std::uint32_t res_idx = IndexVector::build(dst_store, dst_parameters);
 				return TypedIdx(res_idx, pn_ref.type == MultiPn::summands ? Type(Variadic::sum) : Type(Variadic::product));			
 			} break;
 			case Type(MultiPn::params):  //already handeled in named_fn

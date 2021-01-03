@@ -22,6 +22,8 @@ namespace bmath::intern::debug {
 		std::cout
 			<< "Type(Variadic::sum)            = " << unsigned(Type(Variadic::sum))            << "\n"
 			<< "Type(Variadic::product)        = " << unsigned(Type(Variadic::product))        << "\n"
+			<< "Type(Variadic::strict_sum)     = " << unsigned(Type(Variadic::strict_sum))     << "\n"
+			<< "Type(Variadic::strict_product) = " << unsigned(Type(Variadic::strict_product)) << "\n"
 			<< "Type(Variadic::multiset)       = " << unsigned(Type(Variadic::multiset))       << "\n"
 			<< "Type(Variadic::list)           = " << unsigned(Type(Variadic::list))           << "\n"
 		                                                                                       << "\n"

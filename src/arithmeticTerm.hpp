@@ -91,8 +91,9 @@ namespace bmath::intern {
 	};
 
 	//not expeced to be present in normal Term, only in Patterns
-	//represent not actual nodes in pattern tree, as all match info is stored in MultiMatchDatum in MatchData	
+	//represent not actual nodes in pattern tree, as all match info is stored in VariadicMatchDatum in MatchData	
 	//thus all info required in the tree is given in the typed_idx, where the index is repurposed to point elsewhere
+	//(elsewhere means that VariadicMatchDatum array in MatchData)
 	enum class MultiPn 
 	{ 
 		params, //only of MultiPn allowed in valid pattern on lhs (exchanged in RewriteRule's constructor)
@@ -290,7 +291,11 @@ namespace bmath::intern {
 		{
 			Variadic type = Variadic::COUNT;
 			std::string_view name = "";
-			bool commutative = false; //matching algorithm will try to also match permutations if true
+
+			//matching algorithm will try to also match permutations if true
+			//-> advised to add entry to function generality() found in .cpp if so
+			bool commutative = false; 
+
 			bool associative = false; //allows to flatten nested instances if true
 		};
 
@@ -483,11 +488,6 @@ namespace bmath::intern {
 				}
 			};
 
-			struct SharedMultiDatum
-			{
-				StupidBufferVector<TypedIdx, 8> match_indices; //indexes in Term to simplify
-			};
-
 			struct SharedValueDatum
 			{
 				Complex value = std::numeric_limits<double>::quiet_NaN();
@@ -508,12 +508,15 @@ namespace bmath::intern {
 			struct SharedVariadicDatum
 			{
 				//no sum or product in a pattern may have more summands / factors than max_pn_variadic_params_count many
-				static constexpr std::size_t max_pn_variadic_params_count = 8u;
+				static constexpr std::size_t max_pn_variadic_params_count = 6u;
 				//if currenty_matched.test(i), then element i in term to match is currently matched by an element in pattern.
+				//(technically redundant, as match_positions also contains that information)
 				BitVector currenty_matched = {}; 
 				//every element in pattern (except all MultiPn) has own entry which logs, 
 				//  with which element in term to match it currently is associated with.
 				std::array<decltype(IndexVector::Info::size), max_pn_variadic_params_count> match_positions = {};
+
+				TypedIdx match_idx = TypedIdx{}; //indexes in Term to simplify (the haystack)
 			};
 
 			//to allow a constant RewriteRule to be matched against, all match info is stored here
@@ -523,14 +526,11 @@ namespace bmath::intern {
 				static constexpr std::size_t max_value_match_count = 2u; 
 				//maximal number of unrelated TreeMatchVariables allowed per pattern
 				static constexpr std::size_t max_tree_match_count = 4u;	 
-				//maximal number of MultiMatchVariables allowed per pattern
-				static constexpr std::size_t max_multi_match_count = 4u; 
 				//maximal number of sums and products allowed per pattern
-				static constexpr std::size_t max_variadic_count = 4u;    
+				static constexpr std::size_t max_variadic_count = 4u;    //(max multi_match count is same)
 
 				std::array<SharedValueDatum, max_value_match_count> value_match_data = {};
 				std::array<SharedTreeDatum, max_tree_match_count> tree_match_data = {};
-				std::array<SharedMultiDatum, max_multi_match_count> multi_match_data = {};
 				//key is index of sum / product in pattern beeing matched
 				StupidLinearMap<std::uint32_t, -1u, SharedVariadicDatum, max_variadic_count> variadic_data = {};
 
@@ -539,8 +539,8 @@ namespace bmath::intern {
 				constexpr auto& info(const TreeMatchVariable& var) const noexcept { return this->tree_match_data[var.match_data_idx]; }
 				constexpr auto& info(const ValueMatchVariable& var) const noexcept { return this->value_match_data[var.match_data_idx]; }
 
-				constexpr auto& multi_info(const std::uint32_t idx) noexcept { return this->multi_match_data[idx]; }
-				constexpr auto& multi_info(const std::uint32_t idx) const noexcept { return this->multi_match_data[idx]; }
+				constexpr auto& multi_info(const std::uint32_t idx) noexcept { return this->variadic_data.vals[idx]; }
+				constexpr auto& multi_info(const std::uint32_t idx) const noexcept { return this->variadic_data.vals[idx]; }
 			};
 
 			//compares term starting at ref.index in ref.store with pattern starting at pn_ref.index in pn_ref.store

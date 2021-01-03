@@ -223,7 +223,7 @@ namespace bmath::intern {
 	template<typename Union_T, typename Value_T, std::size_t AllocNodeSize, Const is_const>
 	constexpr auto end(const BasicNodeRef<Union_T, StoredVector<Value_T, AllocNodeSize>, is_const>& ref)
 	{
-		return stored_vector::SaveEndIndicator(ref->size());
+		return stored_vector::SaveEndIndicator{ (std::uint32_t) ref->size() };
 	}
 
 } //namespace bmath::intern
