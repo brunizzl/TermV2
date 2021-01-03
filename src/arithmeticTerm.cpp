@@ -1422,7 +1422,6 @@ namespace bmath::intern {
 				}
 				else {
 					match_info.value = *this_value;
-					match_info.match_idx = ref.typed_idx();
 					match_info.responsible = pn_ref.typed_idx();
 					return true;
 				}

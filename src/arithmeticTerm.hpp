@@ -491,16 +491,12 @@ namespace bmath::intern {
 			struct SharedValueDatum
 			{
 				Complex value = std::numeric_limits<double>::quiet_NaN();
-				//indexes in Term to simplify (only usefull during rematch to only match later elements)
-				TypedIdx match_idx = TypedIdx{}; 
 				//the instance of ValueMatchVariable that was setting value_match (thus is also responsible for resetting)
 				TypedIdx responsible = TypedIdx{};
 
 				constexpr bool is_set() const noexcept
 				{
-					assert(equivalent(!std::isnan(this->value.real()), 
-						this->responsible != TypedIdx{}, 
-						this->match_idx != TypedIdx{}));
+					assert(equivalent(!std::isnan(this->value.real()), this->responsible != TypedIdx{}));
 					return  this->responsible != TypedIdx{};
 				}
 			};
@@ -521,7 +517,7 @@ namespace bmath::intern {
 				constexpr SharedVariadicDatum() noexcept { this->match_positions.fill(-1u); }
 
 				//checks this->match_positions if needle is contained
-				//use with care: might check more then are actually contained in specific pattern!
+				//use with care: might check more than actually contained in specific pattern!
 				constexpr bool index_matched(const MatchPos_T needle) const noexcept
 				{
 					const auto stop = this->match_positions.end();

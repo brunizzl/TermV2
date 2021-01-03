@@ -49,7 +49,6 @@ namespace bmath::intern {
 
 	public:
 		constexpr std::size_t capacity() const noexcept { return this->info.capacity; }
-		constexpr std::size_t node_count() const noexcept { return _node_count(this->info.capacity); }
 		constexpr std::size_t size() const noexcept { return this->info.size; }
 		constexpr auto& size() noexcept { return this->info.size; }
 
@@ -72,6 +71,7 @@ namespace bmath::intern {
 			assert((capacity_ + values_per_node - min_capacity) % values_per_node == 0u);
 			return (capacity_ + values_per_node - min_capacity) / values_per_node;
 		}
+		constexpr std::size_t node_count() const noexcept { return _node_count(this->info.capacity); }
 
 		static constexpr std::size_t smallest_fit_capacity(const std::size_t size_) noexcept
 		{

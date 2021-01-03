@@ -35,7 +35,7 @@ idea status:
 
 int main()
 {
-	std::cout << "match_data's size: " << sizeof(pattern::match::MatchData) << "\n\n";
+	std::cout << "size: " << sizeof(pattern::match::MatchData) << "\n\n";
 	debug::enumerate_type();
 	debug::test_rechner();
 	//test::combine_exact();
