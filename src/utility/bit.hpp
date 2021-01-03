@@ -161,12 +161,12 @@ namespace bmath::intern {
 			:size_(std::exchange(snd.size_, 0u)), local_data{ snd.local_data[0], snd.local_data[1] }
 		{
 			if (snd.data_ != snd.local_data) {
-				this->data_ = std::exchange(snd.data_, nullptr);
+				this->data_ = std::exchange(snd.data_, &snd.local_data[0]);
 			}
 		}
 
 		BitVector(const BitSet64* const begin, const BitSet64* const end, const std::size_t new_size) noexcept 
-			:size_(new_size), local_data{ *begin, 0ull }
+			:size_(new_size), local_data{ 0ull, 0ull }
 		{
 			const std::size_t needed_capacity = (end - begin) * 64u;
 			if (needed_capacity > local_max_size) {
@@ -207,13 +207,6 @@ namespace bmath::intern {
 				this->data_[i] = 0ull;
 			}
 			this->size_ = 0u; 
-		}
-
-		void set_to_n_false(const std::size_t n) noexcept
-		{
-			this->clear();
-			this->reserve(n);
-			this->size_ = n;
 		}
 
 		constexpr void  flip(const std::size_t pos) noexcept { this->data_[pos / 64u].flip(pos % 64u); }

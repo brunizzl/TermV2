@@ -595,43 +595,25 @@ namespace bmath::intern {
 			if (head == subtree) {
 				return &head;
 			}
-			else {
-				const auto [index, type] = head.split();
-				switch (type) {
-				default: {
-					assert(type.is<Function>());
-					for (TypedIdx& elem : fn::range(MutRef(store, head))) {
-						if (TypedIdx* const elem_res = tree::find_subtree_owner(store, elem, subtree)) {
-							return elem_res;
-						}
+
+			const Type type = head.get_type();
+			if (type.is<Function>()) {
+				for (TypedIdx& elem : fn::range(MutRef(store, head))) {
+					if (TypedIdx* const elem_res = tree::find_subtree_owner(store, elem, subtree)) {
+						return elem_res;
 					}
-				} break;
-				case Type(Literal::variable): 
-					break;
-				case Type(Literal::complex): 
-					break;
-				case Type(PnNode::tree_match): 
-					break;
-				case Type(PnNode::value_match): {
-					pattern::ValueMatchVariable& var = store.at(index).value_match;
-					if (TypedIdx* const copy_res = tree::find_subtree_owner(store, var.copy_idx, subtree)) {
-						return copy_res;
-					}
-					if (TypedIdx* const match_res = tree::find_subtree_owner(store, var.mtch_idx, subtree)) {
-						return match_res;
-					}
-				} break;
-				case Type(PnNode::value_proxy):
-					break;
-				case Type(MultiPn::summands):
-					break;
-				case Type(MultiPn::factors):
-					break;
-				case Type(MultiPn::params):
-					break;
 				}
-				return nullptr;
 			}
+			else if (type == PnNode::value_match) {
+				pattern::ValueMatchVariable& var = store.at(head.get_index()).value_match;
+				if (TypedIdx* const copy_res = tree::find_subtree_owner(store, var.copy_idx, subtree)) {
+					return copy_res;
+				}
+				if (TypedIdx* const match_res = tree::find_subtree_owner(store, var.mtch_idx, subtree)) {
+					return match_res;
+				}
+			}
+			return nullptr;
 
 		} //find_subtree_owner
 
@@ -1144,7 +1126,8 @@ namespace bmath::intern {
 
 				while (eq.lhs_head != to_isolate) {
 
-					const auto [lhs_index, lhs_type] = eq.lhs_head.split();
+					const Type lhs_type = eq.lhs_head.get_type();
+					const std::uint32_t lhs_index = eq.lhs_head.get_index();
 					switch (lhs_type) {
 					case Type(Variadic::sum): 
 						[[fallthrough]];
@@ -1167,22 +1150,6 @@ namespace bmath::intern {
 						//new eq.rhs_head is product (sum) of old eq.rhs_head divided by (minus) eq.lhs_head factors (summands).
 						eq.rhs_head = TypedIdx(IndexVector::build(store, result_buffer), lhs_type);  
 					} break;
-					case Type(Literal::variable): 
-						assert(false); break;
-					case Type(Literal::complex): 
-						assert(false); break;
-					case Type(PnNode::tree_match): 
-						assert(false); break;
-					case Type(PnNode::value_match): 
-						assert(false); break;
-					case Type(PnNode::value_proxy):
-						assert(false); break;
-					case Type(MultiPn::summands):
-						assert(false); break;
-					case Type(MultiPn::factors):
-						assert(false); break;
-					case Type(MultiPn::params):
-						assert(false); break;
 					case Type(Fn::pow): {
 						IndexVector* params = &store.at(lhs_index).parameters;
 						if (tree::contains(Ref(store, (*params)[0u]), to_isolate)) { //case <contains var>^<computable>
