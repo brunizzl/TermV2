@@ -509,14 +509,24 @@ namespace bmath::intern {
 			{
 				//no sum or product in a pattern may have more summands / factors than max_pn_variadic_params_count many
 				static constexpr std::size_t max_pn_variadic_params_count = 6u;
-				//if currenty_matched.test(i), then element i in term to match is currently matched by an element in pattern.
-				//(technically redundant, as match_positions also contains that information)
-				BitVector currenty_matched = {}; 
+
+				using MatchPos_T = decltype(IndexVector::Info::size);
+
 				//every element in pattern (except all MultiPn) has own entry which logs, 
 				//  with which element in term to match it currently is associated with.
-				std::array<decltype(IndexVector::Info::size), max_pn_variadic_params_count> match_positions = {};
+				std::array<MatchPos_T, max_pn_variadic_params_count> match_positions = {};
 
 				TypedIdx match_idx = TypedIdx{}; //indexes in Term to simplify (the haystack)
+
+				constexpr SharedVariadicDatum() noexcept { this->match_positions.fill(-1u); }
+
+				//checks this->match_positions if needle is contained
+				//use with care: might check more then are actually contained in specific pattern!
+				constexpr bool index_matched(const MatchPos_T needle) const noexcept
+				{
+					const auto stop = this->match_positions.end();
+					return std::find(this->match_positions.begin(), stop, needle) != stop;
+				}
 			};
 
 			//to allow a constant RewriteRule to be matched against, all match info is stored here

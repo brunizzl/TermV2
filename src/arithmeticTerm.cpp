@@ -40,8 +40,9 @@ namespace bmath::intern {
 			{ Type(Variadic::sum        ), 3003 },  
 			{ Type(Variadic::product    ), 3004 }, 
 			{ Type(PnNode::tree_match   ), 3005 }, 
-			{ Type(MultiPn::summands    ), 3006 }, //kinda special, as they always succeed in matching -> need to be matched last 
-			{ Type(MultiPn::factors     ), 3007 }, //kinda special, as they always succeed in matching -> need to be matched last 
+			{ Type(MultiPn::params      ), 3006 }, //kinda special, as they always succeed in matching -> need to be matched last 
+			{ Type(MultiPn::summands    ), 3007 }, //kinda special, as they always succeed in matching -> need to be matched last 
+			{ Type(MultiPn::factors     ), 3008 }, //kinda special, as they always succeed in matching -> need to be matched last 
 		});
 		static_assert(std::is_sorted(type_generality_table.begin(), type_generality_table.end(), [](auto a, auto b) { return a.second < b.second; }));
 		static_assert(static_cast<unsigned>(Type::COUNT) < 1000u, "else the 2xxx generalities may leak into the 3xxx ones in table");
@@ -402,14 +403,14 @@ namespace bmath::intern {
 
 		[[nodiscard]] std::strong_ordering compare(const Ref ref_1, const Ref ref_2)
 		{
-			const auto compare_char_vecs = [](const CharVector& vec_1, const CharVector& vec_2) {
-				const std::size_t size = std::min(vec_1.size(), vec_2.size());
-				if (const std::strong_ordering cmp = compare_arrays(vec_1.data(), vec_2.data(), size); 
+			const auto compare_char_vecs = [](const CharVector& fst, const CharVector& snd) -> std::strong_ordering {
+				const std::size_t size = std::min(fst.size(), snd.size());
+				if (const std::strong_ordering cmp = compare_arrays(fst.data(), snd.data(), size); 
 					cmp != std::strong_ordering::equal) 
 				{
 					return cmp;
 				}
-				return vec_1.size() <=> vec_1.size();
+				return fst.size() <=> snd.size();
 			};
 
 
@@ -744,31 +745,31 @@ namespace bmath::intern {
 		{
 			decltype(RewriteRule::lhs_store) lhs_temp; //exists, because actions like rearrange_value_match might produce free slots in store.
 			decltype(RewriteRule::rhs_store) rhs_temp; //exists, because actions like rearrange_value_match might produce free slots in store.
-			{ //parsing and such
-				auto parse_string = ParseString(name);
-				parse_string.allow_implicit_product();
-				parse_string.remove_space();
-				const auto parts = PatternParts(parse_string);
-				auto table = NameLookupTable(parts.declarations);
-				throw_if(table.tree_table.size() >  match::MatchData::max_tree_match_count, "too many tree_match match variables declared");
-				throw_if(table.value_table.size() > match::MatchData::max_value_match_count, "too many value match variables declared");
-				PatternBuildFunction build_function = { table };
-				this->lhs_head = build_function(lhs_temp, parts.lhs);
-				table.build_lhs = false;
-				this->rhs_head = build_function(rhs_temp, parts.rhs);
+			//parsing and such
+			auto parse_string = ParseString(name);
+			parse_string.allow_implicit_product();
+			parse_string.remove_space();
+			const auto parts = PatternParts(parse_string);
+			auto match_variables_table = NameLookupTable(parts.declarations);
+			throw_if(match_variables_table.tree_table.size() >  match::MatchData::max_tree_match_count, "too many tree_match match variables declared");
+			throw_if(match_variables_table.value_table.size() > match::MatchData::max_value_match_count, "too many value match variables declared");
+			PatternBuildFunction build_function = { match_variables_table };
+			this->lhs_head = build_function(lhs_temp, parts.lhs);
+			match_variables_table.build_lhs = false;
+			this->rhs_head = build_function(rhs_temp, parts.rhs);
 
-				for (const auto& value : table.value_table) {
-					for (const auto lhs_instance : value.lhs_instances) {
-						pn_tree::rearrange_value_match(lhs_temp, this->lhs_head, lhs_instance);;
-					}
-					for (const auto rhs_instance : value.rhs_instances) {
-						pn_tree::rearrange_value_match(rhs_temp, this->rhs_head, rhs_instance);
-					}
+			for (const auto& value : match_variables_table.value_table) {
+				for (const auto lhs_instance : value.lhs_instances) {
+					pn_tree::rearrange_value_match(lhs_temp, this->lhs_head, lhs_instance);;
 				}
-				for (const auto& multi_match : table.multi_table) {
-					throw_if(multi_match.lhs_count > 1u, "pattern only allows single use of each MultiPn in lhs.");
+				for (const auto rhs_instance : value.rhs_instances) {
+					pn_tree::rearrange_value_match(rhs_temp, this->rhs_head, rhs_instance);
 				}
 			}
+			for (const auto& multi_match : match_variables_table.multi_table) {
+				throw_if(multi_match.lhs_count > 1u, "pattern only allows single use of each MultiPn in lhs.");
+			}
+
 			//sorting and combining is done after rearanging value match to allow constructs 
 			//  like "a :real, b | (a+2)+b = ..." to take summands / factors into their value_match match part
 			this->lhs_head = tree::combine(MutRef(lhs_temp, this->lhs_head), true);
@@ -834,7 +835,32 @@ namespace bmath::intern {
 			sort_pattern(MutRef(lhs_temp, this->lhs_head));
 			sort_pattern(MutRef(rhs_temp, this->rhs_head));
 
-			{//adjusting MultiPn indices to SharedVariadicDatum index of each MulitPn on lhs (required to be done bevore changing MultiPn types!)
+			{ //add implicit MultiPn::summands / MultiPn::factors if outermost type of lhs is sum / product
+				if (this->lhs_head.get_type() == Variadic::sum || this->lhs_head.get_type() == Variadic::product) {
+					const Type head_type = this->lhs_head.get_type();
+					const IndexVector& head_variadic = lhs_temp.at(this->lhs_head.get_index());
+					if (!head_variadic.back().get_type().is<MultiPn>()) {
+						const TypedIdx new_multi_pn = TypedIdx(match_variables_table.multi_table.size(), 
+							head_type == Variadic::sum ? MultiPn::summands : MultiPn::factors);
+						{ //adjust lhs
+							const std::size_t new_lhs_head_idx = lhs_temp.allocate();
+							lhs_temp.at(new_lhs_head_idx) = IndexVector({ this->lhs_head, new_multi_pn });
+							this->lhs_head = TypedIdx(new_lhs_head_idx, head_type);
+							this->lhs_head = tree::combine(MutRef(lhs_temp, this->lhs_head), true);
+							sort_pattern(MutRef(lhs_temp, this->lhs_head));
+						}
+						{ //adjust rhs
+							const std::size_t new_rhs_head_idx = rhs_temp.allocate();
+							rhs_temp.at(new_rhs_head_idx) = IndexVector({ this->rhs_head, new_multi_pn });
+							this->rhs_head = TypedIdx(new_rhs_head_idx, head_type);
+							this->rhs_head = tree::combine(MutRef(rhs_temp, this->rhs_head), true);
+							sort_pattern(MutRef(rhs_temp, this->rhs_head));
+						}
+					}
+				}
+			}
+
+			{ //adjusting MultiPn indices to SharedVariadicDatum index of each MulitPn on lhs (required to be done bevore changing MultiPn types!)
 
 				//has to be filled in same order as MatchData::variadic_data
 				//index of element in old_multis equals value of corrected MultiPn occurence (plus the type)
@@ -952,7 +978,8 @@ namespace bmath::intern {
 				const auto contains_to_long_variadic = [](const Ref head) -> bool {
 					const auto inspect_variadic = [](const Ref ref) -> fold::FindBool {
 						if (ref.type == Variadic::sum || ref.type == Variadic::product) {
-							return ref->parameters.size() > match::SharedVariadicDatum::max_pn_variadic_params_count;
+							const std::uint32_t multi_at_back = ref->parameters.back().get_type().is<MultiPn>();
+							return ref->parameters.size() - multi_at_back > match::SharedVariadicDatum::max_pn_variadic_params_count;
 						}
 						return false;
 					};
@@ -985,7 +1012,7 @@ namespace bmath::intern {
 			this->rhs_store.reserve(rhs_temp.nr_used_slots());
 			this->lhs_head = tree::copy(Ref(lhs_temp, this->lhs_head), this->lhs_store);
 			this->rhs_head = tree::copy(Ref(rhs_temp, this->rhs_head), this->rhs_store);
-		}
+		} //RewriteRule::RewriteRule
 
 		std::string RewriteRule::to_string() const
 		{
@@ -1302,7 +1329,8 @@ namespace bmath::intern {
 			default: {
 				assert(pn_ref.type.is<Function>());
 				if (pn_ref.type.is<Variadic>() && fn::is_unordered(pn_ref.type)) {
-					if (pn_ref->parameters.size() > ref->parameters.size()) {
+					const bool params_at_back = pn_ref->parameters.back().get_type() == MultiPn::params;
+					if (pn_ref->parameters.size() - params_at_back > ref->parameters.size()) {  //params can also match nothing -> subtract 1 then
 						return false;
 					}
 					return find_matching_permutation(pn_ref, ref, match_data, 0u, 0u) == FindPermutationRes::matched_all;
@@ -1347,7 +1375,9 @@ namespace bmath::intern {
 				found_multi_pn:
 					auto& info = match_data.multi_info(pn_iter->get_index());
 					const BitSet64 first_pn_elems_many_true = (1ull << (pn_range.size() - 1u)) - 1u; //more precisly: last elem not counted, as it is MultiPn 
-					info.currenty_matched = BitVector(first_pn_elems_many_true, pn_range.size());
+					for (std::uint32_t i = 0u; i < pn_range.size() - 1u; i++) {
+						info.match_positions[i] = i;
+					}
 					info.match_idx = ref.typed_idx();
 					return true;
 				}
@@ -1446,15 +1476,14 @@ namespace bmath::intern {
 			if (pn_ref.type.is<Variadic>() && fn::is_unordered(pn_ref.type)) {
 				SharedVariadicDatum& variadic_datum = match_data.variadic_data.at(pn_ref.index);
 				const IndexVector& pn_params = *pn_ref;
-				assert(variadic_datum.match_idx != TypedIdx{}); //assert this parameters are already matched
+				assert(variadic_datum.match_idx  == ref.typed_idx()); //assert pn_ref is currently matched in ref
 				std::uint32_t pn_i = pn_params.size() - 1u;
 				if (pn_params[pn_i].get_type().is<MultiPn>()) {
 					pn_i--;
 				} 
 				assert(!pn_params[pn_i].get_type().is<MultiPn>()); //there may only be a single one in each variadic
-				const std::uint32_t last_haystack_k = variadic_datum.match_positions[pn_i];
-				variadic_datum.currenty_matched.reset(last_haystack_k);
 				reset_own_matches(pn_ref, match_data);
+				const std::uint32_t last_haystack_k = variadic_datum.match_positions[pn_i];
 				return find_matching_permutation(pn_ref, ref, match_data, pn_i, last_haystack_k + 1u) == FindPermutationRes::matched_all;
 			}
 			else {
@@ -1474,14 +1503,18 @@ namespace bmath::intern {
 
 		FindPermutationRes find_matching_permutation(const Ref pn_ref, const Ref haystack_ref, MatchData& match_data, std::uint32_t pn_i, std::uint32_t haystack_k)
 		{
-			assert(pn_ref.type == haystack_ref.type && (is_one_of<Variadic::sum, Variadic::product>(haystack_ref.type)));
+			assert(pn_ref.type == haystack_ref.type && (fn::is_unordered(haystack_ref.type)));
 
 			const IndexVector& pn_params = *pn_ref;
 			const IndexVector& haystack_params = *haystack_ref;
 
 			SharedVariadicDatum& variadic_datum = match_data.variadic_data.at_or_insert(pn_ref.index);
 			variadic_datum.match_idx = haystack_ref.typed_idx();
-			variadic_datum.currenty_matched.set_to_n_false(haystack_params.size()); 
+
+			BitVector currently_matched = BitVector(haystack_params.size()); //one bit for each element in haystack_params
+			for (std::uint32_t i = 0u; i < pn_i; i++) {
+				currently_matched.set(variadic_datum.match_positions[i]);
+			}
 
 		match_pn_i:
 			while (pn_i < pn_params.size()) {
@@ -1491,14 +1524,14 @@ namespace bmath::intern {
 					return FindPermutationRes::matched_all;
 				}
 				else {
-					assert(!pn_params[pn_i].get_type().is<MultiPn>());
+					assert(!pn_params[pn_i].get_type().is<MultiPn>() && "only MultiPn expected in lhs is params");
 					const Ref pn_i_ref = pn_ref.new_at(pn_params[pn_i]);
 					for (; haystack_k < haystack_params.size(); haystack_k++) {
-						if (variadic_datum.currenty_matched.test(haystack_k)) {
+						if (currently_matched.test(haystack_k)) {
 							continue;
 						}
 						if (match::permutation_equals(pn_i_ref, haystack_ref.new_at(haystack_params[haystack_k]), match_data)) {
-							variadic_datum.currenty_matched.set(haystack_k);
+							currently_matched.set(haystack_k);
 							variadic_datum.match_positions[pn_i] = haystack_k;
 							haystack_k = 0u;
 							pn_i++;
@@ -1507,9 +1540,9 @@ namespace bmath::intern {
 						reset_own_matches(pn_i_ref, match_data);
 					}
 				}
+
 				//got here -> could not match element nr pn_i of pattern with any currently unmatched element in haystack
 				if (pn_i == 0u) {
-					//matching the first element in pattern failed -> there is no hope
 					return FindPermutationRes::unmatchable;
 				}
 				else {
@@ -1523,13 +1556,14 @@ namespace bmath::intern {
 					// (but it can not match any way that was already tried, duh)
 					if (subsequent_permutation_equals(pn_i_ref, haystack_ref.new_at(haystack_params[haystack_k]), match_data)) {
 						//success -> try matching the element not matchable this while iteration with (perhaps) now differenty set match variables
-						pn_i++;						
+						pn_i++;
+						haystack_k = 0u;
 					}
 					else {
 						//could not rematch last successfully matched element with same element in haystack 
 						//  -> try succeeding elements in haystack in next loop iteration
 						reset_own_matches(pn_i_ref, match_data);
-						variadic_datum.currenty_matched.reset(haystack_k);
+						currently_matched.reset(haystack_k);
 						haystack_k++;
 					}
 				}
@@ -1549,8 +1583,7 @@ namespace bmath::intern {
 						const auto src_range = fn::save_range(Ref(src_store, info.match_idx));
 						const auto src_stop = end(src_range);
 						for (auto src_iter = begin(src_range); src_iter != src_stop; ++src_iter) {
-							assert(src_stop.idx < 128); //else currenty_matched needs better initialisation elsewhere
-							if (!info.currenty_matched.test(src_iter.array_idx)) {
+							if (!info.index_matched(src_iter.array_idx)) {
 								const TypedIdx dst_param = tree::copy(Ref(src_store, *src_iter), dst_store); //call normal copy!
 								dst_parameters.push_back(dst_param);
 							}
@@ -1604,8 +1637,8 @@ namespace bmath::intern {
 				const auto src_range = fn::save_range(Ref(src_store, info.match_idx));
 				const auto src_stop = end(src_range);
 				for (auto src_iter = begin(src_range); src_iter != src_stop; ++src_iter) {
-					assert(src_stop.idx < 128); //else currenty_matched needs better initialisation elsewhere
-					if (!info.currenty_matched.test(src_iter.array_idx)) {
+
+					if (!info.index_matched(src_iter.array_idx)) {
 						const TypedIdx dst_param = tree::copy(Ref(src_store, *src_iter), dst_store); //call normal copy!
 						dst_parameters.push_back(dst_param);
 					}
@@ -1621,51 +1654,15 @@ namespace bmath::intern {
 		} //copy
 
 		std::optional<TypedIdx> match_and_replace(const Ref from, const Ref to, const MutRef ref)
-		{		
-			if ((from.type == Variadic::product || from.type == Variadic::sum) && (from.type == ref.type)) {
-				MatchData match_data;
-				if (match::find_matching_permutation(from, ref, match_data, 0u, 0u) != FindPermutationRes::unmatchable) {
-					Store copy_buffer;
-					copy_buffer.reserve(32u);
-					const TypedIdx buffer_head = match::copy(to, match_data, *ref.store, copy_buffer);
-					StupidBufferVector<TypedIdx, 12> result_variadic;
-					{
-						const IndexVector& matched_params = *from;
-						const bool no_top_level_multi_pn = std::find_if(matched_params.begin(), matched_params.end(),
-							[](const TypedIdx idx) {return idx.get_type().is<MultiPn>(); }) == matched_params.end();
-
-						if (no_top_level_multi_pn) [[likely]] {
-							const BitVector& matched = match_data.variadic_data.at(from.index).currenty_matched; //has not recorded MultiPn occupations (thus the shenanegans above)
-							const IndexVector& src_params = *ref; //no allocations in ref.store during src_params livetime -> reference allowed
-							for (std::uint32_t k = 0u; k < src_params.size(); k++) {
-								if (matched.test(k)) {
-									tree::free(ref.new_at(src_params[k])); //delete matched parts
-								}
-								else {
-									result_variadic.push_back(src_params[k]); //keep unmatched parts
-								}
-							}
-							IndexVector::free(*ref.store, ref.index);  //shallow deletion only of initial sum / product itself, not of its operands
-						}
-						else {
-							tree::free(ref);
-						}
-					}					
-					result_variadic.push_back(tree::copy(Ref(copy_buffer, buffer_head), *ref.store));
-					const std::uint32_t res_idx = IndexVector::build(*ref.store, result_variadic);
-					return { TypedIdx(res_idx, ref.type) };
-				}
-			}
-			else {
-				MatchData match_data;
-				if (match::permutation_equals(from, ref, match_data)) {
-					Store copy_buffer;
-					copy_buffer.reserve(32u);
-					const TypedIdx buffer_head = match::copy(to, match_data, *ref.store, copy_buffer);
-					tree::free(ref);
-					const TypedIdx result_head = tree::copy(Ref(copy_buffer, buffer_head), *ref.store);
-					return { result_head };
-				}
+		{					
+			MatchData match_data;
+			if (match::permutation_equals(from, ref, match_data)) {
+				Store copy_buffer;
+				copy_buffer.reserve(32u);
+				const TypedIdx buffer_head = match::copy(to, match_data, *ref.store, copy_buffer);
+				tree::free(ref);
+				const TypedIdx result_head = tree::copy(Ref(copy_buffer, buffer_head), *ref.store);
+				return { result_head };
 			}
 			return {};
 		} //match_and_replace

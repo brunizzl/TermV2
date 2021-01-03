@@ -141,9 +141,9 @@ namespace bmath::intern::debug {
 			{ "                    | sort(list{})      = list{}" },
 			{ "x                   | sort(list{x})     = list{x}" },			
 			{ "p :real, xs :params | sort(list{p, xs}) = concat3(sort(filter_s(p, list{}, list{xs})), list{p}, sort(filter_le(p, list{}, list{xs})))" },
-
+			
 			{ "xs :params, ys :params, zs :params | concat3(list{xs}, list{ys}, list{zs}) = list{xs, ys, zs}" }, 
-
+			
 			{ "cond :not_positive, true_res, false_res | if_positive(cond, true_res, false_res) = false_res" },
 			{ "cond :positive,     true_res, false_res | if_positive(cond, true_res, false_res) = true_res" },
 			

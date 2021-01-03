@@ -116,7 +116,6 @@ namespace bmath::intern {
 	class BitVector
 	{
 		std::size_t size_; //unit is bit, not BitSet64!
-		static constexpr std::size_t local_max_size = 128u; //number of bits held by local_data
 		constexpr std::size_t bitset_end_idx() const noexcept { return (this->size_ + 63u) / 64u; }
 
 		BitSet64* data_ = &local_data[0];
@@ -126,6 +125,7 @@ namespace bmath::intern {
 			std::size_t capacity; //unit is bit, not BitSet64!
 			BitSet64 local_data[2];
 		};
+		static constexpr std::size_t local_max_size = 64u * 2; //number of bits held by local_data
 
 		void unsave_reallocate(const std::size_t new_capacity) noexcept //new_capacity is counted in bit
 		{
@@ -148,9 +148,13 @@ namespace bmath::intern {
 
 		constexpr BitVector() noexcept :size_(0u), local_data{ 0ull, 0ull } {}
 
-		constexpr BitVector(const BitSet64 data, std::size_t size) noexcept :size_(size), local_data{ data, 0u } 
+		constexpr BitVector(std::size_t size) noexcept :size_(size), local_data{ 0ull, 0ull } 
 		{ 
-			assert(size <= local_max_size); 
+			if (size > local_max_size) [[unlikely]] {
+				const std::size_t new_capacity = std::bit_ceil(size);
+				this->data_ = new BitSet64[new_capacity / 64u](); //zero initialized
+				this->capacity = new_capacity;
+			}
 		}
 
 		BitVector(BitVector&& snd) noexcept 

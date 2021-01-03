@@ -114,6 +114,12 @@ namespace bmath::intern {
 		constexpr const Value_T* begin() const noexcept { return this->data_; }
 		constexpr const Value_T* end() const noexcept { return this->data_ + this->info.size; }
 
+		constexpr Value_T& front() noexcept { return *this->data_; }
+		constexpr Value_T& back() noexcept { return *(this->data_ + this->info.size - 1u); }
+
+		constexpr const Value_T& front() const noexcept { return *this->data_; }
+		constexpr const Value_T& back() const noexcept { return *(this->data_ + this->info.size - 1u); }
+
 		//kinda unsave, as always :o
 		constexpr Value_T& operator[](const std::uint32_t at) noexcept { return *(this->data_ + at); }
 		constexpr const Value_T& operator[](const std::uint32_t at) const noexcept { return *(this->data_ + at); }
@@ -209,7 +215,7 @@ namespace bmath::intern {
 	{
 		using Iter = stored_vector::SaveIterator<Value_T, AllocNodeSize, BasicStore<Union_T>>;
 		using Vec_T = StoredVector<Value_T, AllocNodeSize>;
-		return Iter(*ref.store, ref.index, 0u);
+		return Iter{ *ref.store, ref.index, 0u };
 	}
 
 	template<typename Union_T, typename Value_T, std::size_t AllocNodeSize>
@@ -217,7 +223,7 @@ namespace bmath::intern {
 	{
 		using Iter = stored_vector::SaveIterator<const Value_T, AllocNodeSize, const BasicStore<Union_T>>;
 		using Vec_T = StoredVector<Value_T, AllocNodeSize>;
-		return Iter(*ref.store, ref.index, 0u);
+		return Iter{ *ref.store, ref.index, 0u };
 	}
 
 	template<typename Union_T, typename Value_T, std::size_t AllocNodeSize, Const is_const>
