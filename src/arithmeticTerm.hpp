@@ -84,9 +84,9 @@ namespace bmath::intern {
 	//not expeced to be present in normal Term, only in Patterns
 	enum class PnNode 
 	{ 
-		tree_match,  //real nodes appearing as elements in the store, just as everything of MathType
 		value_match, //real nodes appearing as elements in the store, just as everything of MathType
 		value_proxy, //not actual node in tree, just "end" indicator for value subtrees
+		tree_match,  //real nodes appearing as elements in the store, just as everything of MathType
 		COUNT 
 	};
 

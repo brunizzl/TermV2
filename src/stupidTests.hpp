@@ -56,9 +56,9 @@ namespace bmath::intern::debug {
 			<< "Type(Literal::variable)        = " << unsigned(Type(Literal::variable))        << "\n"
 			<< "Type(Literal::complex)         = " << unsigned(Type(Literal::complex))         << "\n"
 			                                                                                   << "\n"
-			<< "Type(PnNode::tree_match)       = " << unsigned(Type(PnNode::tree_match))       << "\n"
 			<< "Type(PnNode::value_match)      = " << unsigned(Type(PnNode::value_match))      << "\n"
 			<< "Type(PnNode::value_proxy)      = " << unsigned(Type(PnNode::value_proxy))      << "\n"
+			<< "Type(PnNode::tree_match)       = " << unsigned(Type(PnNode::tree_match))       << "\n"
 			                                                                                   << "\n"
 			<< "Type(MultiPn::params)          = " << unsigned(Type(MultiPn::params))          << "\n"
 			<< "Type(MultiPn::summands)        = " << unsigned(Type(MultiPn::summands))        << "\n"
@@ -71,87 +71,87 @@ namespace bmath::intern::debug {
 	void test_rechner() 
 	{
 		static const auto rules = std::to_array<pattern::RewriteRule>({ 
-			{ "x :factors | 0 x = 0" },
-			{ "x          | 0^x = 0" },
-			{ "x          | x^0 = 1" },
-			{ "x          | x^1 = x" },
-			
-			{ "x, a, b | (x^a)^b = x^(a*b)" },
-			{ "x       | x x     = x^2" }, 
-			{ "x, a    | x x^a   = x^(a + 1)" },
-			{ "x, a, b | x^a x^b = x^(a + b)" },
-			{ "x :factors, y | exp(x ln(y)) = y^x" },
-			
+			//{ "x :factors | 0 x = 0" },
+			//{ "x          | 0^x = 0" },
+			//{ "x          | x^0 = 1" },
+			//{ "x          | x^1 = x" },
+			//
+			//{ "x, a, b | (x^a)^b = x^(a*b)" },
+			//{ "x       | x x     = x^2" }, 
+			//{ "x, a    | x x^a   = x^(a + 1)" },
+			//{ "x, a, b | x^a x^b = x^(a + b)" },
+			//{ "x :factors, y | exp(x ln(y)) = y^x" },
+			//
 			{ "a, b          | a^2 + 2 a b   + b^2 = (a + b)^2" }, 
-			{ "a, b          | a^2 - 2 a b   + b^2 = (a - b)^2" }, 
-			{ "a :complex, b | a^2 + (2 a) b + b^2 = (a + b)^2" }, 
-			
-			{ "a :no_val, bs :factors, cs :factors | a bs + a cs = a (bs + cs)" },
-			{ "a :no_val, bs :factors              | a bs + a    = a (bs + 1)" }, 
-			{ "a :no_val                           | a    + a    = 2 a" }, 
-			{ "a :value, b, cs :summands           | a (b + cs)  = a b + a cs" }, 
-			
-			{ "a, as :summands |  -(a + as) =  -a - as" },
-			{ "a, as :factors  | 1/(a as)   = 1/a 1/as" },
-			//{ " as :sum      | -as       =     sum:{ -a | a <- as}" }, //not yet writable, will perhaps never happen :|
-			//{ " as :product  | 1/as      = product:{1/a | a <- as}" }, //not yet writable, will perhaps never happen :|
-			
-			{ "x | sin(x)^2 + cos(x)^2 = 1" },
-			
-			//roots and extreme points of sin and cos:
-			{ "         cos(            'pi') = -1" },
-			{ "k :int | cos((k + 0.5)   'pi') =  0" },
-			{ "k :int | cos((2 k)       'pi') =  1" },
-			{ "k :int | cos((2 k + 1)   'pi') = -1" },
-			{ "         sin(            'pi') =  0" },
-			{ "k :int | sin(k           'pi') =  0" },
-			{ "k :int | sin((2 k + 0.5) 'pi') =  1" },
-			{ "k :int | sin((2 k + 1.5) 'pi') = -1" },
-			
-			//differentiation rules:
-			{ "x :variable                      | diff(x, x)      = 1" },
-			{ "x :variable, a :variable         | diff(a, x)      = 0" },
-			{ "x :variable, a :value            | diff(a, x)      = 0" },
-			{ "x :variable, a :value, f :any    | diff(f^a, x)    = diff(f, x) a f^(a-1)" },
-			{ "x :variable, a :value, f :any    | diff(a^f, x)    = diff(f, x) ln(a) a^f" },
-			{ "x :variable, g :any, h :any      | diff(g^h, x)    = (diff(h, x) ln(g) + h diff(g, x)/g) g^h" },
-			{ "x :variable, u :any, v :summands | diff(u + v, x)  = diff(u, x) + diff(v, x)" },
-			{ "x :variable, u :any, v :factors  | diff(u v, x)    = diff(u, x) v + u diff(v, x)" },
-			{ "x :variable, f :any              | diff(sin(f), x) = diff(f, x) cos(f)" },
-			{ "x :variable, f :any              | diff(cos(f), x) = diff(f, x) (-sin(f))" },
-			{ "x :variable, f :any              | diff(exp(f), x) = diff(f, x) exp(f)" },
-			{ "x :variable, f :any              | diff(ln(f), x)  = diff(f, x) 1/f" },
-			
-			//exponential runtime fibonacci implementation:
-			{ "fib(0) = 0" },
-			{ "fib(1) = 1" },
-			{ "n :nat | fib(n) = fib(n - 1) + fib(n - 2)" },
-			
-			//reversing a list:
-			{ "xs :params | reverse(list{xs}) = reverse'(list{}, list{xs})" },
-			{ "xs :params, y, ys :params | reverse'(list{xs}, list{y, ys}) = reverse'(list{y, xs}, list{ys})" },
-			{ "xs :params,               | reverse'(list{xs}, list{})      = list{xs}" },
-			
-			//listing first n fibonacci numbers:
-			{ "n :nat0                    | fib_n(n + 2)                   = reverse(list_fibs(n, list{1, 0}))" },
-			{ "n :nat, a, b, tail :params | list_fibs(n, list{a, b, tail}) = list_fibs(n - 1, list{force(a + b), a, b, tail})" },
-			{ "              tail :params | list_fibs(0, list{tail})       = list{tail}" },
-			
-			//sorting numbers:
-			{ "                    | sort(list{})      = list{}" },
-			{ "x                   | sort(list{x})     = list{x}" },			
-			{ "p :real, xs :params | sort(list{p, xs}) = concat3(sort(filter_s(p, list{}, list{xs})), list{p}, sort(filter_le(p, list{}, list{xs})))" },
-			
-			{ "xs :params, ys :params, zs :params | concat3(list{xs}, list{ys}, list{zs}) = list{xs, ys, zs}" }, 
-			
-			{ "cond :not_positive, true_res, false_res | if_positive(cond, true_res, false_res) = false_res" },
-			{ "cond :positive,     true_res, false_res | if_positive(cond, true_res, false_res) = true_res" },
-			
-			{ "p :real, xs :params, y :real, ys :params | filter_le(p, list{xs}, list{y, ys}) = filter_le(p, if_positive[force(p - y), list{xs}, list{xs, y}], list{ys})" },
-			{ "p :real, xs :params,                     | filter_le(p, list{xs}, list{})      = list{xs}" },
-			
-			{ "p :real, xs :params, y :real, ys :params | filter_s(p, list{xs}, list{y, ys}) = filter_s(p, if_positive[force(p - y), list{xs, y}, list{xs}], list{ys})" },
-			{ "p :real, xs :params,                     | filter_s(p, list{xs}, list{})      = list{xs}" },
+			//{ "a, b          | a^2 - 2 a b   + b^2 = (a - b)^2" }, 
+			//{ "a :complex, b | a^2 + (2 a) b + b^2 = (a + b)^2" }, 
+			//
+			//{ "a :no_val, bs :factors, cs :factors | a bs + a cs = a (bs + cs)" },
+			//{ "a :no_val, bs :factors              | a bs + a    = a (bs + 1)" }, 
+			//{ "a :no_val                           | a    + a    = 2 a" }, 
+			//{ "a :value, b, cs :summands           | a (b + cs)  = a b + a cs" }, 
+			//
+			//{ "a, as :summands |  -(a + as) =  -a - as" },
+			//{ "a, as :factors  | 1/(a as)   = 1/a 1/as" },
+			////{ " as :sum      | -as       =     sum:{ -a | a <- as}" }, //not yet writable, will perhaps never happen :|
+			////{ " as :product  | 1/as      = product:{1/a | a <- as}" }, //not yet writable, will perhaps never happen :|
+			//
+			//{ "x | sin(x)^2 + cos(x)^2 = 1" },
+			//
+			////roots and extreme points of sin and cos:
+			//{ "         cos(            'pi') = -1" },
+			//{ "k :int | cos((k + 0.5)   'pi') =  0" },
+			//{ "k :int | cos((2 k)       'pi') =  1" },
+			//{ "k :int | cos((2 k + 1)   'pi') = -1" },
+			//{ "         sin(            'pi') =  0" },
+			//{ "k :int | sin(k           'pi') =  0" },
+			//{ "k :int | sin((2 k + 0.5) 'pi') =  1" },
+			//{ "k :int | sin((2 k + 1.5) 'pi') = -1" },
+			//
+			////differentiation rules:
+			//{ "x :variable                      | diff(x, x)      = 1" },
+			//{ "x :variable, a :variable         | diff(a, x)      = 0" },
+			//{ "x :variable, a :value            | diff(a, x)      = 0" },
+			//{ "x :variable, a :value, f :any    | diff(f^a, x)    = diff(f, x) a f^(a-1)" },
+			//{ "x :variable, a :value, f :any    | diff(a^f, x)    = diff(f, x) ln(a) a^f" },
+			//{ "x :variable, g :any, h :any      | diff(g^h, x)    = (diff(h, x) ln(g) + h diff(g, x)/g) g^h" },
+			//{ "x :variable, u :any, v :summands | diff(u + v, x)  = diff(u, x) + diff(v, x)" },
+			//{ "x :variable, u :any, v :factors  | diff(u v, x)    = diff(u, x) v + u diff(v, x)" },
+			//{ "x :variable, f :any              | diff(sin(f), x) = diff(f, x) cos(f)" },
+			//{ "x :variable, f :any              | diff(cos(f), x) = diff(f, x) (-sin(f))" },
+			//{ "x :variable, f :any              | diff(exp(f), x) = diff(f, x) exp(f)" },
+			//{ "x :variable, f :any              | diff(ln(f), x)  = diff(f, x) 1/f" },
+			//
+			////exponential runtime fibonacci implementation:
+			//{ "fib(0) = 0" },
+			//{ "fib(1) = 1" },
+			//{ "n :nat | fib(n) = fib(n - 1) + fib(n - 2)" },
+			//
+			////reversing a list:
+			//{ "xs :params | reverse(list{xs}) = reverse'(list{}, list{xs})" },
+			//{ "xs :params, y, ys :params | reverse'(list{xs}, list{y, ys}) = reverse'(list{y, xs}, list{ys})" },
+			//{ "xs :params,               | reverse'(list{xs}, list{})      = list{xs}" },
+			//
+			////listing first n fibonacci numbers:
+			//{ "n :nat0                    | fib_n(n + 2)                   = reverse(list_fibs(n, list{1, 0}))" },
+			//{ "n :nat, a, b, tail :params | list_fibs(n, list{a, b, tail}) = list_fibs(n - 1, list{force(a + b), a, b, tail})" },
+			//{ "              tail :params | list_fibs(0, list{tail})       = list{tail}" },
+			//
+			////sorting numbers:
+			//{ "                    | sort(list{})      = list{}" },
+			//{ "x                   | sort(list{x})     = list{x}" },			
+			//{ "p :real, xs :params | sort(list{p, xs}) = concat3(sort(filter_s(p, list{}, list{xs})), list{p}, sort(filter_le(p, list{}, list{xs})))" },
+			//
+			//{ "xs :params, ys :params, zs :params | concat3(list{xs}, list{ys}, list{zs}) = list{xs, ys, zs}" }, 
+			//
+			//{ "cond :not_positive, true_res, false_res | if_positive(cond, true_res, false_res) = false_res" },
+			//{ "cond :positive,     true_res, false_res | if_positive(cond, true_res, false_res) = true_res" },
+			//
+			//{ "p :real, xs :params, y :real, ys :params | filter_le(p, list{xs}, list{y, ys}) = filter_le(p, if_positive[force(p - y), list{xs}, list{xs, y}], list{ys})" },
+			//{ "p :real, xs :params,                     | filter_le(p, list{xs}, list{})      = list{xs}" },
+			//
+			//{ "p :real, xs :params, y :real, ys :params | filter_s(p, list{xs}, list{y, ys}) = filter_s(p, if_positive[force(p - y), list{xs, y}, list{xs}], list{ys})" },
+			//{ "p :real, xs :params,                     | filter_s(p, list{xs}, list{})      = list{xs}" },
 		});
 
 		for (const auto& rule : rules) {

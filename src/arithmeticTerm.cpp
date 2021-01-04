@@ -6,6 +6,7 @@
 #include <cstring>
 #include <cfenv>
 #include <compare>
+#include <numeric>
 
 #include <iostream>
 
@@ -29,10 +30,10 @@ namespace bmath::intern {
 	constexpr int generality(Type type) noexcept 
 	{ 
 		constexpr auto type_generality_table = std::to_array<std::pair<Type, int>>({
-			{ Type(Literal::complex     ), 1000 }, 
-			{ Type(Literal::variable    ), 1001 },
-			{ Type(PnNode::value_match  ), 1002 }, //may match different subsets of complex numbers, but always requires an actual value to match against
-			{ Type(PnNode::value_proxy  ), 1003 }, //dont care really where this sits, as it never ist used in matching anyway
+			{ Type(PnNode::value_match  ), 1000 }, //may match different subsets of complex numbers, but always requires an actual value to match against
+			{ Type(PnNode::value_proxy  ), 1001 }, //dont care really where this sits, as it never ist used in matching anyway
+			{ Type(Literal::complex     ), 1002 }, //note: after value_match is hack for match::find_matching_permutation
+			{ Type(Literal::variable    ), 1003 },
 			//values 2xxx are not present, as that would require every item in Fn to be listed here (instead default_generality kicks in here)
 			{ Type(NamedFn{}            ), 3000 },
 			{ Type(Variadic::list       ), 3001 },  
@@ -1474,6 +1475,10 @@ namespace bmath::intern {
 			const IndexVector& pn_params = *pn_ref;
 			const IndexVector& haystack_params = *haystack_ref;
 
+			assert(std::is_sorted(haystack_params.begin(), haystack_params.end(), [&](auto lhs, auto rhs) { 
+				return tree::compare(Ref(*haystack_ref.store, lhs), Ref(*haystack_ref.store, rhs)) == std::strong_ordering::less;
+			}));
+
 			SharedVariadicDatum& variadic_datum = match_data.variadic_data.at_or_insert(pn_ref.index);
 			variadic_datum.match_idx = haystack_ref.typed_idx();
 
@@ -1482,29 +1487,76 @@ namespace bmath::intern {
 				currently_matched.set(variadic_datum.match_positions[i]);
 			}
 
-		match_pn_i:
 			while (pn_i < pn_params.size()) {
-				if (pn_params[pn_i].get_type() == MultiPn::params) [[unlikely]] { //also summands and factors are matched as params
+				const Type pn_i_type = pn_params[pn_i].get_type();
+				assert((!pn_i_type.is<MultiPn>() || pn_i_type == MultiPn::params) && "only MultiPn expected in lhs is params");
+				if (pn_i_type == MultiPn::params) [[unlikely]] { //also summands and factors are matched as params
 					assert(pn_i + 1ull == pn_params.size() && "MultiPn is only valid as last element -> only one per variadic");
 					assert(&match_data.multi_info(pn_params[pn_i].get_index()) == &variadic_datum); //just out of paranoia
 					return FindPermutationRes::matched_all;
 				}
-				else {
-					assert(!pn_params[pn_i].get_type().is<MultiPn>() && "only MultiPn expected in lhs is params");
+				else if (pn_i_type.is<MathType>() || pn_i_type == PnNode::value_match) {
 					const Ref pn_i_ref = pn_ref.new_at(pn_params[pn_i]);
+					const int pn_i_generality = generality(pn_i_type);
 					for (; haystack_k < haystack_params.size(); haystack_k++) {
+						static_assert(generality(PnNode::value_match) < generality(Literal::complex));
+						if (pn_i_generality > generality(haystack_params[haystack_k].get_type())) {
+							break; //type at k "larger" than pattern type + haystack sorted -> no chance for pn_i
+						}
 						if (currently_matched.test(haystack_k)) {
-							continue;
+							continue; //ignore parts of haystack currently already associated with elements in pattern
 						}
 						if (match::permutation_equals(pn_i_ref, haystack_ref.new_at(haystack_params[haystack_k]), match_data)) {
-							currently_matched.set(haystack_k);
-							variadic_datum.match_positions[pn_i] = haystack_k;
-							haystack_k = 0u;
-							pn_i++;
-							goto match_pn_i; //next while iteration
+							goto prepare_next_pn_i; //next while iteration
 						}
 						reset_own_matches(pn_i_ref, match_data);
 					}
+				}
+				else {
+					assert(pn_i_type == PnNode::tree_match); //other may not be encoountered in this function
+					const Ref pn_i_ref = pn_ref.new_at(pn_params[pn_i]);
+					const auto& match_info = match_data.info(pn_i_ref->tree_match);
+					if (match_info.is_set()) { //binary search for needle over part of haystack allowed to search in
+						const Ref needle = haystack_ref.new_at(match_info.match_idx); 
+						std::int32_t search_front = haystack_k;
+						std::int32_t search_back = haystack_params.size() - 1u;
+
+						while (search_front <= search_back) {
+							const std::int32_t midpoint = std::midpoint(search_front, search_back);
+							haystack_k = midpoint; //only call tree::compare where not currently matched
+							while (currently_matched.test(haystack_k) && haystack_k <= search_back) {
+								haystack_k++;
+							}
+							if (haystack_k > search_back) {
+								search_back = midpoint - 1u;
+								continue;
+							}
+
+							const Ref search_ref = haystack_ref.new_at(haystack_params[haystack_k]);
+							const std::strong_ordering cmp = tree::compare(search_ref, needle);
+							if (cmp == std::strong_ordering::equal) {
+								goto prepare_next_pn_i;
+							}
+							else if (cmp == std::strong_ordering::less) {
+								search_front = haystack_k + 1u;
+							}
+							else {
+								assert(cmp == std::strong_ordering::greater);
+								search_back = midpoint - 1u;
+							}
+						}
+					}
+					else { //match info is not yet set -> test all
+						for (; haystack_k < haystack_params.size(); haystack_k++) {
+							if (currently_matched.test(haystack_k)) {
+								continue;
+							}
+							if (match::permutation_equals(pn_i_ref, haystack_ref.new_at(haystack_params[haystack_k]), match_data)) {
+								goto prepare_next_pn_i;
+							}
+							reset_own_matches(pn_i_ref, match_data);
+						}
+					}					
 				}
 
 				//got here -> could not match element nr pn_i of pattern with any currently unmatched element in haystack
@@ -1532,7 +1584,13 @@ namespace bmath::intern {
 						currently_matched.reset(haystack_k);
 						haystack_k++;
 					}
+					continue;
 				}
+			prepare_next_pn_i:
+				currently_matched.set(haystack_k);
+				variadic_datum.match_positions[pn_i] = haystack_k;
+				haystack_k = 0u;
+				pn_i++;
 			}
 			return pn_params.size() == haystack_params.size() ? FindPermutationRes::matched_all : FindPermutationRes::matched_some;
 		} //find_matching_permutation
