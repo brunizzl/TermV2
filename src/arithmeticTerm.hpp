@@ -25,6 +25,7 @@ namespace bmath::intern {
 		strict_product, //associative but not commutative
 		multiset,
 		list,
+		set,
 		COUNT
 	};
 
@@ -307,6 +308,7 @@ namespace bmath::intern {
 			{ Variadic::strict_product, "product'", false, true  },
 			{ Variadic::multiset      , "multiset", true , false },
 			{ Variadic::list          , "list"    , false, false },
+			{ Variadic::set           , "set"     , true , false },
 		});
 		static_assert(static_cast<unsigned>(variadic_props_table.front().type) == 0u);
 		static_assert(std::is_sorted(variadic_props_table.begin(), variadic_props_table.end(), 
@@ -559,17 +561,13 @@ namespace bmath::intern {
 			//  thus resetting own variables in part "a*b" will only reset "b".
 			void reset_own_matches(const Ref pn_ref, MatchData& match_data);
 
-			//if not all summands / factors in pattern could be matched, unmatchable is returned.
-			//if not all summands / factors in the haystack are matched, matched_some is returned
-			//(relevant if the current parameters is the outhermost, as then only a partial match may be successfull)
-			enum class FindPermutationRes { matched_all, unmatchable, matched_some };
-
 			//determines weather there is a way to match pn_ref in haystack_ref (thus pn_ref is assumed to part of a pattern)
 			//pn_i is the index of the first element in pn_ref to be matched. 
 			//if pn_i is not zero, it is assumed, that all previous elements in pn_ref are already matched.
 			//the first haystack_k elements of haystack_ref will be skipped for the first match attemt.
 			//it is assumed, that pn_ref and haystack_ref are both the same parameters type (eighter both sum or both product)
-			FindPermutationRes find_matching_permutation(const Ref pn_ref, const Ref haystack_ref, 
+			//returns if search was successfull
+			bool find_matching_permutation(const Ref pn_ref, const Ref haystack_ref, 
 				MatchData& match_data,	std::uint32_t pn_i, std::uint32_t haystack_k);
 
 			//expects pn_ref to already be matched to ref via match_data

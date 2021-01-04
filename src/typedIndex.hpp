@@ -80,7 +80,7 @@ namespace bmath::intern {
 
 
 	template<typename TypesEnum, typename UnderlyingType = std::uint32_t>
-	using BasicTypedIdx = BasicTypedIdx_Bitmask<TypesEnum, UnderlyingType>;
-	//using BasicTypedIdx = BasicTypedIdx_BitField<TypesEnum, UnderlyingType>;
+	//using BasicTypedIdx = BasicTypedIdx_Bitmask<TypesEnum, UnderlyingType>;
+	using BasicTypedIdx = BasicTypedIdx_BitField<TypesEnum, UnderlyingType>;
 
 } //namespace bmath::intern

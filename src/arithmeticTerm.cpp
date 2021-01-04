@@ -30,10 +30,10 @@ namespace bmath::intern {
 	constexpr int generality(Type type) noexcept 
 	{ 
 		constexpr auto type_generality_table = std::to_array<std::pair<Type, int>>({
-			{ Type(PnNode::value_match  ), 1000 }, //may match different subsets of complex numbers, but always requires an actual value to match against
-			{ Type(PnNode::value_proxy  ), 1001 }, //dont care really where this sits, as it never ist used in matching anyway
-			{ Type(Literal::complex     ), 1002 }, //note: after value_match is hack for match::find_matching_permutation
-			{ Type(Literal::variable    ), 1003 },
+			{ Type(Literal::complex     ), 1000 }, 
+			{ Type(Literal::variable    ), 1001 },
+			{ Type(PnNode::value_match  ), 1002 }, //may match different subsets of complex numbers, but always requires an actual value to match against
+			{ Type(PnNode::value_proxy  ), 1003 }, //dont care really where this sits, as it never ist used in matching anyway
 			//values 2xxx are not present, as that would require every item in Fn to be listed here (instead default_generality kicks in here)
 			{ Type(NamedFn{}            ), 3000 },
 			{ Type(Variadic::list       ), 3001 },  
@@ -1301,7 +1301,7 @@ namespace bmath::intern {
 					if (pn_ref->parameters.size() - params_at_back > ref->parameters.size()) {  //params can also match nothing -> subtract 1 then
 						return false;
 					}
-					return find_matching_permutation(pn_ref, ref, match_data, 0u, 0u) == FindPermutationRes::matched_all;
+					return find_matching_permutation(pn_ref, ref, match_data, 0u, 0u);
 				}
 				else if (pn_ref.type.is<Fn>()) {
 					const IndexVector& pn_range = fn::range(pn_ref);
@@ -1451,7 +1451,7 @@ namespace bmath::intern {
 				assert(!pn_params[pn_i].get_type().is<MultiPn>()); //there may only be a single one in each variadic
 				reset_own_matches(pn_ref, match_data);
 				const std::uint32_t last_haystack_k = variadic_datum.match_positions[pn_i];
-				return find_matching_permutation(pn_ref, ref, match_data, pn_i, last_haystack_k + 1u) == FindPermutationRes::matched_all;
+				return find_matching_permutation(pn_ref, ref, match_data, pn_i, last_haystack_k + 1u);
 			}
 			else {
 				const auto& pn_range = fn::range(pn_ref);
@@ -1468,7 +1468,7 @@ namespace bmath::intern {
 			}
 		} //subsequent_permutation_equals
 
-		FindPermutationRes find_matching_permutation(const Ref pn_ref, const Ref haystack_ref, MatchData& match_data, std::uint32_t pn_i, std::uint32_t haystack_k)
+		bool find_matching_permutation(const Ref pn_ref, const Ref haystack_ref, MatchData& match_data, std::uint32_t pn_i, std::uint32_t haystack_k)
 		{
 			assert(pn_ref.type == haystack_ref.type && (fn::is_unordered(haystack_ref.type)));
 
@@ -1493,15 +1493,15 @@ namespace bmath::intern {
 				if (pn_i_type == MultiPn::params) [[unlikely]] { //also summands and factors are matched as params
 					assert(pn_i + 1ull == pn_params.size() && "MultiPn is only valid as last element -> only one per variadic");
 					assert(&match_data.multi_info(pn_params[pn_i].get_index()) == &variadic_datum); //just out of paranoia
-					return FindPermutationRes::matched_all;
+					return true;
 				}
 				else if (pn_i_type.is<MathType>() || pn_i_type == PnNode::value_match) {
 					const Ref pn_i_ref = pn_ref.new_at(pn_params[pn_i]);
 					const int pn_i_generality = generality(pn_i_type);
 					for (; haystack_k < haystack_params.size(); haystack_k++) {
-						static_assert(generality(PnNode::value_match) < generality(Literal::complex));
-						if (pn_i_generality > generality(haystack_params[haystack_k].get_type())) {
-							break; //type at k "larger" than pattern type + haystack sorted -> no chance for pn_i
+						static_assert(generality(PnNode::value_match) > generality(Literal::complex));
+						if (pn_i_generality < generality(haystack_params[haystack_k].get_type())) {
+							goto rematch_last_pn_i; //specimen of pn_i_type in haystack sorted in front of k -> no hope left finding them here or later
 						}
 						if (currently_matched.test(haystack_k)) {
 							continue; //ignore parts of haystack currently already associated with elements in pattern
@@ -1554,14 +1554,13 @@ namespace bmath::intern {
 							if (match::permutation_equals(pn_i_ref, haystack_ref.new_at(haystack_params[haystack_k]), match_data)) {
 								goto prepare_next_pn_i;
 							}
-							reset_own_matches(pn_i_ref, match_data);
 						}
 					}					
 				}
 
-				//got here -> could not match element nr pn_i of pattern with any currently unmatched element in haystack
+			rematch_last_pn_i:
 				if (pn_i == 0u) {
-					return FindPermutationRes::unmatchable;
+					return false;
 				}
 				else {
 					//this while loop iteration tried matching some element after the first in pattern (and failed)
@@ -1584,15 +1583,15 @@ namespace bmath::intern {
 						currently_matched.reset(haystack_k);
 						haystack_k++;
 					}
-					continue;
 				}
+				continue;
 			prepare_next_pn_i:
 				currently_matched.set(haystack_k);
 				variadic_datum.match_positions[pn_i] = haystack_k;
 				haystack_k = 0u;
 				pn_i++;
 			}
-			return pn_params.size() == haystack_params.size() ? FindPermutationRes::matched_all : FindPermutationRes::matched_some;
+			return pn_params.size() == haystack_params.size();
 		} //find_matching_permutation
 
 		TypedIdx copy(const Ref pn_ref, const MatchData& match_data, const Store& src_store, Store& dst_store)
