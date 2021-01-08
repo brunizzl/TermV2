@@ -48,14 +48,13 @@ namespace bmath::intern {
 
 	namespace pattern {
 
-		//using Unknown = UnitEnum<"Unknown">;
-		UNIT_ENUM(Unknown);
+		struct Unknown; //note: this is only ever declared
 
 		using PnVariablesType = SumEnum<Restriction, Form, MultiPn, Unknown>;
 
 		struct TypeProps
 		{
-			PnVariablesType type = Unknown{};
+			PnVariablesType type = PnVariablesType::as<Unknown>;
 			std::string_view name = "";
 		};
 
@@ -93,7 +92,7 @@ namespace bmath::intern {
 		constexpr int infixr(Type type) 
 		{ 
 			constexpr auto infixr_table = std::to_array<std::pair<Type, int>>({
-				{ Type(NamedFn{}          ), 0 },
+				{ Type::as<NamedFn>        , 0 },
 				{ Type(Variadic::sum      ), 2 },
 				{ Type(Variadic::product  ), 4 },	
 				{ Type(Fn::pow            ), 5 }, //not between other function types -> assumed to be printed with '^'  
@@ -626,7 +625,7 @@ namespace bmath::intern {
 			} break;
 			default: {
 				str.pop_back(); //pop '('
-				if (ref.type == NamedFn{}) {
+				if (ref.type.is<NamedFn>()) {
 					const CharVector& name = fn::named_fn_name(ref);
 					str.append(std::string_view(name.data(), name.size()));
 				}
@@ -821,7 +820,7 @@ namespace bmath::intern {
 			} break;
 			default: {
 				need_parentheses = false;
-				if (ref.type == NamedFn{}) {
+				if (ref.type.is<NamedFn>()) {
 					const CharVector& name = fn::named_fn_name(ref);
 					str += std::string_view(name.data(), name.size());
 				}
@@ -952,7 +951,7 @@ namespace bmath::intern {
 				show_typedidx_vec_nodes(ref.index, false);
 			} break;
 			default: {
-				if (ref.type == NamedFn{}) {
+				if (ref.type.is<NamedFn>()) {
 					show_string_nodes(fn::named_fn_name_index(ref), true);
 				}
 				assert(ref.type.is<Function>());
@@ -1069,7 +1068,7 @@ namespace bmath::intern {
 
 			switch (ref.type) {
 			default: {
-				if (ref.type == NamedFn{}) {
+				if (ref.type.is<NamedFn>()) {
 					const CharVector& name = fn::named_fn_name(ref);
 					current_str += std::string_view(name.data(), name.size());
 				}

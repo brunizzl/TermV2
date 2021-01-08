@@ -35,15 +35,16 @@ namespace bmath::intern {
 			{ Type(PnNode::value_match  ), 1002 }, //may match different subsets of complex numbers, but always requires an actual value to match against
 			{ Type(PnNode::value_proxy  ), 1003 }, //dont care really where this sits, as it never ist used in matching anyway
 			//values 2xxx are not present, as that would require every item in Fn to be listed here (instead default_generality kicks in here)
-			{ Type(NamedFn{}            ), 3000 },
+			{ Type::as<NamedFn>          , 3000 },
 			{ Type(Variadic::list       ), 3001 },  
 			{ Type(Variadic::multiset   ), 3002 },  
-			{ Type(Variadic::sum        ), 3003 },  
-			{ Type(Variadic::product    ), 3004 }, 
-			{ Type(PnNode::tree_match   ), 3005 }, 
-			{ Type(MultiPn::params      ), 3006 }, //kinda special, as they always succeed in matching -> need to be matched last 
-			{ Type(MultiPn::summands    ), 3007 }, //kinda special, as they always succeed in matching -> need to be matched last 
-			{ Type(MultiPn::factors     ), 3008 }, //kinda special, as they always succeed in matching -> need to be matched last 
+			{ Type(Variadic::set        ), 3003 },  
+			{ Type(Variadic::sum        ), 3004 },  
+			{ Type(Variadic::product    ), 3005 }, 
+			{ Type(PnNode::tree_match   ), 3006 }, 
+			{ Type(MultiPn::params      ), 3007 }, //kinda special, as they always succeed in matching -> need to be matched last 
+			{ Type(MultiPn::summands    ), 3008 }, //kinda special, as they always succeed in matching -> need to be matched last 
+			{ Type(MultiPn::factors     ), 3009 }, //kinda special, as they always succeed in matching -> need to be matched last 
 		});
 		static_assert(std::is_sorted(type_generality_table.begin(), type_generality_table.end(), [](auto a, auto b) { return a.second < b.second; }));
 		static_assert(static_cast<unsigned>(Type::COUNT) < 1000u, "else the 2xxx generalities may leak into the 3xxx ones in table");
@@ -154,7 +155,7 @@ namespace bmath::intern {
 		void free(const MutRef ref)
 		{
 			switch (ref.type) {
-			case Type(NamedFn{}):
+			case Type::as<NamedFn>:
 				CharVector::free(*ref.store, fn::named_fn_name_index(ref));
 				[[fallthrough]];
 			default: 
@@ -420,7 +421,7 @@ namespace bmath::intern {
 			}
 
 			switch (ref_1.type) {
-			case Type(NamedFn{}): {
+			case Type::as<NamedFn>: {
 				const CharVector& name_1 = fn::named_fn_name(ref_1);
 				const CharVector& name_2 = fn::named_fn_name(ref_2);
 				if (const auto cmp = compare_char_vecs(name_1, name_2); cmp != std::strong_ordering::equal) {
@@ -531,7 +532,7 @@ namespace bmath::intern {
 					const TypedIdx dst_param = tree::copy(src_ref.new_at(src_param), dst_store);
 					dst_parameters.push_back(dst_param);
 				}
-				if (src_ref.type == NamedFn{}) {
+				if (src_ref.type.is<NamedFn>()) {
 					const CharVector& name_ref = fn::named_fn_name(src_ref);
 					std::string name = std::string(name_ref.begin(), name_ref.end());
 					return fn::build_named_fn(dst_store, std::move(name), dst_parameters);
@@ -636,7 +637,7 @@ namespace bmath::intern {
 					if (ref.type.is<Function>()) {
 						const IndexVector& vec = *ref;
 						if (set_all_in_range(ref.index, ref.index + vec.node_count())) return true;
-						if (ref.type == NamedFn{}) {
+						if (ref.type.is<NamedFn>()) {
 							const std::size_t name_index = fn::named_fn_name_index(ref);
 							const std::size_t name_node_count = fn::named_fn_name(ref).node_count();
 							if (set_all_in_range(name_index, name_index + name_node_count)) return true;
@@ -857,7 +858,7 @@ namespace bmath::intern {
 						constexpr Acc(const Ref ref, std::vector<TypedIdx>* new_old_multis) noexcept 
 							:old_multis(new_old_multis), own_idx(-1u)
 						{
-							if (ref.type.is<Variadic>() || ref.type == NamedFn{}) { //these may contain MultiPn -> these have SharedVariadicDatum entry 
+							if (ref.type.is<Variadic>() || ref.type.is<NamedFn>()) { //these may contain MultiPn -> these have SharedVariadicDatum entry 
 								this->own_idx = this->old_multis->size(); //new last element 
 								this->old_multis->emplace_back(TypedIdx{}); //becomes only valid element, once consume found MultiPn
 							}
@@ -881,7 +882,7 @@ namespace bmath::intern {
 						if (ref.type.is<Function>()) {
 							for (auto& param : fn::unsave_range(ref)) {
 								if (param.get_type().is<MultiPn>()) {
-									if (!ref.type.is<Variadic>() && !(ref.type == NamedFn{}) && test_lhs) { //only these may carry MultiPn in lhs
+									if (!ref.type.is<Variadic>() && !(ref.type.is<NamedFn>()) && test_lhs) { //only these may carry MultiPn in lhs
 										return true;
 									}
 									const auto new_param_pos = std::find(old_multis.begin(), old_multis.end(), param); //relative to begin() to be precise
@@ -1287,7 +1288,7 @@ namespace bmath::intern {
 				return false;
 			}
 			switch (pn_ref.type) {
-			case Type(NamedFn{}): {
+			case Type::as<NamedFn>: {
 				const CharVector& name = fn::named_fn_name(ref);
 				const CharVector& pn_name = fn::named_fn_name(pn_ref);
 				if (std::string_view(name.data(), name.size()) != std::string_view(pn_name.data(), pn_name.size())) {
@@ -1317,7 +1318,7 @@ namespace bmath::intern {
 					return true;
 				}
 				else {
-					assert((pn_ref.type.is<Variadic>() && !fn::is_unordered(pn_ref.type)) || pn_ref.type == NamedFn{});
+					assert((pn_ref.type.is<Variadic>() && !fn::is_unordered(pn_ref.type)) || pn_ref.type.is<NamedFn>());
 					const IndexVector& pn_range = fn::range(pn_ref);
 					const IndexVector& range = fn::range(ref);
 					auto pn_iter = pn_range.begin();
@@ -1446,6 +1447,9 @@ namespace bmath::intern {
 				assert(variadic_datum.match_idx  == ref.typed_idx()); //assert pn_ref is currently matched in ref
 				std::uint32_t pn_i = pn_params.size() - 1u;
 				if (pn_params[pn_i].get_type().is<MultiPn>()) {
+					if (pn_i == 0u) {
+						return false;
+					}
 					pn_i--;
 				} 
 				assert(!pn_params[pn_i].get_type().is<MultiPn>()); //there may only be a single one in each variadic
@@ -1516,19 +1520,20 @@ namespace bmath::intern {
 					assert(pn_i_type == PnNode::tree_match); //other may not be encoountered in this function
 					const Ref pn_i_ref = pn_ref.new_at(pn_params[pn_i]);
 					const auto& match_info = match_data.info(pn_i_ref->tree_match);
+
 					if (match_info.is_set()) { //binary search for needle over part of haystack allowed to search in
 						const Ref needle = haystack_ref.new_at(match_info.match_idx); 
-						std::int32_t search_front = haystack_k;
-						std::int32_t search_back = haystack_params.size() - 1u;
+						std::uint32_t search_begin = haystack_k;
+						std::uint32_t search_end = haystack_params.size();
 
-						while (search_front <= search_back) {
-							const std::int32_t midpoint = std::midpoint(search_front, search_back);
+						while (search_begin < search_end) {
+							const std::uint32_t midpoint = std::midpoint(search_begin, search_end); //rounded torwards search_begin
 							haystack_k = midpoint; //only call tree::compare where not currently matched
-							while (currently_matched.test(haystack_k) && haystack_k <= search_back) {
+							while (currently_matched.test(haystack_k) && haystack_k < search_end) {
 								haystack_k++;
 							}
-							if (haystack_k > search_back) {
-								search_back = midpoint - 1u;
+							if (haystack_k == search_end) {
+								search_end = midpoint;
 								continue;
 							}
 
@@ -1538,11 +1543,11 @@ namespace bmath::intern {
 								goto prepare_next_pn_i;
 							}
 							else if (cmp == std::strong_ordering::less) {
-								search_front = haystack_k + 1u;
+								search_begin = haystack_k + 1u;
 							}
 							else {
 								assert(cmp == std::strong_ordering::greater);
-								search_back = midpoint - 1u;
+								search_end = midpoint;
 							}
 						}
 					}
@@ -1617,7 +1622,7 @@ namespace bmath::intern {
 						dst_parameters.push_back(dst_param);
 					}
 				}
-				if (pn_ref.type == NamedFn{}) {
+				if (pn_ref.type.is<NamedFn>()) {
 					const CharVector& name_ref = fn::named_fn_name(pn_ref);
 					std::string name = std::string(name_ref.begin(), name_ref.end());
 					return fn::build_named_fn(dst_store, std::move(name), dst_parameters);

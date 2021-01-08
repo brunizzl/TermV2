@@ -38,8 +38,37 @@ idea status:
  - always keep -1 at some known index in store and never allocate new -1 in build_negated and build_inverted (problem: identify bevore copy)
 */
 
+struct Mercedes;
+struct BMW;
+struct VW;
+struct Audi;
+
+using Auto = SumEnum<Mercedes, BMW, VW, Audi>;
+
+void f(const Auto a)
+{
+	switch (a) {
+		case Auto::as<Mercedes>:
+			std::cout << "mercedes\n";
+			break;
+		case Auto::as<BMW>:
+			std::cout << "bmw\n";
+			break;
+		case Auto::as<VW>:
+			std::cout << "vw\n";
+			break;
+		case Auto::as<Audi>:
+			std::cout << "audi\n";
+			break;			
+	}
+}
+
 int main()
 {
+	f(Auto::as<Mercedes>);
+	f(Auto::as<BMW>);
+	f(Auto::as<VW>);
+	f(Auto::as<Audi>);
 	debug::enumerate_type();
 	debug::test_rechner();
 	//test::combine_exact();

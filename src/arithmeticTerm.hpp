@@ -21,11 +21,13 @@ namespace bmath::intern {
 	{
 		sum,      //associative and commutative
 		product,  //associative and commutative
-		strict_sum,     //associative but not commutative
-		strict_product, //associative but not commutative
+		ordered_sum,     //associative but not commutative
+		ordered_product, //associative but not commutative
 		multiset,
 		list,
 		set,
+		union_,
+		intersection,
 		COUNT
 	};
 
@@ -34,8 +36,7 @@ namespace bmath::intern {
 	//the index points at the IndexVector containing the parameters.
 	//the function name follwos as CharVector in direct succession
 	//(by starting with the parameters, most functions need no extra case to handle NamedFn)
-	UNIT_ENUM(NamedFn);
-	//using NamedFn = UnitEnum<"NamedFn">;
+	struct NamedFn; //note: this struct is never defined, only declared
 
 	//these are lumped together, because they behave the same in most cases -> can be seperated easily from rest
 	//behavior for every specific element in Fn is (at least) defined at array fn::fn_props_table specifying name and arity
@@ -302,13 +303,15 @@ namespace bmath::intern {
 
 		//every item enumerated in Variadic (except COUNT, duh) may be listed here in order of apperance in Variadic
 		constexpr auto variadic_props_table = std::to_array<VariadicProperties>({
-			{ Variadic::sum           , "sum"     , true , true  },
-			{ Variadic::product       , "product" , true , true  },
-			{ Variadic::strict_sum    , "sum'"    , false, true  },
-			{ Variadic::strict_product, "product'", false, true  },
-			{ Variadic::multiset      , "multiset", true , false },
-			{ Variadic::list          , "list"    , false, false },
-			{ Variadic::set           , "set"     , true , false },
+			{ Variadic::sum            , "sum"         , true , true  },
+			{ Variadic::product        , "product"     , true , true  },
+			{ Variadic::ordered_sum    , "sum'"        , false, true  },
+			{ Variadic::ordered_product, "product'"    , false, true  },
+			{ Variadic::multiset       , "multiset"    , true , false },
+			{ Variadic::list           , "list"        , false, false },
+			{ Variadic::set            , "set"         , true , false },
+			{ Variadic::union_         , "union"       , true , true  },
+			{ Variadic::intersection   , "intersection", true , true  },
 		});
 		static_assert(static_cast<unsigned>(variadic_props_table.front().type) == 0u);
 		static_assert(std::is_sorted(variadic_props_table.begin(), variadic_props_table.end(), 
@@ -371,7 +374,7 @@ namespace bmath::intern {
 			const std::size_t result_index = store.allocate_n(nr_parameter_nodes + nr_name_nodes);
 			IndexVector::emplace(store.at(result_index), params, parameter_capacity);
 			CharVector::emplace(store.at(result_index + nr_parameter_nodes), name, name_capacity);
-			return TypedIdx(result_index, Type(NamedFn{}));
+			return TypedIdx(result_index, Type::as<NamedFn>);
 		}
 
 	} //namespace fn

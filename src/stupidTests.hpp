@@ -22,12 +22,12 @@ namespace bmath::intern::debug {
 		std::cout
 			<< "Type(Variadic::sum)            = " << unsigned(Type(Variadic::sum))            << "\n"
 			<< "Type(Variadic::product)        = " << unsigned(Type(Variadic::product))        << "\n"
-			<< "Type(Variadic::strict_sum)     = " << unsigned(Type(Variadic::strict_sum))     << "\n"
-			<< "Type(Variadic::strict_product) = " << unsigned(Type(Variadic::strict_product)) << "\n"
+			<< "Type(Variadic::ordered_sum)    = " << unsigned(Type(Variadic::ordered_sum))    << "\n"
+			<< "Type(Variadic::ordered_product)= " << unsigned(Type(Variadic::ordered_product))<< "\n"
 			<< "Type(Variadic::multiset)       = " << unsigned(Type(Variadic::multiset))       << "\n"
 			<< "Type(Variadic::list)           = " << unsigned(Type(Variadic::list))           << "\n"
 		                                                                                       << "\n"
-			<< "Type(NamedFn{})                = " << unsigned(Type(NamedFn{}))                << "\n"
+			<< "Type(NamedFn{})                = " << unsigned(Type::as<NamedFn>)              << "\n"
 			                                                                                   << "\n"
 			<< "Type(Fn::pow)                  = " << unsigned(Type(Fn::pow))                  << "\n"
 			<< "Type(Fn::log)                  = " << unsigned(Type(Fn::log))                  << "\n"
@@ -139,7 +139,7 @@ namespace bmath::intern::debug {
 			
 			//sorting numbers:
 			{ "                    | sort(list{})      = list{}" },
-			{ "x                   | sort(list{x})     = list{x}" },			
+			{ "x                   | sort(list{x})     = list{x}" },
 			{ "p :real, xs :params | sort(list{p, xs}) = concat3(sort(filter_s(p, list{}, list{xs})), list{p}, sort(filter_le(p, list{}, list{xs})))" },
 			
 			{ "xs :params, ys :params, zs :params | concat3(list{xs}, list{ys}, list{zs}) = list{xs, ys, zs}" }, 
@@ -153,7 +153,17 @@ namespace bmath::intern::debug {
 			{ "p :real, xs :params, y :real, ys :params | filter_s(p, list{xs}, list{y, ys}) = filter_s(p, if_positive[force(p - y), list{xs, y}, list{xs}], list{ys})" },
 			{ "p :real, xs :params,                     | filter_s(p, list{xs}, list{})      = list{xs}" },
 
+
 			{ "x, xs :params | set(x, x, xs) = set(x, xs)" },
+
+			{ "                                       union()                       = set()"},
+			{ "x                                    | union(x)                      = x" },
+			{ "xs :params, ys :params, sets :params | union(set(xs), set(ys), sets) = union(set(xs, ys), sets)" }, 
+
+			{ "                                          intersection()                             = set()"},
+			{ "x                                       | intersection(x)                            = x" },
+			{ "x, xs :params, ys :params, sets :params | intersection(set(x, xs), set(x, ys), sets) = union(intersection(set(x), sets), intersection(set(xs), set(ys), sets))" }, 
+			{ "                           sets :params | intersection(sets)                         = set()" }, 
 		});
 
 		for (const auto& rule : rules) {
