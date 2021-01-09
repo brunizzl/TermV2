@@ -36,7 +36,7 @@ namespace bmath::intern {
 	//the index points at the IndexVector containing the parameters.
 	//the function name follwos as CharVector in direct succession
 	//(by starting with the parameters, most functions need no extra case to handle NamedFn)
-	struct NamedFn; //note: this struct is never defined, only declared
+	struct NamedFn {};
 
 	//these are lumped together, because they behave the same in most cases -> can be seperated easily from rest
 	//behavior for every specific element in Fn is (at least) defined at array fn::fn_props_table specifying name and arity
@@ -374,7 +374,7 @@ namespace bmath::intern {
 			const std::size_t result_index = store.allocate_n(nr_parameter_nodes + nr_name_nodes);
 			IndexVector::emplace(store.at(result_index), params, parameter_capacity);
 			CharVector::emplace(store.at(result_index + nr_parameter_nodes), name, name_capacity);
-			return TypedIdx(result_index, Type::as<NamedFn>);
+			return TypedIdx(result_index, Type(NamedFn{}));
 		}
 
 	} //namespace fn

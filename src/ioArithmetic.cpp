@@ -48,13 +48,13 @@ namespace bmath::intern {
 
 	namespace pattern {
 
-		struct Unknown; //note: this is only ever declared
+		struct Unknown {};
 
 		using PnVariablesType = SumEnum<Restriction, Form, MultiPn, Unknown>;
 
 		struct TypeProps
 		{
-			PnVariablesType type = PnVariablesType::as<Unknown>;
+			PnVariablesType type = PnVariablesType(Unknown{});
 			std::string_view name = "";
 		};
 
@@ -92,7 +92,7 @@ namespace bmath::intern {
 		constexpr int infixr(Type type) 
 		{ 
 			constexpr auto infixr_table = std::to_array<std::pair<Type, int>>({
-				{ Type::as<NamedFn>        , 0 },
+				{ Type(NamedFn{})          , 0 },
 				{ Type(Variadic::sum      ), 2 },
 				{ Type(Variadic::product  ), 4 },	
 				{ Type(Fn::pow            ), 5 }, //not between other function types -> assumed to be printed with '^'  

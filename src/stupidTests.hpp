@@ -27,7 +27,7 @@ namespace bmath::intern::debug {
 			<< "Type(Variadic::multiset)       = " << unsigned(Type(Variadic::multiset))       << "\n"
 			<< "Type(Variadic::list)           = " << unsigned(Type(Variadic::list))           << "\n"
 		                                                                                       << "\n"
-			<< "Type(NamedFn{})                = " << unsigned(Type::as<NamedFn>)              << "\n"
+			<< "Type(NamedFn{})                = " << unsigned(Type(NamedFn{}))                << "\n"
 			                                                                                   << "\n"
 			<< "Type(Fn::pow)                  = " << unsigned(Type(Fn::pow))                  << "\n"
 			<< "Type(Fn::log)                  = " << unsigned(Type(Fn::log))                  << "\n"

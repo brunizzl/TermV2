@@ -35,7 +35,7 @@ namespace bmath::intern {
 			{ Type(PnNode::value_match  ), 1002 }, //may match different subsets of complex numbers, but always requires an actual value to match against
 			{ Type(PnNode::value_proxy  ), 1003 }, //dont care really where this sits, as it never ist used in matching anyway
 			//values 2xxx are not present, as that would require every item in Fn to be listed here (instead default_generality kicks in here)
-			{ Type::as<NamedFn>          , 3000 },
+			{ Type(NamedFn{})            , 3000 },
 			{ Type(Variadic::list       ), 3001 },  
 			{ Type(Variadic::multiset   ), 3002 },  
 			{ Type(Variadic::set        ), 3003 },  
@@ -155,7 +155,7 @@ namespace bmath::intern {
 		void free(const MutRef ref)
 		{
 			switch (ref.type) {
-			case Type::as<NamedFn>:
+			case Type(NamedFn{}):
 				CharVector::free(*ref.store, fn::named_fn_name_index(ref));
 				[[fallthrough]];
 			default: 
@@ -421,7 +421,7 @@ namespace bmath::intern {
 			}
 
 			switch (ref_1.type) {
-			case Type::as<NamedFn>: {
+			case Type(NamedFn{}): {
 				const CharVector& name_1 = fn::named_fn_name(ref_1);
 				const CharVector& name_2 = fn::named_fn_name(ref_2);
 				if (const auto cmp = compare_char_vecs(name_1, name_2); cmp != std::strong_ordering::equal) {
@@ -1288,7 +1288,7 @@ namespace bmath::intern {
 				return false;
 			}
 			switch (pn_ref.type) {
-			case Type::as<NamedFn>: {
+			case Type(NamedFn{}): {
 				const CharVector& name = fn::named_fn_name(ref);
 				const CharVector& pn_name = fn::named_fn_name(pn_ref);
 				if (std::string_view(name.data(), name.size()) != std::string_view(pn_name.data(), pn_name.size())) {

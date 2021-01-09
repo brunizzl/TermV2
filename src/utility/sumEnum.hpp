@@ -1,8 +1,10 @@
 #pragma once
 
 #include <type_traits>
+#include <typeinfo>
 #include <bit>
 #include <compare>
+#include <concepts>
 
 namespace bmath::intern {
     
@@ -11,28 +13,60 @@ namespace bmath::intern {
 	template<typename... Enums>
 	class [[nodiscard]] SumEnum;
 
+	template<typename Enum, Enum LastValidMember>
+	struct [[nodiscard]] WrapEnum //allows to use SumEnum with enums not having their last member named COUNT
+	{
+		static_assert(std::is_enum_v<Enum>);
+
+		Enum value;
+		constexpr WrapEnum(const Enum e) noexcept :value(e) {}
+
+		explicit constexpr WrapEnum(const unsigned u) noexcept :value(static_cast<Enum>(u)) {}
+		explicit constexpr operator unsigned() const noexcept { return static_cast<unsigned>(this->value); }
+
+		//this is the only reason for WrapEnum to exist.
+		static constexpr Enum COUNT = static_cast<Enum>(static_cast<unsigned>(LastValidMember) + 1u);
+	}; //struct WrapEnum 
+
 	namespace enum_detail {
 
 		template<typename Needle, typename Haystack>
-		struct Contains :std::false_type {};
-
-		template<typename Needle, typename Haystack>
-		constexpr bool contains_v = Contains<Needle, Haystack>::value;
+		struct DecideContainedIn :std::false_type {};
 
 		template<typename Needle, typename... HayTail>
-		struct Contains<Needle, SumEnum<Needle, HayTail...>> :std::true_type {};
+		struct DecideContainedIn<Needle, SumEnum<Needle, HayTail...>> :std::true_type {};
 
 		template<typename Needle, typename HayHead, typename... HayTail>
-		struct Contains<Needle, SumEnum<HayHead, HayTail...>> :std::bool_constant<
-			contains_v<Needle, HayHead> || contains_v<Needle, SumEnum<HayTail...>>
+		struct DecideContainedIn<Needle, SumEnum<HayHead, HayTail...>> :std::bool_constant<
+			DecideContainedIn<Needle, HayHead>::value || 
+			DecideContainedIn<Needle, SumEnum<HayTail...>>::value
 		> {};
 
+		template<typename Needle, typename Haystack>
+		concept ContainedIn = DecideContainedIn<Needle, Haystack>::value;
 
-		template<typename, typename = void> 
-		struct HasCOUNT :std::false_type {};
 
-		template<typename E> 
-		struct HasCOUNT<E, std::void_t<decltype(E::COUNT)>> :std::true_type {};
+
+		template<typename Specialized, template<typename...> class Template>
+		struct DecideInstanceOf :std::false_type {};
+
+		template<template<typename...> class Template, typename... Args>
+		struct DecideInstanceOf<Template<Args...>, Template> :std::true_type {};
+
+		template<typename Specialized, template<typename...> class Template>
+		concept InstanceOf = DecideInstanceOf<Specialized, Template>::value;
+
+
+		template<typename Enum>
+		concept InteroperableEnum = std::is_enum_v<Enum> &&
+			requires { Enum::COUNT; };
+
+		template<typename T>
+		concept SumEnumLike = InstanceOf<T, SumEnum> || InstanceOf<T, WrapEnum> || InteroperableEnum<T>;
+
+		template<typename T>
+		concept SumEnumAtom = !SumEnumLike<T> && !std::is_enum_v<T>;
+
 
 
 
@@ -135,33 +169,37 @@ namespace bmath::intern {
 	}; //class SumEnum<>
 
 
-	template<typename Enum, typename... TailEnums> requires enum_detail::HasCOUNT<Enum>::value
+	template<typename Enum, typename... TailEnums> 
 	class [[nodiscard]] SumEnum<Enum, TailEnums...> :public SumEnum<TailEnums...>
 	{
+		static_assert(enum_detail::SumEnumLike<Enum>, "\n"\
+			"SumEnum may only be instanciated with the following types: \n"\
+			"   1. an instance of SumEnum\n"\
+			"   2. an enum class with its last value named \"COUNT\", thus acting like SumEnum\n"\
+			"   3. a struct / class clearly not modeling an enum (represented in SumEnum as single value)\n"\
+			"note 1: likely you passed in an enum class but forgot to add \"COUNT\" as last member\n"\
+			"note 2: Enum::COUNT is only expected to be used as \"number of elements\" in SumEnum context, not as valid value of enum\n"\
+			"note 3: option 3 is called \"Atom\" in SumEnum templates\n");
+
 		static_assert(enum_detail::disjoint_v<enum_detail::ListMembers<Enum>::type, enum_detail::ListMembers<TailEnums...>::type>, 
 			"No two parameters of SumEnum's parameter pack may contain the same type within (or be equal).");
 
 		using Base = SumEnum<TailEnums...>;
 		static constexpr unsigned this_offset = Base::next_offset;
 
-		template<typename...>
-		friend class SumEnum;
-
-
+	protected:
 		using Value = typename Base::Value;
 		static constexpr unsigned next_offset = static_cast<unsigned>(Enum::COUNT) + this_offset;
 
+	private:
+		template<enum_detail::ContainedIn<Base> E>
+		static constexpr Value value_of() { return Base::template as<E>; }
 
-		//E is contained in Base -> hand over to Base
-		template<typename E> requires enum_detail::contains_v<E, Base>
-		static constexpr Value make() noexcept { return Base::template make<E>(); }
+		template<enum_detail::ContainedIn<Enum> E>
+		static constexpr Value value_of() { return static_cast<Value>(static_cast<unsigned>(Enum::template as<E>) + this_offset); }
 
-		//Enum itself is SumEnum<...> and contains E -> hand over to Enum
-		template<typename E> requires enum_detail::contains_v<E, Enum>
-		static constexpr Value make() noexcept { return static_cast<Value>(static_cast<unsigned>(Enum::template make<E>()) + this_offset); }
-
-		template<typename E> requires std::is_same_v<E, Enum>
-		static constexpr Value make() noexcept { static_assert(false, "there is more than on possible value if constructing from Enum"); }
+		template<std::same_as<Enum> E>
+		static constexpr Value value_of() { static_assert(false, "more than one value represents requested type"); }
 
 	public:
 		using Base::Base;
@@ -169,41 +207,41 @@ namespace bmath::intern {
 		constexpr SumEnum(const Enum e) noexcept :Base(static_cast<unsigned>(e) + this_offset) {}
 
 		//this constructor applies if Enum itself is WrapEnum<E> or SumEnum<...> that contains E (directly or deeper within)
-		template<typename E> requires enum_detail::contains_v<E, Enum>
+		template<enum_detail::ContainedIn<Enum> E>
 		constexpr SumEnum(const E e) noexcept :Base(static_cast<unsigned>(static_cast<Enum>(e)) + this_offset) {}
 
 		//this constructor applies if E is contained in Base
-		template<typename E> requires enum_detail::contains_v<E, Base>
+		template<enum_detail::ContainedIn<Base> E>
 		constexpr SumEnum(const E e) noexcept :Base(e) {}
 
 
 		template<typename E>
-		static constexpr Value as = make<E>();
+		static constexpr Value as = SumEnum::template value_of<E>();
 
 
 		//E is contained in Base -> hand over to Base
-		template<typename E> requires enum_detail::contains_v<E, Base>
+		template<enum_detail::ContainedIn<Base> E>
 		constexpr E to() const noexcept { return static_cast<const Base>(*this).to<E>(); }
 
 		//Enum itself is SumEnum<...> and contains E -> hand over to Enum
-		template<typename E> requires enum_detail::contains_v<E, Enum>
+		template<enum_detail::ContainedIn<Enum> E>
 		constexpr E to() const noexcept { return this->to<Enum>().to<E>(); }
 
 		//E is same as Enum -> just undo the offset
-		template<typename E> requires std::is_same_v<E, Enum>
+		template<std::same_as<Enum> E>
 		constexpr E to() const noexcept { return Enum(static_cast<unsigned>(this->value) - this_offset); }
 
 
 		//default case: search in parent types
-		template<typename E> requires enum_detail::contains_v<E, Base>
+		template<enum_detail::ContainedIn<Base> E>
 		constexpr bool is() const noexcept { return static_cast<const Base>(*this).is<E>(); }
 
 		//Enum itself is SumEnum<...> and contains E -> hand over to Enum
-		template<typename E> requires enum_detail::contains_v<E, Enum>
+		template<enum_detail::ContainedIn<Enum> E>
 		constexpr bool is() const noexcept { return this->to<Enum>().is<E>(); }
 
 		//E is same as Enum -> check if current value is between offsets
-		template<typename E> requires std::is_same_v<E, Enum>
+		template<std::same_as<Enum> E>
 		constexpr bool is() const noexcept 
 		{ 
 			return static_cast<unsigned>(this->value) >= this_offset && 
@@ -217,87 +255,61 @@ namespace bmath::intern {
 	}; //class SumEnum<Enum, TailEnums...>
 
 
-	template<typename Type, typename... Tail> requires (!enum_detail::HasCOUNT<Type>::value)
-	class [[nodiscard]] SumEnum<Type, Tail...> :public SumEnum<Tail...>
+	template<enum_detail::SumEnumAtom Atom, typename... TailEnums>
+	class [[nodiscard]] SumEnum<Atom, TailEnums...> :public SumEnum<TailEnums...>
 	{
-		static_assert(!std::is_enum_v<Type>, "only enums with their last member named \"COUNT\" may be part of SumEnum");
-
-		using Base = SumEnum<Tail...>;
+		using Base = SumEnum<TailEnums...>;
 		static constexpr unsigned this_offset = Base::next_offset;
 
-		template<typename...>
-		friend class SumEnum;
-
-
+	protected:
 		using Value = typename Base::Value;
 		static constexpr unsigned next_offset = 1u + this_offset;
 
+	private:
+		template<enum_detail::ContainedIn<Base> E>
+		static constexpr Value value_of() { return Base::template as<E>; }
 
-		template<typename E> requires enum_detail::contains_v<E, Base>
-		static constexpr Value make() noexcept { return Base::template make<E>(); }
-
-		template<typename E> requires std::is_same_v<E, Type>
-		static constexpr Value make() noexcept { return static_cast<Value>(this_offset); }
+		template<std::same_as<Atom> E>
+		static constexpr Value value_of() { return static_cast<Value>(this_offset); }
 
 	public:
 		using Base::Base;
 
-		constexpr SumEnum(const Type) noexcept :Base(this_offset) 
-		{
-			static_assert(false, "please use \"as\" to get SumEnum holding value encoding Type");
+		constexpr SumEnum(const Atom) noexcept :Base(this_offset) 
+		{ 
+			static_assert(std::is_empty_v<Atom>, 
+				"please use \"SumEnum<...>::as<Atom>\" to create SumEnum with value representing non-empty Atom type"); 
 		}
 
 		//this constructor applies if E is contained in Base
-		template<typename E> requires enum_detail::contains_v<E, Base>
+		template<enum_detail::ContainedIn<Base> E>
 		constexpr SumEnum(const E e) noexcept :Base(e) {}
 
 
 		template<typename E>
-		static constexpr Value as = make<E>();
+		static constexpr Value as = SumEnum::template value_of<E>();
 
 
 		//E is contained in Base -> hand over to Base
-		template<typename E> requires enum_detail::contains_v<E, Base>
+		template<enum_detail::ContainedIn<Base> E>
 		constexpr E to() const noexcept { return static_cast<const Base>(*this).to<E>(); }
 
-		template<typename E> requires std::is_same_v<E, Type>
-		constexpr E to() const noexcept 
-		{ 
-			static_assert(false, "SumEnum can only convert to enum-like types");
-		}
+		template<std::same_as<Atom> E>
+		constexpr E to() const noexcept { static_assert(false, "SumEnum can only convert to enum-like types"); }
 
 
 		//default case: search in parent types
-		template<typename E> requires enum_detail::contains_v<E, Base>
+		template<enum_detail::ContainedIn<Base> E>
 		constexpr bool is() const noexcept { return static_cast<const Base>(*this).is<E>(); }
 
 		//E is same as Enum -> check if current value is between offsets
-		template<typename E> requires std::is_same_v<E, Type>
+		template<std::same_as<Atom> E>
 		constexpr bool is() const noexcept { return static_cast<unsigned>(this->value) == this_offset; }
 
 
 		constexpr friend std::strong_ordering operator<=>(const SumEnum&, const SumEnum&) noexcept = default;
 		constexpr friend bool operator==(const SumEnum&, const SumEnum&) noexcept = default;
 		static constexpr Value COUNT = static_cast<Value>(next_offset); //only relevant for outhermost instanciation
-	}; //class SumEnum<Enum, TailEnums...>
+	}; //class SumEnum<Atom, TailEnums...>
 
-
-
-
-
-	template<typename Enum, Enum LastMember>
-	struct [[nodiscard]] WrapEnum //allows to use SumEnum with enums not having their last member named COUNT
-	{
-		static_assert(std::is_enum_v<Enum>);
-
-		Enum value;
-		constexpr WrapEnum(const Enum e) noexcept :value(e) {}
-
-		explicit constexpr WrapEnum(const unsigned u) noexcept :value(static_cast<Enum>(u)) {}
-		explicit constexpr operator unsigned() const noexcept { return static_cast<unsigned>(this->value); }
-
-		//this is the only reason for WrapEnum to exist.
-		static constexpr Enum COUNT = static_cast<Enum>(static_cast<unsigned>(LastMember) + 1u);
-	}; //struct WrapEnum 
-    
 } //namespace bmath::intern
