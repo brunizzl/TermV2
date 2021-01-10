@@ -297,12 +297,14 @@ namespace bmath::intern {
 				{
 					new_product.push_back(build_value(*ref.store, *result_val));
 				}
-				else {
+				else if (*factor_acc != *divisor_acc) {
 					if (*factor_acc != 1.0) {
 						new_product.push_back(build_value(*ref.store, *factor_acc));
 					}
 					if (*divisor_acc != 1.0) {
-						new_product.push_back(build_value(*ref.store, *divisor_acc));
+						const std::uint32_t divisor_idx = ref.store->allocate();
+						new (&ref.store->at(divisor_idx)) TypesUnion(*divisor_acc);
+						new_product.push_back(build_inverted(*ref.store, TypedIdx(divisor_idx, Literal::complex)));
 					}
 				}
 

@@ -13,21 +13,6 @@ namespace bmath::intern {
 	template<typename... Enums>
 	class [[nodiscard]] SumEnum;
 
-	template<typename Enum, Enum LastValidMember>
-	struct [[nodiscard]] WrapEnum //allows to use SumEnum with enums not having their last member named COUNT
-	{
-		static_assert(std::is_enum_v<Enum>);
-
-		Enum value;
-		constexpr WrapEnum(const Enum e) noexcept :value(e) {}
-
-		explicit constexpr WrapEnum(const unsigned u) noexcept :value(static_cast<Enum>(u)) {}
-		explicit constexpr operator unsigned() const noexcept { return static_cast<unsigned>(this->value); }
-
-		//this is the only reason for WrapEnum to exist.
-		static constexpr Enum COUNT = static_cast<Enum>(static_cast<unsigned>(LastValidMember) + 1u);
-	}; //struct WrapEnum 
-
 	namespace enum_detail {
 
 		template<typename Needle, typename Haystack>
@@ -46,6 +31,21 @@ namespace bmath::intern {
 		concept ContainedIn = DecideContainedIn<Needle, Haystack>::value;
 
 
+		template<typename From, typename To>
+		concept ExplicitlyConvertibleTo = 
+		requires (From from) { static_cast<To>(from); };
+
+		template<typename Enum>
+		concept EnumLike = requires (Enum e) {
+			{e}           -> ExplicitlyConvertibleTo<unsigned>;
+			{Enum::COUNT} -> ExplicitlyConvertibleTo<unsigned>;
+		};
+
+		template<typename T>
+		concept SumEnumAtom = !EnumLike<T> && !std::is_enum_v<T>;
+
+
+
 
 		template<typename Specialized, template<typename...> class Template>
 		struct DecideInstanceOf :std::false_type {};
@@ -55,20 +55,6 @@ namespace bmath::intern {
 
 		template<typename Specialized, template<typename...> class Template>
 		concept InstanceOf = DecideInstanceOf<Specialized, Template>::value;
-
-
-		template<typename Enum>
-		concept InteroperableEnum = std::is_enum_v<Enum> &&
-			requires { Enum::COUNT; };
-
-		template<typename T>
-		concept SumEnumLike = InstanceOf<T, SumEnum> || InstanceOf<T, WrapEnum> || InteroperableEnum<T>;
-
-		template<typename T>
-		concept SumEnumAtom = !SumEnumLike<T> && !std::is_enum_v<T>;
-
-
-
 
 
 		template<typename...> struct List;
@@ -172,7 +158,7 @@ namespace bmath::intern {
 	template<typename Enum, typename... TailEnums> 
 	class [[nodiscard]] SumEnum<Enum, TailEnums...> :public SumEnum<TailEnums...>
 	{
-		static_assert(enum_detail::SumEnumLike<Enum>, "\n"\
+		static_assert(enum_detail::EnumLike<Enum>, "\n"\
 			"SumEnum may only be instanciated with the following types: \n"\
 			"   1. an instance of SumEnum\n"\
 			"   2. an enum class with its last value named \"COUNT\", thus acting like SumEnum\n"\
@@ -311,5 +297,33 @@ namespace bmath::intern {
 		constexpr friend bool operator==(const SumEnum&, const SumEnum&) noexcept = default;
 		static constexpr Value COUNT = static_cast<Value>(next_offset); //only relevant for outhermost instanciation
 	}; //class SumEnum<Atom, TailEnums...>
+
+
+
+
+
+	template<typename Enum, Enum LastValidMember>
+	struct [[nodiscard]] WrapEnum //allows to use SumEnum with enums not having their last member named COUNT
+	{
+		static_assert(std::is_enum_v<Enum>);
+
+		Enum value;
+		constexpr WrapEnum(const Enum e) noexcept :value(e) {}
+		constexpr operator Enum() const noexcept { return this->value; }
+
+		//this is the only reason for WrapEnum to exist.
+		static constexpr Enum COUNT = static_cast<Enum>(static_cast<unsigned>(LastValidMember) + 1u);
+	}; //struct WrapEnum 
+
+	template <enum_detail::EnumLike Enum>
+	class [[nodiscard]] OpaqueEnum
+	{
+		enum class Value :unsigned {} value;
+	public:
+
+		constexpr OpaqueEnum(const Enum e) noexcept :value(static_cast<unsigned>(e)) {}
+		constexpr operator Enum() const noexcept { return static_cast<unsigned>(this->value); }
+
+	}; //struct OpaqueEnum
 
 } //namespace bmath::intern

@@ -15,7 +15,7 @@ namespace bmath::intern {
 	class [[nodiscard]] BasicTypedIdx_Bitmask
 	{
 		static_assert(std::is_unsigned_v<UnderlyingType>);
-		static_assert(enum_detail::SumEnumLike<TypesEnum>);
+		static_assert(enum_detail::EnumLike<TypesEnum>);
 
 		UnderlyingType data;
 
@@ -50,7 +50,7 @@ namespace bmath::intern {
 	class [[nodiscard]] BasicTypedIdx_BitField
 	{
 		static_assert(std::is_unsigned_v<UnderlyingType>);
-		static_assert(enum_detail::SumEnumLike<TypesEnum>);
+		static_assert(enum_detail::EnumLike<TypesEnum>);
 
 		static constexpr std::size_t index_offset = std::bit_width((unsigned long long)TypesEnum::COUNT);
 		static constexpr UnderlyingType enum_mask = (1ull << index_offset) - 1ull;
