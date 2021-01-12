@@ -36,7 +36,7 @@ namespace bmath::intern {
 	//the index points at the IndexVector containing the parameters.
 	//the function name follwos as CharVector in direct succession
 	//(by starting with the parameters, most functions need no extra case to handle NamedFn)
-	struct NamedFn {};
+	struct NamedFn :SingleSumEnumEntry {};
 
 	//these are lumped together, because they behave the same in most cases -> can be seperated easily from rest
 	//behavior for every specific element in Fn is (at least) defined at array fn::fn_props_table specifying name and arity

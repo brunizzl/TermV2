@@ -6,6 +6,7 @@ using namespace bmath::intern;
 TODO:
 
 important:
+ - store should know position under wich no free slots exist
  - change permutation_equals (returning bool) to permutation_compare returning one of {match, smaller, larger, unordered} -> binary search for math types?
        if compares unordered, it should clean up after itself, not requiring caller calling reset_own_matches
 	   also requires find_matching_permutation to return same values.
@@ -38,8 +39,30 @@ idea status:
  - always keep -1 at some known index in store and never allocate new -1 in build_negated and build_inverted (problem: identify bevore copy)
 */
 
+enum class Num { one, two, COUNT };
+using Num2 = OpaqueEnum<Num>;
+using Nums = SumEnum<Num, Num2>;
+
+std::string_view print_nums(Nums n) 
+{
+	switch (n) {
+	case Nums(Num::one):
+		return "Num::one";
+	case Nums(Num::two):
+		return "Num::two";
+	case Nums(Num2(Num::one)):
+		return "Num2::one";
+	case Nums(Num2(Num::two)):
+		return "Num2::two";
+	}
+}
+
 int main()
 {
+	std::cout << print_nums(Num::one) << "\n";
+	std::cout << print_nums(Num::two) << "\n";
+	std::cout << print_nums(Num2(Num::one)) << "\n";
+	std::cout << print_nums(Num2(Num::two)) << "\n";
 	debug::enumerate_type();
 	debug::test_rechner();
 	//test::combine_exact();

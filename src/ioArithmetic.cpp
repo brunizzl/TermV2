@@ -48,7 +48,7 @@ namespace bmath::intern {
 
 	namespace pattern {
 
-		struct Unknown {};
+		struct Unknown :SingleSumEnumEntry {};
 
 		using PnVariablesType = SumEnum<Restriction, Form, MultiPn, Unknown>;
 
