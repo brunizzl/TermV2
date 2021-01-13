@@ -17,19 +17,28 @@
 
 namespace bmath::intern {
 
-	enum class Variadic
+	//matching algorithm will try to also match permutations
+	//-> advised to add entry to function generality() found in .cpp for these
+	enum class Comm //short for Commutative
 	{
-		sum,      //associative and commutative
-		product,  //associative and commutative
-		ordered_sum,     //associative but not commutative
-		ordered_product, //associative but not commutative
+		sum,
+		product,
 		multiset,
-		list,
 		set,
 		union_,
 		intersection,
 		COUNT
 	};
+
+	enum class NonComm
+	{
+		list,
+		ordered_sum,
+		ordered_product,
+		COUNT
+	};
+
+	using Variadic = SumEnum<NonComm, Comm>;
 
 	//all functions known at compile time will not store their name with every instance in the store. this does.
 	//the memory is sectioned in two parts: 
@@ -294,24 +303,20 @@ namespace bmath::intern {
 			Variadic type = Variadic::COUNT;
 			std::string_view name = "";
 
-			//matching algorithm will try to also match permutations if true
-			//-> advised to add entry to function generality() found in .cpp if so
-			bool commutative = false; 
-
 			bool associative = false; //allows to flatten nested instances if true
 		};
 
 		//every item enumerated in Variadic (except COUNT, duh) may be listed here in order of apperance in Variadic
 		constexpr auto variadic_props_table = std::to_array<VariadicProperties>({
-			{ Variadic::sum            , "sum"         , true , true  },
-			{ Variadic::product        , "product"     , true , true  },
-			{ Variadic::ordered_sum    , "sum'"        , false, true  },
-			{ Variadic::ordered_product, "product'"    , false, true  },
-			{ Variadic::multiset       , "multiset"    , true , false },
-			{ Variadic::list           , "list"        , false, false },
-			{ Variadic::set            , "set"         , true , false },
-			{ Variadic::union_         , "union"       , true , true  },
-			{ Variadic::intersection   , "intersection", true , true  },
+			{ Comm::sum               , "sum"         , true  },
+			{ Comm::product           , "product"     , true  },
+			{ Comm::multiset          , "multiset"    , false },
+			{ Comm::set               , "set"         , false },
+			{ Comm::union_            , "union"       , true  },
+			{ Comm::intersection      , "intersection", true  },
+			{ NonComm::list           , "list"        , false },
+			{ NonComm::ordered_sum    , "sum'"        , true  },
+			{ NonComm::ordered_product, "product'"    , true  },
 		});
 		static_assert(static_cast<unsigned>(variadic_props_table.front().type) == 0u);
 		static_assert(std::is_sorted(variadic_props_table.begin(), variadic_props_table.end(), 
@@ -324,12 +329,6 @@ namespace bmath::intern {
 		//returns Variadic::COUNT if name is not in variadic_props_table
 		constexpr Variadic variadic_type_of(const std::string_view name) noexcept 
 		{ return search(variadic_props_table, &VariadicProperties::name, name).type; }
-
-		constexpr bool is_unordered(const Variadic type) noexcept 
-		{ return variadic_props_table[static_cast<unsigned>(type)].commutative; }
-
-		constexpr bool is_unordered(const Type type) noexcept 
-		{ return is_unordered(type.to<Variadic>()); }
 
 		constexpr bool is_associative(const Variadic type) noexcept 
 		{ return variadic_props_table[static_cast<unsigned>(type)].associative; }

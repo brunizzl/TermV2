@@ -20,12 +20,16 @@ namespace bmath::intern::debug {
 	{
 		using namespace pattern;
 		std::cout
-			<< "Type(Variadic::sum)            = " << unsigned(Type(Variadic::sum))            << "\n"
-			<< "Type(Variadic::product)        = " << unsigned(Type(Variadic::product))        << "\n"
-			<< "Type(Variadic::ordered_sum)    = " << unsigned(Type(Variadic::ordered_sum))    << "\n"
-			<< "Type(Variadic::ordered_product)= " << unsigned(Type(Variadic::ordered_product))<< "\n"
-			<< "Type(Variadic::multiset)       = " << unsigned(Type(Variadic::multiset))       << "\n"
-			<< "Type(Variadic::list)           = " << unsigned(Type(Variadic::list))           << "\n"
+			<< "Type(Comm::sum)                = " << unsigned(Type(Comm::sum))                << "\n"
+			<< "Type(Comm::product)            = " << unsigned(Type(Comm::product))            << "\n"
+			<< "Type(Comm::multiset)           = " << unsigned(Type(Comm::multiset))           << "\n"
+			<< "Type(Comm::set)                = " << unsigned(Type(Comm::set))                << "\n"
+			<< "Type(Comm::union_)             = " << unsigned(Type(Comm::union_))             << "\n"
+			<< "Type(Comm::intersection)       = " << unsigned(Type(Comm::intersection))       << "\n"
+			                                                                                   << "\n"
+			<< "Type(NonComm::list)            = " << unsigned(Type(NonComm::list))            << "\n"
+			<< "Type(NonComm::ordered_sum)     = " << unsigned(Type(NonComm::ordered_sum))     << "\n"
+			<< "Type(NonComm::ordered_product) = " << unsigned(Type(NonComm::ordered_product)) << "\n"
 		                                                                                       << "\n"
 			<< "Type(NamedFn{})                = " << unsigned(Type(NamedFn{}))                << "\n"
 			                                                                                   << "\n"

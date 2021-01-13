@@ -6,6 +6,8 @@
 #include <compare>
 #include <concepts>
 
+#include "meta.hpp"
+
 namespace bmath::intern {
     
     
@@ -33,15 +35,11 @@ namespace bmath::intern {
 		concept ContainedIn = DecideContainedIn<Needle, Haystack>::value;
 
 
-		template<typename From, typename To>
-		concept ExplicitlyConvertibleTo = 
-		requires (From from) { static_cast<To>(from); };
-
 
 		template<typename Enum>
 		concept EnumLike = requires (Enum e) {
-			{e}           -> ExplicitlyConvertibleTo<unsigned>;
-			{Enum::COUNT} -> ExplicitlyConvertibleTo<unsigned>;
+			{e}           -> meta::ExplicitlyConvertibleTo<unsigned>;
+			{Enum::COUNT} -> meta::ExplicitlyConvertibleTo<unsigned>;
 		};
 
 		template<typename T>
@@ -51,95 +49,32 @@ namespace bmath::intern {
 		concept Enumeratable = Atom<T> || EnumLike<T>;
 
 
+		/////////////////   ListMembers
 
-		template<typename Specialized, template<typename...> class Template>
-		struct DecideInstanceOf :std::false_type {};
+		using meta::List;
 
-		template<template<typename...> class Template, typename... Args>
-		struct DecideInstanceOf<Template<Args...>, Template> :std::true_type {};
+		template<typename...> 
+		struct ListMembers;
 
-		template<typename Specialized, template<typename...> class Template>
-		concept InstanceOf = DecideInstanceOf<Specialized, Template>::value;
-
-
-		template<typename...> struct List;
-
-
-		template<typename...> struct IsEmpty;
-		template<typename... Elems> struct IsEmpty<List<Elems...>> :std::bool_constant<sizeof...(Elems) == 0> {};
-		template<typename... Elems> constexpr bool is_empty_v = IsEmpty<Elems...>::value;
-
-		static_assert(is_empty_v<List<>> && !is_empty_v<List<int, double>>);
-
-
-		template<typename, typename> struct Concat;
-
-		template<typename... Elems_1, typename... Elems_2>
-		struct Concat<List<Elems_1...>, List<Elems_2...>> { using type = List<Elems_1..., Elems_2...>; };
-
-		static_assert(std::is_same_v<Concat<List<int, int>, List<double, nullptr_t>>::type, List<int, int, double, nullptr_t>>);
-
-
-
-		template<typename...> struct ListMembers;
+		template<typename... Args>
+		using ListMembers_t = typename ListMembers<Args...>::type;
 
 		template<typename Head, typename... Tail>
 		struct ListMembers<Head, Tail...> 
-		{ using type = typename Concat<typename ListMembers<Head>::type, typename ListMembers<Tail...>::type>::type; };
+		{ 
+			using type = meta::Concat_t<ListMembers_t<Head>, ListMembers_t<Tail...>>;
+		};
 
 		template<typename... Enums>
-		struct ListMembers<SumEnum<Enums...>> { using type = typename ListMembers<Enums...>::type; };
+		struct ListMembers<SumEnum<Enums...>> { using type = ListMembers_t<Enums...>; };
 
 		template<typename Enum>
 		struct ListMembers<Enum> { using type = List<Enum>; };
 
-		template<> struct ListMembers<> { using type = List<>; };
+		template<> 
+		struct ListMembers<> { using type = List<>; };
 
-		static_assert(std::is_same_v<ListMembers<SumEnum<int, SumEnum<float, bool>>>::type, List<int, float, bool>>);
-
-
-		template<typename, typename> struct InList;
-		template<typename Needle, typename List_> constexpr bool in_list_v = InList<Needle, List_>::value;
-
-		template<typename Needle, typename Elem_0, typename... Elems>
-		struct InList<Needle, List<Elem_0, Elems...>> :std::bool_constant<
-			std::is_same_v<Needle, Elem_0> || in_list_v<Needle, List<Elems...>>
-		> {};
-
-		template<typename Needle> struct InList<Needle, List<>> :std::false_type {};
-
-		static_assert(!in_list_v<char, List<double, int, int, void>>);
-		static_assert(in_list_v<char, List<double, char, int, void>>);
-
-
-		template<typename, typename> struct Intersection;
-
-		template<typename Lhs_1, typename... Lhs_Tail, typename... Rhs>
-		struct Intersection<List<Lhs_1, Lhs_Tail...>, List<Rhs...>> 
-		{ 
-			using type = typename std::conditional_t<in_list_v<Lhs_1, List<Rhs...>>,
-				typename Concat<List<Lhs_1>, typename Intersection<List<Lhs_Tail...>, List<Rhs...>>::type>::type,
-				typename Intersection<List<Lhs_Tail...>, List<Rhs...>>::type
-			>;
-		};
-
-		template<typename... Rhs> struct Intersection<List<>, List<Rhs...>> { using type = List<>; };
-
-		static_assert(std::is_same_v<Intersection<List<bool, int, char>, List<float, double, bool>>::type, List<bool>>);
-
-
-		template<typename, typename> struct Disjoint;
-
-		template<typename... Lhs, typename... Rhs> 
-		struct Disjoint<List<Lhs...>, List<Rhs...>> :std::bool_constant<
-			is_empty_v<typename Intersection<List<Lhs...>, List<Rhs...>>::type>
-		> {};
-
-		template<typename List_1, typename List_2> 
-		constexpr bool disjoint_v = Disjoint<List_1, List_2>::value;
-				
-		static_assert(disjoint_v<List<bool, int, char>, List<float, double>>);
-		static_assert(!disjoint_v<List<bool, int, char>, List<float, double, int>>);
+		static_assert(std::is_same_v<ListMembers_t<SumEnum<int, SumEnum<float, bool>>>, List<int, float, bool>>);
 
 	} //namespace enum_detail
 
@@ -163,7 +98,7 @@ namespace bmath::intern {
 	template<enum_detail::EnumLike Enum, typename... TailEnums>
 	class [[nodiscard]] SumEnum<Enum, TailEnums...> :public SumEnum<TailEnums...>
 	{
-		static_assert(enum_detail::disjoint_v<enum_detail::ListMembers<Enum>::type, enum_detail::ListMembers<TailEnums...>::type>, 
+		static_assert(meta::disjoint_v<enum_detail::ListMembers_t<Enum>, enum_detail::ListMembers_t<TailEnums...>>, 
 			"No two parameters of SumEnum's parameter pack may contain the same type within (or be equal).");
 
 		using Base = SumEnum<TailEnums...>;

@@ -135,6 +135,7 @@
     <ClInclude Include="src\transform.hpp" />
     <ClInclude Include="src\typedIndex.hpp" />
     <ClInclude Include="src\utility\bit.hpp" />
+    <ClInclude Include="src\utility\meta.hpp" />
     <ClInclude Include="src\utility\misc.hpp" />
     <ClInclude Include="src\utility\stringLiteral.hpp" />
     <ClInclude Include="src\utility\sumEnum.hpp" />

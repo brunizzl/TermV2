@@ -36,11 +36,10 @@ namespace bmath::intern {
 			{ Type(PnNode::value_proxy  ), 1003 }, //dont care really where this sits, as it never ist used in matching anyway
 			//values 2xxx are not present, as that would require every item in Fn to be listed here (instead default_generality kicks in here)
 			{ Type(NamedFn{})            , 3000 },
-			{ Type(Variadic::list       ), 3001 },  
-			{ Type(Variadic::multiset   ), 3002 },  
-			{ Type(Variadic::set        ), 3003 },  
-			{ Type(Variadic::sum        ), 3004 },  
-			{ Type(Variadic::product    ), 3005 }, 
+			{ Type(Comm::multiset       ), 3002 },  
+			{ Type(Comm::set            ), 3003 },  
+			{ Type(Comm::sum            ), 3004 },  
+			{ Type(Comm::product        ), 3005 }, 
 			{ Type(PnNode::tree_match   ), 3006 }, 
 			{ Type(MultiPn::params      ), 3007 }, //kinda special, as they always succeed in matching -> need to be matched last 
 			{ Type(MultiPn::summands    ), 3008 }, //kinda special, as they always succeed in matching -> need to be matched last 
@@ -202,14 +201,14 @@ namespace bmath::intern {
 			};
 
 			switch (ref.type) {
-			case Type(Variadic::sum): {
+			case Type(Comm::sum): {
 				OptComplex value_acc = 0.0; //stores sum of values encountered as summands
 				StupidBufferVector<TypedIdx, 16> new_sum;
 
 				for (TypedIdx& summand : fn::unsave_range(ref)) {
 					summand = tree::combine(ref.new_at(summand), exact);
 					switch (summand.get_type()) {
-					case Type(Variadic::sum):
+					case Type(Comm::sum):
 						for (const TypedIdx nested_summand : fn::unsave_range(ref.new_at(summand))) {
 							new_sum.push_back(nested_summand);
 						}						
@@ -241,10 +240,10 @@ namespace bmath::intern {
 				}
 				else {
 					IndexVector::free(*ref.store, ref.index); //free old sum (but not old summands)
-					return TypedIdx(IndexVector::build(*ref.store, new_sum), Type(Variadic::sum));
+					return TypedIdx(IndexVector::build(*ref.store, new_sum), Type(Comm::sum));
 				}
 			} break;
-			case Type(Variadic::product): {
+			case Type(Comm::product): {
 				//unlike with summands, where an inversion is just flipping the sign bit, not every multiplicativly inverse of a floating point number 
 				//  can be stored as floating point number without rounding -> we need two value accumulators. sigh.
 				OptComplex factor_acc = 1.0;
@@ -272,7 +271,7 @@ namespace bmath::intern {
 						}
 						new_product.push_back(factor);
 					} break;
-					case Type(Variadic::product):
+					case Type(Comm::product):
 						for (const TypedIdx nested_factor : fn::unsave_range(ref.new_at(factor))) {
 							new_product.push_back(nested_factor);
 						}
@@ -322,7 +321,7 @@ namespace bmath::intern {
 				}
 				else {
 					IndexVector::free(*ref.store, ref.index); //free old sum (but not old summands)
-					return TypedIdx(IndexVector::build(*ref.store, new_product), Type(Variadic::product));
+					return TypedIdx(IndexVector::build(*ref.store, new_product), Type(Comm::product));
 				}
 			} break;
 			case Type(Fn::force): {
@@ -500,7 +499,7 @@ namespace bmath::intern {
 					return tree::compare(Ref(*ref.store, lhs), Ref(*ref.store, rhs)) == std::strong_ordering::less;
 				};
 
-				if (ref.type.is<Variadic>() && fn::is_unordered(ref.type)) {
+				if (ref.type.is<Comm>()) {
 					IndexVector& operation = *ref;
 					std::sort(operation.begin(), operation.end(), compare_function);
 				}
@@ -809,7 +808,7 @@ namespace bmath::intern {
 						return tree::compare(lhs_ref, rhs_ref) == std::strong_ordering::less;
 					};
 
-					if (ref.type.is<Variadic>() && fn::is_unordered(ref.type)) {
+					if (ref.type.is<Comm>()) {
 						IndexVector& operation = *ref;
 						std::sort(operation.begin(), operation.end(), compare_patterns);
 					}
@@ -822,12 +821,12 @@ namespace bmath::intern {
 			sort_pattern(MutRef(rhs_temp, this->rhs_head));
 
 			{ //add implicit MultiPn::summands / MultiPn::factors if outermost type of lhs is sum / product
-				if (this->lhs_head.get_type() == Variadic::sum || this->lhs_head.get_type() == Variadic::product) {
+				if (this->lhs_head.get_type() == Comm::sum || this->lhs_head.get_type() == Comm::product) {
 					const Type head_type = this->lhs_head.get_type();
 					const IndexVector& head_variadic = lhs_temp.at(this->lhs_head.get_index());
 					if (!head_variadic.back().get_type().is<MultiPn>()) {
 						const TypedIdx new_multi_pn = TypedIdx(match_variables_table.multi_table.size(), 
-							head_type == Variadic::sum ? MultiPn::summands : MultiPn::factors);
+							head_type == Comm::sum ? MultiPn::summands : MultiPn::factors);
 						{ //adjust lhs
 							const std::size_t new_lhs_head_idx = lhs_temp.allocate_one();
 							lhs_temp.at(new_lhs_head_idx) = IndexVector({ this->lhs_head, new_multi_pn });
@@ -908,8 +907,8 @@ namespace bmath::intern {
 				//if MultiPn::params occurs in sum / product, it is replaced by legal and matching MultiPn version.
 				const auto test_and_replace_multi_pn = [](const MutRef head, const bool test_lhs) -> bool {
 					const auto inspect_variadic = [test_lhs](const MutRef ref) -> fold::FindBool {
-						if (ref.type == Variadic::sum || ref.type == Variadic::product) {
-							const Type representing_type = ref.type == Variadic::sum ? MultiPn::summands : MultiPn::factors;
+						if (ref.type == Comm::sum || ref.type == Comm::product) {
+							const Type representing_type = ref.type == Comm::sum ? MultiPn::summands : MultiPn::factors;
 							for (TypedIdx& elem : fn::unsave_range(ref)) {
 								const Type elem_type = elem.get_type();
 								if (elem_type == representing_type) { 
@@ -931,7 +930,7 @@ namespace bmath::intern {
 			{
 				const auto contains_illegal_value_match = [](const Ref head) -> bool {
 					const auto inspect_variadic = [](const Ref ref) -> fold::FindBool {
-						if (ref.type == Variadic::sum || ref.type == Variadic::product) {
+						if (ref.type == Comm::sum || ref.type == Comm::product) {
 							std::size_t nr_value_matches = 0u;
 							for (const TypedIdx elem : fn::range(ref)) {
 								nr_value_matches += (elem.get_type() == PnNode::value_match);
@@ -947,7 +946,7 @@ namespace bmath::intern {
 			{
 				const auto contains_illegal_multi_match = [](const Ref head) -> bool {
 					const auto inspect_variadic = [](const Ref ref) -> fold::FindBool {
-						if (ref.type == Variadic::sum || ref.type == Variadic::product) {
+						if (ref.type == Comm::sum || ref.type == Comm::product) {
 							std::size_t nr_multi_matches = 0u;
 							for (const TypedIdx elem : fn::range(ref)) {
 								nr_multi_matches += elem.get_type().is<MultiPn>();
@@ -963,7 +962,7 @@ namespace bmath::intern {
 			{
 				const auto contains_to_long_variadic = [](const Ref head) -> bool {
 					const auto inspect_variadic = [](const Ref ref) -> fold::FindBool {
-						if (ref.type == Variadic::sum || ref.type == Variadic::product) {
+						if (ref.type == Comm::sum || ref.type == Comm::product) {
 							const std::uint32_t multi_at_back = ref->parameters.back().get_type().is<MultiPn>();
 							return ref->parameters.size() - multi_at_back > match::SharedVariadicDatum::max_pn_variadic_params_count;
 						}
@@ -1055,8 +1054,8 @@ namespace bmath::intern {
 							:acc({ .has_match = false, .computable = true })
 						{
 							switch (ref.type) {
-							case Type(Variadic::sum):     break;
-							case Type(Variadic::product): break;
+							case Type(Comm::sum):     break;
+							case Type(Comm::product): break;
 							case Type(Fn::pow):     break;// for now only allow these Fn to be computed in value
 							case Type(Fn::sqrt):    break;// for now only allow these Fn to be computed in value  
 							default:
@@ -1133,9 +1132,9 @@ namespace bmath::intern {
 					const Type lhs_type = eq.lhs_head.get_type();
 					const std::uint32_t lhs_index = eq.lhs_head.get_index();
 					switch (lhs_type) {
-					case Type(Variadic::sum): 
+					case Type(Comm::sum): 
 						[[fallthrough]];
-					case Type(Variadic::product):
+					case Type(Comm::product):
 					{
 						StupidBufferVector<TypedIdx, 8> result_buffer = { eq.rhs_head };
 						for (const TypedIdx elem : fn::range(MutRef(store, eq.lhs_head))) {
@@ -1143,7 +1142,7 @@ namespace bmath::intern {
 								eq.lhs_head = elem; 
 							}
 							else {
-								const TypedIdx new_rhs_elem = (lhs_type == Variadic::sum ? 
+								const TypedIdx new_rhs_elem = (lhs_type == Comm::sum ? 
 									build_negated (store, elem) : 
 									build_inverted(store, elem));
 								result_buffer.push_back(new_rhs_elem);
@@ -1216,7 +1215,7 @@ namespace bmath::intern {
 				};
 
 				switch (ref.type) {
-				case Type(Variadic::sum): {
+				case Type(Comm::sum): {
 					OptComplex result_val = 0.0;
 					for (auto& summand : fn::range(ref)) {
 						if (const OptComplex summand_val = eval_value_match(ref.new_at(summand), start_val)) {
@@ -1229,7 +1228,7 @@ namespace bmath::intern {
 					}
 					return result_val;
 				} break;
-				case Type(Variadic::product): {
+				case Type(Comm::product): {
 					OptComplex result_factor = 1.0;
 					OptComplex result_divisor = 1.0;
 					for (auto& factor : fn::range(ref)) {
@@ -1299,7 +1298,7 @@ namespace bmath::intern {
 			} [[fallthrough]];				
 			default: {
 				assert(pn_ref.type.is<Function>());
-				if (pn_ref.type.is<Variadic>() && fn::is_unordered(pn_ref.type)) {
+				if (pn_ref.type.is<Comm>()) {
 					const bool params_at_back = pn_ref->parameters.back().get_type() == MultiPn::params;
 					if (pn_ref->parameters.size() - params_at_back > ref->parameters.size()) {  //params can also match nothing -> subtract 1 then
 						return false;
@@ -1320,7 +1319,7 @@ namespace bmath::intern {
 					return true;
 				}
 				else {
-					assert((pn_ref.type.is<Variadic>() && !fn::is_unordered(pn_ref.type)) || pn_ref.type.is<NamedFn>());
+					assert(pn_ref.type.is<NonComm>() || pn_ref.type.is<NamedFn>());
 					const IndexVector& pn_range = fn::range(pn_ref);
 					const IndexVector& range = fn::range(ref);
 					auto pn_iter = pn_range.begin();
@@ -1443,7 +1442,7 @@ namespace bmath::intern {
 			if (!pn_ref.type.is<Function>()) {
 				return false; //can not rematch at all
 			}
-			if (pn_ref.type.is<Variadic>() && fn::is_unordered(pn_ref.type)) {
+			if (pn_ref.type.is<Comm>()) {
 				SharedVariadicDatum& variadic_datum = match_data.variadic_data.at(pn_ref.index);
 				const IndexVector& pn_params = *pn_ref;
 				assert(variadic_datum.match_idx  == ref.typed_idx()); //assert pn_ref is currently matched in ref
@@ -1476,7 +1475,7 @@ namespace bmath::intern {
 
 		bool find_matching_permutation(const Ref pn_ref, const Ref haystack_ref, MatchData& match_data, std::uint32_t pn_i, std::uint32_t haystack_k)
 		{
-			assert(pn_ref.type == haystack_ref.type && (fn::is_unordered(haystack_ref.type)));
+			assert(pn_ref.type == haystack_ref.type && (haystack_ref.type.is<Comm>()));
 
 			const IndexVector& pn_params = *pn_ref;
 			const IndexVector& haystack_params = *haystack_ref;
@@ -1675,7 +1674,7 @@ namespace bmath::intern {
 				}
 
 				const std::uint32_t res_idx = IndexVector::build(dst_store, dst_parameters);
-				return TypedIdx(res_idx, pn_ref.type == MultiPn::summands ? Type(Variadic::sum) : Type(Variadic::product));			
+				return TypedIdx(res_idx, pn_ref.type == MultiPn::summands ? Type(Comm::sum) : Type(Comm::product));			
 			} break;
 			case Type(MultiPn::params):  //already handeled in named_fn
 				assert(false);

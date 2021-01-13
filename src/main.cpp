@@ -6,6 +6,7 @@ using namespace bmath::intern;
 TODO:
 
 important:
+ - let type_table in ioarithmetic use names of fn
  - make pattern and usual term two distinct types (again...)
 	enables: 
 		- variadic commutative can have table with extra info of operands, allowing faster matches / fails, also index in match_data circumvents O(n) lookup
@@ -23,6 +24,7 @@ important:
  - allow to restrict a variables possibility space e.g. natural, integer, real, complex (split Literal::variable in own enum?)
 
 nice to have:
+ - helper type for SumEnum to allow more course switch case: group whole SumEnums to single helper value -> switch ofer helper values
  - use templates to allow multiple stores
  - avoid copying pattern::MultiPn entries (needs to know original storage location of each entry, to steal it from there)
  - noexceptify everything

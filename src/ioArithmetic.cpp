@@ -11,25 +11,23 @@ namespace bmath::intern {
 	/////////////////////////////////////////////////////////////////////local definitions//////////////////////////////////////////////////////////////////////////////////
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	namespace variadic {
 
-		struct SumTraits
-		{
-			static constexpr Type type_name = Type(Variadic::sum);
-			static constexpr char operator_char = '+';
-			static constexpr char inverse_operator_char = '-';
-			static constexpr Token operator_token = token::sum;
-		};
+	struct SumTraits
+	{
+		static constexpr Type type_name = Type(Comm::sum);
+		static constexpr char operator_char = '+';
+		static constexpr char inverse_operator_char = '-';
+		static constexpr Token operator_token = token::sum;
+	};
 
-		struct ProductTraits
-		{
-			static constexpr Type type_name = Type(Variadic::product);
-			static constexpr char operator_char = '*';
-			static constexpr char inverse_operator_char = '/';
-			static constexpr Token operator_token = token::product;
-		};
+	struct ProductTraits
+	{
+		static constexpr Type type_name = Type(Comm::product);
+		static constexpr char operator_char = '*';
+		static constexpr char inverse_operator_char = '/';
+		static constexpr Token operator_token = token::product;
+	};
 
-	} //namespace variadic
 
 	//VariadicTraits must include:
 	//<Enum type> type_name: name of operation in enum representing all types in store
@@ -59,8 +57,8 @@ namespace bmath::intern {
 		};
 
 		constexpr auto type_table = std::to_array<TypeProps>({
-			{ Variadic::sum       , "sum"           },
-			{ Variadic::product   , "product"       },
+			{ Comm::sum           , "sum"           },
+			{ Comm::product       , "product"       },
 			{ Literal::variable   , "variable"      },
 			{ Literal::complex    , "value"         }, //not to be mistaken for Form::complex
 			{ Restr::function     , "fn"            },
@@ -93,8 +91,8 @@ namespace bmath::intern {
 		{ 
 			constexpr auto infixr_table = std::to_array<std::pair<Type, int>>({
 				{ Type(NamedFn{})          , 0 },
-				{ Type(Variadic::sum      ), 2 },
-				{ Type(Variadic::product  ), 4 },	
+				{ Type(Comm::sum      ), 2 },
+				{ Type(Comm::product  ), 4 },	
 				{ Type(Fn::pow            ), 5 }, //not between other function types -> assumed to be printed with '^'  
 				{ Type(Literal::variable  ), 6 },
 				{ Type(Literal::complex   ), 6 }, //may be printed as sum/product itself, then (maybe) has to add parentheses on its own
@@ -134,17 +132,17 @@ namespace bmath::intern {
 			bool parentheses = false;
 
 			if (val.real() != 0.0 && val.imag() != 0.0) {
-				parentheses = parent_infixr > infixr(Type(Variadic::sum));
+				parentheses = parent_infixr > infixr(Type(Comm::sum));
 				buffer << val.real();
 				add_im_to_stream(val.imag(), Flag::showpos);		
 			}
 			else if (val.real() != 0.0 && val.imag() == 0.0) {
-				parentheses = val.real() < 0.0 && parent_infixr >= infixr(Type(Variadic::sum));	//leading '-'
+				parentheses = val.real() < 0.0 && parent_infixr >= infixr(Type(Comm::sum));	//leading '-'
 				buffer << val.real();
 			}
 			else if (val.real() == 0.0 && val.imag() != 0.0) {
-				parentheses = val.imag() < 0.0 && parent_infixr >= infixr(Type(Variadic::sum));	//leading '-'	
-				parentheses |= parent_infixr > infixr(Type(Variadic::product));	//*i
+				parentheses = val.imag() < 0.0 && parent_infixr >= infixr(Type(Comm::sum));	//leading '-'	
+				parentheses |= parent_infixr > infixr(Type(Comm::product));	//*i
 				add_im_to_stream(val.imag(), Flag::noshowpos);
 			}
 			else {
@@ -334,7 +332,7 @@ namespace bmath::intern {
 		}
 		switch (head.type) {
 		case Head::Type::sum: {
-			return build_variadic<variadic::SumTraits>(store, input, head.where, build_negated<Store>, build);
+			return build_variadic<SumTraits>(store, input, head.where, build_negated<Store>, build);
 		} break;
 		case Head::Type::negate: {
 			input.remove_prefix(1u);  //remove minus sign
@@ -342,7 +340,7 @@ namespace bmath::intern {
 			return build_negated(store, to_negate);
 		} break;
 		case Head::Type::product: {
-			return build_variadic<variadic::ProductTraits>(store, input, head.where, build_inverted<Store>, build);
+			return build_variadic<ProductTraits>(store, input, head.where, build_inverted<Store>, build);
 		} break;
 		case Head::Type::power: {
 			const auto base_view = input.steal_prefix(head.where);
@@ -536,7 +534,7 @@ namespace bmath::intern {
 			}
 			switch (head.type) {
 			case Head::Type::sum: {
-				return build_variadic<variadic::SumTraits>(store, input, head.where, build_negated<Store>, *this);
+				return build_variadic<SumTraits>(store, input, head.where, build_negated<Store>, *this);
 			} break;
 			case Head::Type::negate: {
 				input.remove_prefix(1u);  //remove minus sign
@@ -544,7 +542,7 @@ namespace bmath::intern {
 				return build_negated(store, to_negate);
 			} break;
 			case Head::Type::product: {
-				return build_variadic<variadic::ProductTraits>(store, input, head.where, build_inverted<Store>, *this);
+				return build_variadic<ProductTraits>(store, input, head.where, build_inverted<Store>, *this);
 			} break;
 			case Head::Type::power: {
 				const auto base_view = input.steal_prefix(head.where);
@@ -603,14 +601,14 @@ namespace bmath::intern {
 			}
 
 			switch (ref.type) {
-			case Type(Variadic::sum): {
+			case Type(Comm::sum): {
 				const char* seperator = "";
 				for (const auto summand : fn::range(ref)) {
 					str.append(std::exchange(seperator, "+"));
 					print::append_to_string(ref.new_at(summand), str, own_infixr);
 				}
 			} break;
-			case Type(Variadic::product): {
+			case Type(Comm::product): {
 				const char* seperator = "";
 				for (const auto factor : fn::range(ref)) {
 					str.append(std::exchange(seperator, "*"));
@@ -727,7 +725,7 @@ namespace bmath::intern {
 
 			struct GetNegativeProductResult { double negative_factor; StupidBufferVector<TypedIdx, 8> other_factors; };
 			const auto get_negative_product = [get_negative_real](const Ref ref) -> std::optional<GetNegativeProductResult> {
-				if (ref.type == Variadic::product) {
+				if (ref.type == Comm::product) {
 					StupidBufferVector<TypedIdx, 8> other_factors;
 					double negative_factor;
 					bool found_negative_factor = false;
@@ -756,13 +754,13 @@ namespace bmath::intern {
 					}
 					else if (const auto base = get_pow_neg1(ref.new_at(elem))) {
 						str += (first ? "1/" : "/"); 
-						str += print::to_pretty_string(ref.new_at(*base), infixr(Type(Variadic::product)));
+						str += print::to_pretty_string(ref.new_at(*base), infixr(Type(Comm::product)));
 						first = false;
 					}
 					else {
 						str += (first ? "" : " ");
 						//str += (first ? "" : "*");
-						str += print::to_pretty_string(ref.new_at(elem), infixr(Type(Variadic::product)));
+						str += print::to_pretty_string(ref.new_at(elem), infixr(Type(Comm::product)));
 						first = false;
 					}
 				}
@@ -770,7 +768,7 @@ namespace bmath::intern {
 			}; //append_product
 
 			switch (ref.type) {
-			case Type(Variadic::sum): {
+			case Type(Comm::sum): {
 				bool first = true;
 				for (const auto summand : fn::range(ref)) {
 					if (const auto val = get_negative_real(ref.new_at(summand))) {
@@ -799,7 +797,7 @@ namespace bmath::intern {
 				}
 				assert(!first && "found sum with zero summands");
 			} break;
-			case Type(Variadic::product): {
+			case Type(Comm::product): {
 				append_product(fn::range(ref));
 			} break;
 			case Type(Fn::pow): {
@@ -927,7 +925,7 @@ namespace bmath::intern {
 
 			std::string& current_str = rows[ref.index];
 			switch (ref.type) {
-			case Type(Variadic::sum): {
+			case Type(Comm::sum): {
 				current_str.append("sum        : {");
 				const char* separator = "";
 				for (const auto elem : fn::range(ref)) {
@@ -938,7 +936,7 @@ namespace bmath::intern {
 				current_str.push_back('}');
 				show_typedidx_vec_nodes(ref.index, false);
 			} break;
-			case Type(Variadic::product): {
+			case Type(Comm::product): {
 				current_str.append("product    : {");
 				const char* separator = "";
 				const IndexVector test = *ref;
