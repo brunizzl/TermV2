@@ -35,7 +35,6 @@ namespace bmath::intern {
 		concept ContainedIn = DecideContainedIn<Needle, Haystack>::value;
 
 
-
 		template<typename Enum>
 		concept EnumLike = requires (Enum e) {
 			{e}           -> meta::ExplicitlyConvertibleTo<unsigned>;
@@ -259,5 +258,41 @@ namespace bmath::intern {
 
 		static constexpr Value COUNT = static_cast<Value>(static_cast<unsigned>(Enum::COUNT));
 	}; //struct OpaqueEnum
+
+
+
+
+	template<meta::InstanceOf<SumEnum> SumEnum_T, meta::InstanceOf<meta::List> Cases>
+	class EnumSwitch
+	{
+		enum class Value :unsigned {};
+
+	public:
+		template<enum_detail::Enumeratable E> requires (meta::in_list_v<E, Cases>)
+		static constexpr Value as = static_cast<Value>(meta::index_v<E, Cases>);
+
+		static constexpr Value decide(const SumEnum_T e) noexcept
+		{
+			return EnumSwitch::decide_impl(e);
+		}
+
+	private:
+		template<typename Head, typename... Tail>
+		static constexpr Value decide_impl(const SumEnum<Head, Tail...> e) noexcept
+		{
+			if (e.is<Head>()) {
+				return EnumSwitch::template as<Head>;
+			}
+			else if constexpr (sizeof...(Tail) > 0u) {
+				return EnumSwitch::decide_impl(SumEnum<Tail...>(static_cast<unsigned>(e)));
+			}
+			else {
+				assert(false);
+				return static_cast<Value>(-1u);
+			}
+		}
+	};
+
+
 
 } //namespace bmath::intern

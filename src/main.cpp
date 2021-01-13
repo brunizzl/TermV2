@@ -41,10 +41,39 @@ idea status:
  - always keep -1 at some known index in store and never allocate new -1 in build_negated and build_inverted (problem: identify bevore copy)
 */
 
+struct A :SingleSumEnumEntry {};
+struct B :SingleSumEnumEntry {};
+using AB = SumEnum<A, B>;
+struct C :SingleSumEnumEntry {};
+enum class Num { one, two, three, COUNT };
+using Enum = SumEnum<Num, AB, C>;
+
+void f(Enum e) {
+	using Switch = EnumSwitch<Enum, meta::List<Num, AB, C>>;
+
+	switch (Switch::decide(e)) {
+	case Switch::as<Num>:
+		std::cout << "Num\n";
+		break;
+	case Switch::as<AB>:
+		std::cout << "AB\n";
+		break;
+	case Switch::as<C>:
+		std::cout << "C\n";
+		break;
+	}
+}
+
 int main()
 {
-	debug::enumerate_type();
-	debug::test_rechner();
+	f(Num::one);
+	f(Num::two);
+	f(Num::three);
+	f(A{});
+	f(B{});
+	f(C{});
+	//debug::enumerate_type();
+	//debug::test_rechner();
 	//test::combine_exact();
 	//test::pattern_term();
 	//test::arithmetic_term();
