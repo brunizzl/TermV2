@@ -349,7 +349,7 @@ namespace bmath::intern {
 			input.remove_prefix(1u); //remove hat
 			const TypedIdx base = build(store, base_view);
 			const TypedIdx expo = build(store, input);
-			const std::size_t result_index = store.allocate();
+			const std::size_t result_index = store.allocate_one();
 			store.at(result_index) = IndexVector{ base, expo };
 			return TypedIdx(result_index, Type(Fn::pow));
 		} break;
@@ -503,7 +503,7 @@ namespace bmath::intern {
 
 			if (const auto iter = search_name(this->tree_table); iter != this->tree_table.end()) {
 				const std::uint32_t match_data_idx = std::distance(this->tree_table.begin(), iter);
-				const std::size_t result_index = store.allocate();
+				const std::size_t result_index = store.allocate_one();
 				store.at(result_index) = TreeMatchVariable{ match_data_idx, iter->restr };
 				const TypedIdx result_typedidx = TypedIdx(result_index, PnNode::tree_match);
 				(this->build_lhs ? iter->lhs_instances : iter->rhs_instances).push_back(result_typedidx);
@@ -511,7 +511,7 @@ namespace bmath::intern {
 			}
 			else if (const auto iter = search_name(this->value_table); iter != this->value_table.end()) {
 				const std::uint32_t match_data_idx = std::distance(this->value_table.begin(), iter);
-				const std::size_t result_index = store.allocate();
+				const std::size_t result_index = store.allocate_one();
 				store.at(result_index) = ValueMatchVariable{ match_data_idx, iter->form };
 				const TypedIdx result_typedidx = TypedIdx(result_index, PnNode::value_match);
 				(this->build_lhs ? iter->lhs_instances : iter->rhs_instances).push_back(result_typedidx);
@@ -551,7 +551,7 @@ namespace bmath::intern {
 				input.remove_prefix(1u); //remove hat
 				const TypedIdx base = this->operator()(store, base_view);
 				const TypedIdx expo = this->operator()(store, input);
-				const std::size_t result_index = store.allocate();
+				const std::size_t result_index = store.allocate_one();
 				store.at(result_index) = IndexVector{ base, expo };
 				return TypedIdx(result_index, Type(Fn::pow));
 			} break;

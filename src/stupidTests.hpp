@@ -190,18 +190,18 @@ namespace bmath::intern::debug {
 					changed = false;
 					for (const auto& rule : rules) {
 						if (test.match_and_replace(rule)) {
-							std::cout << "matched: " << rule.to_string() << "\n";
+							//std::cout << "matched: " << rule.to_string() << "\n";
 							changed = true;
 							test.establish_order();
 							assert(tree::valid_storage(test.ref()));
-							std::cout << "    = " << test.to_string() << "\n";
+							std::cout << "    = " << test.to_pretty_string() << "\n";
 							//std::cout << test.to_tree() << "\n";
 							//std::cout << test.to_memory_layout() << "\n";
 							break;
 						}
 					}
 				} while (changed);
-				std::cout << "result:   " << test.to_pretty_string() << "\n";
+				//std::cout << "    = " << test.to_pretty_string() << "\n";
 				//std::cout << test.to_memory_layout() << "\n";
 				//std::cout << test.to_tree() << "\n";
 				std::cout << "\n";

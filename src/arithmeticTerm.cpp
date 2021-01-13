@@ -169,16 +169,16 @@ namespace bmath::intern {
 				CharVector::free(*ref.store, ref.index);
 				break;
 			case Type(Literal::complex):
-				ref.store->free(ref.index);
+				ref.store->free_one(ref.index);
 				break;
 			case Type(PnNode::tree_match):
-				ref.store->free(ref.index);
+				ref.store->free_one(ref.index);
 				break;
 			case Type(PnNode::value_match): {
 				pattern::ValueMatchVariable& var = *ref;
 				tree::free(ref.new_at(var.mtch_idx));
 				tree::free(ref.new_at(var.copy_idx));
-				ref.store->free(ref.index);
+				ref.store->free_one(ref.index);
 			} break;
 			case Type(PnNode::value_proxy):
 				break;
@@ -302,7 +302,7 @@ namespace bmath::intern {
 						new_product.push_back(build_value(*ref.store, *factor_acc));
 					}
 					if (*divisor_acc != 1.0) {
-						const std::uint32_t divisor_idx = ref.store->allocate();
+						const std::uint32_t divisor_idx = ref.store->allocate_one();
 						new (&ref.store->at(divisor_idx)) TypesUnion(*divisor_acc);
 						new_product.push_back(build_inverted(*ref.store, TypedIdx(divisor_idx, Literal::complex)));
 					}
@@ -330,7 +330,7 @@ namespace bmath::intern {
 				param = tree::combine(ref.new_at(param), false);
 				if (param.get_type() == Literal::complex) {
 					const TypedIdx result_val = param;
-					ref.store->free(ref.index);
+					ref.store->free_one(ref.index);
 					return result_val;
 				}
 			} break;
@@ -552,7 +552,7 @@ namespace bmath::intern {
 			case Type(Literal::complex): 
 				[[fallthrough]];
 			case Type(PnNode::tree_match): {
-				const std::size_t dst_index = dst_store.allocate();
+				const std::size_t dst_index = dst_store.allocate_one();
 				dst_store.at(dst_index) = *src_ref; //bitwise copy of src
 				return TypedIdx(dst_index, src_ref.type);
 			} break;
@@ -561,7 +561,7 @@ namespace bmath::intern {
 				auto dst_var = pattern::ValueMatchVariable(src_var.match_data_idx, src_var.form);
 				dst_var.mtch_idx = tree::copy(src_ref.new_at(src_var.mtch_idx), dst_store);
 				dst_var.copy_idx = tree::copy(src_ref.new_at(src_var.copy_idx), dst_store);
-				const std::size_t dst_index = dst_store.allocate();
+				const std::size_t dst_index = dst_store.allocate_one();
 				dst_store.at(dst_index) = dst_var;
 				return TypedIdx(dst_index, src_ref.type);
 			} break;
@@ -829,14 +829,14 @@ namespace bmath::intern {
 						const TypedIdx new_multi_pn = TypedIdx(match_variables_table.multi_table.size(), 
 							head_type == Variadic::sum ? MultiPn::summands : MultiPn::factors);
 						{ //adjust lhs
-							const std::size_t new_lhs_head_idx = lhs_temp.allocate();
+							const std::size_t new_lhs_head_idx = lhs_temp.allocate_one();
 							lhs_temp.at(new_lhs_head_idx) = IndexVector({ this->lhs_head, new_multi_pn });
 							this->lhs_head = TypedIdx(new_lhs_head_idx, head_type);
 							this->lhs_head = tree::combine(MutRef(lhs_temp, this->lhs_head), true);
 							sort_pattern(MutRef(lhs_temp, this->lhs_head));
 						}
 						{ //adjust rhs
-							const std::size_t new_rhs_head_idx = rhs_temp.allocate();
+							const std::size_t new_rhs_head_idx = rhs_temp.allocate_one();
 							rhs_temp.at(new_rhs_head_idx) = IndexVector({ this->rhs_head, new_multi_pn });
 							this->rhs_head = TypedIdx(new_rhs_head_idx, head_type);
 							this->rhs_head = tree::combine(MutRef(rhs_temp, this->rhs_head), true);
@@ -1640,7 +1640,7 @@ namespace bmath::intern {
 				return TypedIdx(dst_index, pn_ref.type);
 			} break;
 			case Type(Literal::complex): {
-				const std::size_t dst_index = dst_store.allocate();
+				const std::size_t dst_index = dst_store.allocate_one();
 				dst_store.at(dst_index) = *pn_ref; //bitwise copy
 				return TypedIdx(dst_index, pn_ref.type);
 			} break;
@@ -1655,7 +1655,7 @@ namespace bmath::intern {
 			} break;
 			case Type(PnNode::value_proxy): {
 				const Complex& val = match_data.value_match_data[pn_ref.index].value;
-				const std::size_t dst_index = dst_store.allocate();
+				const std::size_t dst_index = dst_store.allocate_one();
 				dst_store.at(dst_index) = val;
 				return TypedIdx(dst_index, Type(Literal::complex));
 			} break;
