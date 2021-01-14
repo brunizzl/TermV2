@@ -280,15 +280,17 @@ namespace bmath::intern {
 		template<typename Head, typename... Tail>
 		static constexpr Value decide_impl(const SumEnum<Head, Tail...> e) noexcept
 		{
-			if (e.is<Head>()) {
-				return EnumSwitch::template as<Head>;
-			}
-			else if constexpr (sizeof...(Tail) > 0u) {
-				return EnumSwitch::decide_impl(SumEnum<Tail...>(static_cast<unsigned>(e)));
+			if constexpr (sizeof...(Tail) > 0u) {
+				if (e.is<Head>()) {
+					return EnumSwitch::template as<Head>;
+				}
+				else {
+					return EnumSwitch::decide_impl(SumEnum<Tail...>(static_cast<unsigned>(e)));
+				}
 			}
 			else {
-				assert(false);
-				return static_cast<Value>(-1u);
+				assert(e.is<Head>());
+				return EnumSwitch::template as<Head>;
 			}
 		}
 	};

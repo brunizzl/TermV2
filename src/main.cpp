@@ -48,6 +48,14 @@ struct C :SingleSumEnumEntry {};
 enum class Num { one, two, three, COUNT };
 using Enum = SumEnum<Num, AB, C>;
 
+/*
+	vorgehen:
+	1. sortiere Liste von EnumSwitch nach reihenfolge in enum_detail::ListEnums 
+		-> position in sortierter Liste ist Value von Typ
+	2. baue liste von Paaren mit Typ und assoziiertem wert (nach wie vor sortiert nach Typ)
+	2. halbiere Paar-Liste bei COUNT / 2 und teste mit if wert größer / kleinergleich mitte in decide -> rekursionsaufruf
+*/
+
 void f(Enum e) {
 	using Switch = EnumSwitch<Enum, meta::List<Num, AB, C>>;
 
