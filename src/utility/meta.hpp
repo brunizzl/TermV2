@@ -42,7 +42,7 @@ namespace bmath::intern::meta {
 	concept Callable = requires (F f, Args... args) { f(args...); };
 
 	template<typename F, typename R, typename... Args>
-	concept CallableTo = requires (F f, Args... args) { {f(args...)} -> ExplicitlyConvertibleTo<R>; };
+	concept CallableTo = requires (F f, Args... args) { {f(args...)} -> std::convertible_to<R>; };
 
 
 	/////////////////   InstanceOf
@@ -276,8 +276,8 @@ namespace bmath::intern::meta {
 		return cons<decltype(f(std::declval<T>()))>(map(f, List<Ts...>{}));
 	}
 
-	static_assert(map([](auto x) { return x + Int_<4>{}; }, List<Int_<2>, Int_<5>, Int_<-7>>{}) 
-		== List<Int_<6>, Int_<9>, Int_<-3>>{});
+	//static_assert(map([](auto x) { return x + Int_<4>{}; }, List<Int_<2>, Int_<5>, Int_<-7>>{}) 
+	//	== List<Int_<6>, Int_<9>, Int_<-3>>{});
 
 
 	/////////////////   index
@@ -302,24 +302,17 @@ namespace bmath::intern::meta {
 
 	struct Nothing {};
 
-	template<typename T>
-	constexpr Bool_<std::is_same_v<T, Nothing>> operator==(T, Nothing) { return {}; }
-
-	template<typename T>
-	constexpr Bool_<!std::is_same_v<T, Nothing>> operator!=(T, Nothing) { return {}; }
-
 	template<typename P>
 	constexpr Nothing find(List<>, P) { return{}; }
 
-	template<typename T, typename... Ts, CallableTo<bool, T> P>
+	template<typename T, typename... Ts, Callable<T> P>
 	constexpr auto find(List<T, Ts...>, P p) 
 	{
 		if constexpr (p(T{})) { return T{}; }
 		else                  { return find(List<Ts...>{}, p); }
 	}
 
-	static_assert(find(List<Int_<2>, Int_<5>, Int_<-7>>{}, [](auto v) { return v == Int_<-7>{}; }) == Int_<-7>{});
-	static_assert(Nothing{} == find(List<Int_<2>, Int_<5>, Int_<-7>>{}, [](auto v) { return v == Int_<-8>{}; }));
+	//static_assert(find(List<Int_<2>, Int_<5>, Int_<-7>>{}, [](auto v) { return v == Int_<-7>{}; }) == Int_<-7>{});
 
 
 	/////////////////   drop
@@ -346,7 +339,42 @@ namespace bmath::intern::meta {
 	static_assert(take(Int_<2>{}, List<int, int, long, bool>{}) == List<int, int>{});
 
 
-	/////////////////   sort
+	/////////////////   sort (function based)
+
+	namespace sort_detail {
+		template<typename... Ts, typename C>
+		constexpr List<Ts...> merge(List<Ts...>, List<>, C) { return {}; }
+
+		template<typename... Ts, typename C>
+		constexpr List<Ts...> merge(List<>, List<Ts...>, C) { return {}; }
+
+		template<typename L, typename... Ls, typename R, typename... Rs, Callable<L, R> C>
+		constexpr auto merge(List<L, Ls...>, List<R, Rs...>, C c)
+		{
+			if constexpr (c(L{}, R{})) { return cons<L>(merge(List<Ls...>{}, List<R, Rs...>{}, c)); }
+			else                       { return cons<R>(merge(List<L, Ls...>{}, List<Rs...>{}, c)); }
+		}
+	} //namespace sort_detail
+
+	template<typename C>
+	constexpr List<> sort(List<>, C) { return {}; }
+
+	template<typename T, typename C>
+	constexpr List<T> sort(List<T>, C) { return {}; }
+
+	template<typename T1, typename T2, typename... Ts, Callable<T1, T2> C>
+	constexpr auto sort(List<T1, T2, Ts...> l, C c)
+	{
+		constexpr auto n_halfs = Int_<sizeof...(Ts) / 2 + 1>{};
+		auto lhs = sort(take(n_halfs, l), c);
+		auto rhs = sort(drop(n_halfs, l), c);
+		return sort_detail::merge(lhs, rhs, c);
+	}
+
+	static_assert(sort(List<Int_<2>, Int_<5>, Int_<-7>>{}, [](auto l, auto r) { return l < r; }) == List<Int_<-7>, Int_<2>, Int_<5>>{});
+
+
+	/////////////////   sort (type based)
 
 	namespace sort_detail {
 		template<InstanceOf<List>, InstanceOf<List>, template<typename, typename> class Compare>
@@ -389,14 +417,8 @@ namespace bmath::intern::meta {
 	{
 	private:
 		static constexpr auto n_halfs = Int_<sizeof...(Ts) / 2>{};
-		using Lhs = Sort_t<
-			decltype(take(n_halfs, List<Ts...>{})),
-			Compare 
-		>;
-		using Rhs = Sort_t<
-			decltype(drop(n_halfs, List<Ts...>{})),
-			Compare
-		>;
+		using Lhs = Sort_t<decltype(take(n_halfs, List<Ts...>{})), Compare>;
+		using Rhs = Sort_t<decltype(drop(n_halfs, List<Ts...>{})), Compare>;
 	public:
 		using type = sort_detail::Merge_t<Lhs, Rhs, Compare>;
 	};
