@@ -61,11 +61,14 @@ namespace bmath::intern {
 		template<typename Head, typename... Tail>
 		struct ListMembers<Head, Tail...> 
 		{ 
-			using type = meta::Concat_t<ListMembers_t<Head>, ListMembers_t<Tail...>>;
+			using type = decltype(meta::concat(ListMembers_t<Head>{}, ListMembers_t<Tail...>{}));
 		};
 
 		template<typename... Enums>
-		struct ListMembers<SumEnum<Enums...>> { using type = ListMembers_t<Enums...>; };
+		struct ListMembers<SumEnum<Enums...>> 
+		{ 
+			using type = decltype(meta::concat(List<SumEnum<Enums...>>{}, ListMembers_t<Enums...>{}));
+		};
 
 		template<typename Enum>
 		struct ListMembers<Enum> { using type = List<Enum>; };
@@ -73,7 +76,8 @@ namespace bmath::intern {
 		template<> 
 		struct ListMembers<> { using type = List<>; };
 
-		static_assert(std::is_same_v<ListMembers_t<SumEnum<int, SumEnum<float, bool>>>, List<int, float, bool>>);
+		static_assert(ListMembers_t<SumEnum<int, SumEnum<float, bool>>>{} == 
+			List<SumEnum<int, SumEnum<float, bool>>, int, SumEnum<float, bool>, float, bool>{});
 
 	} //namespace enum_detail
 
@@ -97,7 +101,7 @@ namespace bmath::intern {
 	template<enum_detail::EnumLike Enum, typename... TailEnums>
 	class [[nodiscard]] SumEnum<Enum, TailEnums...> :public SumEnum<TailEnums...>
 	{
-		static_assert(meta::disjoint_v<enum_detail::ListMembers_t<Enum>, enum_detail::ListMembers_t<TailEnums...>>, 
+		static_assert(meta::disjoint(enum_detail::ListMembers_t<Enum>{}, enum_detail::ListMembers_t<TailEnums...>{}),
 			"No two parameters of SumEnum's parameter pack may contain the same type within (or be equal).");
 
 		using Base = SumEnum<TailEnums...>;
@@ -268,8 +272,8 @@ namespace bmath::intern {
 		enum class Value :unsigned {};
 
 	public:
-		template<enum_detail::Enumeratable E> requires (meta::in_list_v<E, Cases>)
-		static constexpr Value as = static_cast<Value>(meta::index_v<E, Cases>);
+		template<enum_detail::Enumeratable E> requires ((bool) meta::contains<E>(Cases{}))
+		static constexpr Value as = static_cast<Value>(meta::value(meta::index<E>(Cases{})));
 
 		static constexpr Value decide(const SumEnum_T e) noexcept
 		{
