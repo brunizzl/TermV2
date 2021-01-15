@@ -317,26 +317,43 @@ namespace bmath::intern::meta {
 
 	/////////////////   drop
 
-	template<auto n, typename T, typename... Ts>
+	template<auto n, typename T, typename... Ts> requires (n < 4)
 	constexpr auto drop(Int_<n>, List<T, Ts...>) 
 	{
-		if constexpr (n <= 1) { return List<Ts...>{}; }
-		else                  { return drop(Int_<n - 1>{}, List<Ts...>{}); }
+		if constexpr      (n <= 0) { return List<T, Ts...>{}; }
+		else if constexpr (n == 1) { return List<Ts...>{}; }
+		else                       { return drop(Int_<n - 1>{}, List<Ts...>{}); }
+	}
+
+	template<auto n, typename T1, typename T2, typename T3, typename T4, typename... Ts> requires (n >= 4)
+	constexpr auto drop(Int_<n>, List<T1, T2, T3, T4, Ts...>)
+	{
+		return drop(Int_<n - 4>{}, List<Ts...>{});
 	}
 
 	static_assert(drop(Int_<2>{}, List<int, int, long, bool>{}) == List<long, bool>{});
+	static_assert(drop(Int_<7>{}, List<int, int, int, bool, int, int, long, bool, double>{}) == List<bool, double>{});
 
 
 	/////////////////   take
 
-	template<auto n, typename T, typename... Ts>
+	template<auto n, typename T, typename... Ts> requires (n < 4)
 	constexpr auto take(Int_<n>, List<T, Ts...>)
 	{
-		if constexpr (n <= 1) { return List<T>{}; }
-		else { return cons<T>(take(Int_<n - 1>{}, List<Ts...>{})); }
+		if constexpr      (n <= 0) { return List<>{}; }
+		else if constexpr (n == 1) { return List<T>{}; }
+		else                       { return cons<T>(take(Int_<n - 1>{}, List<Ts...>{})); }
+	}
+
+	template<auto n, typename T1, typename T2, typename T3, typename T4, typename... Ts> requires (n >= 4)
+	constexpr auto take(Int_<n>, List<T1, T2, T3, T4, Ts...>)
+	{
+		return concat(List<T1, T2, T3, T4>{}, take(Int_<n - 4>{}, List<Ts...>{})); 
 	}
 
 	static_assert(take(Int_<2>{}, List<int, int, long, bool>{}) == List<int, int>{});
+	static_assert(take(Int_<7>{}, List<int, int, int, bool, int, int, long, bool, double>{}) 
+		== List<int, int, int, bool, int, int, long>{});
 
 
 	/////////////////   sort (function based)
@@ -371,7 +388,8 @@ namespace bmath::intern::meta {
 		return sort_detail::merge(lhs, rhs, c);
 	}
 
-	static_assert(sort(List<Int_<2>, Int_<5>, Int_<-7>>{}, [](auto l, auto r) { return l < r; }) == List<Int_<-7>, Int_<2>, Int_<5>>{});
+	static_assert(sort(List<Int_<3>, Int_<2>, Int_<5>, Int_<10>, Int_<-7>>{}, [](auto l, auto r) { return l < r; })
+		== List<Int_<-7>, Int_<2>, Int_<3>, Int_<5>, Int_<10>>{});
 
 
 	/////////////////   sort (type based)
