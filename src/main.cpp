@@ -48,6 +48,24 @@ struct C :SingleSumEnumEntry {};
 enum class Num { one, two, three, COUNT };
 using Enum = SumEnum<Num, AB, C>;
 
+constexpr auto enum_infos = enum_detail::generate_member_infos<Enum>();
+constexpr auto num_info = enum_detail::find_info<Num>(enum_infos);
+static_assert(num_info.begin() == 3 && num_info.end() == 6);
+
+constexpr auto ab_info = enum_detail::find_info<AB>(enum_infos);
+static_assert(ab_info.begin() == 1 && ab_info.end() == 3);
+
+
+constexpr auto type_infos = enum_detail::generate_member_infos<Type>();
+constexpr auto fn_info = enum_detail::find_info<Fn>(type_infos);
+static_assert(fn_info.begin() == 10 && fn_info.end() == 33);
+
+constexpr auto function_info = enum_detail::find_info<Function>(type_infos);
+static_assert(function_info.begin() == 0 && function_info.end() == 33);
+
+constexpr auto pattern_info = enum_detail::find_info<MatchType>(type_infos);
+static_assert(pattern_info.begin() == 35 && pattern_info.end() == 41);
+
 /*
 	vorgehen:
 	1. sortiere Liste von EnumSwitch nach reihenfolge in enum_detail::ListEnums 
@@ -80,7 +98,7 @@ int main()
 	f(A{});
 	f(B{});
 	f(C{});
-	//debug::enumerate_type();
+	debug::enumerate_type();
 	//debug::test_rechner();
 	//test::combine_exact();
 	//test::pattern_term();

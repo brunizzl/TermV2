@@ -79,6 +79,54 @@ namespace bmath::intern {
 		static_assert(ListMembers_t<SumEnum<int, SumEnum<float, bool>>>{} == 
 			List<SumEnum<int, SumEnum<float, bool>>, int, SumEnum<float, bool>, float, bool>{});
 
+
+		/////////////////   MemberInfo
+
+		namespace info_detail {
+			template<Enumeratable E, unsigned Begin, unsigned End>
+			struct MemberInfo
+			{
+				using type = E;
+				constexpr unsigned begin() const { return Begin; }
+				constexpr unsigned end() const { return End; }
+			};
+
+
+			template<Enumeratable, unsigned Begin, unsigned End>
+			struct MakeMemberInfo;
+
+			template<Enumeratable S, unsigned B, unsigned E>
+			using MakeMemberInfo_t = typename MakeMemberInfo<S, B, E>::type;
+
+			template<Enumeratable Head, typename... Tail, unsigned Begin, unsigned End>
+			class MakeMemberInfo<SumEnum<Head, Tail...>, Begin, End>
+			{
+				using Base = SumEnum<Tail...>;
+				static constexpr unsigned Split = Begin + (unsigned)Base::COUNT;
+				using OwnInfo = MemberInfo<SumEnum<Head, Tail...>, Begin, End>;
+				using HeadInfo = MakeMemberInfo_t<Head, Split, End>;
+				using TailInfo = MakeMemberInfo_t<Base, Begin, Split>;
+			public:
+				using type = decltype(meta::cons<OwnInfo>(meta::concat(HeadInfo{}, TailInfo{})));
+			};
+
+			template<unsigned Begin, unsigned End>
+			struct MakeMemberInfo<SumEnum<>, Begin, End> { using type = List<>; };
+
+			template<Enumeratable E, unsigned Begin, unsigned End>
+				requires (!meta::InstanceOf<E, SumEnum>)
+			struct MakeMemberInfo<E, Begin, End> { using type = List<MemberInfo<E, Begin, End>>; };
+		} //namespace info_detail
+
+		template<meta::InstanceOf<SumEnum> E>
+		constexpr auto generate_member_infos() { return info_detail::MakeMemberInfo_t<E, 0, (unsigned)E::COUNT>{}; }
+
+		template<Enumeratable E, meta::InstanceOf<List> Infos>
+		constexpr auto find_info(Infos is) 
+		{ 
+			return meta::find(is, [](auto i) { return std::is_same_v<typename decltype(i)::type, E>; } );
+		}
+
 	} //namespace enum_detail
 
 	template<>
@@ -87,7 +135,6 @@ namespace bmath::intern {
 	protected:
 
 		enum class Value :unsigned {} value; //only data held by all of SumEnum
-		static constexpr unsigned next_offset = 0u;
 
 	public:
 		constexpr SumEnum(const Value e) noexcept :value(e) {}
@@ -95,6 +142,8 @@ namespace bmath::intern {
 
 		explicit constexpr SumEnum(const unsigned u) noexcept :value(static_cast<Value>(u)) {}
 		explicit constexpr operator unsigned() const noexcept { return static_cast<unsigned>(this->value); }
+
+		static constexpr Value COUNT = static_cast<Value>(0u);
 	}; //class SumEnum<>
 
 
@@ -105,11 +154,11 @@ namespace bmath::intern {
 			"No two parameters of SumEnum's parameter pack may contain the same type within (or be equal).");
 
 		using Base = SumEnum<TailEnums...>;
-		static constexpr unsigned this_offset = Base::next_offset;
+		static constexpr unsigned this_offset = (unsigned)Base::COUNT;
+		static constexpr unsigned next_offset = static_cast<unsigned>(Enum::COUNT) + this_offset;
 
 	protected:
 		using Value = typename Base::Value;
-		static constexpr unsigned next_offset = static_cast<unsigned>(Enum::COUNT) + this_offset;
 
 	private:
 		template<enum_detail::ContainedIn<Base> E>
@@ -179,11 +228,11 @@ namespace bmath::intern {
 	class [[nodiscard]] SumEnum<T, TailEnums...> :public SumEnum<TailEnums...>
 	{
 		using Base = SumEnum<TailEnums...>;
-		static constexpr unsigned this_offset = Base::next_offset;
+		static constexpr unsigned this_offset = (unsigned)Base::COUNT;
+		static constexpr unsigned next_offset = 1u + this_offset; //Atom occupies one value
 
 	protected:
 		using Value = typename Base::Value;
-		static constexpr unsigned next_offset = 1u + this_offset; //Atom occupies one value
 
 	private:
 		template<enum_detail::ContainedIn<Base> E>
@@ -266,14 +315,32 @@ namespace bmath::intern {
 
 
 
-	template<meta::InstanceOf<SumEnum> SumEnum_T, meta::InstanceOf<meta::List> Cases>
+	template<meta::InstanceOf<SumEnum> SumEnum_T, meta::InstanceOf<meta::List> RawCases>
 	class EnumSwitch
 	{
 		enum class Value :unsigned {};
 
+		//one case covers values of SumEnum_T::Value in range [Begin, End) associated with Enum
+		//if an instance e of SumEnum_T holds a value associated with Case, decide(e) returns Id
+		template<enum_detail::Enumeratable Enum, unsigned Begin, unsigned End, Value Id>
+		struct Case 
+		{
+			using Represented = Enum;
+			constexpr unsigned begin() { return Begin; }
+			constexpr unsigned end() { return End; }
+			constexpr Value id() { return Id; }
+		};
+
+		template<meta::InstanceOf<SumEnum> S, unsigned S_Offset, enum_detail::Enumeratable Needle>
+			requires (enum_detail::ContainedIn<Needle, S> && !std::is_same_v<Needle, S>)
+		static constexpr auto build_type_case(S, meta::Int_<S_Offset>, Needle) 
+		{
+			
+		}
+
 	public:
-		template<enum_detail::Enumeratable E> requires ((bool) meta::contains<E>(Cases{}))
-		static constexpr Value as = static_cast<Value>(meta::value(meta::index<E>(Cases{})));
+		template<enum_detail::Enumeratable E> requires ((bool) meta::contains<E>(RawCases{}))
+		static constexpr Value as = static_cast<Value>(meta::value(meta::index<E>(RawCases{})));
 
 		static constexpr Value decide(const SumEnum_T e) noexcept
 		{

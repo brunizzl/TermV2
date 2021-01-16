@@ -360,10 +360,10 @@ namespace bmath::intern::meta {
 
 	namespace sort_detail {
 		template<typename... Ts, typename C>
-		constexpr List<Ts...> merge(List<Ts...>, List<>, C) { return {}; }
+		constexpr auto merge(List<Ts...> l, List<>, C) { return l; }
 
 		template<typename... Ts, typename C>
-		constexpr List<Ts...> merge(List<>, List<Ts...>, C) { return {}; }
+		constexpr auto merge(List<>, List<Ts...> l, C) { return l; }
 
 		template<typename L, typename... Ls, typename R, typename... Rs, Callable<L, R> C>
 		constexpr auto merge(List<L, Ls...>, List<R, Rs...>, C c)
@@ -446,4 +446,28 @@ namespace bmath::intern::meta {
 	
 	static_assert(Sort_t<List<Int_<2>, Int_<5>, Int_<-7>>, Less>{} == List<Int_<-7>, Int_<2>, Int_<5>>{});
 
+
+	/////////////////   reverse
+
+	namespace reverse_detail {
+		template<typename... Ts>
+		constexpr auto loop(List<Ts...> l, List<>) { return l; }
+
+		template<typename... Ls, typename R, typename... Rs> requires (sizeof...(Rs) < 3)
+		constexpr auto loop(List<Ls...>, List<R, Rs...>) 
+		{ 
+			return loop(List<R, Ls...>{}, List<Rs...>{});
+		}
+
+		template<typename... Ls, typename R1, typename R2, typename R3, typename R4, typename... Rs>
+			constexpr auto loop(List<Ls...>, List<R1, R2, R3, R4, Rs...>)
+		{
+			return loop(List<R4, R3, R2, R1, Ls...>{}, List<Rs...>{});
+		}
+	} //namespace reverse_detail
+
+	template<InstanceOf<List> L>
+	constexpr auto reverse(L l) { return reverse_detail::loop(List<>{}, l); }
+
+	static_assert(reverse(List<int, bool, char, float, double>{}) == List<double, float, char, bool, int>{});
 } //namespace bmath::intern::meta
