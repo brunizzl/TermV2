@@ -67,7 +67,6 @@ namespace bmath::intern::meta {
 	template<typename T, T V>
 	struct Constant
 	{
-		using type = T;
 		static constexpr T value = V;
 		explicit constexpr operator T() const { return V; }
 		constexpr T val() const { return V; }
@@ -148,23 +147,6 @@ namespace bmath::intern::meta {
 	};
 
 
-	/////////////////   is_empty
-
-	template<typename... Ts>
-	constexpr Bool_<sizeof...(Ts) == 0> is_empty(List<Ts...>) { return {}; }
-
-	static_assert(is_empty(List<>{}));
-	static_assert(!is_empty(List<int, bool>{}));
-
-
-	/////////////////   size
-
-	template<typename... Ts>
-	constexpr Int_<sizeof...(Ts)> size(List<Ts...>) { return {}; }
-
-	static_assert(size(List<int, bool, void>{}) == Int_<3>{});
-
-
 	/////////////////   cons
 
 	template<typename T, typename... Ts>
@@ -184,7 +166,7 @@ namespace bmath::intern::meta {
 	/////////////////   drop
 
 	template<auto n, typename T, typename... Ts> requires (n < 4)
-		constexpr auto drop(Int_<n>, List<T, Ts...>)
+	constexpr auto drop(Int_<n>, List<T, Ts...>)
 	{
 		if constexpr (n <= 0) { return List<T, Ts...>{}; }
 		else if constexpr (n == 1) { return List<Ts...>{}; }
@@ -192,7 +174,7 @@ namespace bmath::intern::meta {
 	}
 
 	template<auto n, typename T1, typename T2, typename T3, typename T4, typename... Ts> requires (n >= 4)
-		constexpr auto drop(Int_<n>, List<T1, T2, T3, T4, Ts...>)
+	constexpr auto drop(Int_<n>, List<T1, T2, T3, T4, Ts...>)
 	{
 		return drop(Int_<n - 4>{}, List<Ts...>{});
 	}
@@ -204,7 +186,7 @@ namespace bmath::intern::meta {
 	/////////////////   take
 
 	template<auto n, typename T, typename... Ts> requires (n < 4)
-		constexpr auto take(Int_<n>, List<T, Ts...>)
+	constexpr auto take(Int_<n>, List<T, Ts...>)
 	{
 		if constexpr (n <= 0) { return List<>{}; }
 		else if constexpr (n == 1) { return List<T>{}; }
@@ -212,7 +194,7 @@ namespace bmath::intern::meta {
 	}
 
 	template<auto n, typename T1, typename T2, typename T3, typename T4, typename... Ts> requires (n >= 4)
-		constexpr auto take(Int_<n>, List<T1, T2, T3, T4, Ts...>)
+	constexpr auto take(Int_<n>, List<T1, T2, T3, T4, Ts...>)
 	{
 		return concat(List<T1, T2, T3, T4>{}, take(Int_<n - 4>{}, List<Ts...>{}));
 	}
@@ -226,6 +208,9 @@ namespace bmath::intern::meta {
 
 	template<typename T, typename... Ts>
 	constexpr T head(List<T, Ts...>) { return {}; }
+
+	template<typename T, typename... Ts>
+	constexpr List<Ts...> tail(List<T, Ts...>) { return {}; }
 
 	template<typename T1, typename T2, typename T3, typename T4, typename... Ts> requires (sizeof...(Ts) > 0)
 	constexpr auto last(List<T1, T2, T3, T4, Ts...>) { return last(List<Ts...>{}); }
@@ -243,9 +228,10 @@ namespace bmath::intern::meta {
 	constexpr T last(List<T>) { return {}; }
 
 	template<long long N, InstanceOf<List> L>
-	constexpr auto at(Int_<N> n, L l) { return head(drop(n, l)); }
+	constexpr auto at(Int_<N> n, L l) { return meta::head(meta::drop(n, l)); }
 
 	static_assert(head(List<Int_<1>, Int_<2>, Int_<3>>{}) == Int_<1>{});
+	static_assert(tail(List<Int_<1>, Int_<2>, Int_<3>>{}) == List<Int_<2>, Int_<3>>{});
 	static_assert(last(List<Int_<1>, Int_<2>, Int_<3>>{}) == Int_<3>{});
 	static_assert(last(List<Int_<1>, Int_<2>, Int_<3>, Int_<4>>{}) == Int_<4>{});
 	static_assert(last(List<Int_<1>, Int_<2>, Int_<3>, Int_<4>, Int_<5>>{}) == Int_<5>{});
@@ -585,35 +571,29 @@ namespace bmath::intern::arr {
 
 	/////////////////   map
 
-	namespace map_detail {
-		using meta::List;
-		using meta::Callable;
+	namespace from_list_detail {
+		template<typename T1, meta::Callable<T1> F>
+		constexpr auto loop(meta::List<T1>, F f) { return std::array{ f(T1{}) }; }
 
-		template<typename T1, Callable<T1> F>
-		constexpr auto loop(List<T1>, F f) { return std::array{ f(T1{}) }; }
+		template<typename T1, typename T2, meta::Callable<T1> F>
+		constexpr auto loop(meta::List<T1, T2>, F f) { return std::array{ f(T1{}), f(T2{}) }; }
 
-		template<typename T1, typename T2, Callable<T1> F>
-		constexpr auto loop(List<T1, T2>, F f) { return std::array{ f(T1{}), f(T2{}) }; }
+		template<typename T1, typename T2, typename T3, meta::Callable<T1> F>
+		constexpr auto loop(meta::List<T1, T2, T3>, F f) { return std::array{ f(T1{}), f(T2{}), f(T3{}) }; }
 
-		template<typename T1, typename T2, typename T3, Callable<T1> F>
-		constexpr auto loop(List<T1, T2, T3>, F f) { return std::array{ f(T1{}), f(T2{}), f(T3{}) }; }
+		template<typename T1, typename T2, typename T3, typename T4, meta::Callable<T1> F>
+		constexpr auto loop(meta::List<T1, T2, T3, T4>, F f) { return std::array{ f(T1{}), f(T2{}), f(T3{}), f(T4{}) }; }
 
-		template<typename T1, typename T2, typename T3, typename T4, Callable<T1> F>
-		constexpr auto loop(List<T1, T2, T3, T4>, F f) { return std::array{ f(T1{}), f(T2{}), f(T3{}), f(T4{}) }; }
-
-		template<typename T1, typename T2, typename T3, typename T4, typename... Ts, Callable<T1> F>
+		template<typename T1, typename T2, typename T3, typename T4, typename... Ts, meta::Callable<T1> F>
 			requires (sizeof...(Ts) > 0)
-		constexpr auto loop(List<T1, T2, T3, T4, Ts...>, F f)
+		constexpr auto loop(meta::List<T1, T2, T3, T4, Ts...>, F f)
 		{
-			return arr::concat(std::array{ f(T1{}), f(T2{}), f(T3{}), f(T4{}) }, loop(List<Ts...>{}, f));
+			return arr::concat(std::array{ f(T1{}), f(T2{}), f(T3{}), f(T4{}) }, loop(meta::List<Ts...>{}, f));
 		}
-	} //namespace map_detail
+	} //namespace from_list_detail
 
 	template<typename T, typename... Ts, meta::Callable<T> F>
-	constexpr auto from_list(F f, meta::List<T, Ts...> l)
-	{
-		return map_detail::loop<T>(l, f);
-	}
+	constexpr auto from_list(F f, meta::List<T, Ts...> l) { return from_list_detail::loop<T>(l, f); }
 
 	//static_assert(from_list([](auto x) { return x.val(); }, meta::List<meta::Int_<1>, meta::Int_<2>, meta::Int_<3>>{})
 	//	== std::to_array({ 1ll, 2ll, 3ll }));
@@ -643,22 +623,12 @@ namespace bmath::intern::arr {
 		return result;
 	}
 
-	//static_assert(arr::map([](auto x) { return x + 3; }, std::array{ 1, 2, 3 }) == std::array{ 4, 5, 6 });
+	static_assert(arr::map([](auto x) { return x + 3; }, std::array{ 1, 2, 3 }) == std::array{ 4, 5, 6 });
 
-	template<typename T, T... xs> requires (sizeof...(xs) > 0)
-	constexpr auto make_array()
-	{
-		std::array<T, sizeof...(xs)> res = { xs... };
-		return res;
-	}
 
-	template<typename T>
-	constexpr auto make_array()
-	{
-		std::array<T, 0> res = {};
-		return res;
-	}
+	template<typename T, T... xs>
+	constexpr std::array<T, sizeof...(xs)> make() { return { xs... }; }
 
-	static_assert(make_array<int>() == std::array<int, 0>{});
+	static_assert(make<int>() == std::array<int, 0>{});
 
 } //namespace bmath::intern::arr

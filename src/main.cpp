@@ -9,6 +9,7 @@ using namespace bmath::intern;
 TODO:
 
 important:
+ - rename all ..._detail namespaces to detail_...
  - let type_table in ioarithmetic use names of fn
  - make pattern and usual term two distinct types (again...)
 	enables: 
@@ -45,33 +46,33 @@ idea status:
 */
 
 void f(Type t) {
-	using Options = EnumSwitch<Type, 
-		meta::List<Variadic, NamedFn, Fn, /*Literal,*/ MatchType>
+	using T_ = EnumSwitch<Type, 
+		meta::List<Variadic, NamedFn, Fn, /*Literal, */MatchType>
 		, Type(Literal::complex), Type(Literal::variable)
 	>;
 
 	std::cout << (unsigned)t << "\t";
 	
-	switch (Options::decide(t)) {
-	case Options::is_type<Variadic>():
+	switch (T_::decide(t)) {
+	case T_::is_type<Variadic>():
 		std::cout << "Variadic\n";
 		break;
-	case Options::is_type<NamedFn>():
+	case T_::is_type<NamedFn>():
 		std::cout << "NamedFn\n";
 		break;
-	case Options::is_type<Fn>():
+	case T_::is_type<Fn>():
 		std::cout << "Fn\n";
 		break;
-	//case Options::is_type<Literal>() :
+	//case T_::is_type<Literal>():
 	//	std::cout << "Literal\n";
 	//	break;
-	case Options::is_value(Literal::variable):
+	case T_::is_value(Literal::variable):
 		std::cout << "variable\n";
 		break;
-	case Options::is_value(Literal::complex):
+	case T_::is_value(Literal::complex):
 		std::cout << "complex\n";
 		break;
-	case Options::is_type<MatchType>():
+	case T_::is_type<MatchType>():
 		std::cout << "MatchType\n";
 		break;
 	}

@@ -8,6 +8,7 @@
 #include <numeric>
 #include <algorithm>
 #include <array>
+#include <exception>
 
 #include "meta.hpp"
 #include "typeDebug.hpp"
@@ -321,13 +322,13 @@ namespace bmath::intern {
 	{
 		enum class CaseIdentifier :unsigned {};
 
-		static constexpr std::array value_cases = arr::make_array<unsigned, (unsigned)ValueCases...>();
+		static constexpr std::array value_cases = arr::make<unsigned, (unsigned)ValueCases...>();
 
 		static constexpr CaseIdentifier value_identifier(unsigned e)
 		{
 			const long long array_index = arr::index_of(e, value_cases);
 			if (array_index == -1) throw std::exception{ "only enum values passed in as template arguments are valid" };
-			return static_cast<CaseIdentifier>(meta::size(TypeCases{}).val() + array_index);
+			return static_cast<CaseIdentifier>(TypeCases{}.size().val() + array_index);
 		}
 
 	public:
