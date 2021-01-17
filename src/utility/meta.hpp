@@ -638,11 +638,27 @@ namespace bmath::intern::arr {
 	template<typename T, std::size_t N, meta::Callable<T> F>
 	constexpr auto map(F f, const std::array<T, N>& arr)
 	{
-		std::array<decltype(f(arr[0])), N> result;
+		std::array<decltype(f(arr[0])), N> result = {};
 		std::transform(arr.begin(), arr.end(), result.begin(), f);
 		return result;
 	}
 
 	//static_assert(arr::map([](auto x) { return x + 3; }, std::array{ 1, 2, 3 }) == std::array{ 4, 5, 6 });
+
+	template<typename T, T... xs> requires (sizeof...(xs) > 0)
+	constexpr auto make_array()
+	{
+		std::array<T, sizeof...(xs)> res = { xs... };
+		return res;
+	}
+
+	template<typename T>
+	constexpr auto make_array()
+	{
+		std::array<T, 0> res = {};
+		return res;
+	}
+
+	static_assert(make_array<int>() == std::array<int, 0>{});
 
 } //namespace bmath::intern::arr

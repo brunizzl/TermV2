@@ -46,7 +46,7 @@ idea status:
 
 void f(Type t) {
 	using Options = EnumSwitch<Type, 
-		meta::List<Variadic, NamedFn, Fn, /*Literal, */MatchType>
+		meta::List<Variadic, NamedFn, Fn, /*Literal,*/ MatchType>
 		, Type(Literal::complex), Type(Literal::variable)
 	>;
 

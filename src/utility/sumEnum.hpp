@@ -321,10 +321,9 @@ namespace bmath::intern {
 	{
 		enum class CaseIdentifier :unsigned {};
 
-		static constexpr std::array value_cases = std::array{ ValueCases... };
-		static_assert(sizeof...(ValueCases) == value_cases.size());
+		static constexpr std::array value_cases = arr::make_array<unsigned, (unsigned)ValueCases...>();
 
-		static constexpr CaseIdentifier value_identifier(SumEnum_T e)
+		static constexpr CaseIdentifier value_identifier(unsigned e)
 		{
 			const long long array_index = arr::index_of(e, value_cases);
 			if (array_index == -1) throw std::exception{ "only enum values passed in as template arguments are valid" };
@@ -338,7 +337,7 @@ namespace bmath::intern {
 			return static_cast<CaseIdentifier>(meta::index_of<E>(TypeCases{}).val()); 
 		}
 
-		static consteval CaseIdentifier is_value(SumEnum_T e) { return value_identifier(e); }
+		static consteval CaseIdentifier is_value(SumEnum_T e) { return value_identifier((unsigned)e); }
 
 	private:
 		struct Option
@@ -357,7 +356,7 @@ namespace bmath::intern {
 				[](auto x) { return Option{ EnumSwitch::is_type<typename decltype(x)::type>(), x.begin(), x.end() }; },
 				used_infos);
 			constexpr std::array value_options = arr::map(
-				[](auto e) { return Option{ EnumSwitch::value_identifier(e), (unsigned)e, (unsigned)e + 1 }; },
+				[](auto e) { return Option{ EnumSwitch::value_identifier(e), e, e + 1 }; },
 				value_cases);
 			constexpr auto make_options = [&value_options, &type_options]() {
 				std::array res = arr::concat(type_options, value_options);
