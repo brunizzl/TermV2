@@ -45,22 +45,33 @@ idea status:
 */
 
 void f(Type t) {
-	using Options = EnumSwitch<Type, meta::List<Variadic, NamedFn, Fn, Literal, MatchType>>;
+	using Options = EnumSwitch<Type, 
+		meta::List<Variadic, NamedFn, Fn, /*Literal, */MatchType>
+		, Type(Literal::complex), Type(Literal::variable)
+	>;
+
+	std::cout << (unsigned)t << "\t";
 	
 	switch (Options::decide(t)) {
-	case Options::as<Variadic>:
+	case Options::is_type<Variadic>():
 		std::cout << "Variadic\n";
 		break;
-	case Options::as<NamedFn>:
+	case Options::is_type<NamedFn>():
 		std::cout << "NamedFn\n";
 		break;
-	case Options::as<Fn>:
+	case Options::is_type<Fn>():
 		std::cout << "Fn\n";
 		break;
-	case Options::as<Literal>:
-		std::cout << "Literal\n";
+	//case Options::is_type<Literal>() :
+	//	std::cout << "Literal\n";
+	//	break;
+	case Options::is_value(Literal::variable):
+		std::cout << "variable\n";
 		break;
-	case Options::as<MatchType>:
+	case Options::is_value(Literal::complex):
+		std::cout << "complex\n";
+		break;
+	case Options::is_type<MatchType>():
 		std::cout << "MatchType\n";
 		break;
 	}

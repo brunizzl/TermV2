@@ -6,6 +6,8 @@
 #include <compare>
 #include <concepts>
 #include <numeric>
+#include <algorithm>
+#include <array>
 
 #include "meta.hpp"
 #include "typeDebug.hpp"
@@ -80,15 +82,15 @@ namespace bmath::intern {
 
 		/////////////////   MemberInfo
 
-		namespace info_detail {
-			template<Enumeratable E, std::size_t Begin, std::size_t End>
-			struct MemberInfo
-			{
-				using type = E;
-				constexpr std::size_t begin() const { return Begin; }
-				constexpr std::size_t end() const { return End; }
-			};
+		template<Enumeratable E, std::size_t Begin, std::size_t End>
+		struct MemberInfo
+		{
+			using type = E;
+			constexpr std::size_t begin() const { return Begin; }
+			constexpr std::size_t end() const { return End; }
+		};
 
+		namespace info_detail {
 			template<Enumeratable, unsigned Begin, unsigned End, bool IncludeSelf>
 			struct MakeMemberInfo;
 
@@ -128,13 +130,10 @@ namespace bmath::intern {
 	} //namespace enum_detail
 
 	template<>
-	class [[nodiscard]] SumEnum<>
+	struct [[nodiscard]] SumEnum<>
 	{
-	protected:
-
 		enum class Value :unsigned {} value; //only data held by all of SumEnum
 
-	public:
 		constexpr SumEnum(const Value e) noexcept :value(e) {}
 		constexpr operator Value() const noexcept { return this->value; } //implicit conversion allows use in switch
 
@@ -155,7 +154,7 @@ namespace bmath::intern {
 		static constexpr unsigned this_offset = (unsigned)Base::COUNT;
 		static constexpr unsigned next_offset = static_cast<unsigned>(Enum::COUNT) + this_offset;
 
-	protected:
+	public:
 		using Value = typename Base::Value;
 
 	private:
@@ -229,7 +228,7 @@ namespace bmath::intern {
 		static constexpr unsigned this_offset = (unsigned)Base::COUNT;
 		static constexpr unsigned next_offset = 1u + this_offset; //Atom occupies one value
 
-	protected:
+	public:
 		using Value = typename Base::Value;
 
 	private:
@@ -297,6 +296,8 @@ namespace bmath::intern {
 		static constexpr Enum COUNT = static_cast<Enum>(static_cast<unsigned>(LastValidMember) + 1u);
 	}; //struct WrapEnum 
 
+
+
 	template <enum_detail::Enumeratable Enum>
 	class [[nodiscard]] OpaqueEnum
 	{
@@ -310,50 +311,100 @@ namespace bmath::intern {
 		static constexpr Value COUNT = static_cast<Value>(static_cast<unsigned>(Enum::COUNT));
 	}; //struct OpaqueEnum
 
-	template<meta::InstanceOf<SumEnum> SumEnum_T, meta::InstanceOf<meta::List> RawCases>
+
+
+
+
+
+	template<meta::InstanceOf<SumEnum> SumEnum_T, meta::InstanceOf<meta::List> TypeCases, SumEnum_T... ValueCases>
 	class EnumSwitch
 	{
-		enum class Value :unsigned {};
-		
-		template<meta::InstanceOf<meta::List> CasesPart> 
-		static constexpr Value decide_impl(const SumEnum_T e, const CasesPart cs) noexcept
-		{
-			//std::cout << compact_type_name(typeid(cs).name()) << "\n";
-			constexpr auto cases_count = meta::size(cs);
-			if constexpr (cases_count.val() > 1) {
-				constexpr auto mid_index = cases_count / meta::Int_<2>{};
-				constexpr auto mid_type = meta::at(mid_index, cs);
-				constexpr std::size_t split_value = mid_type.begin();
+		enum class CaseIdentifier :unsigned {};
 
-				if (static_cast<unsigned>(e) < split_value) {
-					constexpr auto first_half = meta::take(mid_index, cs);
-					return EnumSwitch::decide_impl(e, first_half);
+		static constexpr std::array value_cases = std::array{ ValueCases... };
+		static_assert(sizeof...(ValueCases) == value_cases.size());
+
+		static constexpr CaseIdentifier value_identifier(SumEnum_T e)
+		{
+			const long long array_index = arr::index_of(e, value_cases);
+			if (array_index == -1) throw std::exception{ "only enum values passed in as template arguments are valid" };
+			return static_cast<CaseIdentifier>(meta::size(TypeCases{}).val() + array_index);
+		}
+
+	public:
+		template<enum_detail::Enumeratable E> requires (meta::index_of<E>(TypeCases{}).val() != -1)
+		static constexpr CaseIdentifier is_type() noexcept
+		{ 
+			return static_cast<CaseIdentifier>(meta::index_of<E>(TypeCases{}).val()); 
+		}
+
+		static consteval CaseIdentifier is_value(SumEnum_T e) { return value_identifier(e); }
+
+	private:
+		struct Option
+		{
+			CaseIdentifier identifier;
+			std::size_t begin_, end_;
+		};
+
+		static consteval auto compute_all_options()
+		{
+			constexpr auto all_infos = enum_detail::generate_member_infos<SumEnum_T>();
+			constexpr auto used_infos = meta::filter(
+				[](auto i) { return meta::contains<typename decltype(i)::type>(TypeCases{}); },
+				all_infos);
+			constexpr std::array type_options = arr::from_list(
+				[](auto x) { return Option{ EnumSwitch::is_type<typename decltype(x)::type>(), x.begin(), x.end() }; },
+				used_infos);
+			constexpr std::array value_options = arr::map(
+				[](auto e) { return Option{ EnumSwitch::value_identifier(e), (unsigned)e, (unsigned)e + 1 }; },
+				value_cases);
+			constexpr auto make_options = [&value_options, &type_options]() {
+				std::array res = arr::concat(type_options, value_options);
+				std::sort(res.begin(), res.end(), [](Option a, Option b) { return a.begin_ < b.begin_; });
+				return res;
+			};
+			constexpr std::array options = make_options();
+
+			constexpr auto compute_reached = [&options]() {
+				std::array<int, (unsigned)SumEnum_T::COUNT> res = {};
+				for (const Option& option : options) {
+					for (std::size_t i = option.begin_; i < option.end_; i++) {
+						res[i]++;
+					}
+				}
+				return res;
+			};
+			constexpr auto reached = compute_reached();
+			static_assert(std::all_of(reached.begin(), reached.end(), [](auto x) { return x >= 1; }), "every case must be covered");
+			static_assert(std::all_of(reached.begin(), reached.end(), [](auto x) { return x <= 1; }), "no case may be covered twice");
+
+			return options;
+		}
+		static constexpr std::array all_options = compute_all_options();
+
+		template<std::array os> requires (arr::holds<Option>(os))
+		static constexpr CaseIdentifier decide_impl(const SumEnum_T e) noexcept
+		{
+			if constexpr (os.size() > 1u) {
+				constexpr std::size_t mid = os.size() / 2u;
+
+				if (static_cast<unsigned>(e) < os[mid].begin_) {
+					return EnumSwitch::decide_impl<arr::take<mid>(os)>(e);
 				}
 				else {
-					constexpr auto second_half = meta::drop(mid_index, cs);
-					return EnumSwitch::decide_impl(e, second_half);
+					return EnumSwitch::decide_impl<arr::drop<mid>(os)>(e);
 				}
 			}
 			else {
-				using ResultType = typename decltype(meta::head(cs))::type;
-				assert(e.is<ResultType>());
-				return EnumSwitch::template as<ResultType>;
+				return os.front().identifier;
 			}
 		}
 
 	public:
-		template<enum_detail::Enumeratable E> requires ((bool) meta::contains<E>(RawCases{}))
-		static constexpr Value as = static_cast<Value>(meta::index_of<E>(RawCases{}).val());
-
-		static constexpr Value decide(const SumEnum_T e) noexcept
-		{
-			constexpr auto all_infos = enum_detail::generate_member_infos<SumEnum_T>();
-			constexpr auto cases = meta::filter(
-				[](auto i) { return meta::contains<typename decltype(i)::type>(RawCases{}); },
-				all_infos);
-			return EnumSwitch::decide_impl(e, cases);
-		}
-	};
+		static constexpr CaseIdentifier decide(const SumEnum_T e) noexcept 
+		{ return EnumSwitch::decide_impl<all_options>(e); }
+	}; //class EnumSwitch
 
 
 
