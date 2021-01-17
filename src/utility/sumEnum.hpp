@@ -5,8 +5,10 @@
 #include <bit>
 #include <compare>
 #include <concepts>
+#include <numeric>
 
 #include "meta.hpp"
+#include "typeDebug.hpp"
 
 namespace bmath::intern {
     
@@ -65,61 +67,57 @@ namespace bmath::intern {
 		};
 
 		template<typename... Enums>
-		struct ListMembers<SumEnum<Enums...>> 
-		{ 
-			using type = decltype(meta::concat(List<SumEnum<Enums...>>{}, ListMembers_t<Enums...>{}));
-		};
+		struct ListMembers<SumEnum<Enums...>> { using type = ListMembers_t<Enums...>; };
 
-		template<typename Enum>
-		struct ListMembers<Enum> { using type = List<Enum>; };
+		template<typename E> requires (!meta::InstanceOf<E, SumEnum>)
+		struct ListMembers<E> { using type = List<E>; };
 
 		template<> 
 		struct ListMembers<> { using type = List<>; };
 
-		static_assert(ListMembers_t<SumEnum<int, SumEnum<float, bool>>>{} == 
-			List<SumEnum<int, SumEnum<float, bool>>, int, SumEnum<float, bool>, float, bool>{});
+		static_assert(ListMembers_t<SumEnum<int, SumEnum<float, bool>>>{} == List<int, float, bool>{});
 
 
 		/////////////////   MemberInfo
 
 		namespace info_detail {
-			template<Enumeratable E, unsigned Begin, unsigned End>
+			template<Enumeratable E, std::size_t Begin, std::size_t End>
 			struct MemberInfo
 			{
 				using type = E;
-				constexpr unsigned begin() const { return Begin; }
-				constexpr unsigned end() const { return End; }
+				constexpr std::size_t begin() const { return Begin; }
+				constexpr std::size_t end() const { return End; }
 			};
 
-
-			template<Enumeratable, unsigned Begin, unsigned End>
+			template<Enumeratable, unsigned Begin, unsigned End, bool IncludeSelf>
 			struct MakeMemberInfo;
 
-			template<Enumeratable S, unsigned B, unsigned E>
-			using MakeMemberInfo_t = typename MakeMemberInfo<S, B, E>::type;
+			template<Enumeratable S, unsigned B, unsigned E, bool I>
+			using MakeMemberInfo_t = typename MakeMemberInfo<S, B, E, I>::type;
 
-			template<Enumeratable Head, typename... Tail, unsigned Begin, unsigned End>
-			class MakeMemberInfo<SumEnum<Head, Tail...>, Begin, End>
+			template<Enumeratable Head, typename... Tail, unsigned Begin, unsigned End, bool IncludeSelf>
+			class MakeMemberInfo<SumEnum<Head, Tail...>, Begin, End, IncludeSelf>
 			{
 				using Base = SumEnum<Tail...>;
 				static constexpr unsigned Split = Begin + (unsigned)Base::COUNT;
-				using OwnInfo = MemberInfo<SumEnum<Head, Tail...>, Begin, End>;
-				using HeadInfo = MakeMemberInfo_t<Head, Split, End>;
-				using TailInfo = MakeMemberInfo_t<Base, Begin, Split>;
+				using OwnInfo   = MemberInfo<SumEnum<Head, Tail...>, Begin, End>;
+				using HeadInfos = MakeMemberInfo_t<Head, Split, End, true>;
+				using TailInfos = MakeMemberInfo_t<Base, Begin, Split, false>;
+				using SubInfos  = decltype(meta::concat(TailInfos{}, HeadInfos{}));
 			public:
-				using type = decltype(meta::cons<OwnInfo>(meta::concat(HeadInfo{}, TailInfo{})));
+				using type = std::conditional_t<IncludeSelf, decltype(meta::cons<OwnInfo>(SubInfos{})), SubInfos>;
 			};
 
 			template<unsigned Begin, unsigned End>
-			struct MakeMemberInfo<SumEnum<>, Begin, End> { using type = List<>; };
+			struct MakeMemberInfo<SumEnum<>, Begin, End, false> { using type = List<>; };
 
 			template<Enumeratable E, unsigned Begin, unsigned End>
 				requires (!meta::InstanceOf<E, SumEnum>)
-			struct MakeMemberInfo<E, Begin, End> { using type = List<MemberInfo<E, Begin, End>>; };
+			struct MakeMemberInfo<E, Begin, End, true> { using type = List<MemberInfo<E, Begin, End>>; };
 		} //namespace info_detail
 
 		template<meta::InstanceOf<SumEnum> E>
-		constexpr auto generate_member_infos() { return info_detail::MakeMemberInfo_t<E, 0, (unsigned)E::COUNT>{}; }
+		constexpr auto generate_member_infos() { return info_detail::MakeMemberInfo_t<E, 0, (unsigned)E::COUNT, true>{}; }
 
 		template<Enumeratable E, meta::InstanceOf<List> Infos>
 		constexpr auto find_info(Infos is) 
@@ -312,57 +310,48 @@ namespace bmath::intern {
 		static constexpr Value COUNT = static_cast<Value>(static_cast<unsigned>(Enum::COUNT));
 	}; //struct OpaqueEnum
 
-
-
-
 	template<meta::InstanceOf<SumEnum> SumEnum_T, meta::InstanceOf<meta::List> RawCases>
 	class EnumSwitch
 	{
 		enum class Value :unsigned {};
-
-		//one case covers values of SumEnum_T::Value in range [Begin, End) associated with Enum
-		//if an instance e of SumEnum_T holds a value associated with Case, decide(e) returns Id
-		template<enum_detail::Enumeratable Enum, unsigned Begin, unsigned End, Value Id>
-		struct Case 
+		
+		template<meta::InstanceOf<meta::List> CasesPart> 
+		static constexpr Value decide_impl(const SumEnum_T e, const CasesPart cs) noexcept
 		{
-			using Represented = Enum;
-			constexpr unsigned begin() { return Begin; }
-			constexpr unsigned end() { return End; }
-			constexpr Value id() { return Id; }
-		};
+			//std::cout << compact_type_name(typeid(cs).name()) << "\n";
+			constexpr auto cases_count = meta::size(cs);
+			if constexpr (cases_count.val() > 1) {
+				constexpr auto mid_index = cases_count / meta::Int_<2>{};
+				constexpr auto mid_type = meta::at(mid_index, cs);
+				constexpr std::size_t split_value = mid_type.begin();
 
-		template<meta::InstanceOf<SumEnum> S, unsigned S_Offset, enum_detail::Enumeratable Needle>
-			requires (enum_detail::ContainedIn<Needle, S> && !std::is_same_v<Needle, S>)
-		static constexpr auto build_type_case(S, meta::Int_<S_Offset>, Needle) 
-		{
-			
+				if (static_cast<unsigned>(e) < split_value) {
+					constexpr auto first_half = meta::take(mid_index, cs);
+					return EnumSwitch::decide_impl(e, first_half);
+				}
+				else {
+					constexpr auto second_half = meta::drop(mid_index, cs);
+					return EnumSwitch::decide_impl(e, second_half);
+				}
+			}
+			else {
+				using ResultType = typename decltype(meta::head(cs))::type;
+				assert(e.is<ResultType>());
+				return EnumSwitch::template as<ResultType>;
+			}
 		}
 
 	public:
 		template<enum_detail::Enumeratable E> requires ((bool) meta::contains<E>(RawCases{}))
-		static constexpr Value as = static_cast<Value>(meta::value(meta::index<E>(RawCases{})));
+		static constexpr Value as = static_cast<Value>(meta::index_of<E>(RawCases{}).val());
 
 		static constexpr Value decide(const SumEnum_T e) noexcept
 		{
-			return EnumSwitch::decide_impl(e);
-		}
-
-	private:
-		template<typename Head, typename... Tail>
-		static constexpr Value decide_impl(const SumEnum<Head, Tail...> e) noexcept
-		{
-			if constexpr (sizeof...(Tail) > 0u) {
-				if (e.is<Head>()) {
-					return EnumSwitch::template as<Head>;
-				}
-				else {
-					return EnumSwitch::decide_impl(SumEnum<Tail...>(static_cast<unsigned>(e)));
-				}
-			}
-			else {
-				assert(e.is<Head>());
-				return EnumSwitch::template as<Head>;
-			}
+			constexpr auto all_infos = enum_detail::generate_member_infos<SumEnum_T>();
+			constexpr auto cases = meta::filter(
+				[](auto i) { return meta::contains<typename decltype(i)::type>(RawCases{}); },
+				all_infos);
+			return EnumSwitch::decide_impl(e, cases);
 		}
 	};
 

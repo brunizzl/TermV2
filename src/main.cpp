@@ -1,7 +1,10 @@
 
-#include "stupidTests.hpp"
-using namespace bmath::intern;
 
+
+#include "stupidTests.hpp"
+#include "utility/typeDebug.hpp"
+
+using namespace bmath::intern;
 /*
 TODO:
 
@@ -41,63 +44,34 @@ idea status:
  - always keep -1 at some known index in store and never allocate new -1 in build_negated and build_inverted (problem: identify bevore copy)
 */
 
-struct A :SingleSumEnumEntry {};
-struct B :SingleSumEnumEntry {};
-using AB = SumEnum<A, B>;
-struct C :SingleSumEnumEntry {};
-enum class Num { one, two, three, COUNT };
-using Enum = SumEnum<Num, AB, C>;
-
-constexpr auto enum_infos = enum_detail::generate_member_infos<Enum>();
-constexpr auto num_info = enum_detail::find_info<Num>(enum_infos);
-static_assert(num_info.begin() == 3 && num_info.end() == 6);
-
-constexpr auto ab_info = enum_detail::find_info<AB>(enum_infos);
-static_assert(ab_info.begin() == 1 && ab_info.end() == 3);
-
-
-constexpr auto type_infos = enum_detail::generate_member_infos<Type>();
-constexpr auto fn_info = enum_detail::find_info<Fn>(type_infos);
-static_assert(fn_info.begin() == 10 && fn_info.end() == 33);
-
-constexpr auto function_info = enum_detail::find_info<Function>(type_infos);
-static_assert(function_info.begin() == 0 && function_info.end() == 33);
-
-constexpr auto pattern_info = enum_detail::find_info<MatchType>(type_infos);
-static_assert(pattern_info.begin() == 35 && pattern_info.end() == 41);
-
-/*
-	vorgehen:
-	1. sortiere Liste von EnumSwitch nach reihenfolge in enum_detail::ListEnums 
-		-> position in sortierter Liste ist Value von Typ
-	2. baue liste von Paaren mit Typ und assoziiertem wert (nach wie vor sortiert nach Typ)
-	2. halbiere Paar-Liste bei COUNT / 2 und teste mit if wert größer / kleinergleich mitte in decide -> rekursionsaufruf
-*/
-
-void f(Enum e) {
-	using Switch = EnumSwitch<Enum, meta::List<Num, AB, C>>;
-
-	switch (Switch::decide(e)) {
-	case Switch::as<Num>:
-		std::cout << "Num\n";
+void f(Type t) {
+	using Options = EnumSwitch<Type, meta::List<Variadic, NamedFn, Fn, Literal, MatchType>>;
+	
+	switch (Options::decide(t)) {
+	case Options::as<Variadic>:
+		std::cout << "Variadic\n";
 		break;
-	case Switch::as<AB>:
-		std::cout << "AB\n";
+	case Options::as<NamedFn>:
+		std::cout << "NamedFn\n";
 		break;
-	case Switch::as<C>:
-		std::cout << "C\n";
+	case Options::as<Fn>:
+		std::cout << "Fn\n";
+		break;
+	case Options::as<Literal>:
+		std::cout << "Literal\n";
+		break;
+	case Options::as<MatchType>:
+		std::cout << "MatchType\n";
 		break;
 	}
 }
 
 int main()
 {
-	f(Num::one);
-	f(Num::two);
-	f(Num::three);
-	f(A{});
-	f(B{});
-	f(C{});
+	for (unsigned i = 0; i < (unsigned)Type::COUNT; i++) {
+		f(Type(i));
+	}
+	std::cout << "\n\n";
 	debug::enumerate_type();
 	//debug::test_rechner();
 	//test::combine_exact();

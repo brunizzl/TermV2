@@ -124,6 +124,7 @@
     <ClCompile Include="src\ioArithmetic.cpp" />
     <ClCompile Include="src\parseTerm.cpp" />
     <ClCompile Include="src\transform.cpp" />
+    <ClCompile Include="src\utility\typeDebug.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\arithmeticTerm.hpp" />
@@ -139,6 +140,7 @@
     <ClInclude Include="src\utility\misc.hpp" />
     <ClInclude Include="src\utility\stringLiteral.hpp" />
     <ClInclude Include="src\utility\sumEnum.hpp" />
+    <ClInclude Include="src\utility\typeDebug.hpp" />
     <ClInclude Include="src\utility\vector.hpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

@@ -61,23 +61,14 @@ namespace bmath::intern::meta {
 	//////////////////////////////////////////   Value Types   ////////////////////////////////////////////////////////////
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	template<typename>
-	struct Type {};
-
-
-
 	template<typename T, T V>
 	struct Constant
 	{
-		static constexpr T value = V;
 		using type = T;
+		static constexpr T value = V;
 		explicit constexpr operator T() const { return V; }
+		constexpr T val() const { return V; }
 	};
-
-
-	template<typename C> requires (requires { C::value; })
-	constexpr typename C::type value(C) { return C::value; }
-
 
 
 	template<long long N>
@@ -115,13 +106,6 @@ namespace bmath::intern::meta {
 	template<bool B>
 	constexpr Bool_<!B> operator!(Bool_<B>) { return {}; }
 
-
-	template<Eq T, T V1, T V2>
-	constexpr Bool_<V1 == V2> operator==(Constant<T, V1>, Constant<T, V2>) { return {}; }
-
-	template<Eq T, T V1, T V2>
-	constexpr Bool_<V1 != V2> operator!=(Constant<T, V1>, Constant<T, V2>) { return {}; }
-
 	template<Ord T, T V1, T V2>
 	constexpr Bool_<(V1 < V2)> operator<(Constant<T, V1>, Constant<T, V2>) { return {}; }
 
@@ -134,15 +118,15 @@ namespace bmath::intern::meta {
 	template<Ord T, T V1, T V2>
 	constexpr Bool_<(V1 >= V2)> operator>=(Constant<T, V1>, Constant<T, V2>) { return {}; }
 
-	template<typename T1, typename T2>
-	constexpr Bool_<std::is_same_v<T1, T2>> operator==(Type<T1>, Type<T2>) { return {}; }
 
-	template<typename T1, typename T2>
-	constexpr Bool_<!std::is_same_v<T1, T2>> operator!=(Type<T1>, Type<T2>) { return {}; }
+	template<typename T1, typename T2> requires (std::is_empty_v<T1> || std::is_empty_v<T2>)
+	constexpr Bool_<std::is_same_v<T1, T2>> operator==(T1, T2) { return {}; }
+
+	template<typename T1, typename T2> requires (std::is_empty_v<T1> || std::is_empty_v<T2>)
+	constexpr Bool_<!std::is_same_v<T1, T2>> operator!=(T1, T2) { return {}; }
 
 
 	static_assert(Int_<4>{} + Int_<6>{} == Int_<10>{});
-
 	static_assert(Int_<4>{} + Int_<8>{} >= Int_<10>{});
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -171,23 +155,6 @@ namespace bmath::intern::meta {
 	static_assert(size(List<int, bool, void>{}) == Int_<3>{});
 
 
-	/////////////////   comparing lists
-
-	template<InstanceOf<List>, InstanceOf<List>>
-	struct EqualLists :False_ {};
-
-	template<typename... Ts>
-	struct EqualLists<List<Ts...>, List<Ts...>> :True_ {};
-
-	template<InstanceOf<List> L1, InstanceOf<List> L2>
-	constexpr Bool_<EqualLists<L1, L2>::value> operator==(L1, L2) { return {}; }
-
-	template<InstanceOf<List> L1, InstanceOf<List> L2>
-	constexpr Bool_<!EqualLists<L1, L2>::value> operator!=(L1, L2) { return {}; }
-
-	static_assert(List<int, bool>{} == List<int, bool>{});
-	static_assert(List<int>{} != List<int, bool>{});
-
 	/////////////////   cons
 
 	template<typename T, typename... Ts>
@@ -202,6 +169,77 @@ namespace bmath::intern::meta {
 	constexpr List<Ts_1..., Ts_2...> concat(List<Ts_1...>, List<Ts_2...>) { return {}; }
 
 	static_assert(concat(List<int, int>(), List<double, nullptr_t>()) == List<int, int, double, nullptr_t>());
+
+
+	/////////////////   drop
+
+	template<auto n, typename T, typename... Ts> requires (n < 4)
+		constexpr auto drop(Int_<n>, List<T, Ts...>)
+	{
+		if constexpr (n <= 0) { return List<T, Ts...>{}; }
+		else if constexpr (n == 1) { return List<Ts...>{}; }
+		else { return drop(Int_<n - 1>{}, List<Ts...>{}); }
+	}
+
+	template<auto n, typename T1, typename T2, typename T3, typename T4, typename... Ts> requires (n >= 4)
+		constexpr auto drop(Int_<n>, List<T1, T2, T3, T4, Ts...>)
+	{
+		return drop(Int_<n - 4>{}, List<Ts...>{});
+	}
+
+	static_assert(drop(Int_<2>{}, List<int, int, long, bool>{}) == List<long, bool>{});
+	static_assert(drop(Int_<7>{}, List<int, int, int, bool, int, int, long, bool, double>{}) == List<bool, double>{});
+
+
+	/////////////////   take
+
+	template<auto n, typename T, typename... Ts> requires (n < 4)
+		constexpr auto take(Int_<n>, List<T, Ts...>)
+	{
+		if constexpr (n <= 0) { return List<>{}; }
+		else if constexpr (n == 1) { return List<T>{}; }
+		else { return cons<T>(take(Int_<n - 1>{}, List<Ts...>{})); }
+	}
+
+	template<auto n, typename T1, typename T2, typename T3, typename T4, typename... Ts> requires (n >= 4)
+		constexpr auto take(Int_<n>, List<T1, T2, T3, T4, Ts...>)
+	{
+		return concat(List<T1, T2, T3, T4>{}, take(Int_<n - 4>{}, List<Ts...>{}));
+	}
+
+	static_assert(take(Int_<2>{}, List<int, int, long, bool>{}) == List<int, int>{});
+	static_assert(take(Int_<7>{}, List<int, int, int, bool, int, int, long, bool, double>{})
+		== List<int, int, int, bool, int, int, long>{});
+
+
+	/////////////////   access
+
+	template<typename T, typename... Ts>
+	constexpr T head(List<T, Ts...>) { return {}; }
+
+	template<typename T1, typename T2, typename T3, typename T4, typename... Ts> requires (sizeof...(Ts) > 0)
+	constexpr auto last(List<T1, T2, T3, T4, Ts...>) { return last(List<Ts...>{}); }
+
+	template<typename T1, typename T2, typename T3, typename T4>
+	constexpr T4 last(List<T1, T2, T3, T4>) { return {}; }
+
+	template<typename T1, typename T2, typename T3>
+	constexpr T3 last(List<T1, T2, T3>) { return {}; }
+
+	template<typename T1, typename T2>
+	constexpr T2 last(List<T1, T2>) { return {}; }
+
+	template<typename T>
+	constexpr T last(List<T>) { return {}; }
+
+	template<long long N, InstanceOf<List> L>
+	constexpr auto at(Int_<N> n, L l) { return head(drop(n, l)); }
+
+	static_assert(head(List<Int_<1>, Int_<2>, Int_<3>>{}) == Int_<1>{});
+	static_assert(last(List<Int_<1>, Int_<2>, Int_<3>>{}) == Int_<3>{});
+	static_assert(last(List<Int_<1>, Int_<2>, Int_<3>, Int_<4>>{}) == Int_<4>{});
+	static_assert(last(List<Int_<1>, Int_<2>, Int_<3>, Int_<4>, Int_<5>>{}) == Int_<5>{});
+	static_assert(at(Int_<2>{}, List<Int_<1>, Int_<2>, Int_<3>, Int_<4>, Int_<5>>{}) == Int_<3>{});
 
 
 	/////////////////   containes
@@ -249,10 +287,10 @@ namespace bmath::intern::meta {
 	template<typename P>
 	constexpr List<> filter(P, List<>) { return {}; }
 
-	template<typename T, typename... Ts, CallableTo<bool, T> P> 
+	template<typename T, typename... Ts, Callable<T> P> 
 	constexpr auto filter(P p, List<T, Ts...>) 
 	{
-		constexpr auto filtered_tail = filter(p, List<Ts...>{});
+		constexpr InstanceOf<List> auto filtered_tail = filter(p, List<Ts...>{});
 		if constexpr (p(T{})) { return cons<T>(filtered_tail); }
 		else                  { return filtered_tail; }
 	}
@@ -280,24 +318,6 @@ namespace bmath::intern::meta {
 	//	== List<Int_<6>, Int_<9>, Int_<-3>>{});
 
 
-	/////////////////   index
-
-	template<typename Needle, typename T, typename... Ts>
-	constexpr auto index(List<T, Ts...>) 
-	{
-		if constexpr (Type<Needle>{} == Type<T>{}) { return Int_<0>{}; }
-		else if constexpr (sizeof...(Ts) == 0)     { return Int_<-1>{}; }
-		else {
-			const auto tail_idx = index<Needle>(List<Ts...>{}); 
-			if constexpr (tail_idx != Int_<-1>{}) { return tail_idx + Int_<1>{}; }
-			else                                  { return Int_<-1>{}; }
-		}
-	}
-
-	static_assert(index<int>(List<char, bool, float, int, double, long>{}) == Int_<3>{});
-	static_assert(index<int>(List<char, bool, float, double, long>{}) == Int_<-1>{});
-
-
 	/////////////////   find
 
 	struct Nothing {};
@@ -306,54 +326,86 @@ namespace bmath::intern::meta {
 	constexpr Nothing find(List<>, P) { return{}; }
 
 	template<typename T, typename... Ts, Callable<T> P>
+		requires (sizeof...(Ts) < 3)
 	constexpr auto find(List<T, Ts...>, P p) 
 	{
 		if constexpr (p(T{})) { return T{}; }
 		else                  { return find(List<Ts...>{}, p); }
 	}
 
+	template<typename T1, typename T2, typename T3, typename T4, typename... Ts, Callable<T1> P>
+	constexpr auto find(List<T1, T2, T3, T4, Ts...>, P p)
+	{
+		if constexpr      (p(T1{})) { return T1{}; }
+		else if constexpr (p(T2{})) { return T2{}; }
+		else if constexpr (p(T3{})) { return T3{}; }
+		else if constexpr (p(T4{})) { return T4{}; }
+		else                        { return find(List<Ts...>{}, p); }
+	}
+
 	//static_assert(find(List<Int_<2>, Int_<5>, Int_<-7>>{}, [](auto v) { return v == Int_<-7>{}; }) == Int_<-7>{});
 
 
-	/////////////////   drop
+	/////////////////   find_index
+	namespace find_detail {
+		template<long long N, typename P>
+		constexpr Int_<-1> loop(List<>, Int_<N>, P) { return {}; }
 
-	template<auto n, typename T, typename... Ts> requires (n < 4)
-	constexpr auto drop(Int_<n>, List<T, Ts...>) 
-	{
-		if constexpr      (n <= 0) { return List<T, Ts...>{}; }
-		else if constexpr (n == 1) { return List<Ts...>{}; }
-		else                       { return drop(Int_<n - 1>{}, List<Ts...>{}); }
-	}
+		template<typename T, typename... Ts, long long N, Callable<T> P>
+			requires (sizeof...(Ts) < 3)
+		constexpr auto loop(List<T, Ts...>, Int_<N> n, P p)
+		{
+			if constexpr (p(T{})) { return n; }
+			else                  { return loop(List<Ts...>{}, n + Int_<1>{}, p); }
+		}
 
-	template<auto n, typename T1, typename T2, typename T3, typename T4, typename... Ts> requires (n >= 4)
-	constexpr auto drop(Int_<n>, List<T1, T2, T3, T4, Ts...>)
-	{
-		return drop(Int_<n - 4>{}, List<Ts...>{});
-	}
+		template<typename T1, typename T2, typename T3, typename T4, typename... Ts, long long N, Callable<T1> P>
+		constexpr auto loop(List<T1, T2, T3, T4, Ts...>, Int_<N> n, P p)
+		{
+			if constexpr      (p(T1{})) { return n + Int_<0>{}; }
+			else if constexpr (p(T2{})) { return n + Int_<1>{}; }
+			else if constexpr (p(T3{})) { return n + Int_<2>{}; }
+			else if constexpr (p(T4{})) { return n + Int_<3>{}; }
+			else                        { return loop(List<Ts...>{}, n + Int_<4>{}, p); }
+		}
 
-	static_assert(drop(Int_<2>{}, List<int, int, long, bool>{}) == List<long, bool>{});
-	static_assert(drop(Int_<7>{}, List<int, int, int, bool, int, int, long, bool, double>{}) == List<bool, double>{});
+	} //namespace find_detail
+
+	template<InstanceOf<List> L, typename P>
+	constexpr auto find_index(L l, P p) { return find_detail::loop(l, Int_<0>{}, p); }
+
+	//static_assert(find_index(List<Int_<2>, Int_<5>, Int_<-7>>{}, [](auto v) { return (bool)(v == Int_<-7>{}); }) == Int_<2>{});
 
 
-	/////////////////   take
+	/////////////////   find_index
 
-	template<auto n, typename T, typename... Ts> requires (n < 4)
-	constexpr auto take(Int_<n>, List<T, Ts...>)
-	{
-		if constexpr      (n <= 0) { return List<>{}; }
-		else if constexpr (n == 1) { return List<T>{}; }
-		else                       { return cons<T>(take(Int_<n - 1>{}, List<Ts...>{})); }
-	}
+	namespace index_detail {
+		template<typename Needle, long long N>
+		constexpr Int_<-1> loop(List<>, Int_<N> n) { return {}; }
 
-	template<auto n, typename T1, typename T2, typename T3, typename T4, typename... Ts> requires (n >= 4)
-	constexpr auto take(Int_<n>, List<T1, T2, T3, T4, Ts...>)
-	{
-		return concat(List<T1, T2, T3, T4>{}, take(Int_<n - 4>{}, List<Ts...>{})); 
-	}
+		template<typename Needle, typename T, typename... Ts, long long N>
+			requires (sizeof...(Ts) < 3)
+		constexpr auto loop(List<T, Ts...>, Int_<N> n)
+		{
+			if constexpr (std::is_same_v<Needle, T>) { return n; }
+			else                                     { return loop<Needle>(List<Ts...>{}, n + Int_<1>{}); }
+		}
 
-	static_assert(take(Int_<2>{}, List<int, int, long, bool>{}) == List<int, int>{});
-	static_assert(take(Int_<7>{}, List<int, int, int, bool, int, int, long, bool, double>{}) 
-		== List<int, int, int, bool, int, int, long>{});
+		template<typename Needle, typename T1, typename T2, typename T3, typename T4, typename... Ts, long long N>
+		constexpr auto loop(List<T1, T2, T3, T4, Ts...>, Int_<N> n)
+		{
+			if constexpr      (std::is_same_v<Needle, T1>) { return n + Int_<0>{}; }
+			else if constexpr (std::is_same_v<Needle, T2>) { return n + Int_<1>{}; }
+			else if constexpr (std::is_same_v<Needle, T3>) { return n + Int_<2>{}; }
+			else if constexpr (std::is_same_v<Needle, T4>) { return n + Int_<3>{}; }
+			else                                           { return loop<Needle>(List<Ts...>{}, n + Int_<4>{}); }
+		}
+	} //namespace index_detail
+
+	template<typename Needle, InstanceOf<List> L>
+	constexpr auto index_of(L l) { return index_detail::loop<Needle>(l, Int_<0>{}); }
+
+	static_assert(index_of<Int_<-7>>(List<Int_<2>, Int_<5>, Int_<-7>>{}) == Int_<2>{});
 
 
 	/////////////////   sort (function based)
