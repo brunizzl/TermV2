@@ -1,14 +1,12 @@
 #pragma once
 
 #include <type_traits>
-#include <typeinfo>
 #include <bit>
 #include <compare>
 #include <concepts>
 #include <numeric>
 #include <algorithm>
 #include <array>
-#include <exception>
 
 #include "meta.hpp"
 #include "typeDebug.hpp"
@@ -322,39 +320,38 @@ namespace bmath::intern {
 	{
 		enum class CaseIdentifier :unsigned {};
 
-		static constexpr std::array value_cases = arr::make<unsigned, (unsigned)ValueCases...>();
-
-		static constexpr CaseIdentifier value_identifier(unsigned e)
-		{
-			const long long array_index = arr::index_of(e, value_cases);
-			if (array_index == -1) throw std::exception{ "only enum values passed in as template arguments are valid" };
-			return static_cast<CaseIdentifier>(TypeCases{}.size().val() + array_index);
-		}
-
-	public:
-		template<enum_detail::Enumeratable E> requires (meta::index_of<E>(TypeCases{}).val() != -1)
-		static constexpr CaseIdentifier is_type = static_cast<CaseIdentifier>(meta::index_of<E>(TypeCases{}).val());
-
-		static consteval CaseIdentifier is_value(SumEnum_T e) { return value_identifier((unsigned)e); }
-
-	private:
 		struct Option
 		{
 			CaseIdentifier identifier;
 			std::size_t begin_, end_;
 		};
 
-		static consteval auto compute_all_options()
+		static constexpr std::array value_cases = arr::make<unsigned, (unsigned)ValueCases...>();
+
+		template<typename E>
+		static constexpr CaseIdentifier type_identifier()
+		{
+			static_assert(meta::index_of<E>(TypeCases{}).val() != -1, "only types passed in the template arguments are valid");
+			return static_cast<CaseIdentifier>(meta::index_of<E>(TypeCases{}).val());
+		}
+
+		static constexpr CaseIdentifier value_identifier(unsigned e)
+		{
+			if (arr::index_of(e, value_cases) == -1) throw "only enum values passed in the template arguments are valid";
+			return static_cast<CaseIdentifier>(TypeCases{}.size().val() + arr::index_of(e, value_cases));
+		}
+
+		static constexpr auto compute_all_options()
 		{
 			constexpr auto all_infos = enum_detail::generate_member_infos<SumEnum_T>();
 			constexpr auto used_infos = meta::filter(
 				[](auto i) { return meta::contains<typename decltype(i)::type>(TypeCases{}); },
 				all_infos);
 			constexpr std::array type_options = arr::from_list(
-				[](auto x) { return Option{ EnumSwitch::is_type<typename decltype(x)::type>, x.begin(), x.end() }; },
+				[](auto x) { return Option{ EnumSwitch::type_identifier<typename decltype(x)::type>(), x.begin(), x.end() }; },
 				used_infos);
 			constexpr std::array value_options = arr::map(
-				[](auto e) { return Option{ EnumSwitch::value_identifier(e), e, e + 1 }; },
+				[](unsigned e) { return Option{ EnumSwitch::value_identifier(e), e, e + 1 }; },
 				value_cases);
 			constexpr auto make_options = [&value_options, &type_options]() {
 				std::array res = arr::concat(type_options, value_options);
@@ -380,27 +377,34 @@ namespace bmath::intern {
 		}
 		static constexpr std::array all_options = compute_all_options();
 
-		template<std::array os> requires (arr::holds<Option>(os))
+		template<std::array Options> requires (arr::holds<Option>(Options))
 		static constexpr CaseIdentifier decide_impl(const SumEnum_T e) noexcept
 		{
-			if constexpr (os.size() > 1u) {
-				constexpr std::size_t mid = os.size() / 2u;
+			if constexpr (Options.size() > 1u) {
+				constexpr std::size_t mid = Options.size() / 2u;
 
-				if (static_cast<unsigned>(e) < os[mid].begin_) {
-					return EnumSwitch::decide_impl<arr::take<mid>(os)>(e);
+				if (static_cast<unsigned>(e) < Options[mid].begin_) {
+					return EnumSwitch::decide_impl<arr::take<mid>(Options)>(e);
 				}
 				else {
-					return EnumSwitch::decide_impl<arr::drop<mid>(os)>(e);
+					return EnumSwitch::decide_impl<arr::drop<mid>(Options)>(e);
 				}
 			}
 			else {
-				return os.front().identifier;
+				return Options.front().identifier;
 			}
 		}
 
 	public:
 		static constexpr CaseIdentifier decide(const SumEnum_T e) noexcept 
-		{ return EnumSwitch::decide_impl<all_options>(e); }
+		{ 
+			return EnumSwitch::decide_impl<all_options>(e); 
+		}
+
+		template<typename E>
+		static constexpr CaseIdentifier is_type = EnumSwitch::type_identifier<E>();
+
+		static constexpr CaseIdentifier is_value(SumEnum_T e) { return value_identifier((unsigned)e); }
 	}; //class EnumSwitch
 
 

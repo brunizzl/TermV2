@@ -4,7 +4,6 @@
 #include "stupidTests.hpp"
 #include "utility/typeDebug.hpp"
 
-using namespace bmath::intern;
 /*
 TODO:
 
@@ -46,35 +45,39 @@ idea status:
  - always keep -1 at some known index in store and never allocate new -1 in build_negated and build_inverted (problem: identify bevore copy)
 */
 
-void f(Type t) {
-	using T_ = EnumSwitch<Type, 
-		meta::List<Variadic, NamedFn, Fn, MatchType>
-		, Type(Literal::complex), Type(Literal::variable)
-	>;
+namespace bmath::intern {
+	void f(Type t) {
+		using T_ = EnumSwitch<Type, 
+			meta::List<Variadic, NamedFn, Fn, MatchType>
+			, Type(Literal::complex), Type(Literal::variable)
+		>;
 
-	std::cout << (unsigned)t << "\t";
-	
-	switch (T_::decide(t)) {
-	case T_::is_type<Variadic>:
-		std::cout << "Variadic\n";
-		break;
-	case T_::is_type<NamedFn>:
-		std::cout << "NamedFn\n";
-		break;
-	case T_::is_type<Fn>:
-		std::cout << "Fn\n";
-		break;
-	case T_::is_value(Literal::variable):
-		std::cout << "variable\n";
-		break;
-	case T_::is_value(Literal::complex):
-		std::cout << "complex\n";
-		break;
-	case T_::is_type<MatchType>:
-		std::cout << "MatchType\n";
-		break;
-	}
+		std::cout << (unsigned)t << "\t";
+
+		switch (T_::decide(t)) {
+		case T_::is_type<Variadic>:
+			std::cout << "Variadic\n";
+			break;
+		case T_::is_type<NamedFn>:
+			std::cout << "NamedFn\n";
+			break;
+		case T_::is_type<Fn>:
+			std::cout << "Fn\n";
+			break;
+		case T_::is_value(Literal::variable):
+			std::cout << "variable\n";
+			break;
+		case T_::is_value(Literal::complex):
+			std::cout << "complex\n";
+			break;
+		case T_::is_type<MatchType>:
+			std::cout << "MatchType\n";
+			break;
+		}
+	} //f
 }
+
+using namespace bmath::intern;
 
 int main()
 {
