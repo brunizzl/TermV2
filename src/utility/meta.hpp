@@ -242,10 +242,27 @@ namespace bmath::intern::meta {
 	template<typename T>
 	constexpr False_ contains(List<>) { return {}; }
 
-	template<typename T, typename Head, typename... Tail>
-	constexpr auto contains(List<Head, Tail...>) 
+	template<typename T, typename T1>
+	constexpr Bool_<std::is_same_v<T, T1>> 
+		contains(List<T1>) { return {}; }
+
+	template<typename T, typename T1, typename T2>
+	constexpr Bool_<std::is_same_v<T, T1> || std::is_same_v<T, T2>> 
+		contains(List<T1, T2>) { return {}; }
+
+	template<typename T, typename T1, typename T2, typename T3>
+	constexpr Bool_<std::is_same_v<T, T1> || std::is_same_v<T, T2> || std::is_same_v<T, T3>> 
+		contains(List<T1, T2, T3>) { return {}; }
+
+	template<typename T, typename T1, typename T2, typename T3, typename T4>
+	constexpr Bool_<std::is_same_v<T, T1> || std::is_same_v<T, T2> || std::is_same_v<T, T3> || std::is_same_v<T, T4>>
+		contains(List<T1, T2, T3, T4>) { return {}; }
+
+	template<typename T, typename T1, typename T2, typename T3, typename T4, typename... Ts>
+	constexpr auto contains(List<T1, T2, T3, T4, Ts...>)
 	{
-		return Bool_<std::is_same_v<T, Head>>{} || contains<T>(List<Tail...>{});
+		return Bool_<std::is_same_v<T, T1> || std::is_same_v<T, T2> || std::is_same_v<T, T3> || std::is_same_v<T, T4>>{} || 
+			contains<T>(List<Ts...>{});
 	}
 
 	static_assert(contains<int>(List<bool, void, double, int, bool>{}));
@@ -342,7 +359,7 @@ namespace bmath::intern::meta {
 
 
 	/////////////////   find_index
-	namespace find_detail {
+	namespace detail_find {
 		template<long long N, typename P>
 		constexpr Int_<-1> loop(List<>, Int_<N>, P) { return {}; }
 
@@ -364,17 +381,17 @@ namespace bmath::intern::meta {
 			else                        { return loop(List<Ts...>{}, n + Int_<4>{}, p); }
 		}
 
-	} //namespace find_detail
+	} //namespace detail_find
 
 	template<InstanceOf<List> L, typename P>
-	constexpr auto find_index(L l, P p) { return find_detail::loop(l, Int_<0>{}, p); }
+	constexpr auto find_index(L l, P p) { return detail_find::loop(l, Int_<0>{}, p); }
 
 	//static_assert(find_index(List<Int_<2>, Int_<5>, Int_<-7>>{}, [](auto v) { return (bool)(v == Int_<-7>{}); }) == Int_<2>{});
 
 
 	/////////////////   find_index
 
-	namespace index_detail {
+	namespace detail_index {
 		template<typename Needle, long long N>
 		constexpr Int_<-1> loop(List<>, Int_<N> n) { return {}; }
 
@@ -395,17 +412,17 @@ namespace bmath::intern::meta {
 			else if constexpr (std::is_same_v<Needle, T4>) { return n + Int_<3>{}; }
 			else                                           { return loop<Needle>(List<Ts...>{}, n + Int_<4>{}); }
 		}
-	} //namespace index_detail
+	} //namespace detail_index
 
 	template<typename Needle, InstanceOf<List> L>
-	constexpr auto index_of(L l) { return index_detail::loop<Needle>(l, Int_<0>{}); }
+	constexpr auto index_of(L l) { return detail_index::loop<Needle>(l, Int_<0>{}); }
 
 	static_assert(index_of<Int_<-7>>(List<Int_<2>, Int_<5>, Int_<-7>>{}) == Int_<2>{});
 
 
 	/////////////////   sort (function based)
 
-	namespace sort_detail {
+	namespace detail_sort {
 		template<typename... Ts, typename C>
 		constexpr auto merge(List<Ts...> l, List<>, C) { return l; }
 
@@ -418,7 +435,7 @@ namespace bmath::intern::meta {
 			if constexpr (c(L{}, R{})) { return cons<L>(merge(List<Ls...>{}, List<R, Rs...>{}, c)); }
 			else                       { return cons<R>(merge(List<L, Ls...>{}, List<Rs...>{}, c)); }
 		}
-	} //namespace sort_detail
+	} //namespace detail_sort
 
 	template<typename C>
 	constexpr List<> sort(List<>, C) { return {}; }
@@ -432,7 +449,7 @@ namespace bmath::intern::meta {
 		constexpr auto n_halfs = Int_<sizeof...(Ts) / 2 + 1>{};
 		auto lhs = sort(take(n_halfs, l), c);
 		auto rhs = sort(drop(n_halfs, l), c);
-		return sort_detail::merge(lhs, rhs, c);
+		return detail_sort::merge(lhs, rhs, c);
 	}
 
 	static_assert(sort(List<Int_<3>, Int_<2>, Int_<5>, Int_<10>, Int_<-7>>{}, [](auto l, auto r) { return l < r; })
@@ -440,8 +457,7 @@ namespace bmath::intern::meta {
 
 
 	/////////////////   sort (type based)
-
-	namespace sort_detail {
+	namespace detail_sort {
 		template<InstanceOf<List>, InstanceOf<List>, template<typename, typename> class Compare>
 		struct Merge;
 	
@@ -463,7 +479,7 @@ namespace bmath::intern::meta {
 				decltype(cons<R>(Merge_t<List<L, Ls...>, List<Rs...>, Compare>{}))
 			>;
 		};
-	} //namespace sort_detail
+	} //namespace detail_sort
 	
 	template<InstanceOf<List>, template<typename, typename> class Compare>
 	struct Sort;
@@ -485,7 +501,7 @@ namespace bmath::intern::meta {
 		using Lhs = Sort_t<decltype(take(n_halfs, List<Ts...>{})), Compare>;
 		using Rhs = Sort_t<decltype(drop(n_halfs, List<Ts...>{})), Compare>;
 	public:
-		using type = sort_detail::Merge_t<Lhs, Rhs, Compare>;
+		using type = detail_sort::Merge_t<Lhs, Rhs, Compare>;
 	};
 	
 	template<typename L, typename R>
@@ -496,7 +512,7 @@ namespace bmath::intern::meta {
 
 	/////////////////   reverse
 
-	namespace reverse_detail {
+	namespace detail_reverse {
 		template<typename... Ts>
 		constexpr auto loop(List<Ts...> l, List<>) { return l; }
 
@@ -511,10 +527,10 @@ namespace bmath::intern::meta {
 		{
 			return loop(List<R4, R3, R2, R1, Ls...>{}, List<Rs...>{});
 		}
-	} //namespace reverse_detail
+	} //namespace detail_reverse
 
 	template<InstanceOf<List> L>
-	constexpr auto reverse(L l) { return reverse_detail::loop(List<>{}, l); }
+	constexpr auto reverse(L l) { return detail_reverse::loop(List<>{}, l); }
 
 	static_assert(reverse(List<int, bool, char, float, double>{}) == List<double, float, char, bool, int>{});
 
@@ -532,12 +548,9 @@ namespace bmath::intern {
 		constexpr Array() noexcept :data_{} {}
 
 		template<typename... Ts>
-		constexpr Array(T t, Ts... ts) noexcept :data_{ t, ts... } { static_assert(sizeof...(Ts) == N - 1); }
+		constexpr Array(T t, Ts... ts) noexcept :data_{ t, ts... } {}
 
-		constexpr std::size_t size() const { return N; }
-
-		constexpr       T* data()       noexcept { return this->data_; }
-		constexpr const T* data() const noexcept { return this->data_; }
+		constexpr std::size_t size() const noexcept { return N; }
 
 		constexpr       T& operator[](std::size_t i)       noexcept { return this->data_[i]; }
 		constexpr const T& operator[](std::size_t i) const noexcept { return this->data_[i]; }
@@ -548,6 +561,9 @@ namespace bmath::intern {
 		constexpr       T& back()       noexcept { return this->data_[N - 1]; }
 		constexpr const T& back() const noexcept { return this->data_[N - 1]; }
 
+		constexpr       T* data()       noexcept { return this->data_; }
+		constexpr const T* data() const noexcept { return this->data_; }
+
 		constexpr       T* begin()       noexcept { return this->data_; }
 		constexpr const T* begin() const noexcept { return this->data_; }
 
@@ -556,6 +572,10 @@ namespace bmath::intern {
 
 		constexpr std::strong_ordering operator<=>(const Array&) const noexcept = default;
 	}; //struct Array
+	
+	template <class T, class... U>
+	Array(T, U...) -> Array<T, 1 + sizeof...(U)>;
+
 
 	template<typename T>
 	class Array<T, 0>
@@ -565,19 +585,19 @@ namespace bmath::intern {
 	public:
 		constexpr Array() noexcept = default;
 
-		constexpr std::size_t size() const { return 0; }
+		constexpr std::size_t size() const noexcept { return 0; }
 
-		constexpr       T* data()       noexcept { return nullptr; }
-		constexpr const T* data() const noexcept { return nullptr; }
-
-		constexpr       T& operator[](std::size_t i)       noexcept { return *Array::ptr(); }
-		constexpr const T& operator[](std::size_t i) const noexcept { return *Array::ptr(); }
+		constexpr       T& operator[](std::size_t)       noexcept { return *Array::ptr(); }
+		constexpr const T& operator[](std::size_t) const noexcept { return *Array::ptr(); }
 
 		constexpr       T& front()       noexcept { return *Array::ptr(); }
 		constexpr const T& front() const noexcept { return *Array::ptr(); }
 
 		constexpr       T& back()       noexcept { return *Array::ptr(); }
 		constexpr const T& back() const noexcept { return *Array::ptr(); }
+
+		constexpr       T* data()       noexcept { return nullptr; }
+		constexpr const T* data() const noexcept { return nullptr; }
 
 		constexpr       T* begin()       noexcept { return nullptr; }
 		constexpr const T* begin() const noexcept { return nullptr; }
@@ -587,56 +607,93 @@ namespace bmath::intern {
 
 		constexpr std::strong_ordering operator<=>(const Array&) const noexcept = default;
 	}; //class Array<T, 0>
-	
-	template <class T, class... U>
-	Array(T, U...) -> Array<T, 1 + sizeof...(U)>;
 
 
 
 	namespace arr {
 		template<typename T1, typename T2, std::size_t N>
-		constexpr bool holds(Array<T2, N>) { return std::is_same_v<T1, T2>; }
+		constexpr bool holds(const Array<T2, N>&) { return std::is_same_v<T1, T2>; }
 
 
-		/////////////////   combining and removing
+		/////////////////   concat
+		namespace detail_concat {
+			template <typename T, std::size_t N1, std::size_t N2, std::size_t... I1, std::size_t... I2>
+			constexpr Array<T, N1 + N2> impl(
+				const Array<T, N1>& arr_1, const Array<T, N2>& arr_2, std::index_sequence<I1...>, std::index_sequence<I2...>)
+			{
+				return { arr_1[I1]..., arr_2[I2]... };
+			}
+		} //namespace detail_concat
 
 		template<typename T, std::size_t N1, std::size_t N2>
 		constexpr Array<T, N1 + N2> concat(const Array<T, N1>& arr_1, const Array<T, N2>& arr_2)
 		{
-			Array<T, N1 + N2> result;
-			std::copy_n(arr_1.data(), N1, result.data());
-			std::copy_n(arr_2.data(), N2, result.data() + N1);
-			return result;
+			return detail_concat::impl(arr_1, arr_2, std::make_index_sequence<N1>{}, std::make_index_sequence<N2>{});
 		}
+
+		static_assert(concat(Array{ 1, 2, 3 }, Array{ 4, 5, 6 }) == Array{ 1, 2, 3, 4, 5, 6 });
+
+
+		/////////////////   cons
+		namespace detail_cons {
+			template <typename T, std::size_t N, std::size_t... I>
+			constexpr Array<T, N + 1> impl(const T& val, const Array<T, N>& arr_, std::index_sequence<I...>)
+			{
+				return { val, arr_[I]... };
+			}
+		} //namespace detail_cons
 
 		template<typename T, std::size_t N>
-		constexpr Array<T, N + 1> cons(const T& val, const Array<T, N>& arr)
+		constexpr Array<T, N + 1> cons(const T& val, const Array<T, N>& arr_)
 		{
-			Array<T, N + 1> result = { val };
-			std::copy_n(arr.data(), N, result.data() + 1);
-			return result;
+			return detail_cons::impl(val, arr_, std::make_index_sequence<N>{});
 		}
 
-		template<std::size_t Delta, typename T, std::size_t N> requires (N >= Delta)
-			constexpr Array<T, N - Delta> drop(const Array<T, N>& arr)
+		static_assert(cons(1, Array{ 2, 3, 4 }) == Array{ 1, 2, 3, 4 });
+
+
+		/////////////////   subrange / take / drop
+		namespace detail_subrange {
+			template <std::size_t N_out, typename T, std::size_t... I>
+			constexpr Array<T, N_out> impl(const T* arr_, std::index_sequence<I...>)
+			{
+				return { arr_[I]... };
+			}
+		} //namespace detail_subrange
+
+		template<std::size_t Start, std::size_t Length, typename T, std::size_t N>
+		constexpr Array<T, Length> subrange(const Array<T, N>& arr_)
 		{
-			Array<T, N - Delta> result;
-			std::copy_n(arr.data() + Delta, N - Delta, result.data());
-			return result;
+			static_assert(N >= Start + Length);
+			return detail_subrange::impl<Length>(arr_.data() + Start, std::make_index_sequence<Length>{});
 		}
 
-		template<std::size_t Delta, typename T, std::size_t N> requires (N >= Delta)
-			constexpr Array<T, Delta> take(const Array<T, N>& arr)
+		static_assert(subrange<3, 4>(Array{ 1, 2, 3, 4, 5, 6, 7 ,8 }) == Array{ 4, 5, 6, 7 });
+
+
+		template<std::size_t Delta, typename T, std::size_t N>
+		constexpr Array<T, Delta> take(const Array<T, N>& arr_)
 		{
-			Array<T, Delta> result;
-			std::copy_n(arr.data(), Delta, result.data());
-			return result;
+			static_assert(N >= Delta);
+			return detail_subrange::impl<Delta>(arr_.data(), std::make_index_sequence<Delta>{});
 		}
 
+		static_assert(take<3>(Array{ 1, 2, 3, 4, 5, 6, 7 ,8 }) == Array{ 1, 2, 3 });
 
-		/////////////////   map
 
-		namespace from_list_detail {
+		template<std::size_t Delta, typename T, std::size_t N>
+		constexpr Array<T, N - Delta> drop(const Array<T, N>& arr_)
+		{
+			static_assert(N >= Delta);
+			return detail_subrange::impl<N - Delta>(arr_.data() + Delta, std::make_index_sequence<N - Delta>{});
+		}
+
+		static_assert(drop<3>(Array{ 1, 2, 3, 4, 5, 6, 7 ,8 }) == Array{ 4, 5, 6, 7, 8 });
+
+
+
+		/////////////////   from_list
+		namespace detail_from_list {
 			template<typename T1, meta::Callable<T1> F>
 			constexpr auto loop(meta::List<T1>, F f) { return Array{ f(T1{}) }; }
 
@@ -650,20 +707,21 @@ namespace bmath::intern {
 			constexpr auto loop(meta::List<T1, T2, T3, T4>, F f) { return Array{ f(T1{}), f(T2{}), f(T3{}), f(T4{}) }; }
 
 			template<typename T1, typename T2, typename T3, typename T4, typename... Ts, meta::Callable<T1> F>
-			requires (sizeof...(Ts) > 0)
-				constexpr auto loop(meta::List<T1, T2, T3, T4, Ts...>, F f)
+				requires (sizeof...(Ts) > 0)
+			constexpr auto loop(meta::List<T1, T2, T3, T4, Ts...>, F f)
 			{
 				return arr::concat(Array{ f(T1{}), f(T2{}), f(T3{}), f(T4{}) }, loop(meta::List<Ts...>{}, f));
 			}
-		} //namespace from_list_detail
+		} //namespace detail_from_list
 
 		template<typename T, typename... Ts, meta::Callable<T> F>
-		constexpr auto from_list(F f, meta::List<T, Ts...> l) { return from_list_detail::loop<T>(l, f); }
+		constexpr auto from_list(F f, meta::List<T, Ts...> l) { return detail_from_list::loop<T>(l, f); }
 
 		//static_assert(from_list([](auto x) { return x.val(); }, meta::List<meta::Int_<1>, meta::Int_<2>, meta::Int_<3>>{})
 		//	== std::to_array({ 1ll, 2ll, 3ll }));
 
 
+		/////////////////   index_of
 
 		template<typename T, std::size_t N>
 		constexpr long long index_of(const T& t, const Array<T, N>& arr)
@@ -679,25 +737,30 @@ namespace bmath::intern {
 		static_assert(index_of(8, Array{ 1, 2, 4, 5, 6, 7 }) == -1);
 
 
+		/////////////////   map
+
+		namespace detail_map {
+			template<class T, std::size_t N, meta::Callable<T> F, std::size_t... I>
+			constexpr auto impl(F f, const Array<T, N>& input, std::index_sequence<I...>)
+			{ 
+				using ResT = decltype(f(std::declval<T>()));
+				return Array<ResT, N>{ f(input[I])... };
+			}
+		} //detail_map
 
 		template<typename T, std::size_t N, meta::Callable<T> F>
-		constexpr auto map(F f, const Array<T, N>& arr)
+		constexpr auto map(F f, const Array<T, N>& input)
 		{
-			Array<decltype(f(arr[0])), N> result = {};
-			std::transform(arr.begin(), arr.end(), result.begin(), f);
-			return result;
+			return detail_map::impl(f, input, std::make_index_sequence<N>{});
 		}
 
 		static_assert(arr::map([](auto x) { return x + 3; }, Array{ 1, 2, 3 }) == Array{ 4, 5, 6 });
 
 
-
+		//taken and adapted from https://en.cppreference.com/w/cpp/container/array/to_array
 		namespace detail_make {
 			template<class T, std::size_t N, std::size_t... I>
-			constexpr Array<T, N> impl(const T(&a)[N], std::index_sequence<I...>)
-			{
-				return Array<T, N>{ a[I]... };
-			}
+			constexpr Array<T, N> impl(const T(&a)[N], std::index_sequence<I...>) { return { a[I]... }; }
 		} //detail_make
 
 		template <class T, std::size_t N>
