@@ -2,9 +2,8 @@
 
 #include <type_traits>
 #include <concepts>
-
-#include <array>
 #include <algorithm>
+#include <compare>
 
 namespace bmath::intern::meta {
 
@@ -521,114 +520,194 @@ namespace bmath::intern::meta {
 
 } //namespace bmath::intern::meta
 
-namespace bmath::intern::arr {
+namespace bmath::intern {
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	//////////////////////////////////////////   Operations on std::array   ///////////////////////////////////////////////
+	///////////////////////////////////   Operations on std::array like container  ////////////////////////////////////////
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-	template<std::array arr>
-	using Array_ = meta::Constant<decltype(arr), arr>;
-
-	template<typename T1, typename T2, std::size_t N>
-	constexpr bool holds(std::array<T2, N>) { return std::is_same_v<T1, T2>; }
-
-
-	/////////////////   combining and removing
-
-	template<typename T, std::size_t N1, std::size_t N2>
-	constexpr std::array<T, N1 + N2> concat(const std::array<T, N1>& arr_1, const std::array<T, N2>& arr_2)
-	{
-		std::array<T, N1 + N2> result;
-		std::copy_n(arr_1.data(), N1, result.data());
-		std::copy_n(arr_2.data(), N2, result.data() + N1);
-		return result;
-	}
-
 	template<typename T, std::size_t N>
-	constexpr std::array<T, N + 1> cons(const T& val, const std::array<T, N>& arr)
+	struct Array
 	{
-		std::array<T, N + 1> result = { val };
-		std::copy_n(arr.data(), N, result.data() + 1);
-		return result;
-	}
+		T data_[N];
 
-	template<std::size_t Delta, typename T, std::size_t N> requires (N >= Delta)
-		constexpr std::array<T, N - Delta> drop(const std::array<T, N>& arr)
+		constexpr Array() noexcept :data_{} {}
+
+		template<typename... Ts>
+		constexpr Array(T t, Ts... ts) noexcept :data_{ t, ts... } { static_assert(sizeof...(Ts) == N - 1); }
+
+		constexpr std::size_t size() const { return N; }
+
+		constexpr       T* data()       noexcept { return this->data_; }
+		constexpr const T* data() const noexcept { return this->data_; }
+
+		constexpr       T& operator[](std::size_t i)       noexcept { return this->data_[i]; }
+		constexpr const T& operator[](std::size_t i) const noexcept { return this->data_[i]; }
+
+		constexpr       T& front()       noexcept { return this->data_[0]; }
+		constexpr const T& front() const noexcept { return this->data_[0]; }
+
+		constexpr       T& back()       noexcept { return this->data_[N - 1]; }
+		constexpr const T& back() const noexcept { return this->data_[N - 1]; }
+
+		constexpr       T* begin()       noexcept { return this->data_; }
+		constexpr const T* begin() const noexcept { return this->data_; }
+
+		constexpr       T* end()       noexcept { return this->data_ + N; }
+		constexpr const T* end() const noexcept { return this->data_ + N; }
+
+		constexpr std::strong_ordering operator<=>(const Array&) const noexcept = default;
+	}; //struct Array
+
+	template<typename T>
+	class Array<T, 0>
 	{
-		std::array<T, N - Delta> result;
-		std::copy_n(arr.data() + Delta, N - Delta, result.data());
-		return result;
-	}
+		static constexpr T* ptr() noexcept { return nullptr; }
 
-	template<std::size_t Delta, typename T, std::size_t N> requires (N >= Delta)
-		constexpr std::array<T, Delta> take(const std::array<T, N>& arr)
-	{
-		std::array<T, Delta> result;
-		std::copy_n(arr.data(), Delta, result.data());
-		return result;
-	}
+	public:
+		constexpr Array() noexcept = default;
+
+		constexpr std::size_t size() const { return 0; }
+
+		constexpr       T* data()       noexcept { return nullptr; }
+		constexpr const T* data() const noexcept { return nullptr; }
+
+		constexpr       T& operator[](std::size_t i)       noexcept { return *Array::ptr(); }
+		constexpr const T& operator[](std::size_t i) const noexcept { return *Array::ptr(); }
+
+		constexpr       T& front()       noexcept { return *Array::ptr(); }
+		constexpr const T& front() const noexcept { return *Array::ptr(); }
+
+		constexpr       T& back()       noexcept { return *Array::ptr(); }
+		constexpr const T& back() const noexcept { return *Array::ptr(); }
+
+		constexpr       T* begin()       noexcept { return nullptr; }
+		constexpr const T* begin() const noexcept { return nullptr; }
+
+		constexpr       T* end()       noexcept { return nullptr; }
+		constexpr const T* end() const noexcept { return nullptr; }
+
+		constexpr std::strong_ordering operator<=>(const Array&) const noexcept = default;
+	}; //class Array<T, 0>
+	
+	template <class T, class... U>
+	Array(T, U...) -> Array<T, 1 + sizeof...(U)>;
 
 
-	/////////////////   map
 
-	namespace from_list_detail {
-		template<typename T1, meta::Callable<T1> F>
-		constexpr auto loop(meta::List<T1>, F f) { return std::array{ f(T1{}) }; }
+	namespace arr {
+		template<typename T1, typename T2, std::size_t N>
+		constexpr bool holds(Array<T2, N>) { return std::is_same_v<T1, T2>; }
 
-		template<typename T1, typename T2, meta::Callable<T1> F>
-		constexpr auto loop(meta::List<T1, T2>, F f) { return std::array{ f(T1{}), f(T2{}) }; }
 
-		template<typename T1, typename T2, typename T3, meta::Callable<T1> F>
-		constexpr auto loop(meta::List<T1, T2, T3>, F f) { return std::array{ f(T1{}), f(T2{}), f(T3{}) }; }
+		/////////////////   combining and removing
 
-		template<typename T1, typename T2, typename T3, typename T4, meta::Callable<T1> F>
-		constexpr auto loop(meta::List<T1, T2, T3, T4>, F f) { return std::array{ f(T1{}), f(T2{}), f(T3{}), f(T4{}) }; }
-
-		template<typename T1, typename T2, typename T3, typename T4, typename... Ts, meta::Callable<T1> F>
-			requires (sizeof...(Ts) > 0)
-		constexpr auto loop(meta::List<T1, T2, T3, T4, Ts...>, F f)
+		template<typename T, std::size_t N1, std::size_t N2>
+		constexpr Array<T, N1 + N2> concat(const Array<T, N1>& arr_1, const Array<T, N2>& arr_2)
 		{
-			return arr::concat(std::array{ f(T1{}), f(T2{}), f(T3{}), f(T4{}) }, loop(meta::List<Ts...>{}, f));
+			Array<T, N1 + N2> result;
+			std::copy_n(arr_1.data(), N1, result.data());
+			std::copy_n(arr_2.data(), N2, result.data() + N1);
+			return result;
 		}
-	} //namespace from_list_detail
 
-	template<typename T, typename... Ts, meta::Callable<T> F>
-	constexpr auto from_list(F f, meta::List<T, Ts...> l) { return from_list_detail::loop<T>(l, f); }
-
-	//static_assert(from_list([](auto x) { return x.val(); }, meta::List<meta::Int_<1>, meta::Int_<2>, meta::Int_<3>>{})
-	//	== std::to_array({ 1ll, 2ll, 3ll }));
-
-
-
-	template<typename T, std::size_t N>
-	constexpr long long index_of(const T& t, const std::array<T, N>& arr)
-	{
-		const auto iter = std::find(arr.begin(), arr.end(), t);
-		if (iter != arr.end()) {
-			return std::distance(arr.begin(), iter);
+		template<typename T, std::size_t N>
+		constexpr Array<T, N + 1> cons(const T& val, const Array<T, N>& arr)
+		{
+			Array<T, N + 1> result = { val };
+			std::copy_n(arr.data(), N, result.data() + 1);
+			return result;
 		}
-		return -1ll;
-	}
 
-	static_assert(index_of(4, std::array{ 1, 2, 4, 5, 6, 7 }) == 2);
-	static_assert(index_of(8, std::array{ 1, 2, 4, 5, 6, 7 }) == -1);
+		template<std::size_t Delta, typename T, std::size_t N> requires (N >= Delta)
+			constexpr Array<T, N - Delta> drop(const Array<T, N>& arr)
+		{
+			Array<T, N - Delta> result;
+			std::copy_n(arr.data() + Delta, N - Delta, result.data());
+			return result;
+		}
+
+		template<std::size_t Delta, typename T, std::size_t N> requires (N >= Delta)
+			constexpr Array<T, Delta> take(const Array<T, N>& arr)
+		{
+			Array<T, Delta> result;
+			std::copy_n(arr.data(), Delta, result.data());
+			return result;
+		}
+
+
+		/////////////////   map
+
+		namespace from_list_detail {
+			template<typename T1, meta::Callable<T1> F>
+			constexpr auto loop(meta::List<T1>, F f) { return Array{ f(T1{}) }; }
+
+			template<typename T1, typename T2, meta::Callable<T1> F>
+			constexpr auto loop(meta::List<T1, T2>, F f) { return Array{ f(T1{}), f(T2{}) }; }
+
+			template<typename T1, typename T2, typename T3, meta::Callable<T1> F>
+			constexpr auto loop(meta::List<T1, T2, T3>, F f) { return Array{ f(T1{}), f(T2{}), f(T3{}) }; }
+
+			template<typename T1, typename T2, typename T3, typename T4, meta::Callable<T1> F>
+			constexpr auto loop(meta::List<T1, T2, T3, T4>, F f) { return Array{ f(T1{}), f(T2{}), f(T3{}), f(T4{}) }; }
+
+			template<typename T1, typename T2, typename T3, typename T4, typename... Ts, meta::Callable<T1> F>
+			requires (sizeof...(Ts) > 0)
+				constexpr auto loop(meta::List<T1, T2, T3, T4, Ts...>, F f)
+			{
+				return arr::concat(Array{ f(T1{}), f(T2{}), f(T3{}), f(T4{}) }, loop(meta::List<Ts...>{}, f));
+			}
+		} //namespace from_list_detail
+
+		template<typename T, typename... Ts, meta::Callable<T> F>
+		constexpr auto from_list(F f, meta::List<T, Ts...> l) { return from_list_detail::loop<T>(l, f); }
+
+		//static_assert(from_list([](auto x) { return x.val(); }, meta::List<meta::Int_<1>, meta::Int_<2>, meta::Int_<3>>{})
+		//	== std::to_array({ 1ll, 2ll, 3ll }));
 
 
 
-	template<typename T, std::size_t N, meta::Callable<T> F>
-	constexpr auto map(F f, const std::array<T, N>& arr)
-	{
-		std::array<decltype(f(arr[0])), N> result = {};
-		std::transform(arr.begin(), arr.end(), result.begin(), f);
-		return result;
-	}
+		template<typename T, std::size_t N>
+		constexpr long long index_of(const T& t, const Array<T, N>& arr)
+		{
+			const auto iter = std::find(arr.begin(), arr.end(), t);
+			if (iter != arr.end()) {
+				return std::distance(arr.begin(), iter);
+			}
+			return -1ll;
+		}
 
-	static_assert(arr::map([](auto x) { return x + 3; }, std::array{ 1, 2, 3 }) == std::array{ 4, 5, 6 });
+		static_assert(index_of(4, Array{ 1, 2, 4, 5, 6, 7 }) == 2);
+		static_assert(index_of(8, Array{ 1, 2, 4, 5, 6, 7 }) == -1);
 
 
-	template<typename T, T... xs>
-	constexpr std::array<T, sizeof...(xs)> make() { return { xs... }; }
 
-	static_assert(make<int>() == std::array<int, 0>{});
+		template<typename T, std::size_t N, meta::Callable<T> F>
+		constexpr auto map(F f, const Array<T, N>& arr)
+		{
+			Array<decltype(f(arr[0])), N> result = {};
+			std::transform(arr.begin(), arr.end(), result.begin(), f);
+			return result;
+		}
+
+		static_assert(arr::map([](auto x) { return x + 3; }, Array{ 1, 2, 3 }) == Array{ 4, 5, 6 });
+
+
+
+		namespace detail_make {
+			template<class T, std::size_t N, std::size_t... I>
+			constexpr Array<T, N> impl(const T(&a)[N], std::index_sequence<I...>)
+			{
+				return Array<T, N>{ a[I]... };
+			}
+		} //detail_make
+
+		template <class T, std::size_t N>
+		constexpr Array<T, N> make(const T(&a)[N])
+		{
+			return detail_make::impl(a, std::make_index_sequence<N>{});
+		}
+
+		static_assert(make<int>({ 1 }) == Array{ 1 });
+
+	} //namespace arr
 
 } //namespace bmath::intern::arr

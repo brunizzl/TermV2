@@ -47,10 +47,9 @@ idea status:
 
 namespace bmath::intern {
 	void f(Type t) {
-		using T_ = EnumSwitch<Type, 
-			meta::List<Variadic, NamedFn, Fn, MatchType>
-			, Type(Literal::complex), Type(Literal::variable)
-		>;
+		using T_ = typename bmath::intern::EnumSwitch<Type, 
+			meta::List<Variadic, NamedFn, Literal, Fn, MatchType>/*, 
+			arr::make<Type>({ Literal::complex, Literal::variable })*/>;
 
 		std::cout << (unsigned)t << "\t";
 
@@ -64,12 +63,15 @@ namespace bmath::intern {
 		case T_::is_type<Fn>:
 			std::cout << "Fn\n";
 			break;
-		case T_::is_value(Literal::variable):
+		case T_::is_type<Literal>:
+			std::cout << "Literal\n";
+			break;
+		/*case T_::is_value(Literal::variable):
 			std::cout << "variable\n";
 			break;
 		case T_::is_value(Literal::complex):
 			std::cout << "complex\n";
-			break;
+			break;*/
 		case T_::is_type<MatchType>:
 			std::cout << "MatchType\n";
 			break;
