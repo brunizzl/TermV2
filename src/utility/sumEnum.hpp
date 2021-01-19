@@ -333,10 +333,7 @@ namespace bmath::intern {
 
 	public:
 		template<enum_detail::Enumeratable E> requires (meta::index_of<E>(TypeCases{}).val() != -1)
-		static constexpr CaseIdentifier is_type() noexcept
-		{ 
-			return static_cast<CaseIdentifier>(meta::index_of<E>(TypeCases{}).val()); 
-		}
+		static constexpr CaseIdentifier is_type = static_cast<CaseIdentifier>(meta::index_of<E>(TypeCases{}).val());
 
 		static consteval CaseIdentifier is_value(SumEnum_T e) { return value_identifier((unsigned)e); }
 
@@ -354,7 +351,7 @@ namespace bmath::intern {
 				[](auto i) { return meta::contains<typename decltype(i)::type>(TypeCases{}); },
 				all_infos);
 			constexpr std::array type_options = arr::from_list(
-				[](auto x) { return Option{ EnumSwitch::is_type<typename decltype(x)::type>(), x.begin(), x.end() }; },
+				[](auto x) { return Option{ EnumSwitch::is_type<typename decltype(x)::type>, x.begin(), x.end() }; },
 				used_infos);
 			constexpr std::array value_options = arr::map(
 				[](auto e) { return Option{ EnumSwitch::value_identifier(e), e, e + 1 }; },

@@ -9,6 +9,7 @@ using namespace bmath::intern;
 TODO:
 
 important:
+ - fix bug in tree::free where memory for NamedFn is released in two parts
  - rename all ..._detail namespaces to detail_...
  - let type_table in ioarithmetic use names of fn
  - make pattern and usual term two distinct types (again...)
@@ -47,32 +48,29 @@ idea status:
 
 void f(Type t) {
 	using T_ = EnumSwitch<Type, 
-		meta::List<Variadic, NamedFn, Fn, /*Literal, */MatchType>
+		meta::List<Variadic, NamedFn, Fn, MatchType>
 		, Type(Literal::complex), Type(Literal::variable)
 	>;
 
 	std::cout << (unsigned)t << "\t";
 	
 	switch (T_::decide(t)) {
-	case T_::is_type<Variadic>():
+	case T_::is_type<Variadic>:
 		std::cout << "Variadic\n";
 		break;
-	case T_::is_type<NamedFn>():
+	case T_::is_type<NamedFn>:
 		std::cout << "NamedFn\n";
 		break;
-	case T_::is_type<Fn>():
+	case T_::is_type<Fn>:
 		std::cout << "Fn\n";
 		break;
-	//case T_::is_type<Literal>():
-	//	std::cout << "Literal\n";
-	//	break;
 	case T_::is_value(Literal::variable):
 		std::cout << "variable\n";
 		break;
 	case T_::is_value(Literal::complex):
 		std::cout << "complex\n";
 		break;
-	case T_::is_type<MatchType>():
+	case T_::is_type<MatchType>:
 		std::cout << "MatchType\n";
 		break;
 	}
@@ -83,8 +81,8 @@ int main()
 	for (unsigned i = 0; i < (unsigned)Type::COUNT; i++) {
 		f(Type(i));
 	}
-	std::cout << "\n\n";
-	debug::enumerate_type();
+	//std::cout << "\n\n";
+	//debug::enumerate_type();
 	//debug::test_rechner();
 	//test::combine_exact();
 	//test::pattern_term();
