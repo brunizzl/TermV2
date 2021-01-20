@@ -213,6 +213,8 @@ namespace bmath::intern {
 	}; //class SumEnum<Enum, TailEnums...>
 
 
+
+
 	template<enum_detail::Atom T, typename... TailEnums>
 	class [[nodiscard]] SumEnum<T, TailEnums...> :public SumEnum<TailEnums...>
 	{
@@ -309,15 +311,13 @@ namespace bmath::intern {
 
 
 	template<
-		InstanceOf<SumEnum> SumEnum_T, 
-		InstanceOf<meta::List> TypeCases, 
-		std::array ValueCases = std::array<unsigned, 0>{}>
+		InstanceOf<SumEnum> SumEnum_T,
+		meta::ListInstance TypeCases,
+		auto ValueCases = std::array<unsigned, 0>{}>
 	class EnumSwitch
 	{
-		//static_assert(InstanceOf<SumEnum_T, SumEnum>);
-		//static_assert(InstanceOf<TypeCases, meta::List>);
-		static_assert(std::is_same_v<SumEnum_T, typename decltype(ValueCases)::value_type> || 
-			std::is_same_v<std::array<unsigned, 0>, decltype(ValueCases)>);
+		static_assert(InstanceOf<SumEnum_T, SumEnum>);
+		static_assert(InstanceOf<TypeCases, meta::List>);
 
 		enum class CaseIdentifier :unsigned {};
 
@@ -338,7 +338,7 @@ namespace bmath::intern {
 		static constexpr CaseIdentifier value_identifier()
 		{
 			static_assert(arr::index_of(e, ValueCases) != -1, "only enum values passed in the template arguments are valid");
-			return static_cast<CaseIdentifier>(TypeCases{}.size() + arr::index_of(e, ValueCases));
+			return static_cast<CaseIdentifier>(meta::size_v<TypeCases> + arr::index_of(e, ValueCases));
 		}
 
 
@@ -365,7 +365,7 @@ namespace bmath::intern {
 			using UsedInfos = meta::Filter_t<IsInTypeCases, AllInfos>;
 
 			constexpr std::array type_options = arr::from_list_v<InfoToOption, UsedInfos>;
-			constexpr std::array value_options = arr::map_v<ValueToOption, ValueCases>;
+			constexpr std::array value_options = arr::map_v<Option, ValueToOption, ValueCases>;
 
 			constexpr auto make_options = [&value_options, &type_options]() {
 				std::array res = arr::concat(type_options, value_options);
@@ -384,8 +384,10 @@ namespace bmath::intern {
 				return res;
 			};
 			constexpr auto reached = compute_reached();
-			static_assert(std::all_of(reached.begin(), reached.end(), [](auto x) { return x >= 1; }), "every case must be covered");
-			static_assert(std::all_of(reached.begin(), reached.end(), [](auto x) { return x <= 1; }), "no case may be covered twice");
+			static_assert(std::all_of(reached.begin(), reached.end(), [](auto x) { return x >= 1; }), 
+				"every case must be covered");
+			static_assert(std::all_of(reached.begin(), reached.end(), [](auto x) { return x <= 1; }), 
+				"no case may be covered twice");
 
 			return options;
 		}
@@ -420,12 +422,6 @@ namespace bmath::intern {
 		
 		template<auto e>
 		static constexpr CaseIdentifier is_value = EnumSwitch::value_identifier<SumEnum_T(e)>();
-
-		//template<typename E>
-		//static constexpr CaseIdentifier is_type() { return EnumSwitch::type_identifier<E>(); }
-		//
-		//template<auto e>
-		//static constexpr CaseIdentifier is_value() { return EnumSwitch::value_identifier<SumEnum_T(e)>(); }
 	}; //class EnumSwitch
 
 

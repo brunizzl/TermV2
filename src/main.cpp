@@ -49,9 +49,10 @@ idea status:
 using namespace bmath::intern;
 
 void f(Type t) {
-	using Switch = typename bmath::intern::EnumSwitch < Type,
+	using Switch = EnumSwitch<Type,
 		meta::List<Variadic, NamedFn, Fn, MatchType>,
-		std::array{ Type(Literal::complex), Type(Literal::variable) }> ;
+		std::array{ Type(Literal::complex), Type(Literal::variable) }>;
+	//using Switch = EnumSwitch<Type, meta::List<Variadic, NamedFn, Fn, Literal, MatchType>>;
 
 	std::cout << (unsigned)t << "\t";
 
@@ -65,6 +66,9 @@ void f(Type t) {
 	case Switch::is_type<Fn>:
 		std::cout << "Fn\n";
 		break;
+	//case Switch::is_type<Literal>:
+	//	std::cout << "Literal\n";
+	//	break;
 	case Switch::is_value<Literal::variable>:
 		std::cout << "variable\n";
 		break;

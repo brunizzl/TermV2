@@ -87,10 +87,10 @@ namespace bmath::intern::arr {
 
 	/////////////////   FromList
 
-	template<template<typename> class F, InstanceOf<meta::List> L>
+	template<template<typename> class F, meta::ListInstance L>
 	struct FromList;
 
-	template<template<typename> class F, InstanceOf<meta::List> L>
+	template<template<typename> class F, meta::ListInstance L>
 	constexpr auto from_list_v = FromList<F, L>::value;
 
 	template<template<typename> class F, typename T1>
@@ -122,8 +122,20 @@ namespace bmath::intern::arr {
 	{
 		static constexpr auto value = arr::concat(
 			std::array{ F<T1>::value, F<T2>::value, F<T3>::value, F<T4>::value },
-			from_list_v<F, List<T5, Ts...>>);
+			from_list_v<F, meta::List<T5, Ts...>>);
 	};
+
+
+	/////////////////   FromSeq
+
+	template<ct::SeqInstance A>
+	struct FromSeq;
+
+	template<ct::SeqInstance A>
+	constexpr auto from_seq_v = FromSeq<A>::value;
+
+	template<typename T, T... xs>
+	struct FromSeq<ct::Seq<T, xs...>> { static constexpr auto value = std::array<T, sizeof...(xs)>{ xs... }; };
 
 
 	/////////////////   index_of
@@ -163,23 +175,29 @@ namespace bmath::intern::arr {
 	/////////////////   Map
 
 	namespace detail_map {
-		template<template <auto> class F, std::array Arr, typename IndexSeq>
+		template<typename ResT, template <auto> class F, std::array Arr, typename IndexSeq>
 		struct ComputeMap;
 
-		template<template <auto> class F, std::array Arr, std::size_t... I>
-		struct ComputeMap<F, Arr, std::index_sequence<I...>>
+		template<typename ResT, template <auto> class F, std::array Arr, std::size_t... I>
+		struct ComputeMap<ResT, F, Arr, std::index_sequence<I...>>
 		{
 			static constexpr auto value = std::array{ F<Arr[I]>::value... };
 		};
+
+		template<typename ResT, template <auto> class F, std::array Arr>
+		struct ComputeMap<ResT, F, Arr, std::index_sequence<>>
+		{
+			static constexpr auto value = std::array<ResT, 0>{};
+		};
 	} //detail_map
 
-	template<template <auto> class F, std::array Arr>
-	constexpr auto map_v = detail_map::ComputeMap<F, Arr, std::make_index_sequence<Arr.size()>>::value;
+	template<typename ResT, template <auto> class F, std::array Arr>
+	constexpr auto map_v = detail_map::ComputeMap<ResT, F, Arr, std::make_index_sequence<Arr.size()>>::value;
 
 	template<auto V>
 	struct Plus3 { static constexpr auto value = V + 3; };
 
-	static_assert(map_v <Plus3, std::array{ 1, 2, 3 }> == std::array{ 4, 5, 6 });
+	static_assert(map_v<int, Plus3, std::array{ 1, 2, 3 }> == std::array{ 4, 5, 6 });
 
 
 

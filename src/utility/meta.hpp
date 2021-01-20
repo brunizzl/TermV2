@@ -62,7 +62,7 @@ namespace bmath::intern {
 namespace bmath::intern::meta {
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	//////////////////////////////////////////   Operations on Lists   ////////////////////////////////////////////////////
+	//////////////////////////////////////////   Operations on Lists of types   ///////////////////////////////////////////
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -70,34 +70,54 @@ namespace bmath::intern::meta {
 	using I_c = std::integral_constant<long long, Val>;
 
 	template<typename... Ts>
-	struct List 
-	{
-		constexpr std::bool_constant<sizeof...(Ts) == 0> is_empty() { return {}; }
-		constexpr I_c<sizeof...(Ts)> size() { return {}; }
-	};
+	struct List;
+
+
+	/////////////////   ListInstance
+
+	template<typename>
+	struct DecideTListInstance :std::false_type {};
+
+	template<typename... Ts>
+	struct DecideTListInstance<List<Ts...>> :std::true_type {};
+
+	template<typename T>
+	concept ListInstance = DecideTListInstance<T>::value;
+
+
+	/////////////////   Size
+
+	template<ListInstance>
+	struct Size;
+
+	template<typename... Ts>
+	struct Size<List<Ts...>> :I_c<sizeof...(Ts)> {};
+
+	template<ListInstance L>
+	constexpr std::size_t size_v = Size<L>::value;
 
 
 	/////////////////   Cons
 
-	template<typename, InstanceOf<List>>
+	template<typename, ListInstance>
 	struct Cons;
 
-	template<typename Head, InstanceOf<List> List_>
-	using Cons_t = typename Cons<Head, List_>::type;
+	template<typename T, ListInstance L>
+	using Cons_t = typename Cons<T, L>::type;
 
-	template<typename Head, typename... Tail>
-	struct Cons<Head, List<Tail...>> { using type = List<Head, Tail...>; };
+	template<typename T, typename... Ts>
+	struct Cons<T, List<Ts...>> { using type = List<T, Ts...>; };
 	
 	
 	/////////////////   Concat
 
-	template<InstanceOf<List>, InstanceOf<List>>
+	template<ListInstance, ListInstance>
 	struct Concat;
 
 	template<typename... Elems_1, typename... Elems_2>
 	struct Concat<List<Elems_1...>, List<Elems_2...>> { using type = List<Elems_1..., Elems_2...>; };
 
-	template<InstanceOf<List> List_1, InstanceOf<List> List_2>
+	template<ListInstance List_1, ListInstance List_2>
 	using Concat_t = typename Concat<List_1, List_2>::type;
 
 	static_assert(std::is_same_v<Concat_t<List<int, int>, List<double, nullptr_t>>, List<int, int, double, nullptr_t>>);
@@ -105,10 +125,10 @@ namespace bmath::intern::meta {
 
 	/////////////////   Contains
 
-	template<typename, InstanceOf<List>>
+	template<typename, ListInstance>
 	struct Contains;
 
-	template<typename T, InstanceOf<List> L>
+	template<typename T, ListInstance L>
 	constexpr bool contains_v = Contains<T, L>::value;
 
 	template<typename T>
@@ -141,13 +161,13 @@ namespace bmath::intern::meta {
 
 	/////////////////   Intersection
 
-	template<InstanceOf<List>, InstanceOf<List>>
+	template<ListInstance, ListInstance>
 	struct Intersection;
 
-	template<InstanceOf<List> L1, InstanceOf<List> L2>
+	template<ListInstance L1, ListInstance L2>
 	using Intersection_t = typename Intersection<L1, L2>::type;
 
-	template<typename T, typename... Ts, InstanceOf<List> L2>
+	template<typename T, typename... Ts, ListInstance L2>
 	class Intersection <List<T, Ts...>, L2> 
 	{
 		using TailRes = Intersection_t<List<Ts...>, L2>;
@@ -155,7 +175,7 @@ namespace bmath::intern::meta {
 		using type = std::conditional_t<contains_v<T, L2>, Cons_t<T, TailRes>, TailRes>;
 	};
 
-	template<InstanceOf<List> L2>
+	template<ListInstance L2>
 	struct Intersection <List<>, L2> { using type = List<>; };
 
 	static_assert(std::is_same_v<Intersection_t<List<bool, int, char>, List<float, double, bool>>, List<bool>>);
@@ -163,16 +183,16 @@ namespace bmath::intern::meta {
 
 	/////////////////   Disjoint
 
-	template<InstanceOf<List> L1, InstanceOf<List> L2>
+	template<ListInstance L1, ListInstance L2>
 	constexpr bool disjoint_v = std::bool_constant<std::is_same_v<Intersection_t<L1, L2>, List<>>>::value;
 
 
 	/////////////////   Filter
 
-	template<template <typename> class P, InstanceOf<List> L>
+	template<template <typename> class P, ListInstance L>
 	struct Filter;
 
-	template<template <typename> class P, InstanceOf<List> L>
+	template<template <typename> class P, ListInstance L>
 	using Filter_t = typename Filter<P, L>::type;
 
 	template<template <typename> class P, typename T, typename... Ts>
@@ -191,7 +211,7 @@ namespace bmath::intern::meta {
 
 	/////////////////   IndexOf
 
-	template<typename T, InstanceOf<List> L, std::size_t Offset>
+	template<typename T, ListInstance L, std::size_t Offset>
 	struct DecideIndexOf;
 
 	template<typename T, std::size_t Offset>
@@ -203,7 +223,7 @@ namespace bmath::intern::meta {
 	template<typename T1, typename T2, typename... Ts, std::size_t Offset>
 	struct DecideIndexOf<T1, List<T2, Ts...>, Offset> :I_c<DecideIndexOf<T1, List<Ts...>, Offset + 1>::value> {};
 
-	template<typename T, InstanceOf<List> L>
+	template<typename T, ListInstance L>
 	constexpr std::size_t index_of_v = DecideIndexOf<T, L, 0>::value;
 
 	static_assert(index_of_v<I_c<-7>, List<I_c<2>, I_c<5>, I_c<-7>>> == 2);
@@ -211,10 +231,10 @@ namespace bmath::intern::meta {
 
 	///////////////////   Sort (requires take and drop)
 	//namespace detail_sort {
-	//	template<InstanceOf<List>, InstanceOf<List>, template<typename, typename> class Compare>
+	//	template<ListInstance, ListInstance, template<typename, typename> class Compare>
 	//	struct Merge;
 	//
-	//	template<InstanceOf<List> L1, InstanceOf<List> L2, template<typename, typename> class Compare>
+	//	template<ListInstance L1, ListInstance L2, template<typename, typename> class Compare>
 	//	using Merge_t = typename Merge<L1, L2, Compare>::type;
 	//
 	//	template<typename... Ts, template<typename, typename> class Compare>
@@ -234,10 +254,10 @@ namespace bmath::intern::meta {
 	//	};
 	//} //namespace detail_sort
 	//
-	//template<InstanceOf<List>, template<typename, typename> class Compare>
+	//template<ListInstance, template<typename, typename> class Compare>
 	//struct Sort;
 	//
-	//template<InstanceOf<List> L, template<typename, typename> class Compare>
+	//template<ListInstance L, template<typename, typename> class Compare>
 	//using Sort_t = typename Sort<L, Compare>::type;
 	//
 	//template<template<typename, typename> class Compare>
@@ -263,3 +283,95 @@ namespace bmath::intern::meta {
 	//static_assert(std::is_same_v<Sort_t<List<I_c<2>, I_c<5>, I_c<-7>>, Less>, List<I_c<-7>, I_c<2>, I_c<5>>>);
 
 } //namespace bmath::intern::meta
+
+namespace bmath::intern::ct {
+
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	//////////////////////////////////////////   Operations on Sequences of values   //////////////////////////////////////
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	template<long long Val>
+	using I_c = std::integral_constant<long long, Val>;
+
+
+	template<typename T, T...>
+	struct Seq;
+
+	template<int... ints>
+	using Ints = Seq<int, ints...>;
+
+
+	/////////////////   ListInstance
+
+	template<typename>
+	struct DecideSeqInstance :std::false_type {};
+
+	template<typename T, T... xs>
+	struct DecideSeqInstance<Seq<T, xs...>> :std::true_type {};
+
+	template<typename T>
+	concept SeqInstance = DecideSeqInstance<T>::value;
+
+
+	/////////////////   Size
+
+	template<SeqInstance>
+	struct Size;
+
+	template<typename T, T... xs>
+	struct Size<Seq<T, xs...>> :I_c<sizeof...(xs)> {};
+
+	template<SeqInstance A>
+	constexpr std::size_t size_v = Size<A>::value;
+
+
+	/////////////////   Cons
+
+	template<auto, SeqInstance>
+	struct Cons;
+
+	template<auto x, SeqInstance A>
+	using Cons_t = typename Cons<x, A>::type;
+
+	template<typename T, T x, T... xs>
+	struct Cons<x, Seq<T, xs...>> { using type = Seq<T, x, xs...>; };
+
+	static_assert(std::is_same_v<Cons_t<1, Ints<2, 3, 4>>, Ints<1, 2, 3, 4>>);
+
+
+	/////////////////   Concat
+
+	template<SeqInstance, SeqInstance>
+	struct Concat;
+
+	template<typename T, T... xs, T...ys>
+	struct Concat<Seq<T, xs...>, Seq<T, ys...>> { using type = Seq<T, xs..., ys...>; };
+
+	template<SeqInstance A1, SeqInstance A2>
+	using Concat_t = typename Concat<A1, A2>::type;
+
+	static_assert(std::is_same_v<Concat_t<Ints<0, 1>, Ints<2, 3, 4>>, Ints<0, 1, 2, 3, 4>>);
+
+
+	/////////////////   IndexOf
+
+	template<auto x, SeqInstance A, std::size_t Offset>
+	struct DecideIndexOf;
+
+	template<typename T, T x, std::size_t Offset>
+	struct DecideIndexOf<x, Seq<T>, Offset> :I_c<-1> {};
+
+	template<typename T, T x, T... xs, std::size_t Offset>
+	struct DecideIndexOf<x, Seq<T, x, xs...>, Offset> :I_c<Offset> {};
+
+	template<typename T, T x, T y, T... ys, std::size_t Offset>
+	struct DecideIndexOf<x, Seq<T, y, ys...>, Offset> :I_c<DecideIndexOf<x, Seq<T, ys...>, Offset + 1>::value> {};
+
+	template<auto x, SeqInstance A>
+	constexpr std::size_t index_of_v = DecideIndexOf<x, A, 0>::value;
+
+	static_assert(index_of_v<-7, Ints<2, 5, -7>> == 2);
+
+
+
+} //namespace bmath::intern::ct
