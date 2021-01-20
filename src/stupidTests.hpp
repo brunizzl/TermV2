@@ -4,6 +4,7 @@
 #include <charconv>
 #include <cassert>
 #include <numeric>
+#include <array>
 
 #include "utility/bit.hpp"
 

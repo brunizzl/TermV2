@@ -209,7 +209,7 @@ namespace bmath::intern::meta {
 	static_assert(index_of_v<I_c<-7>, List<I_c<2>, I_c<5>, I_c<-7>>> == 2);
 
 
-	///////////////////   Sort
+	///////////////////   Sort (requires take and drop)
 	//namespace detail_sort {
 	//	template<InstanceOf<List>, InstanceOf<List>, template<typename, typename> class Compare>
 	//	struct Merge;

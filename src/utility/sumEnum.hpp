@@ -84,8 +84,8 @@ namespace bmath::intern {
 		struct MemberInfo
 		{
 			using type = E;
-			constexpr std::size_t begin() const { return Begin; }
-			constexpr std::size_t end() const { return End; }
+			static constexpr std::size_t begin_ = Begin;
+			static constexpr std::size_t end_ = End;
 		};
 
 		namespace info_detail {
@@ -314,6 +314,8 @@ namespace bmath::intern {
 		std::array ValueCases = std::array<unsigned, 0>{}>
 	class EnumSwitch
 	{
+		//static_assert(InstanceOf<SumEnum_T, SumEnum>);
+		//static_assert(InstanceOf<TypeCases, meta::List>);
 		static_assert(std::is_same_v<SumEnum_T, typename decltype(ValueCases)::value_type> || 
 			std::is_same_v<std::array<unsigned, 0>, decltype(ValueCases)>);
 
@@ -332,26 +334,39 @@ namespace bmath::intern {
 			return static_cast<CaseIdentifier>(meta::index_of_v<E, TypeCases>);
 		}
 
-		static constexpr CaseIdentifier value_identifier(const SumEnum_T e)
+		template<SumEnum_T e>
+		static constexpr CaseIdentifier value_identifier()
 		{
-			if (arr::index_of(e, ValueCases) == -1) throw "only enum values passed in the template arguments are valid";
+			static_assert(arr::index_of(e, ValueCases) != -1, "only enum values passed in the template arguments are valid");
 			return static_cast<CaseIdentifier>(TypeCases{}.size() + arr::index_of(e, ValueCases));
 		}
 
+
 		template<typename T>
-		struct InTypeCases :std::bool_constant<meta::contains_v<typename T::type, TypeCases>> {};
+		struct IsInTypeCases :std::bool_constant<meta::contains_v<typename T::type, TypeCases>> {};
+
+		template<typename T>
+		struct InfoToOption
+		{
+			static constexpr Option value = Option{ 
+				EnumSwitch::type_identifier<typename T::type>(), T::begin_, T::end_ };
+		}; 
+		
+		template<SumEnum_T val>
+		struct ValueToOption
+		{
+			static constexpr Option value = Option{
+				EnumSwitch::value_identifier<val>(), (unsigned)val, (unsigned)val + 1 };
+		};
 
 		static constexpr auto compute_all_options()
 		{
 			using AllInfos = enum_detail::MemberInfos_t<SumEnum_T>;
-			using UsedInfos = meta::Filter_t<InTypeCases, AllInfos>;
+			using UsedInfos = meta::Filter_t<IsInTypeCases, AllInfos>;
 
-			constexpr std::array type_options = arr::from_list(
-				[](auto x) { return Option{ EnumSwitch::type_identifier<typename decltype(x)::type>(), x.begin(), x.end() }; },
-				UsedInfos{});
-			constexpr std::array value_options = arr::map(
-				[](auto e) { return Option{ EnumSwitch::value_identifier(e), (unsigned)e, (unsigned)e + 1 }; },
-				ValueCases);
+			constexpr std::array type_options = arr::from_list_v<InfoToOption, UsedInfos>;
+			constexpr std::array value_options = arr::map_v<ValueToOption, ValueCases>;
+
 			constexpr auto make_options = [&value_options, &type_options]() {
 				std::array res = arr::concat(type_options, value_options);
 				std::sort(res.begin(), res.end(), [](Option a, Option b) { return a.begin_ < b.begin_; });
@@ -379,8 +394,6 @@ namespace bmath::intern {
 		template<std::array Options>
 		static constexpr CaseIdentifier decide_impl(const SumEnum_T e) noexcept
 		{
-			static_assert(arr::holds_v<Option, decltype(Options)>);
-
 			if constexpr (Options.size() > 1u) {
 				constexpr std::size_t mid = Options.size() / 2u;
 
@@ -404,8 +417,15 @@ namespace bmath::intern {
 
 		template<typename E>
 		static constexpr CaseIdentifier is_type = EnumSwitch::type_identifier<E>();
+		
+		template<auto e>
+		static constexpr CaseIdentifier is_value = EnumSwitch::value_identifier<SumEnum_T(e)>();
 
-		static constexpr CaseIdentifier is_value(SumEnum_T e) { return value_identifier(e); }
+		//template<typename E>
+		//static constexpr CaseIdentifier is_type() { return EnumSwitch::type_identifier<E>(); }
+		//
+		//template<auto e>
+		//static constexpr CaseIdentifier is_value() { return EnumSwitch::value_identifier<SumEnum_T(e)>(); }
 	}; //class EnumSwitch
 
 

@@ -8,9 +8,6 @@
 #include "meta.hpp"
 
 namespace bmath::intern::arr {
-	
-	template<typename T, typename ArrT>
-	constexpr bool holds_v = std::is_same_v<T, typename ArrT::value_type>;
 
 	/////////////////   concat
 	namespace detail_concat {
@@ -88,34 +85,45 @@ namespace bmath::intern::arr {
 	//static_assert(drop<3>(std::array{ 1, 2, 3, 4, 5, 6, 7 ,8 }) == std::array{ 4, 5, 6, 7, 8 });
 
 
+	/////////////////   FromList
 
-	/////////////////   from_list
-	namespace detail_from_list {
-		template<typename T1, Callable<T1> F>
-		constexpr auto loop(meta::List<T1>, F f) { return std::array{ f(T1{}) }; }
+	template<template<typename> class F, InstanceOf<meta::List> L>
+	struct FromList;
 
-		template<typename T1, typename T2, Callable<T1> F>
-		constexpr auto loop(meta::List<T1, T2>, F f) { return std::array{ f(T1{}), f(T2{}) }; }
+	template<template<typename> class F, InstanceOf<meta::List> L>
+	constexpr auto from_list_v = FromList<F, L>::value;
 
-		template<typename T1, typename T2, typename T3, Callable<T1> F>
-		constexpr auto loop(meta::List<T1, T2, T3>, F f) { return std::array{ f(T1{}), f(T2{}), f(T3{}) }; }
+	template<template<typename> class F, typename T1>
+	struct FromList<F, meta::List<T1>>
+	{
+		static constexpr auto value = std::array{ F<T1>::value };
+	};
 
-		template<typename T1, typename T2, typename T3, typename T4, Callable<T1> F>
-		constexpr auto loop(meta::List<T1, T2, T3, T4>, F f) { return std::array{ f(T1{}), f(T2{}), f(T3{}), f(T4{}) }; }
+	template<template<typename> class F, typename T1, typename T2>
+	struct FromList<F, meta::List<T1, T2>>
+	{
+		static constexpr auto value = std::array{ F<T1>::value, F<T2>::value };
+	};
 
-		template<typename T1, typename T2, typename T3, typename T4, typename... Ts, Callable<T1> F>
-			requires (sizeof...(Ts) > 0)
-		constexpr auto loop(meta::List<T1, T2, T3, T4, Ts...>, F f)
-		{
-			return arr::concat(std::array{ f(T1{}), f(T2{}), f(T3{}), f(T4{}) }, loop(meta::List<Ts...>{}, f));
-		}
-	} //namespace detail_from_list
+	template<template<typename> class F, typename T1, typename T2, typename T3>
+	struct FromList<F, meta::List<T1, T2, T3>>
+	{
+		static constexpr auto value = std::array{ F<T1>::value, F<T2>::value, F<T3>::value };
+	};
 
-	template<typename T, typename... Ts, Callable<T> F>
-	constexpr auto from_list(F f, meta::List<T, Ts...> l) { return detail_from_list::loop<T>(l, f); }
+	template<template<typename> class F, typename T1, typename T2, typename T3, typename T4>
+	struct FromList<F, meta::List<T1, T2, T3, T4>>
+	{
+		static constexpr auto value = std::array{ F<T1>::value, F<T2>::value, F<T3>::value, F<T4>::value };
+	};
 
-	//static_assert(from_list([](auto x) { return x.val(); }, meta::List<meta::Int_<1>, meta::Int_<2>, meta::Int_<3>>{})
-	//	== std::to_array({ 1ll, 2ll, 3ll }));
+	template<template<typename> class F, typename T1, typename T2, typename T3, typename T4, typename T5, typename... Ts>
+	struct FromList<F, meta::List<T1, T2, T3, T4, T5, Ts...>>
+	{
+		static constexpr auto value = arr::concat(
+			std::array{ F<T1>::value, F<T2>::value, F<T3>::value, F<T4>::value },
+			from_list_v<F, List<T5, Ts...>>);
+	};
 
 
 	/////////////////   index_of
@@ -150,6 +158,30 @@ namespace bmath::intern::arr {
 	{
 		return detail_map::impl(f, input, std::make_index_sequence<N>{});
 	}
+
+
+	/////////////////   Map
+
+	namespace detail_map {
+		template<template <auto> class F, std::array Arr, typename IndexSeq>
+		struct ComputeMap;
+
+		template<template <auto> class F, std::array Arr, std::size_t... I>
+		struct ComputeMap<F, Arr, std::index_sequence<I...>>
+		{
+			static constexpr auto value = std::array{ F<Arr[I]>::value... };
+		};
+	} //detail_map
+
+	template<template <auto> class F, std::array Arr>
+	constexpr auto map_v = detail_map::ComputeMap<F, Arr, std::make_index_sequence<Arr.size()>>::value;
+
+	template<auto V>
+	struct Plus3 { static constexpr auto value = V + 3; };
+
+	static_assert(map_v <Plus3, std::array{ 1, 2, 3 }> == std::array{ 4, 5, 6 });
+
+
 
 	//static_assert(arr::map([](auto x) { return x + 3; }, std::array{ 1, 2, 3 }) == std::array{ 4, 5, 6 });
 
