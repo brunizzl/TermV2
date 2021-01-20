@@ -51,7 +51,7 @@ using namespace bmath::intern;
 void f(Type t) {
 	using Switch = EnumSwitch<Type,
 		meta::List<Variadic, NamedFn, Fn, MatchType>,
-		arr::make<Type>({ Literal::complex, Literal::variable })>;
+		std::to_array<Type>({ Literal::complex, Literal::variable })>;
 
 	std::cout << (unsigned)t << "\t";
 

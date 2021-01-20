@@ -311,10 +311,11 @@ namespace bmath::intern {
 	template<
 		InstanceOf<SumEnum> SumEnum_T, 
 		InstanceOf<meta::List> TypeCases, 
-		Array ValueCases = Array<SumEnum_T, 0>{}>
+		std::array ValueCases = std::array<unsigned, 0>{}>
 	class EnumSwitch
 	{
-		static_assert(arr::holds_v<SumEnum_T, decltype(ValueCases)>);
+		static_assert(std::is_same_v<SumEnum_T, typename decltype(ValueCases)::value_type> || 
+			std::is_same_v<std::array<unsigned, 0>, decltype(ValueCases)>);
 
 		enum class CaseIdentifier :unsigned {};
 
@@ -345,21 +346,21 @@ namespace bmath::intern {
 			using AllInfos = enum_detail::MemberInfos_t<SumEnum_T>;
 			using UsedInfos = meta::Filter_t<InTypeCases, AllInfos>;
 
-			constexpr Array type_options = arr::from_list(
+			constexpr std::array type_options = arr::from_list(
 				[](auto x) { return Option{ EnumSwitch::type_identifier<typename decltype(x)::type>(), x.begin(), x.end() }; },
 				UsedInfos{});
-			constexpr Array value_options = arr::map(
+			constexpr std::array value_options = arr::map(
 				[](auto e) { return Option{ EnumSwitch::value_identifier(e), (unsigned)e, (unsigned)e + 1 }; },
 				ValueCases);
 			constexpr auto make_options = [&value_options, &type_options]() {
-				Array res = arr::concat(type_options, value_options);
+				std::array res = arr::concat(type_options, value_options);
 				std::sort(res.begin(), res.end(), [](Option a, Option b) { return a.begin_ < b.begin_; });
 				return res;
 			};
-			constexpr Array options = make_options();
+			constexpr std::array options = make_options();
 
 			constexpr auto compute_reached = [&options]() {
-				Array<int, (unsigned)SumEnum_T::COUNT> res = {};
+				std::array<int, (unsigned)SumEnum_T::COUNT> res = {};
 				for (const Option& option : options) {
 					for (std::size_t i = option.begin_; i < option.end_; i++) {
 						res[i]++;
@@ -375,7 +376,7 @@ namespace bmath::intern {
 		}
 		static constexpr auto all_options = compute_all_options();
 
-		template<Array Options>
+		template<std::array Options>
 		static constexpr CaseIdentifier decide_impl(const SumEnum_T e) noexcept
 		{
 			static_assert(arr::holds_v<Option, decltype(Options)>);
