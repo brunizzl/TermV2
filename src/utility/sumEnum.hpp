@@ -8,6 +8,7 @@
 #include <algorithm>
 
 #include "meta.hpp"
+#include "array.hpp"
 
 namespace bmath::intern {
     
@@ -38,8 +39,8 @@ namespace bmath::intern {
 
 		template<typename Enum>
 		concept EnumLike = requires (Enum e) {
-			{e}           -> meta::ExplicitlyConvertibleTo<unsigned>;
-			{Enum::COUNT} -> meta::ExplicitlyConvertibleTo<unsigned>;
+			{e}           -> ExplicitlyConvertibleTo<unsigned>;
+			{Enum::COUNT} -> ExplicitlyConvertibleTo<unsigned>;
 		};
 
 		template<typename T>
@@ -62,19 +63,19 @@ namespace bmath::intern {
 		template<typename Head, typename... Tail>
 		struct ListMembers<Head, Tail...> 
 		{ 
-			using type = decltype(meta::concat(ListMembers_t<Head>{}, ListMembers_t<Tail...>{}));
+			using type = meta::Concat_t<ListMembers_t<Head>, ListMembers_t<Tail...>>;
 		};
 
 		template<typename... Enums>
 		struct ListMembers<SumEnum<Enums...>> { using type = ListMembers_t<Enums...>; };
 
-		template<typename E> requires (!meta::InstanceOf<E, SumEnum>)
+		template<typename E> requires (!InstanceOf<E, SumEnum>)
 		struct ListMembers<E> { using type = List<E>; };
 
 		template<> 
 		struct ListMembers<> { using type = List<>; };
 
-		static_assert(ListMembers_t<SumEnum<int, SumEnum<float, bool>>>{} == List<int, float, bool>{});
+		static_assert(std::is_same_v<ListMembers_t<SumEnum<int, SumEnum<float, bool>>>, List<int, float, bool>>);
 
 
 		/////////////////   MemberInfo
@@ -102,27 +103,21 @@ namespace bmath::intern {
 				using OwnInfo   = MemberInfo<SumEnum<Head, Tail...>, Begin, End>;
 				using HeadInfos = MakeMemberInfo_t<Head, Split, End, true>;
 				using TailInfos = MakeMemberInfo_t<Base, Begin, Split, false>;
-				using SubInfos  = decltype(meta::concat(TailInfos{}, HeadInfos{}));
+				using SubInfos  = meta::Concat_t<TailInfos, HeadInfos>;
 			public:
-				using type = std::conditional_t<IncludeSelf, decltype(meta::cons<OwnInfo>(SubInfos{})), SubInfos>;
+				using type = std::conditional_t<IncludeSelf, meta::Cons_t<OwnInfo, SubInfos>, SubInfos>;
 			};
 
 			template<unsigned Begin, unsigned End>
 			struct MakeMemberInfo<SumEnum<>, Begin, End, false> { using type = List<>; };
 
 			template<Enumeratable E, unsigned Begin, unsigned End>
-				requires (!meta::InstanceOf<E, SumEnum>)
+				requires (!InstanceOf<E, SumEnum>)
 			struct MakeMemberInfo<E, Begin, End, true> { using type = List<MemberInfo<E, Begin, End>>; };
 		} //namespace info_detail
 
-		template<meta::InstanceOf<SumEnum> E>
-		constexpr auto generate_member_infos() { return info_detail::MakeMemberInfo_t<E, 0, (unsigned)E::COUNT, true>{}; }
-
-		template<Enumeratable E, meta::InstanceOf<List> Infos>
-		constexpr auto find_info(Infos is) 
-		{ 
-			return meta::find(is, [](auto i) { return std::is_same_v<typename decltype(i)::type, E>; } );
-		}
+		template<InstanceOf<SumEnum> E>
+		using MemberInfos_t = info_detail::MakeMemberInfo_t<E, 0, (unsigned)E::COUNT, true>;
 
 	} //namespace enum_detail
 
@@ -144,7 +139,7 @@ namespace bmath::intern {
 	template<enum_detail::EnumLike Enum, typename... TailEnums>
 	class [[nodiscard]] SumEnum<Enum, TailEnums...> :public SumEnum<TailEnums...>
 	{
-		static_assert(meta::disjoint(enum_detail::ListMembers_t<Enum>{}, enum_detail::ListMembers_t<TailEnums...>{}),
+		static_assert(meta::disjoint_v<enum_detail::ListMembers_t<Enum>, enum_detail::ListMembers_t<TailEnums...>>,
 			"No two parameters of SumEnum's parameter pack may contain the same type within (or be equal).");
 
 		using Base = SumEnum<TailEnums...>;
@@ -313,10 +308,13 @@ namespace bmath::intern {
 
 
 
-	template<meta::InstanceOf<SumEnum> SumEnum_T, meta::InstanceOf<meta::List> TypeCases, auto ValueCases = Array<SumEnum_T, 0>{}>
+	template<
+		InstanceOf<SumEnum> SumEnum_T, 
+		InstanceOf<meta::List> TypeCases, 
+		Array ValueCases = Array<SumEnum_T, 0>{}>
 	class EnumSwitch
 	{
-		static_assert(arr::holds<SumEnum_T>(ValueCases));
+		static_assert(arr::holds_v<SumEnum_T, decltype(ValueCases)>);
 
 		enum class CaseIdentifier :unsigned {};
 
@@ -329,25 +327,27 @@ namespace bmath::intern {
 		template<typename E>
 		static constexpr CaseIdentifier type_identifier()
 		{
-			static_assert(meta::index_of<E>(TypeCases{}).val() != -1, "only types passed in the template arguments are valid");
-			return static_cast<CaseIdentifier>(meta::index_of<E>(TypeCases{}).val());
+			static_assert(meta::index_of_v<E, TypeCases> != -1, "only types passed in the template arguments are valid");
+			return static_cast<CaseIdentifier>(meta::index_of_v<E, TypeCases>);
 		}
 
 		static constexpr CaseIdentifier value_identifier(const SumEnum_T e)
 		{
 			if (arr::index_of(e, ValueCases) == -1) throw "only enum values passed in the template arguments are valid";
-			return static_cast<CaseIdentifier>(TypeCases{}.size().val() + arr::index_of(e, ValueCases));
+			return static_cast<CaseIdentifier>(TypeCases{}.size() + arr::index_of(e, ValueCases));
 		}
+
+		template<typename T>
+		struct InTypeCases :std::bool_constant<meta::contains_v<typename T::type, TypeCases>> {};
 
 		static constexpr auto compute_all_options()
 		{
-			constexpr auto all_infos = enum_detail::generate_member_infos<SumEnum_T>();
-			constexpr auto used_infos = meta::filter(
-				[](auto i) { return meta::contains<typename decltype(i)::type>(TypeCases{}); },
-				all_infos);
+			using AllInfos = enum_detail::MemberInfos_t<SumEnum_T>;
+			using UsedInfos = meta::Filter_t<InTypeCases, AllInfos>;
+
 			constexpr Array type_options = arr::from_list(
 				[](auto x) { return Option{ EnumSwitch::type_identifier<typename decltype(x)::type>(), x.begin(), x.end() }; },
-				used_infos);
+				UsedInfos{});
 			constexpr Array value_options = arr::map(
 				[](auto e) { return Option{ EnumSwitch::value_identifier(e), (unsigned)e, (unsigned)e + 1 }; },
 				ValueCases);
@@ -375,9 +375,11 @@ namespace bmath::intern {
 		}
 		static constexpr auto all_options = compute_all_options();
 
-		template<Array Options> requires (arr::holds<Option>(Options))
+		template<Array Options>
 		static constexpr CaseIdentifier decide_impl(const SumEnum_T e) noexcept
 		{
+			static_assert(arr::holds_v<Option, decltype(Options)>);
+
 			if constexpr (Options.size() > 1u) {
 				constexpr std::size_t mid = Options.size() / 2u;
 
