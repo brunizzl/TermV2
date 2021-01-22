@@ -5,9 +5,6 @@
 #include <bit>
 
 namespace bmath::intern {
-    
-    
-
 
 	template<typename UInt_T>
 	struct [[nodiscard]] IntBitSet
@@ -169,6 +166,7 @@ namespace bmath::intern {
 			:size_(new_size), local_data{ 0ull, 0ull }
 		{
 			const std::size_t needed_capacity = (end - begin) * 64u;
+			assert(needed_capacity >= new_size);
 			if (needed_capacity > local_max_size) {
 				this->unsave_reallocate(needed_capacity);
 			}

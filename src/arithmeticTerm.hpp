@@ -241,8 +241,18 @@ namespace bmath::intern {
 	using MathStore = BasicStore<MathUnion>;
 
 
-	using MutRef = BasicRef<Type, MathStore>;
+	template<typename T>
+	concept MathReference = ReferenceTo<T, MathUnion> && T::is_const;
+
+	template<typename T>
+	concept MutMathReference = ReferenceTo<T, MathUnion> && !T::is_const;
+
+
 	using Ref = BasicRef<Type, const MathStore>;
+	using MutRef = BasicRef<Type, MathStore>;
+
+	static_assert(MathReference<const Ref>);
+	static_assert(MutMathReference<MutRef>);
 
 
 	//utility for NamedFn, types in Fn and types in Variadic
@@ -615,14 +625,14 @@ namespace bmath::intern {
 		template<typename Wrapped_T> constexpr Find<Wrapped_T> done(const Wrapped_T w) { return { w, true  }; }
 		template<typename Wrapped_T> constexpr Find<Wrapped_T> more(const Wrapped_T w) { return { w, false }; }
 		
-		struct FindBool //the simple_fold evaluation stops early if cut is true and returns true
+		struct FindTrue //the simple_fold evaluation stops early if cut is true and returns true
 		{
 			bool cut = false;
 
 			constexpr bool return_early() const noexcept { return this->cut; }
 			constexpr operator bool() const noexcept { return this->cut; }
-			constexpr FindBool(bool init) :cut(init) {}
-			constexpr FindBool() = default;
+			constexpr FindTrue(bool init) :cut(init) {}
+			constexpr FindTrue() = default;
 		};
 
 
@@ -633,28 +643,33 @@ namespace bmath::intern {
 		struct ReturnEarlyPossible <T, std::void_t<decltype(std::declval<T>().return_early())>> :std::true_type {};
 
 		static_assert(ReturnEarlyPossible<Find<TypedIdx>>::value);
-		static_assert(ReturnEarlyPossible<FindBool>::value);
+		static_assert(ReturnEarlyPossible<FindTrue>::value);
 		static_assert(!ReturnEarlyPossible<bool>::value);
 
 
 		struct Void {}; //used if there is nothing to be returned from simple_fold
 
-		//calls apply with every node (postorder), parameter is (BasicRef<Union_T, Type_T, Store_T> ref), apply returns Res_T
-		//Res_T might have nonstatic member return_early, to indicate if the fold may be stopped early, as the result is already known
+		//calls apply with every node (postorder),
+		//Res_T might have nonstatic member return_early, to indicate if the fold may be stopped early, because the result is already known
 		//not really a fold function in the classical sense, as there is no information accumulated - 
 		//  eighter you have the final result or not. (or you only mutate the term and not return any result at all)
-		template<typename Res_T, typename Type_T, StoreLike Store_T, typename Apply>
-		Res_T simple_fold(const BasicRef<Type_T, Store_T> ref, Apply apply);
+		template<typename Res_T, ReferenceTo<MathUnion> R, CallableTo<Res_T, R> Apply>
+		Res_T simple_fold(const R ref, Apply apply);
 
-		//this fold differentiates between recursive nodes (Variadic's, Fn's and ValueMatchVariable) and Leafes (values and variables)
-		//OpAccumulator is constructed before a recursive call is made and consumes each recursive result. It thus needs to at least
+
+		template<typename A, typename Res_T>
+		concept Accumulator = requires(A a, Res_T r) {
+			{ a.consume(r) };
+			{ a.result() } -> std::convertible_to<Res_T>;
+		};
+
+		//this fold differentiates between recursive nodes (Function and ValueMatchVariable) and Leafes (values and variables)
+		//Acc is constructed before a recursive call is made and consumes each recursive result. It thus needs to at least
 		//  have a Constructor taking as arguments (BasicRef<Union_T, Type_T, Const> ref, AccInit... init) 
-		//  and a consume method taking as single parameter (Res_T elem_res)
-		//  a result method taking no parameters and returning Res_T
-		//leaf_apply has parameters (BasicRef<Union_T, Type_T, Const> ref) and returns Res_T.		
-		template<typename Res_T, typename OpAccumulator, typename Type_T, StoreLike Store_T, 
-			typename LeafApply, typename... AccInit>
-		Res_T tree_fold(const BasicRef<Type_T, Store_T> ref, LeafApply leaf_apply, const AccInit... init);
+		//  and a consume method taking as single parameter of type Res_T
+		//  a result method taking no parameters and returning Res_T	
+		template<typename Res_T, Accumulator<Res_T> Acc, ReferenceTo<MathUnion> R, CallableTo<Res_T, R> LeafApply, typename... AccInit>
+		Res_T tree_fold(const R ref, LeafApply leaf_apply, const AccInit... init);
 
 	} //namespace fold
 

@@ -4,15 +4,13 @@
 
 namespace bmath::intern {
 
-	template<typename T> //it is advised to only use this concept to specify other concepts,
-	concept AnyReference = requires(T a) { //if both const and mut ref are semantically allowed, only enable const
-		{ a.store };
-		{ a.type };
-		{ a.index };
-		{ a.typed_idx() };
-		{ a.operator*() };
-		{ a.operator->() };
+	template<typename R, typename T> //it is advised to only use this concept to specify other concepts,
+	concept ReferenceTo = requires(R a) { //if both const and mut ref are semantically allowed, only enable const
+		{ a.operator*() } -> std::convertible_to<const T>;
+		{ a.operator->() } -> std::convertible_to<const T*>;
 	};
+
+
 
 	template<typename Own_T, StoreLike Store_T>
 	struct BasicNodeRef;

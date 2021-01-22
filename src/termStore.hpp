@@ -117,8 +117,10 @@ namespace bmath::intern {
 			VecElem* combined_data = nullptr;
 
 			constexpr Memory() noexcept = default;
+
 			template<typename MemoryResource>
 			constexpr Memory(MemoryResource r) noexcept :Alloc_T<VecElem>(r) {}
+
 			constexpr Memory(Memory&& snd) noexcept
 				:Alloc_T<VecElem>(std::move(snd)),
 				combined_data(std::exchange(snd.combined_data, nullptr)) {}
@@ -162,14 +164,13 @@ namespace bmath::intern {
 			const std::size_t alligned_n_size = std::min(std::bit_ceil(n), 64ull);
 			const std::size_t spacer_size  = alligned_n_size - ((this->size_ - 1u) % alligned_n_size) - 1u;
 			const std::size_t result_index = this->size_ + spacer_size;
-			const std::size_t new_size     = this->size_ + spacer_size + n;
-			if (new_size > this->capacity) {
-				this->unsave_change_capacity(std::max(this->capacity * 2u, std::bit_ceil(new_size)));
+			this->size_ += spacer_size + n;
+			if (this->size_ > this->capacity) {
+				this->unsave_change_capacity(std::max(this->capacity * 2u, std::bit_ceil(this->size_)));
 			}
-			this->size_ = new_size;
 
 			std::size_t mask_bitset_index = result_index / 64u;
-			for (; mask_bitset_index < (new_size - 1u) / 64u; mask_bitset_index++) {
+			for (; mask_bitset_index < (this->size_ - 1u) / 64u; mask_bitset_index++) {
 				this->occupancy_data()[mask_bitset_index] = -1ull; //set all in first (n / 64u) tables responsible for the n returned elements 
 			}
 			const std::uint64_t last_mask = -1ull >> (64u - (n % 64u)); //first n % 64u bits set or if (n % 64u == 0u) all 64u bit set
@@ -348,7 +349,7 @@ namespace bmath::intern {
 			}
 		} //free_n()
 
-		//returns copy of BitSets managing storage (bit is set) means (position is currently in use) 
+		//returns copy of BitSets managing storage (bit is set -> position is currently in use) 
 		[[nodiscard]] BitVector storage_occupancy() const noexcept
 		{
 			const auto begin = this->occupancy_data();

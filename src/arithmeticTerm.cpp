@@ -580,8 +580,8 @@ namespace bmath::intern {
 
 		bool contains(const Ref ref, const TypedIdx to_contain)
 		{
-			return fold::simple_fold<fold::FindBool>(ref, 
-				[to_contain](const Ref ref) -> fold::FindBool 
+			return fold::simple_fold<fold::FindTrue>(ref, 
+				[to_contain](const Ref ref) -> fold::FindTrue 
 				{ return ref.typed_idx() == to_contain; }
 			);
 		} //contains
@@ -623,7 +623,7 @@ namespace bmath::intern {
 		bool valid_storage(const Ref ref)
 		{
 			BitVector store_positions = ref.store->storage_occupancy(); //every index in store is represented as bit here. false -> currently free	
-			const auto reset_and_check_position = [&store_positions](const Ref ref) -> fold::FindBool { //doubles in function as 
+			const auto reset_and_check_position = [&store_positions](const Ref ref) -> fold::FindTrue { //doubles in function as 
 				if (!ref.type.is<MultiPn>() && !(ref.type == PnNode::value_proxy)) { //else index does not point in store anyway
 					const auto set_all_in_range = [&store_positions](std::size_t index, const std::size_t end) {
 						while (index < end) {
@@ -654,17 +654,17 @@ namespace bmath::intern {
 				}
 				return false; //found no double use (not at this node anyway)
 			};
-			const bool found_double_use = fold::simple_fold<fold::FindBool>(ref, reset_and_check_position);
+			const bool found_double_use = fold::simple_fold<fold::FindTrue>(ref, reset_and_check_position);
 			return !found_double_use && store_positions.none();
 		} //valid_storage
 
 		bool contains_variables(const Ref ref)
 		{
 			using namespace pattern;
-			const auto test_for_variables = [](const Ref ref) -> fold::FindBool {
+			const auto test_for_variables = [](const Ref ref) -> fold::FindTrue {
 				return ref.type == Literal::variable || ref.type.is<MatchType>();
 			};
-			return fold::simple_fold<fold::FindBool>(ref, test_for_variables);
+			return fold::simple_fold<fold::FindTrue>(ref, test_for_variables);
 		} //contains_variables
 
 		TypedIdx search_variable(const Ref ref, const std::string_view name)
@@ -767,10 +767,10 @@ namespace bmath::intern {
 						const Ref rhs_ref = Ref(*ref.store, rhs);					
 						{
 							const auto contains_general_match_variables = [](const Ref ref) -> bool {
-								const auto is_general_match_variable = [](const Ref ref) -> fold::FindBool {
+								const auto is_general_match_variable = [](const Ref ref) -> fold::FindTrue {
 									return ref.type.is<MultiPn>() || ref.type == PnNode::tree_match;
 								};
-								return fold::simple_fold<fold::FindBool>(ref, is_general_match_variable);
+								return fold::simple_fold<fold::FindTrue>(ref, is_general_match_variable);
 							};
 							const bool lhs_contains = contains_general_match_variables(lhs_ref);
 							const bool rhs_contains = contains_general_match_variables(rhs_ref);
@@ -879,7 +879,7 @@ namespace bmath::intern {
 				catalog_lhs_occurences(Ref(lhs_temp, this->lhs_head));
 
 				const auto replace_occurences = [&old_multis](const MutRef head, const bool test_lhs) -> bool {
-					const auto check_function_params = [&old_multis, test_lhs](const MutRef ref) -> fold::FindBool {
+					const auto check_function_params = [&old_multis, test_lhs](const MutRef ref) -> fold::FindTrue {
 						if (ref.type.is<Function>()) {
 							for (auto& param : fn::unsave_range(ref)) {
 								if (param.get_type().is<MultiPn>()) {
@@ -898,7 +898,7 @@ namespace bmath::intern {
 						}
 						return false;
 					};
-					return fold::simple_fold<fold::FindBool>(head, check_function_params);
+					return fold::simple_fold<fold::FindTrue>(head, check_function_params);
 				};
 				throw_if(replace_occurences(MutRef(lhs_temp, this->lhs_head), true), "MultiPn in unexpected place in lhs");
 				throw_if(replace_occurences(MutRef(rhs_temp, this->rhs_head), false), "MultiPn only referenced in rhs");
@@ -906,7 +906,7 @@ namespace bmath::intern {
 			{
 				//if MultiPn::params occurs in sum / product, it is replaced by legal and matching MultiPn version.
 				const auto test_and_replace_multi_pn = [](const MutRef head, const bool test_lhs) -> bool {
-					const auto inspect_variadic = [test_lhs](const MutRef ref) -> fold::FindBool {
+					const auto inspect_variadic = [test_lhs](const MutRef ref) -> fold::FindTrue {
 						if (ref.type == Comm::sum || ref.type == Comm::product) {
 							const Type representing_type = ref.type == Comm::sum ? MultiPn::summands : MultiPn::factors;
 							for (TypedIdx& elem : fn::unsave_range(ref)) {
@@ -922,14 +922,14 @@ namespace bmath::intern {
 						}
 						return false;
 					};
-					return fold::simple_fold<fold::FindBool>(head, inspect_variadic);
+					return fold::simple_fold<fold::FindTrue>(head, inspect_variadic);
 				};
 				throw_if(test_and_replace_multi_pn(MutRef(lhs_temp, this->lhs_head), true), "wrong MultiPn in lhs");
 				test_and_replace_multi_pn(MutRef(rhs_temp, this->rhs_head), false);
 			}
 			{
 				const auto contains_illegal_value_match = [](const Ref head) -> bool {
-					const auto inspect_variadic = [](const Ref ref) -> fold::FindBool {
+					const auto inspect_variadic = [](const Ref ref) -> fold::FindTrue {
 						if (ref.type == Comm::sum || ref.type == Comm::product) {
 							std::size_t nr_value_matches = 0u;
 							for (const TypedIdx elem : fn::range(ref)) {
@@ -939,13 +939,13 @@ namespace bmath::intern {
 						}
 						return false;
 					};
-					return fold::simple_fold<fold::FindBool>(head, inspect_variadic);
+					return fold::simple_fold<fold::FindTrue>(head, inspect_variadic);
 				};
 				throw_if(contains_illegal_value_match(Ref(lhs_temp, this->lhs_head)), "no two value match variables may share the same sum / product in lhs.");
 			}
 			{
 				const auto contains_illegal_multi_match = [](const Ref head) -> bool {
-					const auto inspect_variadic = [](const Ref ref) -> fold::FindBool {
+					const auto inspect_variadic = [](const Ref ref) -> fold::FindTrue {
 						if (ref.type == Comm::sum || ref.type == Comm::product) {
 							std::size_t nr_multi_matches = 0u;
 							for (const TypedIdx elem : fn::range(ref)) {
@@ -955,20 +955,20 @@ namespace bmath::intern {
 						}
 						return false;
 					};
-					return fold::simple_fold<fold::FindBool>(head, inspect_variadic);
+					return fold::simple_fold<fold::FindTrue>(head, inspect_variadic);
 				};
 				throw_if(contains_illegal_multi_match(Ref(lhs_temp, this->lhs_head)), "no two multi match variables may share the same sum / product in lhs.");
 			}	
 			{
 				const auto contains_to_long_variadic = [](const Ref head) -> bool {
-					const auto inspect_variadic = [](const Ref ref) -> fold::FindBool {
+					const auto inspect_variadic = [](const Ref ref) -> fold::FindTrue {
 						if (ref.type == Comm::sum || ref.type == Comm::product) {
 							const std::uint32_t multi_at_back = ref->parameters.back().get_type().is<MultiPn>();
 							return ref->parameters.size() - multi_at_back > match::SharedVariadicDatum::max_pn_variadic_params_count;
 						}
 						return false;
 					};
-					return fold::simple_fold<fold::FindBool>(head, inspect_variadic);
+					return fold::simple_fold<fold::FindTrue>(head, inspect_variadic);
 				};
 				throw_if(contains_to_long_variadic(Ref(lhs_temp, this->lhs_head)), "a sum / product in lhs contains to many operands.");
 			}	
@@ -1720,8 +1720,8 @@ namespace bmath::intern {
 
 	namespace fold {
 
-		template<typename Res_T, typename Type_T, StoreLike Store_T, typename Apply>
-		Res_T simple_fold(const BasicRef<Type_T, Store_T> ref, Apply apply)
+		template<typename Res_T, ReferenceTo<MathUnion> R, CallableTo<Res_T, R> Apply>
+		Res_T simple_fold(const R ref, Apply apply)
 		{
 			constexpr bool return_early_possible = ReturnEarlyPossible<Res_T>::value;
 
@@ -1741,21 +1741,21 @@ namespace bmath::intern {
 			return apply(ref); 
 		} //simple_fold
 
-		template<typename Res_T, typename OpAccumulator, typename Type_T, StoreLike Store_T, typename LeafApply, typename... AccInit>
-		Res_T tree_fold(const BasicRef<Type_T, Store_T> ref, LeafApply leaf_apply, const AccInit... init)
+		template<typename Res_T, Accumulator<Res_T> Acc, ReferenceTo<MathUnion> R, CallableTo<Res_T, R> LeafApply, typename... AccInit>
+		Res_T tree_fold(const R ref, LeafApply leaf_apply, const AccInit... init)
 		{
 			if (ref.type.is<Function>()) {
-				OpAccumulator acc(ref, init...);
+				Acc acc(ref, init...);
 				for (const auto elem : fn::range(ref)) {
-					acc.consume(fold::tree_fold<Res_T, OpAccumulator>(ref.new_at(elem), leaf_apply, init...));
+					acc.consume(fold::tree_fold<Res_T, Acc>(ref.new_at(elem), leaf_apply, init...));
 				}
 				return acc.result();
 			}
 			else if (ref.type == PnNode::value_match) {
-				OpAccumulator acc(ref, init...);
+				Acc acc(ref, init...);
 				const pattern::ValueMatchVariable var = *ref;
-				acc.consume(fold::tree_fold<Res_T, OpAccumulator>(ref.new_at(var.mtch_idx), leaf_apply, init...));
-				acc.consume(fold::tree_fold<Res_T, OpAccumulator>(ref.new_at(var.copy_idx), leaf_apply, init...));
+				acc.consume(fold::tree_fold<Res_T, Acc>(ref.new_at(var.mtch_idx), leaf_apply, init...));
+				acc.consume(fold::tree_fold<Res_T, Acc>(ref.new_at(var.copy_idx), leaf_apply, init...));
 				return acc.result();
 			}
 			else {
