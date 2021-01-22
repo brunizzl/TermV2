@@ -184,7 +184,7 @@ namespace bmath::intern::debug {
 
 		while (true) {
 			std::string name;
-			std::cout << "> ";
+			std::cout << "test> ";
 			std::getline(std::cin, name);
 			try {
 				bmath::Term test(name); 
@@ -365,6 +365,8 @@ namespace bmath::intern::test {
 			std::cout << "baue aus: \"" << s << "\"\n";
 			const RewriteRule pattern(s);
 			std::cout << "pattern: " << pattern.to_string() << "\n\n";
+			std::cout << "lhs baum:\n" << pattern.lhs_tree() << "\n\n";
+			std::cout << "rhs baum:\n" << pattern.rhs_tree() << "\n\n";
 			std::cout << "lhs speicher:\n" << pattern.lhs_memory_layout() << "\n\n";
 			std::cout << "rhs speicher:\n" << pattern.rhs_memory_layout() << "\n\n";
 			std::cout << "-------------------------------------------------------------------------------------\n";
@@ -400,7 +402,7 @@ namespace bmath::intern::test {
 		std::cout << "term_1: " << term_1.to_string() << "\n";
 
 		Ref ref = static_cast<const Term&>(term_1).ref();
-		auto head_2 = tree::copy(ref, const_cast<Store&>(*ref.store));
+		auto head_2 = tree::copy(ref, const_cast<MathStore&>(*ref.store));
 
 		std::string term_2_str;
 		print::append_to_string(ref, term_2_str);
@@ -557,7 +559,7 @@ namespace bmath::intern::test {
 	{
 		using StringArray = StoredVector<char, 16>;
 		using Store_T = BasicStore<StringArray>;
-		using Ref_T = BasicNodeRef<StringArray, StringArray, Const::no>;
+		using Ref_T = BasicNodeRef<StringArray, Store_T>;
 	
 		static_assert(StringArray::min_capacity == 12u);
 		static_assert(StringArray::values_per_node == 16u);

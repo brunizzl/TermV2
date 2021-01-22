@@ -12,6 +12,7 @@
 
 #include "typedIndex.hpp"
 #include "termStore.hpp"
+#include "reference.hpp"
 #include "parseTerm.hpp"
 #include "termVector.hpp"
 
@@ -206,7 +207,7 @@ namespace bmath::intern {
 
 
 
-	union TypesUnion
+	union MathUnion
 	{
 		Complex complex;
 		IndexVector parameters; //all in Variadic and all in Fn
@@ -214,14 +215,14 @@ namespace bmath::intern {
 		pattern::TreeMatchVariable tree_match;    //only expected as part of pattern
 		pattern::ValueMatchVariable value_match;  //only expected as part of pattern
 
-		constexpr TypesUnion(const Complex                    & val) noexcept :complex(val)     {}
-		constexpr TypesUnion(const IndexVector                & val) noexcept :parameters(val)   {}
-		constexpr TypesUnion(const CharVector                 & val) noexcept :char_vec(val)    {} 
-		constexpr TypesUnion(const pattern::TreeMatchVariable & val) noexcept :tree_match(val)  {} 
-		constexpr TypesUnion(const pattern::ValueMatchVariable& val) noexcept :value_match(val) {} 
-		constexpr TypesUnion()                                       noexcept :complex(0.0)     {} 
+		constexpr MathUnion(const Complex                    & val) noexcept :complex(val)     {}
+		constexpr MathUnion(const IndexVector                & val) noexcept :parameters(val)  {}
+		constexpr MathUnion(const CharVector                 & val) noexcept :char_vec(val)    {} 
+		constexpr MathUnion(const pattern::TreeMatchVariable & val) noexcept :tree_match(val)  {} 
+		constexpr MathUnion(const pattern::ValueMatchVariable& val) noexcept :value_match(val) {} 
+		constexpr MathUnion()                                       noexcept :complex(0.0)     {} 
 
-		constexpr auto operator<=>(const TypesUnion&) const = default;
+		constexpr auto operator<=>(const MathUnion&) const = default;
 
 		constexpr operator const Complex                     &() const noexcept { return this->complex; }
 		constexpr operator const IndexVector                 &() const noexcept { return this->parameters; }
@@ -236,12 +237,12 @@ namespace bmath::intern {
 		constexpr operator pattern::ValueMatchVariable &() noexcept { return this->value_match; }
 	};
 
-	static_assert(sizeof(TypesUnion) * 8 == 128);
-	using Store = BasicStore<TypesUnion>;
+	static_assert(sizeof(MathUnion) * 8 == 128);
+	using MathStore = BasicStore<MathUnion>;
 
 
-	using MutRef = BasicMutRef<TypesUnion, Type>;
-	using Ref = BasicRef<TypesUnion, Type>;
+	using MutRef = BasicRef<Type, MathStore>;
+	using Ref = BasicRef<Type, const MathStore>;
 
 
 	//utility for NamedFn, types in Fn and types in Variadic
@@ -400,7 +401,7 @@ namespace bmath::intern {
 		std::size_t count(const Ref ref);
 
 		//copies subtree starting at src_ref into dst_store and returns its head
-		[[nodiscard]] TypedIdx copy(const Ref src_ref, Store& dst_store);
+		[[nodiscard]] TypedIdx copy(const Ref src_ref, MathStore& dst_store);
 
 		//returns true iff subtree starting at ref contains to_contain (or is to_contain itself)
 		bool contains(const Ref ref, const TypedIdx to_contain);
@@ -416,7 +417,7 @@ namespace bmath::intern {
 		//returns pointer to field of parent of subtree, where subtree is held
 		//only the non-const return value requires this function to not take a const store, 
 		//  else handing in a reference as head might not be desired.
-		TypedIdx* find_subtree_owner(Store& store, TypedIdx& head, const TypedIdx subtree);
+		TypedIdx* find_subtree_owner(MathStore& store, TypedIdx& head, const TypedIdx subtree);
 
 		//expects ref to be head of term and ref.store to house ref exclusively 
 		//(-> every position in store eighter free or used by (children of) ref exactly once)
@@ -435,8 +436,8 @@ namespace bmath::intern {
 		{
 			TypedIdx lhs_head;
 			TypedIdx rhs_head;
-			Store lhs_store;
-			Store rhs_store;
+			MathStore lhs_store;
+			MathStore rhs_store;
 
 			RewriteRule(std::string name);
 			std::string to_string() const;
@@ -457,18 +458,18 @@ namespace bmath::intern {
 			//returns pointer to position in parent of value_match, where value_match is to be held in future
 			// (currently value_match is only somewhere in the subtree that it will own, not nesseccarily at the root.
 			//assumes head to be passed at reference to its own storage position
-			TypedIdx* find_value_match_subtree(Store& store, TypedIdx& head, const TypedIdx value_match);
+			TypedIdx* find_value_match_subtree(MathStore& store, TypedIdx& head, const TypedIdx value_match);
 
 			//changes value_match from its state holding two value_proxy directly to actually
 			//having copy_idx and match_idx initialized (thus value_match also bubbles up a bit in term)
-			void rearrange_value_match(Store& store, TypedIdx& head, const TypedIdx value_match);
+			void rearrange_value_match(MathStore& store, TypedIdx& head, const TypedIdx value_match);
 
 			struct Equation { TypedIdx lhs_head, rhs_head; };
 
 			//reorders lhs and rhs until to_isolate is lhs_head, returns updated lhs_head and rhs_head
 			//(possible other subtrees identical to to_isolate are not considered, thus the name prefix)
 			//currently only used in rearrange_value_match, thus quite specialized
-			[[nodiscard]] Equation stupid_solve_for(Store& store, Equation eq, const TypedIdx to_isolate);
+			[[nodiscard]] Equation stupid_solve_for(MathStore& store, Equation eq, const TypedIdx to_isolate);
 
 			//mostly stripped down version of tree::combine_values_exact to find calculate SharedValueDatum.value
 			// from the start_val taken out of matched term
@@ -579,7 +580,7 @@ namespace bmath::intern {
 
 			//copies pn_ref with match_data into dst_store, returns head of copied result.
 			[[nodiscard]] TypedIdx copy(const Ref pn_ref, const MatchData& match_data, 
-				const Store& src_store, Store& dst_store);
+				const MathStore& src_store, MathStore& dst_store);
 
 			//this function is the primary function designed to be called from outside of this namespace.
 			//the function will try to match the head of in with the head of ref and if so, replace the matched part with out.
@@ -638,12 +639,12 @@ namespace bmath::intern {
 
 		struct Void {}; //used if there is nothing to be returned from simple_fold
 
-		//calls apply with every node (postorder), parameter is (BasicRef<Union_T, Type_T, is_const> ref), apply returns Res_T
+		//calls apply with every node (postorder), parameter is (BasicRef<Union_T, Type_T, Store_T> ref), apply returns Res_T
 		//Res_T might have nonstatic member return_early, to indicate if the fold may be stopped early, as the result is already known
 		//not really a fold function in the classical sense, as there is no information accumulated - 
 		//  eighter you have the final result or not. (or you only mutate the term and not return any result at all)
-		template<typename Res_T, typename Union_T, typename Type_T, Const is_const, typename Apply>
-		Res_T simple_fold(const BasicRef<Union_T, Type_T, is_const> ref, Apply apply);
+		template<typename Res_T, typename Type_T, StoreLike Store_T, typename Apply>
+		Res_T simple_fold(const BasicRef<Type_T, Store_T> ref, Apply apply);
 
 		//this fold differentiates between recursive nodes (Variadic's, Fn's and ValueMatchVariable) and Leafes (values and variables)
 		//OpAccumulator is constructed before a recursive call is made and consumes each recursive result. It thus needs to at least
@@ -651,9 +652,9 @@ namespace bmath::intern {
 		//  and a consume method taking as single parameter (Res_T elem_res)
 		//  a result method taking no parameters and returning Res_T
 		//leaf_apply has parameters (BasicRef<Union_T, Type_T, Const> ref) and returns Res_T.		
-		template<typename Res_T, typename OpAccumulator, typename Union_T, typename Type_T, Const is_const, 
+		template<typename Res_T, typename OpAccumulator, typename Type_T, StoreLike Store_T, 
 			typename LeafApply, typename... AccInit>
-		Res_T tree_fold(const BasicRef<Union_T, Type_T, is_const> ref, LeafApply leaf_apply, const AccInit... init);
+		Res_T tree_fold(const BasicRef<Type_T, Store_T> ref, LeafApply leaf_apply, const AccInit... init);
 
 	} //namespace fold
 
@@ -664,7 +665,7 @@ namespace bmath {
 	class Term
 	{
 	public:
-		intern::Store store;
+		intern::MathStore store;
 		intern::TypedIdx head;
 
 		Term(std::string& name); //allows whitespace and implicit product

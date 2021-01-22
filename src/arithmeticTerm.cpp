@@ -302,7 +302,7 @@ namespace bmath::intern {
 					}
 					if (*divisor_acc != 1.0) {
 						const std::uint32_t divisor_idx = ref.store->allocate_one();
-						new (&ref.store->at(divisor_idx)) TypesUnion(*divisor_acc);
+						new (&ref.store->at(divisor_idx)) MathUnion(*divisor_acc);
 						new_product.push_back(build_inverted(*ref.store, TypedIdx(divisor_idx, Literal::complex)));
 					}
 				}
@@ -523,7 +523,7 @@ namespace bmath::intern {
 			return fold::tree_fold<std::size_t, Acc>(ref, [](auto) { return 1u; });
 		} //count
 
-		[[nodiscard]] TypedIdx copy(const Ref src_ref, Store& dst_store)
+		[[nodiscard]] TypedIdx copy(const Ref src_ref, MathStore& dst_store)
 		{
 			switch (src_ref.type) {			
 			default: {
@@ -593,7 +593,7 @@ namespace bmath::intern {
 			return combine_result;
 		} //establish_basic_order
 
-		TypedIdx* find_subtree_owner(Store& store, TypedIdx& head, const TypedIdx subtree)
+		TypedIdx* find_subtree_owner(MathStore& store, TypedIdx& head, const TypedIdx subtree)
 		{
 			if (head == subtree) {
 				return &head;
@@ -1030,7 +1030,7 @@ namespace bmath::intern {
 
 		namespace pn_tree {
 
-			TypedIdx* find_value_match_subtree(Store& store, TypedIdx& head, const TypedIdx value)
+			TypedIdx* find_value_match_subtree(MathStore& store, TypedIdx& head, const TypedIdx value)
 			{
 				struct MatchTraits
 				{
@@ -1099,13 +1099,13 @@ namespace bmath::intern {
 				return nullptr;
 			} //find_value_match_subtree
 
-			void rearrange_value_match(Store& store, TypedIdx& head, const TypedIdx value_match)
+			void rearrange_value_match(MathStore& store, TypedIdx& head, const TypedIdx value_match)
 			{
 				TypedIdx* const value_match_subtree = find_value_match_subtree(store, head, value_match);
 				TypedIdx* const value_match_storage = tree::find_subtree_owner(store, head, value_match);
 
 				if (value_match_storage != value_match_subtree) { //else value owns just itself, no nodes upstream
-					using VarRef = BasicNodeRef<TypesUnion, ValueMatchVariable, Const::no>;
+					using VarRef = BasicNodeRef<ValueMatchVariable, MathStore>;
 					const VarRef var = VarRef(store, value_match.get_index());
 					const TypedIdx proxy_value = var->copy_idx;
 					assert(var->copy_idx == var->mtch_idx);
@@ -1123,7 +1123,7 @@ namespace bmath::intern {
 				}
 			} //rearrange_value_match
 
-			Equation stupid_solve_for(Store& store, Equation eq, const TypedIdx to_isolate)
+			Equation stupid_solve_for(MathStore& store, Equation eq, const TypedIdx to_isolate)
 			{
 				assert(tree::contains(Ref(store, eq.lhs_head), to_isolate));
 
@@ -1600,7 +1600,7 @@ namespace bmath::intern {
 			return pn_params.size() == haystack_params.size();
 		} //find_matching_permutation
 
-		TypedIdx copy(const Ref pn_ref, const MatchData& match_data, const Store& src_store, Store& dst_store)
+		TypedIdx copy(const Ref pn_ref, const MatchData& match_data, const MathStore& src_store, MathStore& dst_store)
 		{
 			switch (pn_ref.type) {
 			default: {
@@ -1686,7 +1686,7 @@ namespace bmath::intern {
 		{					
 			MatchData match_data;
 			if (match::permutation_equals(from, ref, match_data)) {
-				Store copy_buffer;
+				MathStore copy_buffer;
 				copy_buffer.reserve(32u);
 				const TypedIdx buffer_head = match::copy(to, match_data, *ref.store, copy_buffer);
 				tree::free(ref);
@@ -1720,8 +1720,8 @@ namespace bmath::intern {
 
 	namespace fold {
 
-		template<typename Res_T, typename Union_T, typename Type_T, Const is_const, typename Apply>
-		Res_T simple_fold(const BasicRef<Union_T, Type_T, is_const> ref, Apply apply)
+		template<typename Res_T, typename Type_T, StoreLike Store_T, typename Apply>
+		Res_T simple_fold(const BasicRef<Type_T, Store_T> ref, Apply apply)
 		{
 			constexpr bool return_early_possible = ReturnEarlyPossible<Res_T>::value;
 
@@ -1741,8 +1741,8 @@ namespace bmath::intern {
 			return apply(ref); 
 		} //simple_fold
 
-		template<typename Res_T, typename OpAccumulator, typename Union_T, typename Type_T, Const is_const, typename LeafApply, typename... AccInit>
-		Res_T tree_fold(const BasicRef<Union_T, Type_T, is_const> ref, LeafApply leaf_apply, const AccInit... init)
+		template<typename Res_T, typename OpAccumulator, typename Type_T, StoreLike Store_T, typename LeafApply, typename... AccInit>
+		Res_T tree_fold(const BasicRef<Type_T, Store_T> ref, LeafApply leaf_apply, const AccInit... init)
 		{
 			if (ref.type.is<Function>()) {
 				OpAccumulator acc(ref, init...);

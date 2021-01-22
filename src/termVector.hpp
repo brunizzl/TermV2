@@ -132,10 +132,11 @@ namespace bmath::intern {
 		//this iterator does not hold the position pointed at directly, but always takes the way via the store,
 		//  where the StoredVector we walk along is held.
 		//The Store is thus allowed to move its data elsewhere during StoredVector traversal.
-		template<typename Value_T, std::size_t AllocNodeSize, typename Store_T>
+		template<typename Value_T, std::size_t AllocNodeSize, StoreLike Store_T>
 		class SaveIterator
 		{
-			using StoredVector_T = std::conditional_t <std::is_const_v<Value_T>,
+			static_assert(std::is_const_v<Value_T> == std::is_const_v<Store_T>);
+			using StoredVector_T = std::conditional_t<std::is_const_v<Store_T>,
 				const StoredVector<std::remove_const_t<Value_T>, AllocNodeSize>,
 				      StoredVector<std::remove_const_t<Value_T>, AllocNodeSize>
 			>;
@@ -210,24 +211,16 @@ namespace bmath::intern {
 
 	} //namespace stored_vector
 
-	template<typename Union_T, typename Value_T, std::size_t AllocNodeSize>
-	constexpr auto begin(const BasicNodeRef<Union_T, StoredVector<Value_T, AllocNodeSize>, Const::no>& ref)
+	template<typename Value_T, std::size_t AllocNodeSize, StoreLike Store_T> 
+	constexpr auto begin(const BasicNodeRef<StoredVector<Value_T, AllocNodeSize>, Store_T>& ref)
 	{
-		using Iter = stored_vector::SaveIterator<Value_T, AllocNodeSize, BasicStore<Union_T>>;
-		using Vec_T = StoredVector<Value_T, AllocNodeSize>;
+		using CV_Value_T = std::conditional_t<std::is_const_v<Store_T>, const Value_T, Value_T>;
+		using Iter = stored_vector::SaveIterator<CV_Value_T, AllocNodeSize, Store_T>;
 		return Iter{ *ref.store, ref.index, 0u };
 	}
 
-	template<typename Union_T, typename Value_T, std::size_t AllocNodeSize>
-	constexpr auto begin(const BasicNodeRef<Union_T, StoredVector<Value_T, AllocNodeSize>, Const::yes>& ref)
-	{
-		using Iter = stored_vector::SaveIterator<const Value_T, AllocNodeSize, const BasicStore<Union_T>>;
-		using Vec_T = StoredVector<Value_T, AllocNodeSize>;
-		return Iter{ *ref.store, ref.index, 0u };
-	}
-
-	template<typename Union_T, typename Value_T, std::size_t AllocNodeSize, Const is_const>
-	constexpr auto end(const BasicNodeRef<Union_T, StoredVector<Value_T, AllocNodeSize>, is_const>& ref)
+	template<typename Value_T, std::size_t AllocNodeSize, StoreLike Store_T>
+	constexpr auto end(const BasicNodeRef<StoredVector<Value_T, AllocNodeSize>, Store_T>& ref)
 	{
 		return stored_vector::SaveEndIndicator{ (std::uint32_t) ref->size() };
 	}

@@ -20,18 +20,23 @@ namespace bmath::intern {
 
 	//this is a the result, if an allocator had a child with std::vector
 	//a StoreLike behaves kinda like an allocator, only that the allocated space is not guaranteed to stay at the same memory address
-	// -> an allocation returns no address, but an index for later access via method at().
+	//thus an allocation returns no address, but an index for later access via method at().
 	template<typename T>
-	concept StoreLike = requires (T a, std::size_t n, std::size_t pos) {
+	concept StoreLike = 
+		requires (const T a, std::size_t n) {
+		{a.at(n)} -> std::same_as<typename T::value_type const&>; 
+		{a.data()} -> std::same_as<typename T::value_type const*>; 
+		{a.size()} -> std::convertible_to<std::size_t>;
+		{a.valid_idx(n)} -> std::same_as<bool>;
+	} && (std::is_const_v<T> || 
+		requires (T a, std::size_t n) {
+		{a.at(n)} -> std::same_as<typename T::value_type&>; 
+		{a.data()} -> std::same_as<typename T::value_type*>; 
 		{a.allocate_one()} -> std::convertible_to<std::size_t>;
 		{a.allocate_n(n)} -> std::convertible_to<std::size_t>;
-		{a.free_one(pos)};
-		{a.free_n(pos, n)};
-		{a.at(n)}; //returns reference to contained type
-		{a.size()} -> std::convertible_to<std::size_t>;
-		{a.data()}; //returns pointer to array of contained type
-		{a.valid_idx(n)} -> std::same_as<bool>;
-	};
+	});
+
+
 
 	template <typename Payload_T, template <typename> class Alloc_T = std::allocator> 
 		requires Allocator<Alloc_T>
@@ -173,6 +178,8 @@ namespace bmath::intern {
 		} //at_back_allocate_alligned()
 
 	public:
+		using value_type = Payload_T;
+
 		//returns pointer to begin of payload array (same adress as combinded_data, but new type)
 		constexpr inline Payload_T* data() noexcept { return &this->memory.combined_data->payload; }
 		constexpr inline const Payload_T* data() const noexcept { return &this->memory.combined_data->payload; }
@@ -371,81 +378,5 @@ namespace bmath::intern {
 
 
 
-
-	enum class Const :bool { no = false, yes = true };
-
-	template<typename Union_T, typename Own_T, Const is_const>
-	struct BasicNodeRef;
-
-	//as any algorithm accessing an element of a term needs also access to its store, both store and TypedIdx info
-	//  are neatly bundled as a package here
-	template<typename Union_T, typename Type_T, Const is_const = Const::yes>
-	struct BasicRef
-	{
-		using Store_T = std::conditional_t<(bool)is_const, const BasicStore<Union_T>, BasicStore<Union_T>>;
-		Store_T* const store; //actual pointer to have shallow constness
-		std::uint32_t index;
-		Type_T type;
-
-		constexpr BasicRef(Store_T& new_store, const BasicTypedIdx<Type_T> elem) noexcept
-			:store(&new_store), index(elem.get_index()), type(elem.get_type()) {}
-
-		constexpr BasicRef(Store_T& new_store, const std::uint32_t new_index) noexcept
-			:store(&new_store), index(new_index), type(Type_T::COUNT) {}
-
-		constexpr BasicRef(const BasicRef<Union_T, Type_T, Const::no>& ref) noexcept 
-			:store(ref.store), index(ref.index), type(ref.type) {} //allow both const and mut to be initialized from mut
-
-		constexpr auto& operator*() const { return store->at(index); }
-		constexpr auto* operator->() const { return &store->at(index); }
-
-		constexpr void set(const BasicTypedIdx<Type_T> elem) noexcept 
-		{ 
-			this->index = elem.get_index(); 
-			this->type = elem.get_type(); 
-		}
-
-		constexpr BasicRef new_at(const BasicTypedIdx<Type_T> elem) const noexcept { return BasicRef(*this->store, elem); }
-
-		template<typename Own_T, Const result_const = is_const>
-		constexpr auto cast() const noexcept { return BasicNodeRef<Union_T, Own_T, result_const>(*this); }
-
-		template<typename Own_T, Const result_const = is_const>
-		constexpr auto new_as(const std::uint32_t new_index) const noexcept 
-		{ 
-			return BasicNodeRef<Union_T, Own_T, result_const>(*this->store, new_index); 
-		}
-
-		constexpr BasicTypedIdx<Type_T> typed_idx() const noexcept { return BasicTypedIdx<Type_T>(this->index, this->type); }
-	}; //struct BasicRef
-
-	template<typename Union_T, typename Type_T>
-	using BasicMutRef = BasicRef<Union_T, Type_T, Const::no>;
-
-
-	//in contrast to BasicRef, this struct only stands for the single type Own_T in that Union_T thingy
-	template<typename Union_T, typename Own_T, Const is_const>
-	struct BasicNodeRef
-	{
-		static_assert(std::is_convertible_v<Union_T, Own_T>);
-
-		using Store_T = std::conditional_t<(bool)is_const, const BasicStore<Union_T>, BasicStore<Union_T>>;
-		using Const_Own_T = std::conditional_t<(bool)is_const, const Own_T, Own_T>;
-		Store_T* const store; //actual pointer to have shallow constness
-		std::uint32_t index;
-
-		constexpr BasicNodeRef(Store_T& new_store, const std::uint32_t new_index)
-			:store(&new_store), index(new_index) {}
-
-		template<typename Type_T>
-		constexpr BasicNodeRef(const BasicRef<Union_T, Type_T, is_const>& ref) :store(ref.store), index(ref.index) {
-		
-		}
-
-		constexpr auto new_at(const std::size_t new_index) const noexcept { return BasicNodeRef(*this->store, new_index); }
-
-		constexpr auto& operator*() const { return static_cast<Const_Own_T&>(store->at(index)); }
-		constexpr auto* operator->() const { return &static_cast<Const_Own_T&>(store->at(index)); }
-	};
 
 } //namespace bmath::intern

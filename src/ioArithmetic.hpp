@@ -51,14 +51,14 @@ namespace bmath::intern {
 	[[nodiscard]] Head find_head_type(const ParseView view);
 
 	//returns head
-	[[nodiscard]] TypedIdx build(Store& store, ParseView view);
+	[[nodiscard]] TypedIdx build(MathStore& store, ParseView view);
 
 
 	template<typename Store_T>
 	[[nodiscard]] TypedIdx build_value(Store_T& store, const std::complex<double> complex) noexcept
 	{
 		const std::size_t result_idx = store.allocate_one();
-		new (&store.at(result_idx)) TypesUnion(complex);
+		new (&store.at(result_idx)) MathUnion(complex);
 		return TypedIdx(result_idx, Type(Literal::complex));
 	}
 
@@ -67,7 +67,7 @@ namespace bmath::intern {
 	{
 		const TypedIdx minus_1 = build_value(store, -1.0);
 		const std::size_t result_idx = store.allocate_one();
-		new (&store.at(result_idx)) TypesUnion(IndexVector({ minus_1, to_negate }));
+		new (&store.at(result_idx)) MathUnion(IndexVector({ minus_1, to_negate }));
 		return TypedIdx(result_idx, Type(Comm::product));
 	}
 
@@ -76,7 +76,7 @@ namespace bmath::intern {
 	{
 		const TypedIdx minus_1 = build_value(store, -1.0);
 		const std::size_t result_idx = store.allocate_one();
-		new (&store.at(result_idx)) TypesUnion(IndexVector({ to_invert, minus_1 }));
+		new (&store.at(result_idx)) MathUnion(IndexVector({ to_invert, minus_1 }));
 		return TypedIdx(result_idx, Type(Fn::pow));
 	}
 
@@ -139,7 +139,7 @@ namespace bmath::intern {
 			//assumes to only get declarations part of pattern
 			NameLookupTable(ParseView declarations);
 
-			TypedIdx insert_instance(Store& store, const ParseView input);
+			TypedIdx insert_instance(MathStore& store, const ParseView input);
 		};
 
 		struct PatternBuildFunction
@@ -148,7 +148,7 @@ namespace bmath::intern {
 			NameLookupTable& table;
 
 			//equivalent to build() for pattern
-			TypedIdx operator()(Store& store, ParseView input);
+			TypedIdx operator()(MathStore& store, ParseView input);
 		};
 
 	} //namespace pattern
@@ -160,7 +160,7 @@ namespace bmath::intern {
 		//prettier, but also slower
 		std::string to_pretty_string(const Ref ref, const int parent_infixr = 0);
 
-		std::string to_memory_layout(const Store& store, const std::initializer_list<const TypedIdx> heads);
+		std::string to_memory_layout(const MathStore& store, const std::initializer_list<const TypedIdx> heads);
 
 		//returns tree representation of ref
 		//offset specifies how far the whole tree is shifted to the right

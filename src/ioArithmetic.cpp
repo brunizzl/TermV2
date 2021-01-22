@@ -321,7 +321,7 @@ namespace bmath::intern {
 		}
 	} //find_head_type
 
-	TypedIdx build(Store& store, ParseView input)
+	TypedIdx build(MathStore& store, ParseView input)
 	{
 		if (input.size() == 0u) [[unlikely]] throw ParseFailure{ input.offset, "recieved empty substring" };
 		Head head = find_head_type(input);
@@ -332,7 +332,7 @@ namespace bmath::intern {
 		}
 		switch (head.type) {
 		case Head::Type::sum: {
-			return build_variadic<SumTraits>(store, input, head.where, build_negated<Store>, build);
+			return build_variadic<SumTraits>(store, input, head.where, build_negated<MathStore>, build);
 		} break;
 		case Head::Type::negate: {
 			input.remove_prefix(1u);  //remove minus sign
@@ -340,7 +340,7 @@ namespace bmath::intern {
 			return build_negated(store, to_negate);
 		} break;
 		case Head::Type::product: {
-			return build_variadic<ProductTraits>(store, input, head.where, build_inverted<Store>, build);
+			return build_variadic<ProductTraits>(store, input, head.where, build_inverted<MathStore>, build);
 		} break;
 		case Head::Type::power: {
 			const auto base_view = input.steal_prefix(head.where);
@@ -492,7 +492,7 @@ namespace bmath::intern {
 			}
 		} //NameLookupTable::NameLookupTable
 
-		TypedIdx NameLookupTable::insert_instance(Store& store, const ParseView input)
+		TypedIdx NameLookupTable::insert_instance(MathStore& store, const ParseView input)
 		{
 			const auto name = input.to_string_view();
 			const auto search_name = [name](auto& vec) { 
@@ -523,7 +523,7 @@ namespace bmath::intern {
 		} //NameLookupTable::insert_instance
 
 
-		TypedIdx PatternBuildFunction::operator()(Store& store, ParseView input)
+		TypedIdx PatternBuildFunction::operator()(MathStore& store, ParseView input)
 		{
 			if (input.size() == 0u) [[unlikely]] throw ParseFailure{ input.offset, "recieved empty substring" };
 			Head head = find_head_type(input);
@@ -534,7 +534,7 @@ namespace bmath::intern {
 			}
 			switch (head.type) {
 			case Head::Type::sum: {
-				return build_variadic<SumTraits>(store, input, head.where, build_negated<Store>, *this);
+				return build_variadic<SumTraits>(store, input, head.where, build_negated<MathStore>, *this);
 			} break;
 			case Head::Type::negate: {
 				input.remove_prefix(1u);  //remove minus sign
@@ -542,7 +542,7 @@ namespace bmath::intern {
 				return build_negated(store, to_negate);
 			} break;
 			case Head::Type::product: {
-				return build_variadic<ProductTraits>(store, input, head.where, build_inverted<Store>, *this);
+				return build_variadic<ProductTraits>(store, input, head.where, build_inverted<MathStore>, *this);
 			} break;
 			case Head::Type::power: {
 				const auto base_view = input.steal_prefix(head.where);
@@ -998,9 +998,9 @@ namespace bmath::intern {
 			print::append_to_string(ref, current_str, 0);
 		} //append_memory_row
 
-		std::string to_memory_layout(const Store& store, const std::initializer_list<const TypedIdx> heads)
+		std::string to_memory_layout(const MathStore& store, const std::initializer_list<const TypedIdx> heads)
 		{
-			std::vector<std::string> rows(store.size(), "");
+			std::vector<std::string> rows(std::max(store.size(), pattern::match::MatchData::max_variadic_count), "");
 
 			std::string result((heads.size() == 1u) ? "   | head at index: " : "   | heads at indices: ");
 			result.reserve(store.size() * 15);
@@ -1015,19 +1015,17 @@ namespace bmath::intern {
 			}	
 			{
 				const BitVector used_positions = store.storage_occupancy();
-				int i = 0;
-				for (auto& elem : rows) {
+				for (int i = 0; i < store.size(); i++) {
 					if (i < 10) { //please std::format, i need you :(
 						result += " ";
 					}
 					result += std::to_string(i);
 					result += " | ";
-					result += elem;
+					result += rows[i];
 					if (!used_positions.test(i)) {
 						result += "-----free slot-----";
 					}
 					result += "\n";
-					i++;
 				}
 			}
 			return result;

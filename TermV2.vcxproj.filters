@@ -83,5 +83,8 @@
     <ClInclude Include="src\utility\array.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\reference.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

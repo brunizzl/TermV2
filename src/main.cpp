@@ -48,57 +48,19 @@ idea status:
 
 using namespace bmath::intern;
 
-void f(Type t) {
-	using Switch = EnumSwitch<Type,
-		meta::List<Variadic, NamedFn, Fn, MatchType>,
-		std::array{ Type(Literal::complex), Type(Literal::variable) }>;
-	//using Switch = EnumSwitch<Type, meta::List<Variadic, NamedFn, Fn, Literal, MatchType>>;
-
-	std::cout << (unsigned)t << "\t";
-
-	switch (Switch::decide(t)) {
-	case Switch::is_type<Variadic>:
-		std::cout << "Variadic\n";
-		break;
-	case Switch::is_type<NamedFn>:
-		std::cout << "NamedFn\n";
-		break;
-	case Switch::is_type<Fn>:
-		std::cout << "Fn\n";
-		break;
-	//case Switch::is_type<Literal>:
-	//	std::cout << "Literal\n";
-	//	break;
-	case Switch::is_value<Literal::variable>:
-		std::cout << "variable\n";
-		break;
-	case Switch::is_value<Literal::complex>:
-		std::cout << "complex\n";
-		break;
-	case Switch::is_type<MatchType>:
-		std::cout << "MatchType\n";
-		break;
-	}
-}
-
 
 int main()
 {
-	for (unsigned i = 0; i < (unsigned)Type::COUNT; i++) {
-		f(Type(i));
-	}
-	//std::cout << "\n\n";
-	//debug::enumerate_type();
-	//debug::test_rechner();
-	//test::combine_exact();
+	debug::enumerate_type();
+	debug::test_rechner();
 	//test::pattern_term();
 	//test::arithmetic_term();
 	//test::copy();
 	//test::bit_set();
 	//test::match();
-	//test::combine();
 	//test::alloc_n();
 	//test::term_array();
+	//test::combine();
 }
 
 
