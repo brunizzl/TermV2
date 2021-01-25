@@ -313,12 +313,9 @@ namespace bmath::intern {
 	template<
 		InstanceOf<SumEnum> SumEnum_T,
 		meta::ListInstance TypeCases,
-		auto ValueCases = std::array<unsigned, 0>{}>
+		std::array ValueCases = std::array<unsigned, 0>{}>
 	class EnumSwitch
 	{
-		static_assert(InstanceOf<SumEnum_T, SumEnum>);
-		static_assert(InstanceOf<TypeCases, meta::List>);
-
 		enum class CaseIdentifier :unsigned {};
 
 		struct Option

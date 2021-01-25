@@ -248,10 +248,12 @@ namespace bmath::intern {
 	concept MutMathReference = ReferenceTo<T, MathUnion> && !T::is_const;
 
 
-	using Ref = BasicRef<Type, const MathStore>;
-	using MutRef = BasicRef<Type, MathStore>;
+	using Ref = BasicSaveRef<Type, const MathStore>;
+	using UnsaveRef = BasicUnsaveRef<Type, MathUnion>;
+	using MutRef = BasicSaveRef<Type, MathStore>;
 
-	static_assert(MathReference<const Ref>);
+	static_assert(MathReference<Ref>);
+	static_assert(MathReference<UnsaveRef>);
 	static_assert(MutMathReference<MutRef>);
 
 
@@ -349,27 +351,29 @@ namespace bmath::intern {
 
 
 
-		constexpr auto         range(const MutRef ref) noexcept { return ref.cast<IndexVector>(); }
-		constexpr auto& unsave_range(const MutRef ref) noexcept { return ref->parameters; }
-		constexpr auto&        range(const    Ref ref) noexcept { return ref->parameters; }
-		constexpr auto    save_range(const    Ref ref) noexcept { return ref.cast<IndexVector>(); }
+		constexpr auto&        range(const UnsaveRef ref) noexcept { return ref->parameters; }
+		constexpr auto&        range(const       Ref ref) noexcept { return ref->parameters; }
+		constexpr auto    save_range(const       Ref ref) noexcept { return ref.cast<IndexVector>(); }
+		constexpr auto         range(const    MutRef ref) noexcept { return ref.cast<IndexVector>(); }
+		constexpr auto& unsave_range(const    MutRef ref) noexcept { return ref->parameters; }
 
 
-
-		constexpr std::uint32_t named_fn_name_index(const Ref named_fn) noexcept
+		template<ReferenceTo<MathUnion> R>
+		constexpr std::uint32_t named_fn_name_index(const R named_fn) noexcept
 		{
 			const IndexVector& parameters = *named_fn;
 			return named_fn.index + parameters.node_count();
 		}
 
+		template<ReferenceTo<MathUnion> R>
 		constexpr const CharVector& named_fn_name(const Ref named_fn) noexcept
 		{
 			return static_cast<const CharVector&>(named_fn.store->at(named_fn_name_index(named_fn)));
 		}
 
-		constexpr CharVector& named_fn_name(const MutRef named_fn) noexcept
+		constexpr const CharVector& named_fn_name(const UnsaveRef named_fn) noexcept
 		{
-			return static_cast<CharVector&>(named_fn.store->at(named_fn_name_index(named_fn)));
+			return static_cast<const CharVector&>(*named_fn.raw_at(named_fn_name_index(named_fn)));
 		}
 
 		template<typename Store_T, typename Name_T, typename Parameters_T>
@@ -402,24 +406,24 @@ namespace bmath::intern {
 		[[nodiscard]] TypedIdx combine(const MutRef ref, const bool exact);
 
 		//compares two subterms of perhaps different stores, assumes both to have their parameters parts sorted
-		[[nodiscard]] std::strong_ordering compare(const Ref ref_1, const Ref ref_2);
+		[[nodiscard]] std::strong_ordering compare(const UnsaveRef ref_1, const UnsaveRef ref_2);
 
 		//sorts parameters parts by compare
 		void sort(const MutRef ref);
 
 		//counts number of logical nodes of subtree (note: logical nodes might be fewer than used slots in store)
-		std::size_t count(const Ref ref);
+		std::size_t count(const UnsaveRef ref);
 
 		//copies subtree starting at src_ref into dst_store and returns its head
 		[[nodiscard]] TypedIdx copy(const Ref src_ref, MathStore& dst_store);
 
 		//returns true iff subtree starting at ref contains to_contain (or is to_contain itself)
-		bool contains(const Ref ref, const TypedIdx to_contain);
+		bool contains(const UnsaveRef ref, const TypedIdx to_contain);
 
-		bool contains_variables(const Ref ref);
+		bool contains_variables(const UnsaveRef ref);
 
 		//returns TypedIdx() if unsuccsessfull
-		TypedIdx search_variable(const Ref ref, const std::string_view name);
+		TypedIdx search_variable(const UnsaveRef ref, const std::string_view name);
 
 		//calls first tree::combine, then tree::sort
 		[[nodiscard]] TypedIdx establish_basic_order(MutRef ref);
@@ -438,7 +442,7 @@ namespace bmath::intern {
 	//algorithms to compare pattern to usual term and find match
 	namespace pattern {
 
-		bool meets_restriction(const Ref ref, const Restriction restr);
+		bool meets_restriction(const UnsaveRef ref, const Restriction restr);
 
 		bool has_form(const Complex& nr, const Form form);
 
@@ -483,7 +487,7 @@ namespace bmath::intern {
 
 			//mostly stripped down version of tree::combine_values_exact to find calculate SharedValueDatum.value
 			// from the start_val taken out of matched term
-			OptComplex eval_value_match(const Ref ref, const Complex& start_val);
+			OptComplex eval_value_match(const UnsaveRef ref, const Complex& start_val);
 
 		} //namespace pn_tree
 
@@ -567,12 +571,12 @@ namespace bmath::intern {
 			//compares term starting at ref.index in ref.store with pattern starting at pn_ref.index in pn_ref.store
 			//if match is succsessfull, match_data stores what pattern's match variables matched and true is returned.
 			//if match was not succsessfull, match_data is NOT reset and false is returned
-			bool permutation_equals(const Ref pn_ref, const Ref ref, MatchData& match_data);
+			bool permutation_equals(const UnsaveRef pn_ref, const UnsaveRef ref, MatchData& match_data);
 
 			//resets not all matched variables appearing in pn_ref, but only the ones also set by pn_ref
 			//example: in whole pattern "a+a*b" "a" may be matched as single summand, 
 			//  thus resetting own variables in part "a*b" will only reset "b".
-			void reset_own_matches(const Ref pn_ref, MatchData& match_data);
+			void reset_own_matches(const UnsaveRef pn_ref, MatchData& match_data);
 
 			//determines weather there is a way to match pn_ref in haystack_ref (thus pn_ref is assumed to part of a pattern)
 			//pn_i is the index of the first element in pn_ref to be matched. 
@@ -580,16 +584,16 @@ namespace bmath::intern {
 			//the first haystack_k elements of haystack_ref will be skipped for the first match attemt.
 			//it is assumed, that pn_ref and haystack_ref are both the same parameters type (eighter both sum or both product)
 			//returns if search was successfull
-			bool find_matching_permutation(const Ref pn_ref, const Ref haystack_ref, 
+			bool find_matching_permutation(const UnsaveRef pn_ref, const UnsaveRef haystack_ref,
 				MatchData& match_data,	std::uint32_t pn_i, std::uint32_t haystack_k);
 
 			//expects pn_ref to already be matched to ref via match_data
 			//if one exists, this function finds a different match of pn_ref in ref, appearing after the current one
 			//  in all permutations
-			bool subsequent_permutation_equals(const Ref pn_ref, const Ref ref, MatchData& match_data);
+			bool subsequent_permutation_equals(const UnsaveRef pn_ref, const UnsaveRef ref, MatchData& match_data);
 
 			//copies pn_ref with match_data into dst_store, returns head of copied result.
-			[[nodiscard]] TypedIdx copy(const Ref pn_ref, const MatchData& match_data, 
+			[[nodiscard]] TypedIdx copy(const UnsaveRef pn_ref, const MatchData& match_data,
 				const MathStore& src_store, MathStore& dst_store);
 
 			//this function is the primary function designed to be called from outside of this namespace.
@@ -597,7 +601,7 @@ namespace bmath::intern {
 			//if a transformation happened, Just the new subterm is returned to replace the TypedIdx 
 			//  of the old subterm in its parent, else nothing.
 			//if the result contains something, ref is no longer valid.
-			[[nodiscard]] std::optional<TypedIdx> match_and_replace(const Ref in, const Ref out, const MutRef ref);
+			[[nodiscard]] std::optional<TypedIdx> match_and_replace(const UnsaveRef in, const UnsaveRef out, const MutRef ref);
 
 			//tries to match in (in postoreder) against every subterm of ref and finally ref itself. if a deeper match was found, 
 			// snd of return value is true. 
@@ -665,7 +669,7 @@ namespace bmath::intern {
 
 		//this fold differentiates between recursive nodes (Function and ValueMatchVariable) and Leafes (values and variables)
 		//Acc is constructed before a recursive call is made and consumes each recursive result. It thus needs to at least
-		//  have a Constructor taking as arguments (BasicRef<Union_T, Type_T, Const> ref, AccInit... init) 
+		//  have a Constructor taking as arguments (BasicSaveRef<Union_T, Type_T, Const> ref, AccInit... init) 
 		//  and a consume method taking as single parameter of type Res_T
 		//  a result method taking no parameters and returning Res_T	
 		template<typename Res_T, Accumulator<Res_T> Acc, ReferenceTo<MathUnion> R, CallableTo<Res_T, R> LeafApply, typename... AccInit>

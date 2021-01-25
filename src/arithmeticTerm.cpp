@@ -404,7 +404,7 @@ namespace bmath::intern {
 			return ref.typed_idx();
 		} //combine
 
-		[[nodiscard]] std::strong_ordering compare(const Ref ref_1, const Ref ref_2)
+		[[nodiscard]] std::strong_ordering compare(const UnsaveRef ref_1, const UnsaveRef ref_2)
 		{
 			const auto compare_char_vecs = [](const CharVector& fst, const CharVector& snd) -> std::strong_ordering {
 				const std::size_t size = std::min(fst.size(), snd.size());
@@ -436,9 +436,10 @@ namespace bmath::intern {
 				if (const auto cmp = vector_1.size() <=> vector_2.size(); cmp != std::strong_ordering::equal) {
 					return cmp;
 				}
+				const auto stop = vector_1.end(); //both are of equal length
 				for (auto iter_1 = vector_1.begin(),
 				          iter_2 = vector_2.begin();
-					iter_1 != vector_1.end(); //both are of equal length
+					iter_1 != stop; 
 					++iter_1,
 					++iter_2) 
 				{
@@ -450,14 +451,10 @@ namespace bmath::intern {
 				return std::strong_ordering::equal;
 			} break;			
 			case Type(Literal::variable): {
-				const CharVector& var_1 = *ref_1;
-				const CharVector& var_2 = *ref_2;
-				return compare_char_vecs(var_1, var_2);
+				return compare_char_vecs(*ref_1, *ref_2);
 			} break;
 			case Type(Literal::complex): {
-				const Complex& complex_1 = *ref_1;
-				const Complex& complex_2 = *ref_2;
-				return compare_complex(complex_1, complex_2);
+				return compare_complex(*ref_1, *ref_2);
 			} break;
 			case Type(PnNode::tree_match): {
 				const pattern::TreeMatchVariable& var_1 = *ref_1;
@@ -509,13 +506,13 @@ namespace bmath::intern {
 			fold::simple_fold<fold::Void>(ref, sort_variadic);
 		} //sort
 
-		std::size_t count(const Ref ref)
+		std::size_t count(const UnsaveRef ref)
 		{
 			struct Acc
 			{
 				std::size_t acc;
 
-				constexpr Acc(const Ref) noexcept :acc(1u) {}
+				constexpr Acc(const UnsaveRef) noexcept :acc(1u) {}
 				void consume(const std::size_t child_size) noexcept { this->acc += child_size; }
 				auto result() noexcept { return this->acc; }
 			};
@@ -578,10 +575,10 @@ namespace bmath::intern {
 		} //copy
 
 
-		bool contains(const Ref ref, const TypedIdx to_contain)
+		bool contains(const UnsaveRef ref, const TypedIdx to_contain)
 		{
 			return fold::simple_fold<fold::FindTrue>(ref, 
-				[to_contain](const Ref ref) -> fold::FindTrue 
+				[to_contain](const UnsaveRef ref) -> fold::FindTrue
 				{ return ref.typed_idx() == to_contain; }
 			);
 		} //contains
@@ -658,18 +655,18 @@ namespace bmath::intern {
 			return !found_double_use && store_positions.none();
 		} //valid_storage
 
-		bool contains_variables(const Ref ref)
+		bool contains_variables(const UnsaveRef ref)
 		{
 			using namespace pattern;
-			const auto test_for_variables = [](const Ref ref) -> fold::FindTrue {
+			const auto test_for_variables = [](const UnsaveRef ref) -> fold::FindTrue {
 				return ref.type == Literal::variable || ref.type.is<MatchType>();
 			};
 			return fold::simple_fold<fold::FindTrue>(ref, test_for_variables);
 		} //contains_variables
 
-		TypedIdx search_variable(const Ref ref, const std::string_view name)
+		TypedIdx search_variable(const UnsaveRef ref, const std::string_view name)
 		{
-			const auto test_for_name = [name](Ref ref) -> fold::Find<TypedIdx> {
+			const auto test_for_name = [name](UnsaveRef ref) -> fold::Find<TypedIdx> {
 				return (ref.type == Literal::variable && std::string_view(ref->char_vec.data(), ref->char_vec.size()) == name) ?
 					fold::done(TypedIdx(ref.index, ref.type)) : //name was found -> cut tree evaluation here
 					fold::more(TypedIdx());
@@ -682,7 +679,7 @@ namespace bmath::intern {
 
 	namespace pattern {
 
-		bool meets_restriction(const Ref ref, const Restriction restr)
+		bool meets_restriction(const UnsaveRef ref, const Restriction restr)
 		{
 			switch (restr) {
 			case Restriction(Restr::any):
@@ -1194,9 +1191,9 @@ namespace bmath::intern {
 				return eq;
 			} //stupid_solve_for
 
-			OptComplex eval_value_match(const Ref ref, const Complex& start_val)
+			OptComplex eval_value_match(const UnsaveRef ref, const Complex& start_val)
 			{
-				const auto get_divisor = [](const Ref ref) -> std::optional<TypedIdx> {
+				const auto get_divisor = [](const UnsaveRef ref) -> std::optional<TypedIdx> {
 					if (ref.type == Fn::pow) {
 						const IndexVector& params = *ref;
 						if (params[1].get_type() == Literal::complex) {
@@ -1283,7 +1280,7 @@ namespace bmath::intern {
 
 	namespace pattern::match {
 
-		bool permutation_equals(const Ref pn_ref, const Ref ref, MatchData& match_data)
+		bool permutation_equals(const UnsaveRef pn_ref, const UnsaveRef ref, MatchData& match_data)
 		{
 			if (pn_ref.type.is<MathType>() && pn_ref.type != ref.type) {
 				return false;
@@ -1409,9 +1406,9 @@ namespace bmath::intern {
 			}
 		} //permutation_equals
 
-		void reset_own_matches(const Ref pn_ref, MatchData& match_data) 
+		void reset_own_matches(const UnsaveRef pn_ref, MatchData& match_data)
 		{
-			const auto reset_single = [&match_data](const Ref ref) -> fold::Void {
+			const auto reset_single = [&match_data](const UnsaveRef ref) -> fold::Void {
 				switch (ref.type) {
 				case Type(PnNode::tree_match): {
 					SharedTreeDatum& info = match_data.info(ref->tree_match);
@@ -1437,7 +1434,7 @@ namespace bmath::intern {
 			fold::simple_fold<fold::Void>(pn_ref, reset_single);
 		} //reset_own_matches
 
-		bool subsequent_permutation_equals(const Ref pn_ref, const Ref ref, MatchData& match_data)
+		bool subsequent_permutation_equals(const UnsaveRef pn_ref, const UnsaveRef ref, MatchData& match_data)
 		{
 			if (!pn_ref.type.is<Function>()) {
 				return false; //can not rematch at all
@@ -1473,7 +1470,7 @@ namespace bmath::intern {
 			}
 		} //subsequent_permutation_equals
 
-		bool find_matching_permutation(const Ref pn_ref, const Ref haystack_ref, MatchData& match_data, std::uint32_t pn_i, std::uint32_t haystack_k)
+		bool find_matching_permutation(const UnsaveRef pn_ref, const UnsaveRef haystack_ref, MatchData& match_data, std::uint32_t pn_i, std::uint32_t haystack_k)
 		{
 			assert(pn_ref.type == haystack_ref.type && (haystack_ref.type.is<Comm>()));
 
@@ -1481,7 +1478,7 @@ namespace bmath::intern {
 			const IndexVector& haystack_params = *haystack_ref;
 
 			assert(std::is_sorted(haystack_params.begin(), haystack_params.end(), [&](auto lhs, auto rhs) { 
-				return tree::compare(Ref(*haystack_ref.store, lhs), Ref(*haystack_ref.store, rhs)) == std::strong_ordering::less;
+				return tree::compare(haystack_ref.new_at(lhs), haystack_ref.new_at(rhs)) == std::strong_ordering::less;
 			}));
 
 			SharedVariadicDatum& variadic_datum = match_data.variadic_data.at_or_insert(pn_ref.index);
@@ -1501,7 +1498,7 @@ namespace bmath::intern {
 					return true;
 				}
 				else if (pn_i_type.is<MathType>() || pn_i_type == PnNode::value_match) {
-					const Ref pn_i_ref = pn_ref.new_at(pn_params[pn_i]);
+					const UnsaveRef pn_i_ref = pn_ref.new_at(pn_params[pn_i]);
 					const int pn_i_generality = generality(pn_i_type);
 					for (; haystack_k < haystack_params.size(); haystack_k++) {
 						static_assert(generality(PnNode::value_match) > generality(Literal::complex));
@@ -1519,11 +1516,11 @@ namespace bmath::intern {
 				}
 				else {
 					assert(pn_i_type == PnNode::tree_match); //other may not be encoountered in this function
-					const Ref pn_i_ref = pn_ref.new_at(pn_params[pn_i]);
+					const UnsaveRef pn_i_ref = pn_ref.new_at(pn_params[pn_i]);
 					const auto& match_info = match_data.info(pn_i_ref->tree_match);
 
 					if (match_info.is_set()) { //binary search for needle over part of haystack allowed to search in
-						const Ref needle = haystack_ref.new_at(match_info.match_idx); 
+						const UnsaveRef needle = haystack_ref.new_at(match_info.match_idx);
 						std::uint32_t search_begin = haystack_k;
 						std::uint32_t search_end = haystack_params.size();
 
@@ -1538,7 +1535,7 @@ namespace bmath::intern {
 								continue;
 							}
 
-							const Ref search_ref = haystack_ref.new_at(haystack_params[haystack_k]);
+							const UnsaveRef search_ref = haystack_ref.new_at(haystack_params[haystack_k]);
 							const std::strong_ordering cmp = tree::compare(search_ref, needle);
 							if (cmp == std::strong_ordering::equal) {
 								goto prepare_next_pn_i;
@@ -1573,7 +1570,7 @@ namespace bmath::intern {
 					// -> perhaps an element preceding the current one could be matched differently
 					// -> try that
 					pn_i--;
-					const Ref pn_i_ref = pn_ref.new_at(pn_params[pn_i]);
+					const UnsaveRef pn_i_ref = pn_ref.new_at(pn_params[pn_i]);
 					haystack_k = variadic_datum.match_positions[pn_i];
 					//try rematching the last successfully matched element in pattern with same part it matched with previously
 					// (but it can not match any way that was already tried, duh)
@@ -1600,13 +1597,13 @@ namespace bmath::intern {
 			return pn_params.size() == haystack_params.size();
 		} //find_matching_permutation
 
-		TypedIdx copy(const Ref pn_ref, const MatchData& match_data, const MathStore& src_store, MathStore& dst_store)
+		TypedIdx copy(const UnsaveRef pn_ref, const MatchData& match_data, const MathStore& src_store, MathStore& dst_store)
 		{
 			switch (pn_ref.type) {
 			default: {
 				assert(pn_ref.type.is<Function>());
 				StupidBufferVector<TypedIdx, 12> dst_parameters;
-				for (const TypedIdx pn_param : fn::save_range(pn_ref)) {
+				for (const TypedIdx pn_param : fn::range(pn_ref)) {
 					if (pn_param.get_type() == MultiPn::params) { //summands and factors need stay their type (summands always to sum...)
 						const SharedVariadicDatum& info = match_data.multi_info(pn_param.get_index());
 						const auto src_range = fn::save_range(Ref(src_store, info.match_idx));
@@ -1682,7 +1679,7 @@ namespace bmath::intern {
 			}
 		} //copy
 
-		std::optional<TypedIdx> match_and_replace(const Ref from, const Ref to, const MutRef ref)
+		std::optional<TypedIdx> match_and_replace(const UnsaveRef from, const UnsaveRef to, const MutRef ref)
 		{					
 			MatchData match_data;
 			if (match::permutation_equals(from, ref, match_data)) {

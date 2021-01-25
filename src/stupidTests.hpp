@@ -199,15 +199,15 @@ namespace bmath::intern::debug {
 							changed = true;
 							test.establish_order();
 							assert(tree::valid_storage(test.ref()));
-							std::cout << "    = " << test.to_pretty_string() << "\n";
+							//std::cout << "    = " << test.to_pretty_string() << "\n";
 							//std::cout << test.to_tree() << "\n";
 							//std::cout << test.to_memory_layout() << "\n";
 							break;
 						}
 					}
 				} while (changed);
-				//std::cout << "    = " << test.to_pretty_string() << "\n";
-				//std::cout << test.to_memory_layout() << "\n";
+				std::cout << "    = " << test.to_pretty_string() << "\n";
+				std::cout << test.to_memory_layout() << "\n";
 				//std::cout << test.to_tree() << "\n";
 				std::cout << "\n";
 

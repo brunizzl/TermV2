@@ -28,6 +28,7 @@ important:
  - allow to restrict a variables possibility space e.g. natural, integer, real, complex (split Literal::variable in own enum?)
 
 nice to have:
+ - deprecate pattern::pn_tree::eval_value_match (instead remove value_match from rhs, just copy tree instead of value)
  - helper type for SumEnum to allow more course switch case: group whole SumEnums to single helper value -> switch ofer helper values
  - use templates to allow multiple stores
  - avoid copying pattern::MultiPn entries (needs to know original storage location of each entry, to steal it from there)
