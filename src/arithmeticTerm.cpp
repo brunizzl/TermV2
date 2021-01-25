@@ -154,15 +154,18 @@ namespace bmath::intern {
 		void free(const MutRef ref)
 		{
 			switch (ref.type) {
-			case Type(NamedFn{}):
-				CharVector::free(*ref.store, fn::named_fn_name_index(ref));
-				[[fallthrough]];
 			default: 
 				assert(ref.type.is<Function>());
 				for (const TypedIdx elem : fn::unsave_range(ref)) {
 					tree::free(ref.new_at(elem));
 				}
-				IndexVector::free(*ref.store, ref.index);
+				if (ref.type.is<NamedFn>()) { //also free name
+					const std::uint32_t node_count = ref->parameters.node_count() + fn::named_fn_name(ref).node_count();
+					ref.store->free_n(ref.index, node_count);
+				}
+				else {
+					IndexVector::free(*ref.store, ref.index);
+				}
 				break;
 			case Type(Literal::variable): 
 				CharVector::free(*ref.store, ref.index);

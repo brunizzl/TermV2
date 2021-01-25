@@ -91,8 +91,8 @@ namespace bmath::intern {
 		{ 
 			constexpr auto infixr_table = std::to_array<std::pair<Type, int>>({
 				{ Type(NamedFn{})          , 0 },
-				{ Type(Comm::sum      ), 2 },
-				{ Type(Comm::product  ), 4 },	
+				{ Type(Comm::sum          ), 2 },
+				{ Type(Comm::product      ), 4 },	
 				{ Type(Fn::pow            ), 5 }, //not between other function types -> assumed to be printed with '^'  
 				{ Type(Literal::variable  ), 6 },
 				{ Type(Literal::complex   ), 6 }, //may be printed as sum/product itself, then (maybe) has to add parentheses on its own

@@ -8,9 +8,7 @@
 TODO:
 
 important:
- - fix bug in tree::free where memory for NamedFn is released in two parts
- - rename all ..._detail namespaces to detail_...
- - let type_table in ioarithmetic use names of fn
+ - let type_table in ioArithmetic use names of fn
  - make pattern and usual term two distinct types (again...)
 	enables: 
 		- variadic commutative can have table with extra info of operands, allowing faster matches / fails, also index in match_data circumvents O(n) lookup
@@ -22,8 +20,8 @@ important:
        if compares unordered, it should clean up after itself, not requiring caller calling reset_own_matches
 	   also requires find_matching_permutation to return same values.
 	   also: is unordered possible?
- - seperate match and replace into multiple functions
  - write data structure one abstraction layer above RewriteRule (RuleSet) to group multiple pattens
+     - seperate match and replace into multiple functions there
  - restructure everything to use modules (basically needed to constexprfy all the things)
  - allow to restrict a variables possibility space e.g. natural, integer, real, complex (split Literal::variable in own enum?)
 

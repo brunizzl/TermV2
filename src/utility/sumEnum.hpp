@@ -19,7 +19,7 @@ namespace bmath::intern {
 
 	struct SingleSumEnumEntry {}; //marker if you want to use Type as enum value (Type has to inherit from here)
 
-	namespace enum_detail {
+	namespace detail_enum {
 
 		template<typename Needle, typename Haystack>
 		struct DecideContainedIn :std::false_type {};
@@ -88,7 +88,7 @@ namespace bmath::intern {
 			static constexpr std::size_t end_ = End;
 		};
 
-		namespace info_detail {
+		namespace detail_info {
 			template<Enumeratable, unsigned Begin, unsigned End, bool IncludeSelf>
 			struct MakeMemberInfo;
 
@@ -114,12 +114,12 @@ namespace bmath::intern {
 			template<Enumeratable E, unsigned Begin, unsigned End>
 				requires (!InstanceOf<E, SumEnum>)
 			struct MakeMemberInfo<E, Begin, End, true> { using type = List<MemberInfo<E, Begin, End>>; };
-		} //namespace info_detail
+		} //namespace detail_info
 
 		template<InstanceOf<SumEnum> E>
-		using MemberInfos_t = info_detail::MakeMemberInfo_t<E, 0, (unsigned)E::COUNT, true>;
+		using MemberInfos_t = detail_info::MakeMemberInfo_t<E, 0, (unsigned)E::COUNT, true>;
 
-	} //namespace enum_detail
+	} //namespace detail_enum
 
 	template<>
 	struct [[nodiscard]] SumEnum<>
@@ -136,10 +136,10 @@ namespace bmath::intern {
 	}; //class SumEnum<>
 
 
-	template<enum_detail::EnumLike Enum, typename... TailEnums>
+	template<detail_enum::EnumLike Enum, typename... TailEnums>
 	class [[nodiscard]] SumEnum<Enum, TailEnums...> :public SumEnum<TailEnums...>
 	{
-		static_assert(meta::disjoint_v<enum_detail::ListMembers_t<Enum>, enum_detail::ListMembers_t<TailEnums...>>,
+		static_assert(meta::disjoint_v<detail_enum::ListMembers_t<Enum>, detail_enum::ListMembers_t<TailEnums...>>,
 			"No two parameters of SumEnum's parameter pack may contain the same type within (or be equal).");
 
 		using Base = SumEnum<TailEnums...>;
@@ -150,10 +150,10 @@ namespace bmath::intern {
 		using Value = typename Base::Value;
 
 	private:
-		template<enum_detail::ContainedIn<Base> E>
+		template<detail_enum::ContainedIn<Base> E>
 		static constexpr Value value_of() { return Base::template as<E>; }
 
-		template<enum_detail::ContainedIn<Enum> E>
+		template<detail_enum::ContainedIn<Enum> E>
 		static constexpr Value value_of() { return static_cast<Value>(static_cast<unsigned>(Enum::template as<E>) + this_offset); }
 
 		template<std::same_as<Enum> E>
@@ -165,11 +165,11 @@ namespace bmath::intern {
 		constexpr SumEnum(const Enum e) noexcept :Base(static_cast<unsigned>(e) + this_offset) {}
 
 		//this constructor applies if Enum itself is WrapEnum<E> or SumEnum<...> that contains E (directly or deeper within)
-		template<enum_detail::ContainedIn<Enum> E>
+		template<detail_enum::ContainedIn<Enum> E>
 		constexpr SumEnum(const E e) noexcept :Base(static_cast<unsigned>(static_cast<Enum>(e)) + this_offset) {}
 
 		//this constructor applies if E is contained in Base
-		template<enum_detail::ContainedIn<Base> E>
+		template<detail_enum::ContainedIn<Base> E>
 		constexpr SumEnum(const E e) noexcept :Base(e) {}
 
 
@@ -178,11 +178,11 @@ namespace bmath::intern {
 
 
 		//E is contained in Base -> hand over to Base
-		template<enum_detail::ContainedIn<Base> E>
+		template<detail_enum::ContainedIn<Base> E>
 		constexpr E to() const noexcept { return static_cast<const Base>(*this).to<E>(); }
 
 		//Enum itself is SumEnum<...> and contains E -> hand over to Enum
-		template<enum_detail::ContainedIn<Enum> E>
+		template<detail_enum::ContainedIn<Enum> E>
 		constexpr E to() const noexcept { return this->to<Enum>().to<E>(); }
 
 		//E is same as Enum -> just undo the offset
@@ -191,11 +191,11 @@ namespace bmath::intern {
 
 
 		//default case: search in parent types
-		template<enum_detail::ContainedIn<Base> E>
+		template<detail_enum::ContainedIn<Base> E>
 		constexpr bool is() const noexcept { return static_cast<const Base>(*this).is<E>(); }
 
 		//Enum itself is SumEnum<...> and contains E -> hand over to Enum
-		template<enum_detail::ContainedIn<Enum> E>
+		template<detail_enum::ContainedIn<Enum> E>
 		constexpr bool is() const noexcept { return this->to<Enum>().is<E>(); }
 
 		//E is same as Enum -> check if current value is between offsets
@@ -215,7 +215,7 @@ namespace bmath::intern {
 
 
 
-	template<enum_detail::Atom T, typename... TailEnums>
+	template<detail_enum::Atom T, typename... TailEnums>
 	class [[nodiscard]] SumEnum<T, TailEnums...> :public SumEnum<TailEnums...>
 	{
 		using Base = SumEnum<TailEnums...>;
@@ -226,7 +226,7 @@ namespace bmath::intern {
 		using Value = typename Base::Value;
 
 	private:
-		template<enum_detail::ContainedIn<Base> E>
+		template<detail_enum::ContainedIn<Base> E>
 		static constexpr Value value_of() { return Base::template as<E>; }
 
 		template<std::same_as<T> E>
@@ -242,7 +242,7 @@ namespace bmath::intern {
 		}
 
 		//this constructor applies if E is contained in Base
-		template<enum_detail::ContainedIn<Base> E>
+		template<detail_enum::ContainedIn<Base> E>
 		constexpr SumEnum(const E e) noexcept :Base(e) {}
 
 
@@ -251,7 +251,7 @@ namespace bmath::intern {
 
 
 		//E is contained in Base -> hand over to Base
-		template<enum_detail::ContainedIn<Base> E>
+		template<detail_enum::ContainedIn<Base> E>
 		constexpr E to() const noexcept { return static_cast<const Base>(*this).to<E>(); }
 
 		template<std::same_as<T> E>
@@ -259,7 +259,7 @@ namespace bmath::intern {
 
 
 		//default case: search in parent types
-		template<enum_detail::ContainedIn<Base> E>
+		template<detail_enum::ContainedIn<Base> E>
 		constexpr bool is() const noexcept { return static_cast<const Base>(*this).is<E>(); }
 
 		//E is same as Enum -> check if current value is between offsets
@@ -292,7 +292,7 @@ namespace bmath::intern {
 
 
 
-	template <enum_detail::Enumeratable Enum>
+	template <detail_enum::Enumeratable Enum>
 	class [[nodiscard]] OpaqueEnum
 	{
 		enum class Value :unsigned {} value;
@@ -358,7 +358,7 @@ namespace bmath::intern {
 
 		static constexpr auto compute_all_options()
 		{
-			using AllInfos = enum_detail::MemberInfos_t<SumEnum_T>;
+			using AllInfos = detail_enum::MemberInfos_t<SumEnum_T>;
 			using UsedInfos = meta::Filter_t<IsInTypeCases, AllInfos>;
 
 			constexpr std::array type_options = arr::from_list_v<InfoToOption, UsedInfos>;

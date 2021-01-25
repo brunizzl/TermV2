@@ -9,6 +9,20 @@
 #include <compare>
 #include <bit>
 
+#if defined(_MSC_VER)
+
+#define BMATH_UNREACHABLE __assume(false)
+
+#elif (defined(__GNUC__) || defined(__clang__))
+
+#define BMATH_UNREACHABLE __builtin_unreachable()
+
+#else
+
+#define BMATH_UNREACHABLE ((void)0)
+
+#endif
+
 
 namespace bmath::intern {
     

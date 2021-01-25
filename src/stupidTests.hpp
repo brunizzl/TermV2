@@ -226,7 +226,7 @@ namespace bmath::intern::debug {
 
 namespace bmath::intern::test {
 
-	namespace sum_enum_detail {
+	namespace detail_sum_enum {
 
 		enum class A1 { a, b, c, COUNT };
 		enum class A2 { a, b, c, COUNT };
@@ -252,11 +252,11 @@ namespace bmath::intern::test {
 			std::cout << (hit ? "\n" : "upsi!\n");
 		}
 
-	} //namespace sum_enum_detail
+	} //namespace detail_sum_enum
 
 	void sum_enum()
 	{
-		using namespace sum_enum_detail;
+		using namespace detail_sum_enum;
 		f1(A1::a);
 		f1(A1::b);
 		f1(A1::c);
