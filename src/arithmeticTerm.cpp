@@ -726,29 +726,28 @@ namespace bmath::intern {
 			}
 		} //has_form
 
-		RewriteRule::RewriteRule(std::string name)
+
+		IntermediateRewriteRule::IntermediateRewriteRule(std::string name)
 		{
-			decltype(RewriteRule::lhs_store) lhs_temp; //exists, because actions like rearrange_value_match might produce free slots in store.
-			decltype(RewriteRule::rhs_store) rhs_temp; //exists, because actions like rearrange_value_match might produce free slots in store.
 			//parsing and such
 			auto parse_string = ParseString(name);
 			parse_string.allow_implicit_product();
 			parse_string.remove_space();
 			const auto parts = PatternParts(parse_string);
 			auto match_variables_table = NameLookupTable(parts.declarations);
-			throw_if(match_variables_table.tree_table.size() >  match::MatchData::max_tree_match_count, "too many tree_match match variables declared");
+			throw_if(match_variables_table.tree_table.size() > match::MatchData::max_tree_match_count, "too many tree_match match variables declared");
 			throw_if(match_variables_table.value_table.size() > match::MatchData::max_value_match_count, "too many value match variables declared");
 			PatternBuildFunction build_function = { match_variables_table };
-			this->lhs_head = build_function(lhs_temp, parts.lhs);
+			this->lhs_head = build_function(this->store, parts.lhs);
 			match_variables_table.build_lhs = false;
-			this->rhs_head = build_function(rhs_temp, parts.rhs);
+			this->rhs_head = build_function(this->store, parts.rhs);
 
 			for (const auto& value : match_variables_table.value_table) {
 				for (const auto lhs_instance : value.lhs_instances) {
-					pn_tree::rearrange_value_match(lhs_temp, this->lhs_head, lhs_instance);;
+					pn_tree::rearrange_value_match(this->store, this->lhs_head, lhs_instance);;
 				}
 				for (const auto rhs_instance : value.rhs_instances) {
-					pn_tree::rearrange_value_match(rhs_temp, this->rhs_head, rhs_instance);
+					pn_tree::rearrange_value_match(this->store, this->rhs_head, rhs_instance);
 				}
 			}
 			for (const auto& multi_match : match_variables_table.multi_table) {
@@ -757,14 +756,14 @@ namespace bmath::intern {
 
 			//sorting and combining is done after rearanging value match to allow constructs 
 			//  like "a :real, b | (a+2)+b = ..." to take summands / factors into their value_match match part
-			this->lhs_head = tree::combine(MutRef(lhs_temp, this->lhs_head), true);
-			this->rhs_head = tree::combine(MutRef(rhs_temp, this->rhs_head), true);
+			this->lhs_head = tree::combine(MutRef(this->store, this->lhs_head), true);
+			this->rhs_head = tree::combine(MutRef(this->store, this->rhs_head), true);
 
 			const auto sort_pattern = [](const MutRef ref) {
 				const auto sort_variadic = [&](MutRef ref) {
 					const auto compare_patterns = [&](const TypedIdx lhs, const TypedIdx rhs) {
 						const Ref lhs_ref = Ref(*ref.store, lhs);
-						const Ref rhs_ref = Ref(*ref.store, rhs);					
+						const Ref rhs_ref = Ref(*ref.store, rhs);
 						{
 							const auto contains_general_match_variables = [](const Ref ref) -> bool {
 								const auto is_general_match_variable = [](const Ref ref) -> fold::FindTrue {
@@ -787,8 +786,8 @@ namespace bmath::intern {
 									constexpr Accumulator(const Ref ref) noexcept :ref_type(ref.type) {}
 									void consume(const int child_depth) noexcept { this->min_operand_depth = std::min(this->min_operand_depth, child_depth); }
 
-									auto result() noexcept 
-									{ 
+									auto result() noexcept
+									{
 										return this->ref_type == PnNode::value_match ? //literals held by value match dont count >:|
 											std::numeric_limits<int>::max() :
 											std::max(this->min_operand_depth, this->min_operand_depth + 1);  //std::max because +1 might cause overflow
@@ -817,29 +816,29 @@ namespace bmath::intern {
 
 				fold::simple_fold<fold::Void>(ref, sort_variadic);
 			};
-			sort_pattern(MutRef(lhs_temp, this->lhs_head));
-			sort_pattern(MutRef(rhs_temp, this->rhs_head));
+			sort_pattern(MutRef(this->store, this->lhs_head));
+			sort_pattern(MutRef(this->store, this->rhs_head));
 
 			{ //add implicit MultiPn::summands / MultiPn::factors if outermost type of lhs is sum / product
 				if (this->lhs_head.get_type() == Comm::sum || this->lhs_head.get_type() == Comm::product) {
 					const Type head_type = this->lhs_head.get_type();
-					const IndexVector& head_variadic = lhs_temp.at(this->lhs_head.get_index());
+					const IndexVector& head_variadic = this->store.at(this->lhs_head.get_index());
 					if (!head_variadic.back().get_type().is<MultiPn>()) {
-						const TypedIdx new_multi_pn = TypedIdx(match_variables_table.multi_table.size(), 
+						const TypedIdx new_multi_pn = TypedIdx(match_variables_table.multi_table.size(),
 							head_type == Comm::sum ? MultiPn::summands : MultiPn::factors);
 						{ //adjust lhs
-							const std::size_t new_lhs_head_idx = lhs_temp.allocate_one();
-							lhs_temp.at(new_lhs_head_idx) = IndexVector({ this->lhs_head, new_multi_pn });
+							const std::size_t new_lhs_head_idx = this->store.allocate_one();
+							this->store.at(new_lhs_head_idx) = IndexVector({ this->lhs_head, new_multi_pn });
 							this->lhs_head = TypedIdx(new_lhs_head_idx, head_type);
-							this->lhs_head = tree::combine(MutRef(lhs_temp, this->lhs_head), true);
-							sort_pattern(MutRef(lhs_temp, this->lhs_head));
+							this->lhs_head = tree::combine(MutRef(this->store, this->lhs_head), true);
+							sort_pattern(MutRef(this->store, this->lhs_head));
 						}
 						{ //adjust rhs
-							const std::size_t new_rhs_head_idx = rhs_temp.allocate_one();
-							rhs_temp.at(new_rhs_head_idx) = IndexVector({ this->rhs_head, new_multi_pn });
+							const std::size_t new_rhs_head_idx = this->store.allocate_one();
+							this->store.at(new_rhs_head_idx) = IndexVector({ this->rhs_head, new_multi_pn });
 							this->rhs_head = TypedIdx(new_rhs_head_idx, head_type);
-							this->rhs_head = tree::combine(MutRef(rhs_temp, this->rhs_head), true);
-							sort_pattern(MutRef(rhs_temp, this->rhs_head));
+							this->rhs_head = tree::combine(MutRef(this->store, this->rhs_head), true);
+							sort_pattern(MutRef(this->store, this->rhs_head));
 						}
 					}
 				}
@@ -849,14 +848,14 @@ namespace bmath::intern {
 
 				//has to be filled in same order as MatchData::variadic_data
 				//index of element in old_multis equals value of corrected MultiPn occurence (plus the type)
-				std::vector<TypedIdx> old_multis; 
+				std::vector<TypedIdx> old_multis;
 				const auto catalog_lhs_occurences = [&old_multis](const Ref head) {
 					struct Acc
 					{
-						std::vector<TypedIdx>* old_multis; 
+						std::vector<TypedIdx>* old_multis;
 						std::uint32_t own_idx;
 
-						constexpr Acc(const Ref ref, std::vector<TypedIdx>* new_old_multis) noexcept 
+						constexpr Acc(const Ref ref, std::vector<TypedIdx>* new_old_multis) noexcept
 							:old_multis(new_old_multis), own_idx(-1u)
 						{
 							if (ref.type.is<Variadic>() || ref.type.is<NamedFn>()) { //these may contain MultiPn -> these have SharedVariadicDatum entry 
@@ -865,8 +864,8 @@ namespace bmath::intern {
 							}
 						}
 
-						void consume(const TypedIdx child) noexcept 
-						{ 
+						void consume(const TypedIdx child) noexcept
+						{
 							if (child.get_type().is<MultiPn>()) {
 								this->old_multis->at(this->own_idx) = child;
 							}
@@ -874,9 +873,9 @@ namespace bmath::intern {
 
 						auto result() noexcept { return TypedIdx{}; }
 					};
-					(void) fold::tree_fold<TypedIdx, Acc>(head, [](const Ref ref) { return ref.typed_idx(); }, &old_multis);
+					(void)fold::tree_fold<TypedIdx, Acc>(head, [](const Ref ref) { return ref.typed_idx(); }, &old_multis);
 				};
-				catalog_lhs_occurences(Ref(lhs_temp, this->lhs_head));
+				catalog_lhs_occurences(Ref(this->store, this->lhs_head));
 
 				const auto replace_occurences = [&old_multis](const MutRef head, const bool test_lhs) -> bool {
 					const auto check_function_params = [&old_multis, test_lhs](const MutRef ref) -> fold::FindTrue {
@@ -900,8 +899,8 @@ namespace bmath::intern {
 					};
 					return fold::simple_fold<fold::FindTrue>(head, check_function_params);
 				};
-				throw_if(replace_occurences(MutRef(lhs_temp, this->lhs_head), true), "MultiPn in unexpected place in lhs");
-				throw_if(replace_occurences(MutRef(rhs_temp, this->rhs_head), false), "MultiPn only referenced in rhs");
+				throw_if(replace_occurences(MutRef(this->store, this->lhs_head), true), "MultiPn in unexpected place in lhs");
+				throw_if(replace_occurences(MutRef(this->store, this->rhs_head), false), "MultiPn only referenced in rhs");
 			}
 			{
 				//if MultiPn::params occurs in sum / product, it is replaced by legal and matching MultiPn version.
@@ -911,7 +910,7 @@ namespace bmath::intern {
 							const Type representing_type = ref.type == Comm::sum ? MultiPn::summands : MultiPn::factors;
 							for (TypedIdx& elem : fn::unsave_range(ref)) {
 								const Type elem_type = elem.get_type();
-								if (elem_type == representing_type) { 
+								if (elem_type == representing_type) {
 									elem = TypedIdx(elem.get_index(), MultiPn::params); //params also represent summands / factors
 								}
 								else if (test_lhs && elem_type.is<MultiPn>() && elem_type != representing_type) {
@@ -924,8 +923,8 @@ namespace bmath::intern {
 					};
 					return fold::simple_fold<fold::FindTrue>(head, inspect_variadic);
 				};
-				throw_if(test_and_replace_multi_pn(MutRef(lhs_temp, this->lhs_head), true), "wrong MultiPn in lhs");
-				test_and_replace_multi_pn(MutRef(rhs_temp, this->rhs_head), false);
+				throw_if(test_and_replace_multi_pn(MutRef(this->store, this->lhs_head), true), "wrong MultiPn in lhs");
+				test_and_replace_multi_pn(MutRef(this->store, this->rhs_head), false);
 			}
 			{
 				const auto contains_illegal_value_match = [](const Ref head) -> bool {
@@ -941,7 +940,7 @@ namespace bmath::intern {
 					};
 					return fold::simple_fold<fold::FindTrue>(head, inspect_variadic);
 				};
-				throw_if(contains_illegal_value_match(Ref(lhs_temp, this->lhs_head)), "no two value match variables may share the same sum / product in lhs.");
+				throw_if(contains_illegal_value_match(Ref(this->store, this->lhs_head)), "no two value match variables may share the same sum / product in lhs.");
 			}
 			{
 				const auto contains_illegal_multi_match = [](const Ref head) -> bool {
@@ -957,8 +956,8 @@ namespace bmath::intern {
 					};
 					return fold::simple_fold<fold::FindTrue>(head, inspect_variadic);
 				};
-				throw_if(contains_illegal_multi_match(Ref(lhs_temp, this->lhs_head)), "no two multi match variables may share the same sum / product in lhs.");
-			}	
+				throw_if(contains_illegal_multi_match(Ref(this->store, this->lhs_head)), "no two multi match variables may share the same sum / product in lhs.");
+			}
 			{
 				const auto contains_to_long_variadic = [](const Ref head) -> bool {
 					const auto inspect_variadic = [](const Ref ref) -> fold::FindTrue {
@@ -970,19 +969,19 @@ namespace bmath::intern {
 					};
 					return fold::simple_fold<fold::FindTrue>(head, inspect_variadic);
 				};
-				throw_if(contains_to_long_variadic(Ref(lhs_temp, this->lhs_head)), "a sum / product in lhs contains to many operands.");
-			}	
+				throw_if(contains_to_long_variadic(Ref(this->store, this->lhs_head)), "a sum / product in lhs contains to many operands.");
+			}
 			{
 				const auto contains_to_many_variadics = [](const Ref head) -> bool {
 					struct Acc
 					{
 						int acc;
 
-						constexpr Acc(const Ref ref) noexcept 
-							:acc(ref.type == PnNode::value_match ? 
-									std::numeric_limits<int>::min() : //subterms of value_match dont count -> initialize negative
-									(ref.type.is<Variadic>() || ref.type.is<NamedFn>())) //count only these two
-						{} 
+						constexpr Acc(const Ref ref) noexcept
+							:acc(ref.type == PnNode::value_match ?
+								std::numeric_limits<int>::min() : //subterms of value_match dont count -> initialize negative
+								(ref.type.is<Variadic>() || ref.type.is<NamedFn>())) //count only these two
+						{}
 
 						void consume(const int child_size) noexcept { this->acc += child_size; }
 						auto result() noexcept { return std::max(this->acc, 0); } //always this->acc if type was other than value_match
@@ -990,16 +989,11 @@ namespace bmath::intern {
 					const int variadic_count = fold::tree_fold<std::size_t, Acc>(head, [](auto) { return 0; });
 					return variadic_count > match::MatchData::max_variadic_count;
 				};
-				throw_if(contains_to_many_variadics(Ref(lhs_temp, this->lhs_head)), "lhs contains to many variadic functions / instances of NamedFn");
+				throw_if(contains_to_many_variadics(Ref(this->store, this->lhs_head)), "lhs contains to many variadic functions / instances of NamedFn");
 			}
-
-			this->lhs_store.reserve(lhs_temp.nr_used_slots());
-			this->rhs_store.reserve(rhs_temp.nr_used_slots());
-			this->lhs_head = tree::copy(Ref(lhs_temp, this->lhs_head), this->lhs_store);
-			this->rhs_head = tree::copy(Ref(rhs_temp, this->rhs_head), this->rhs_store);
 		} //RewriteRule::RewriteRule
 
-		std::string RewriteRule::to_string() const
+		std::string IntermediateRewriteRule::to_string() const
 		{
 			std::string str;
 			print::append_to_string(this->lhs_ref(), str);
@@ -1008,25 +1002,40 @@ namespace bmath::intern {
 			return str;
 		}
 
-		std::string RewriteRule::lhs_memory_layout() const
+		std::string IntermediateRewriteRule::lhs_memory_layout() const
 		{
-			return print::to_memory_layout(this->lhs_store, { this->lhs_head });
+			return print::to_memory_layout(this->store, { this->lhs_head });
 		}
 
-		std::string RewriteRule::rhs_memory_layout() const
+		std::string IntermediateRewriteRule::rhs_memory_layout() const
 		{
-			return print::to_memory_layout(this->rhs_store, { this->rhs_head });
+			return print::to_memory_layout(this->store, { this->rhs_head });
 		}
 
-		std::string RewriteRule::lhs_tree(const std::size_t offset) const
+		std::string IntermediateRewriteRule::lhs_tree(const std::size_t offset) const
 		{
 			return print::to_tree(this->lhs_ref(), offset);
 		}
 
-		std::string RewriteRule::rhs_tree(const std::size_t offset) const
+		std::string IntermediateRewriteRule::rhs_tree(const std::size_t offset) const
 		{
 			return print::to_tree(this->rhs_ref(), offset);
 		}
+
+
+
+		RewriteRule::RewriteRule(std::string name)
+		{
+			IntermediateRewriteRule intermediate = IntermediateRewriteRule(std::move(name));
+			//std::cout << "--------------------------------------------\n";
+			//std::cout << intermediate.lhs_tree() << "\n\n";
+			//std::cout << intermediate.rhs_tree() << "\n\n";
+			std::cout << intermediate.to_string() << "\n";
+
+			this->store.reserve(intermediate.store.nr_used_slots());
+			this->lhs_head = pn_tree::intermediate_to_pattern(intermediate.lhs_ref(), this->store);
+			this->rhs_head = pn_tree::intermediate_to_pattern(intermediate.rhs_ref(), this->store);
+		} //RewriteRule::RewriteRule
 
 		namespace pn_tree {
 
@@ -1194,9 +1203,9 @@ namespace bmath::intern {
 				return eq;
 			} //stupid_solve_for
 
-			OptComplex eval_value_match(const UnsaveRef ref, const Complex& start_val)
+			OptComplex eval_value_match(const UnsavePnRef ref, const Complex& start_val)
 			{
-				const auto get_divisor = [](const UnsaveRef ref) -> std::optional<TypedIdx> {
+				const auto get_divisor = [](const UnsavePnRef ref) -> std::optional<TypedIdx> {
 					if (ref.type == Fn::pow) {
 						const IndexVector& params = *ref;
 						if (params[1].get_type() == Literal::complex) {
@@ -1277,13 +1286,70 @@ namespace bmath::intern {
 				}
 			} //eval_value_match
 
+			PnTypedIdx intermediate_to_pattern(const UnsaveRef src_ref, PnStore& dst_store)
+			{
+				switch (src_ref.type) {
+				default: {
+					assert(src_ref.type.is<Function>());
+					StupidBufferVector<PnTypedIdx, 12> dst_parameters;
+					for (const TypedIdx src_param : fn::range(src_ref)) {
+						const PnTypedIdx dst_param = intermediate_to_pattern(src_ref.new_at(src_param), dst_store);
+						dst_parameters.push_back(dst_param);
+					}
+					if (src_ref.type.is<NamedFn>()) {
+						const CharVector& name_ref = fn::named_fn_name(src_ref);
+						std::string name = std::string(name_ref.begin(), name_ref.end());
+						return fn::build_named_fn(dst_store, std::move(name), dst_parameters);
+					}
+					else {
+						return PnTypedIdx(IndexVector::build(dst_store, dst_parameters), src_ref.type);
+					}
+				} break;
+				case Type(Literal::variable): {
+					const CharVector& src_var = *src_ref;
+					const auto src_name = std::string(src_var.data(), src_var.size());
+					const std::size_t dst_index = CharVector::build(dst_store, src_name);
+					return PnTypedIdx(dst_index, src_ref.type);
+				} break;
+				case Type(Literal::complex): {
+					const std::size_t dst_index = dst_store.allocate_one();
+					dst_store.at(dst_index) = src_ref->complex; //bitwise copy of src
+					return PnTypedIdx(dst_index, src_ref.type);
+				} break;
+				case Type(PnNode::tree_match): {
+					const std::size_t dst_index = dst_store.allocate_one();
+					dst_store.at(dst_index) = src_ref->tree_match; //bitwise copy of src
+					return PnTypedIdx(dst_index, src_ref.type);
+				} break;
+				case Type(PnNode::value_match): {
+					const pattern::ValueMatchVariable src_var = *src_ref;
+					auto dst_var = pattern::ValueMatchVariable(src_var.match_data_idx, src_var.form);
+					dst_var.mtch_idx = intermediate_to_pattern(src_ref.new_at(src_var.mtch_idx), dst_store);
+					dst_var.copy_idx = intermediate_to_pattern(src_ref.new_at(src_var.copy_idx), dst_store);
+					const std::size_t dst_index = dst_store.allocate_one();
+					dst_store.at(dst_index) = dst_var;
+					return PnTypedIdx(dst_index, src_ref.type);
+				} break;
+				case Type(PnNode::value_proxy): //return same ref, as proxy does not own any nodes in src_store anyway (index has different meaning)
+					[[fallthrough]];
+				case Type(MultiPn::summands):
+					[[fallthrough]];
+				case Type(MultiPn::factors):
+					[[fallthrough]];
+				case Type(MultiPn::params):
+					return PnTypedIdx(src_ref.index, PnType(src_ref.type));
+				}
+				assert(false);
+				return PnTypedIdx();
+			} //intermediate_to_pattern
+
 		} //namespace pn_tree
 
 	} //namespace pattern
 
 	namespace pattern::match {
 
-		bool permutation_equals(const UnsaveRef pn_ref, const UnsaveRef ref, MatchData& match_data)
+		bool permutation_equals(const pattern::UnsavePnRef pn_ref, const UnsaveRef ref, MatchData& match_data)
 		{
 			if (pn_ref.type.is<MathType>() && pn_ref.type != ref.type) {
 				return false;
@@ -1409,35 +1475,38 @@ namespace bmath::intern {
 			}
 		} //permutation_equals
 
-		void reset_own_matches(const UnsaveRef pn_ref, MatchData& match_data)
+		void reset_own_matches(const pattern::UnsavePnRef pn_ref, MatchData& match_data)
 		{
-			const auto reset_single = [&match_data](const UnsaveRef ref) -> fold::Void {
-				switch (ref.type) {
-				case Type(PnNode::tree_match): {
-					SharedTreeDatum& info = match_data.info(ref->tree_match);
-					if (info.responsible == ref.typed_idx()) {
-						info = SharedTreeDatum();
+			switch (pn_ref.type) {
+			default:
+				if (pn_ref.type.is<Function>()) {
+					for (const PnTypedIdx elem : fn::range(pn_ref)) {
+						reset_own_matches(pn_ref.new_at(elem), match_data);
 					}
-				} break;
-				case Type(PnNode::value_match): {
-					SharedValueDatum& info = match_data.info(ref->value_match);
-					if (info.responsible == ref.typed_idx()) {
-						info = SharedValueDatum();
-					}
-				} break;
-				case Type(MultiPn::summands): //nothing to do for these (done by variadic)
-					break;
-				case Type(MultiPn::factors): 
-					break;
-				case Type(MultiPn::params): 
-					break;
 				}
-				return fold::Void{};
-			};
-			fold::simple_fold<fold::Void>(pn_ref, reset_single);
+				break;
+			case Type(PnNode::tree_match): {
+				SharedTreeDatum& info = match_data.info(pn_ref->tree_match);
+				if (info.responsible == pn_ref.typed_idx()) {
+					info = SharedTreeDatum();
+				}
+			} break;
+			case Type(PnNode::value_match): {
+				SharedValueDatum& info = match_data.info(pn_ref->value_match);
+				if (info.responsible == pn_ref.typed_idx()) {
+					info = SharedValueDatum();
+				}
+			} break;
+			case Type(MultiPn::summands): //nothing to do for these (done by variadic)
+				break;
+			case Type(MultiPn::factors):
+				break;
+			case Type(MultiPn::params):
+				break;
+			}
 		} //reset_own_matches
 
-		bool subsequent_permutation_equals(const UnsaveRef pn_ref, const UnsaveRef ref, MatchData& match_data)
+		bool subsequent_permutation_equals(const pattern::UnsavePnRef pn_ref, const UnsaveRef ref, MatchData& match_data)
 		{
 			if (!pn_ref.type.is<Function>()) {
 				return false; //can not rematch at all
@@ -1473,7 +1542,7 @@ namespace bmath::intern {
 			}
 		} //subsequent_permutation_equals
 
-		bool find_matching_permutation(const UnsaveRef pn_ref, const UnsaveRef haystack_ref, MatchData& match_data, std::uint32_t pn_i, std::uint32_t haystack_k)
+		bool find_matching_permutation(const pattern::UnsavePnRef pn_ref, const UnsaveRef haystack_ref, MatchData& match_data, std::uint32_t pn_i, std::uint32_t haystack_k)
 		{
 			assert(pn_ref.type == haystack_ref.type && (haystack_ref.type.is<Comm>()));
 
@@ -1501,7 +1570,7 @@ namespace bmath::intern {
 					return true;
 				}
 				else if (pn_i_type.is<MathType>() || pn_i_type == PnNode::value_match) {
-					const UnsaveRef pn_i_ref = pn_ref.new_at(pn_params[pn_i]);
+					const pattern::UnsavePnRef pn_i_ref = pn_ref.new_at(pn_params[pn_i]);
 					const int pn_i_generality = generality(pn_i_type);
 					for (; haystack_k < haystack_params.size(); haystack_k++) {
 						static_assert(generality(PnNode::value_match) > generality(Literal::complex));
@@ -1519,7 +1588,7 @@ namespace bmath::intern {
 				}
 				else {
 					assert(pn_i_type == PnNode::tree_match); //other may not be encoountered in this function
-					const UnsaveRef pn_i_ref = pn_ref.new_at(pn_params[pn_i]);
+					const pattern::UnsavePnRef pn_i_ref = pn_ref.new_at(pn_params[pn_i]);
 					const auto& match_info = match_data.info(pn_i_ref->tree_match);
 
 					if (match_info.is_set()) { //binary search for needle over part of haystack allowed to search in
@@ -1573,7 +1642,7 @@ namespace bmath::intern {
 					// -> perhaps an element preceding the current one could be matched differently
 					// -> try that
 					pn_i--;
-					const UnsaveRef pn_i_ref = pn_ref.new_at(pn_params[pn_i]);
+					const pattern::UnsavePnRef pn_i_ref = pn_ref.new_at(pn_params[pn_i]);
 					haystack_k = variadic_datum.match_positions[pn_i];
 					//try rematching the last successfully matched element in pattern with same part it matched with previously
 					// (but it can not match any way that was already tried, duh)
@@ -1600,7 +1669,7 @@ namespace bmath::intern {
 			return pn_params.size() == haystack_params.size();
 		} //find_matching_permutation
 
-		TypedIdx copy(const UnsaveRef pn_ref, const MatchData& match_data, const MathStore& src_store, MathStore& dst_store)
+		TypedIdx copy(const pattern::UnsavePnRef pn_ref, const MatchData& match_data, const MathStore& src_store, MathStore& dst_store)
 		{
 			switch (pn_ref.type) {
 			default: {
@@ -1640,7 +1709,7 @@ namespace bmath::intern {
 			} break;
 			case Type(Literal::complex): {
 				const std::size_t dst_index = dst_store.allocate_one();
-				dst_store.at(dst_index) = *pn_ref; //bitwise copy
+				dst_store.at(dst_index) = pn_ref->complex; //bitwise copy
 				return TypedIdx(dst_index, pn_ref.type);
 			} break;
 			case Type(PnNode::tree_match): {
@@ -1682,7 +1751,7 @@ namespace bmath::intern {
 			}
 		} //copy
 
-		std::optional<TypedIdx> match_and_replace(const UnsaveRef from, const UnsaveRef to, const MutRef ref)
+		std::optional<TypedIdx> match_and_replace(const pattern::UnsavePnRef from, const pattern::UnsavePnRef to, const MutRef ref)
 		{					
 			MatchData match_data;
 			if (match::permutation_equals(from, ref, match_data)) {
@@ -1696,7 +1765,7 @@ namespace bmath::intern {
 			return {};
 		} //match_and_replace
 
-		std::pair<std::optional<TypedIdx>, bool> recursive_match_and_replace(const Ref in, const Ref out, const MutRef ref)
+		std::pair<std::optional<TypedIdx>, bool> recursive_match_and_replace(const pattern::UnsavePnRef in, const pattern::UnsavePnRef out, const MutRef ref)
 		{
 			assert(ref.type.is<MathType>());
 			if (ref.type.is<Function>()) {

@@ -224,16 +224,16 @@ namespace bmath::intern {
 
 		constexpr auto operator<=>(const MathUnion&) const = default;
 
-		constexpr operator const Complex                     &() const noexcept { return this->complex; }
-		constexpr operator const IndexVector                 &() const noexcept { return this->parameters; }
-		constexpr operator const CharVector                  &() const noexcept { return this->char_vec; }
-		constexpr operator const pattern::TreeMatchVariable  &() const noexcept { return this->tree_match; }
+		constexpr operator const Complex                     &() const noexcept { return this->complex;     }
+		constexpr operator const IndexVector                 &() const noexcept { return this->parameters;  }
+		constexpr operator const CharVector                  &() const noexcept { return this->char_vec;    }
+		constexpr operator const pattern::TreeMatchVariable  &() const noexcept { return this->tree_match;  }
 		constexpr operator const pattern::ValueMatchVariable &() const noexcept { return this->value_match; }
 
-		constexpr operator Complex                     &() noexcept { return this->complex; }
-		constexpr operator IndexVector                 &() noexcept { return this->parameters; }
-		constexpr operator CharVector                  &() noexcept { return this->char_vec; }
-		constexpr operator pattern::TreeMatchVariable  &() noexcept { return this->tree_match; }
+		constexpr operator Complex                     &() noexcept { return this->complex;     }
+		constexpr operator IndexVector                 &() noexcept { return this->parameters;  }
+		constexpr operator CharVector                  &() noexcept { return this->char_vec;    }
+		constexpr operator pattern::TreeMatchVariable  &() noexcept { return this->tree_match;  }
 		constexpr operator pattern::ValueMatchVariable &() noexcept { return this->value_match; }
 	};
 
@@ -358,15 +358,15 @@ namespace bmath::intern {
 		constexpr auto& unsave_range(const    MutRef ref) noexcept { return ref->parameters; }
 
 
-		template<ReferenceTo<MathUnion> R>
-		constexpr std::uint32_t named_fn_name_index(const R named_fn) noexcept
+		template<typename Reference>
+		constexpr std::uint32_t named_fn_name_index(const Reference named_fn) noexcept
 		{
 			const IndexVector& parameters = *named_fn;
 			return named_fn.index + parameters.node_count();
 		}
 
-		template<ReferenceTo<MathUnion> R>
-		constexpr const CharVector& named_fn_name(const Ref named_fn) noexcept
+		template<typename Reference>
+		constexpr const CharVector& named_fn_name(const Reference named_fn) noexcept
 		{
 			return static_cast<const CharVector&>(named_fn.store->at(named_fn_name_index(named_fn)));
 		}
@@ -442,28 +442,96 @@ namespace bmath::intern {
 	//algorithms to compare pattern to usual term and find match
 	namespace pattern {
 
+		using PnType = SumEnum<MatchType, MathType>;
+		using PnTypedIdx = BasicTypedIdx<PnType>;
+
+		union PnUnion
+		{
+			Complex complex;
+			IndexVector parameters; //all in Variadic and all in Fn
+			CharVector char_vec;
+			pattern::TreeMatchVariable tree_match;    //only expected as part of pattern
+			pattern::ValueMatchVariable value_match;  //only expected as part of pattern
+
+			constexpr PnUnion(const Complex&                     val) noexcept :complex(val)     {}
+			constexpr PnUnion(const IndexVector&                 val) noexcept :parameters(val)  {}
+			constexpr PnUnion(const CharVector&                  val) noexcept :char_vec(val)    {}
+			constexpr PnUnion(const pattern::TreeMatchVariable&  val) noexcept :tree_match(val)  {}
+			constexpr PnUnion(const pattern::ValueMatchVariable& val) noexcept :value_match(val) {}
+			constexpr PnUnion()                                       noexcept :complex(0.0)     {}
+
+			constexpr auto operator<=>(const PnUnion&) const = default;
+
+			constexpr operator const Complex                    & () const noexcept { return this->complex;     }
+			constexpr operator const IndexVector                & () const noexcept { return this->parameters;  }
+			constexpr operator const CharVector                 & () const noexcept { return this->char_vec;    }
+			constexpr operator const pattern::TreeMatchVariable & () const noexcept { return this->tree_match;  }
+			constexpr operator const pattern::ValueMatchVariable& () const noexcept { return this->value_match; }
+			
+			constexpr operator Complex                    & () noexcept { return this->complex;     }
+			constexpr operator IndexVector                & () noexcept { return this->parameters;  }
+			constexpr operator CharVector                 & () noexcept { return this->char_vec;    }
+			constexpr operator pattern::TreeMatchVariable & () noexcept { return this->tree_match;  }
+			constexpr operator pattern::ValueMatchVariable& () noexcept { return this->value_match; }
+		};
+
+		using PnStore = BasicStore<PnUnion>;
+
+		static_assert(StoreLike<PnStore>);
+
+		using UnsavePnRef = BasicUnsaveRef<PnType, PnUnion>;
+		using PnRef = BasicSaveRef<PnType, const PnStore>;
+		using MutPnRef = BasicSaveRef<PnType, PnStore>;
+
+
+		static_assert(ReferenceTo<UnsavePnRef, PnUnion>);
+		static_assert(ReferenceTo<PnRef, PnUnion>);
+		static_assert(ReferenceTo<MutPnRef, PnUnion>);
+
+
 		bool meets_restriction(const UnsaveRef ref, const Restriction restr);
 
 		bool has_form(const Complex& nr, const Form form);
 
-		struct RewriteRule
+		//representation of RewriteRule without pattern specific elements
+		// -> allows manipulation of rule with other rules
+		//can not be used to match against, but RewriteRule can be build from this
+		struct IntermediateRewriteRule 
 		{
-			TypedIdx lhs_head;
-			TypedIdx rhs_head;
-			MathStore lhs_store;
-			MathStore rhs_store;
+			TypedIdx lhs_head = TypedIdx();
+			TypedIdx rhs_head = TypedIdx();
+			MathStore store = {}; //acts as both store for rhs and lhs
 
-			RewriteRule(std::string name);
+			MutRef lhs_mut_ref() noexcept { return MutRef(this->store, this->lhs_head); }
+			MutRef rhs_mut_ref() noexcept { return MutRef(this->store, this->rhs_head); }
+			Ref lhs_ref() const noexcept { return Ref(this->store, this->lhs_head); }
+			Ref rhs_ref() const noexcept { return Ref(this->store, this->rhs_head); }
+
+			IntermediateRewriteRule(std::string name);
 			std::string to_string() const;
 			std::string lhs_memory_layout() const;
 			std::string rhs_memory_layout() const;
 			std::string lhs_tree(const std::size_t offset = 0u) const;
 			std::string rhs_tree(const std::size_t offset = 0u) const;
+		};
 
-			MutRef lhs_mut_ref() noexcept { return MutRef(this->lhs_store, this->lhs_head); }
-			MutRef rhs_mut_ref() noexcept { return MutRef(this->rhs_store, this->rhs_head); }
-			Ref lhs_ref() const noexcept { return Ref(this->lhs_store, this->lhs_head); }
-			Ref rhs_ref() const noexcept { return Ref(this->rhs_store, this->rhs_head); }
+		//this is the form needed for a rule to be applied, however once it is in this form, 
+		//  it can not be manipulated further by other rules
+		struct RewriteRule
+		{
+			PnTypedIdx lhs_head;
+			PnTypedIdx rhs_head;
+			PnStore store; //acts as both store for rhs and lhs
+
+			RewriteRule(const PnTypedIdx new_lhs_head, const PnTypedIdx new_rhs_head, PnStore new_store) noexcept
+				:lhs_head(new_lhs_head), rhs_head(new_rhs_head), store(std::move(new_store)) {}
+
+			RewriteRule(std::string name);
+
+			MutPnRef lhs_mut_ref() noexcept { return MutPnRef(this->store, this->lhs_head); }
+			MutPnRef rhs_mut_ref() noexcept { return MutPnRef(this->store, this->rhs_head); }
+			PnRef lhs_ref() const noexcept { return PnRef(this->store, this->lhs_head); }
+			PnRef rhs_ref() const noexcept { return PnRef(this->store, this->rhs_head); }
 		};
 
 		//algorithms specific to patterns
@@ -487,8 +555,12 @@ namespace bmath::intern {
 
 			//mostly stripped down version of tree::combine_values_exact to find calculate SharedValueDatum.value
 			// from the start_val taken out of matched term
-			OptComplex eval_value_match(const UnsaveRef ref, const Complex& start_val);
+			OptComplex eval_value_match(const UnsavePnRef ref, const Complex& start_val);
 
+			//copies math_ref into dst_store but changes all math representations of pattern specific nodes 
+			//  to their final pattern versions
+			PnTypedIdx intermediate_to_pattern(const UnsaveRef math_ref, PnStore& dst_store);
+			
 		} //namespace pn_tree
 
 		namespace match {
@@ -571,12 +643,12 @@ namespace bmath::intern {
 			//compares term starting at ref.index in ref.store with pattern starting at pn_ref.index in pn_ref.store
 			//if match is succsessfull, match_data stores what pattern's match variables matched and true is returned.
 			//if match was not succsessfull, match_data is NOT reset and false is returned
-			bool permutation_equals(const UnsaveRef pn_ref, const UnsaveRef ref, MatchData& match_data);
+			bool permutation_equals(const pattern::UnsavePnRef pn_ref, const UnsaveRef ref, MatchData& match_data);
 
 			//resets not all matched variables appearing in pn_ref, but only the ones also set by pn_ref
 			//example: in whole pattern "a+a*b" "a" may be matched as single summand, 
 			//  thus resetting own variables in part "a*b" will only reset "b".
-			void reset_own_matches(const UnsaveRef pn_ref, MatchData& match_data);
+			void reset_own_matches(const pattern::UnsavePnRef pn_ref, MatchData& match_data);
 
 			//determines weather there is a way to match pn_ref in haystack_ref (thus pn_ref is assumed to part of a pattern)
 			//pn_i is the index of the first element in pn_ref to be matched. 
@@ -584,16 +656,16 @@ namespace bmath::intern {
 			//the first haystack_k elements of haystack_ref will be skipped for the first match attemt.
 			//it is assumed, that pn_ref and haystack_ref are both the same parameters type (eighter both sum or both product)
 			//returns if search was successfull
-			bool find_matching_permutation(const UnsaveRef pn_ref, const UnsaveRef haystack_ref,
+			bool find_matching_permutation(const pattern::UnsavePnRef pn_ref, const UnsaveRef haystack_ref,
 				MatchData& match_data,	std::uint32_t pn_i, std::uint32_t haystack_k);
 
 			//expects pn_ref to already be matched to ref via match_data
 			//if one exists, this function finds a different match of pn_ref in ref, appearing after the current one
 			//  in all permutations
-			bool subsequent_permutation_equals(const UnsaveRef pn_ref, const UnsaveRef ref, MatchData& match_data);
+			bool subsequent_permutation_equals(const pattern::UnsavePnRef pn_ref, const UnsaveRef ref, MatchData& match_data);
 
 			//copies pn_ref with match_data into dst_store, returns head of copied result.
-			[[nodiscard]] TypedIdx copy(const UnsaveRef pn_ref, const MatchData& match_data,
+			[[nodiscard]] TypedIdx copy(const pattern::UnsavePnRef pn_ref, const MatchData& match_data,
 				const MathStore& src_store, MathStore& dst_store);
 
 			//this function is the primary function designed to be called from outside of this namespace.
@@ -601,18 +673,33 @@ namespace bmath::intern {
 			//if a transformation happened, Just the new subterm is returned to replace the TypedIdx 
 			//  of the old subterm in its parent, else nothing.
 			//if the result contains something, ref is no longer valid.
-			[[nodiscard]] std::optional<TypedIdx> match_and_replace(const UnsaveRef in, const UnsaveRef out, const MutRef ref);
+			[[nodiscard]] std::optional<TypedIdx> match_and_replace(
+				const pattern::UnsavePnRef in, const pattern::UnsavePnRef out, const MutRef ref);
 
 			//tries to match in (in postoreder) against every subterm of ref and finally ref itself. if a deeper match was found, 
 			// snd of return value is true. 
 			//if fst of return value is valid, ref could be matched and got replaced by *fst of return value, 
 			//  meaning ref is no longer valid and caller needs to replace ref with *return_value.first  
 			[[nodiscard]] std::pair<std::optional<TypedIdx>, bool> recursive_match_and_replace(
-				const Ref in, const Ref out, const MutRef ref);
+				const pattern::UnsavePnRef in, const pattern::UnsavePnRef out, const MutRef ref);
 
 		} //namespace match
 
 	} //namespace pattern
+
+	namespace fn {
+
+		constexpr auto&        range(const pattern::UnsavePnRef ref) noexcept { return ref->parameters; }
+		constexpr auto&        range(const pattern::      PnRef ref) noexcept { return ref->parameters; }
+		constexpr auto    save_range(const pattern::      PnRef ref) noexcept { return ref.cast<IndexVector>(); }
+		constexpr auto         range(const pattern::   MutPnRef ref) noexcept { return ref.cast<IndexVector>(); }
+		constexpr auto& unsave_range(const pattern::   MutPnRef ref) noexcept { return ref->parameters; }
+
+		constexpr const CharVector& named_fn_name(const pattern::UnsavePnRef named_fn) noexcept
+		{
+			return static_cast<const CharVector&>(*named_fn.raw_at(named_fn_name_index(named_fn)));
+		}
+	} //namespace fn
 
 	namespace fold {
 

@@ -8,6 +8,7 @@
 TODO:
 
 important:
+ - adjust valid_storage() to allow forest
  - let type_table in ioArithmetic use names of fn
  - make pattern and usual term two distinct types (again...)
 	enables: 

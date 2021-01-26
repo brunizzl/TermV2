@@ -172,13 +172,14 @@ namespace bmath::intern::debug {
 		});
 
 		for (const auto& rule : rules) {
-			std::cout << rule.to_string() << "\n";
-			assert(tree::valid_storage(rule.lhs_ref()));
-			assert(tree::valid_storage(rule.rhs_ref()));
+			//std::cout << "------------------------------------------------------\n";
+			//std::cout << rule.to_string() << "\n";
 			//std::cout << rule.lhs_memory_layout() << "\n";
 			//std::cout << rule.rhs_memory_layout() << "\n";
 			//std::cout << "lhs:\n" << rule.lhs_tree() << "\n";
 			//std::cout << "rhs:\n" << rule.rhs_tree() << "\n\n\n";
+			//assert(tree::valid_storage(rule.lhs_ref()));
+			//assert(tree::valid_storage(rule.rhs_ref()));
 		}
 		std::cout << "\n\n";
 
@@ -364,11 +365,11 @@ namespace bmath::intern::test {
 		for (auto& s : term_names) {
 			std::cout << "baue aus: \"" << s << "\"\n";
 			const RewriteRule pattern(s);
-			std::cout << "pattern: " << pattern.to_string() << "\n\n";
-			std::cout << "lhs baum:\n" << pattern.lhs_tree() << "\n\n";
-			std::cout << "rhs baum:\n" << pattern.rhs_tree() << "\n\n";
-			std::cout << "lhs speicher:\n" << pattern.lhs_memory_layout() << "\n\n";
-			std::cout << "rhs speicher:\n" << pattern.rhs_memory_layout() << "\n\n";
+			//std::cout << "pattern: " << pattern.to_string() << "\n\n";
+			//std::cout << "lhs baum:\n" << pattern.lhs_tree() << "\n\n";
+			//std::cout << "rhs baum:\n" << pattern.rhs_tree() << "\n\n";
+			//std::cout << "lhs speicher:\n" << pattern.lhs_memory_layout() << "\n\n";
+			//std::cout << "rhs speicher:\n" << pattern.rhs_memory_layout() << "\n\n";
 			std::cout << "-------------------------------------------------------------------------------------\n";
 		}
 	} //pattern_term
@@ -418,7 +419,7 @@ namespace bmath::intern::test {
 		auto t = Term(t_name);
 		t.establish_order();
 		auto m = pattern::match::MatchData{};
-		std::cout << "match lhs of \"" << p.to_string() << "\" with \"" << t.to_string() << ": " << pattern::match::permutation_equals(p.lhs_ref(), t.ref(), m) << "\n";
+		//std::cout << "match lhs of \"" << p.to_string() << "\" with \"" << t.to_string() << ": " << pattern::match::permutation_equals(p.lhs_ref(), t.ref(), m) << "\n";
 	}
 
 	void combine()
