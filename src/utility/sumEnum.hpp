@@ -360,6 +360,8 @@ namespace bmath::intern {
 		{
 			using AllInfos = detail_enum::MemberInfos_t<SumEnum_T>;
 			using UsedInfos = meta::Filter_t<IsInTypeCases, AllInfos>;
+			static_assert(meta::size_v<UsedInfos> == meta::size_v<TypeCases>,
+				"every type case must stand for a unique range in SumEnum_T");
 
 			constexpr std::array type_options = arr::from_list_v<InfoToOption, UsedInfos>;
 			constexpr std::array value_options = arr::map_v<Option, ValueToOption, ValueCases>;
