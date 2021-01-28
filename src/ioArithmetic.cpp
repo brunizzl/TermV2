@@ -44,46 +44,6 @@ namespace bmath::intern {
 	template<typename Store_T, typename BuildAny>
 	[[nodiscard]] TypedIdx build_function(Store_T& store, ParseView input, const std::size_t open_par, BuildAny build_any);
 
-	namespace pattern {
-
-		struct Unknown :SingleSumEnumEntry {};
-
-		using PnVariablesType = SumEnum<Restriction, Form, MultiPn, Unknown>;
-
-		struct TypeProps
-		{
-			PnVariablesType type = PnVariablesType(Unknown{});
-			std::string_view name = "";
-		};
-
-		constexpr auto type_table = std::to_array<TypeProps>({
-			{ Comm::sum           , "sum"           },
-			{ Comm::product       , "product"       },
-			{ Literal::variable   , "variable"      },
-			{ Literal::complex    , "value"         }, //not to be mistaken for Form::complex
-			{ Restr::function     , "fn"            },
-			{ Form::natural       , "nat"           },
-			{ Form::natural_0     , "nat0"          },
-			{ Form::integer       , "int"           },
-			{ Form::real          , "real"          },
-			{ Form::complex       , "complex"       }, //not to be mistaken for Literal::complex
-			{ Form::negative      , "negative"      },
-			{ Form::not_negative  , "not_negative"  },
-			{ Form::positive      , "positive"      },
-			{ Form::not_positive  , "not_positive"  },
-			{ Restr::any          , "any"           },
-			{ Restr::nn1          , "nn1"           },
-			{ Restr::no_val       , "no_val"        },
-			{ MultiPn::summands   , "summands"      },
-			{ MultiPn::factors    , "factors"       },
-			{ MultiPn::params     , "params"        },
-		});
-
-		constexpr std::string_view name_of(const PnVariablesType r) noexcept { return find(type_table, &TypeProps::type, r).name; }
-		constexpr PnVariablesType type_of(const std::string_view s) noexcept { return search(type_table, &TypeProps::name, s).type; }
-
-	} //namespace pattern
-
 	namespace print {
 
 		//operator precedence (used to decide if parentheses are nessecary in out string)
@@ -463,7 +423,7 @@ namespace bmath::intern {
 				const std::size_t colon = find_first_of_skip_pars(var_view.tokens, token::colon);
 				if (colon != TokenView::npos) {
 					const PnVariablesType type = type_of(var_view.to_string_view(colon + 1u));
-					if (type.is<Unknown>()) [[unlikely]] throw ParseFailure{ var_view.offset + colon + 1u, "unknown restriction" };
+					if (type.is<UnknownPnVar>()) [[unlikely]] throw ParseFailure{ var_view.offset + colon + 1u, "unknown restriction" };
 
 					if (type.is<Form>()) {
 						this->value_table.emplace_back(var_view.to_string_view(0, colon), type.to<Form>());
@@ -501,6 +461,9 @@ namespace bmath::intern {
 
 			if (const auto iter = search_name(this->tree_table); iter != this->tree_table.end()) {
 				const std::uint32_t match_data_idx = std::distance(this->tree_table.begin(), iter);
+
+
+
 				const std::size_t result_index = store.allocate_one();
 				store.at(result_index) = TreeMatchVariable{ match_data_idx, iter->restr };
 				const TypedIdx result_typedidx = TypedIdx(result_index, PnNode::tree_match);

@@ -203,6 +203,71 @@ namespace bmath::intern {
 			{}
 		};
 
+
+
+		struct UnknownPnVar :SingleSumEnumEntry {};
+
+		//intermediary used in build process
+		using PnVariablesType = SumEnum<Restriction, Form, MultiPn, UnknownPnVar>;
+
+		struct TypeProps
+		{
+			PnVariablesType type = PnVariablesType(UnknownPnVar{});
+			std::string_view name = "";
+		};
+
+		constexpr auto type_table = std::to_array<TypeProps>({
+			{ Comm::sum           , "sum"           },
+			{ Comm::product       , "product"       },
+			{ Literal::variable   , "variable"      },
+			{ Literal::complex    , "value"         }, //not to be mistaken for Form::complex
+			{ Restr::function     , "fn"            },
+			{ Form::natural       , "nat"           },
+			{ Form::natural_0     , "nat0"          },
+			{ Form::integer       , "int"           },
+			{ Form::real          , "real"          },
+			{ Form::complex       , "complex"       }, //not to be mistaken for Literal::complex
+			{ Form::negative      , "negative"      },
+			{ Form::not_negative  , "not_negative"  },
+			{ Form::positive      , "positive"      },
+			{ Form::not_positive  , "not_positive"  },
+			{ Restr::any          , "any"           },
+			{ Restr::nn1          , "nn1"           },
+			{ Restr::no_val       , "no_val"        },
+			{ MultiPn::summands   , "summands"      },
+			{ MultiPn::factors    , "factors"       },
+			{ MultiPn::params     , "params"        },
+			});
+
+		constexpr std::string_view name_of(const PnVariablesType r) noexcept { return find(type_table, &TypeProps::type, r).name; }
+		constexpr PnVariablesType type_of(const std::string_view s) noexcept { return search(type_table, &TypeProps::name, s).type; }
+
+
+		//all patterns are initially build using only MathType, thus the pattern specific nodes 
+		//  are modeled with ones avaliable in math (most prominently: NamedFn)
+		namespace math_rep {
+
+			//TreeMatchVariable is modeled as NamedFn holding:
+			//  parsed name as variable in first parameter (not kept in final TreeMatchVariable)
+			//  .match_data_idx as complex in second parameter
+			//  .restr as variable (same name as calling name_of(.restr)) in third parameter
+			constexpr std::string_view tree_match_name = "__TreeMatch";
+			
+			//(nonexisting) MultiMatchVariable is modeled as NamedFn holding:
+			//  parsed name as variable in first parameter (obviously not kept in final PnTypedIdx)
+			//  .get_index() as complex in second parameter
+			//  .get_type() as variable (same name as calling name_of(.get_type())) in third parameter
+			constexpr std::string_view multi_match_name = "__MultiMatch";
+
+			//ValueMatchVariable is modeled as NamedFn holding:
+			//  parsed name as variable in first parameter (not kept in final ValueMatchVariable)
+			//  .mtch_idx as complex in second parameter
+			//  .copy_idx as complex in third parameter
+			//  .match_data_idx as complex in forth parameter
+			//  .form as variable (same name as calling name_of(.restr)) in fifth parameter
+			constexpr std::string_view value_match_name = "__ValueMatch";
+		} //namespace math_rep
+
 	} //namespace pattern
 
 
@@ -376,8 +441,8 @@ namespace bmath::intern {
 			return static_cast<const CharVector&>(*named_fn.raw_at(named_fn_name_index(named_fn)));
 		}
 
-		template<typename Store_T, typename Name_T, typename Parameters_T>
-		inline TypedIdx build_named_fn(Store_T& store, const Name_T name, const Parameters_T& params)
+		template<StoreLike Store_T, typename Parameters_T>
+		inline TypedIdx build_named_fn(Store_T& store, const std::string_view name, const Parameters_T& params)
 		{
 			const std::size_t parameter_capacity = IndexVector::smallest_fit_capacity(params.size());
 			const std::size_t nr_parameter_nodes = IndexVector::_node_count(parameter_capacity);
@@ -557,9 +622,11 @@ namespace bmath::intern {
 			// from the start_val taken out of matched term
 			OptComplex eval_value_match(const UnsavePnRef ref, const Complex& start_val);
 
-			//copies math_ref into dst_store but changes all math representations of pattern specific nodes 
+			//copies math_ref into dst_store but changes math representations of pattern specific nodes 
 			//  to their final pattern versions
-			PnTypedIdx intermediate_to_pattern(const UnsaveRef math_ref, PnStore& dst_store);
+			//if only_build_basic, only tree- and multimatch are converted to pattern form
+			//  (this is done to allow simple patterns as means to build more difficult patterns, e.g. reorder value match)
+			PnTypedIdx intermediate_to_pattern(const UnsaveRef math_ref, PnStore& dst_store, bool only_build_basic);
 			
 		} //namespace pn_tree
 

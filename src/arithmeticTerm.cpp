@@ -1033,8 +1033,8 @@ namespace bmath::intern {
 			std::cout << intermediate.to_string() << "\n";
 
 			this->store.reserve(intermediate.store.nr_used_slots());
-			this->lhs_head = pn_tree::intermediate_to_pattern(intermediate.lhs_ref(), this->store);
-			this->rhs_head = pn_tree::intermediate_to_pattern(intermediate.rhs_ref(), this->store);
+			this->lhs_head = pn_tree::intermediate_to_pattern(intermediate.lhs_ref(), this->store, false);
+			this->rhs_head = pn_tree::intermediate_to_pattern(intermediate.rhs_ref(), this->store, false);
 		} //RewriteRule::RewriteRule
 
 		namespace pn_tree {
@@ -1286,20 +1286,56 @@ namespace bmath::intern {
 				}
 			} //eval_value_match
 
-			PnTypedIdx intermediate_to_pattern(const UnsaveRef src_ref, PnStore& dst_store)
+			PnTypedIdx intermediate_to_pattern(const UnsaveRef src_ref, PnStore& dst_store, bool only_build_basic)
 			{
 				switch (src_ref.type) {
+				case Type(NamedFn{}): {
+					const std::string_view name = fn::named_fn_name(src_ref);
+					if (name == math_rep::tree_match_name) {
+						const IndexVector& tree_match_rep = *src_ref;
+						assert(tree_match_rep.size() == 3); //first param is name
+
+						assert(tree_match_rep[1].get_type() == Literal::complex); //convert to .match_data_idx
+						const Complex idx_rep = src_ref.new_at(tree_match_rep[1])->complex;
+						assert(has_form(idx_rep, Form::natural_0));
+
+						assert(tree_match_rep[2].get_type() == Literal::variable); //convert to .type
+						const PnVariablesType restr = type_of(src_ref.new_at(tree_match_rep[2])->char_vec);
+						assert(restr.is<Restriction>());
+
+						const std::size_t dst_index = dst_store.allocate_one();
+						dst_store.at(dst_index) = TreeMatchVariable{ static_cast<std::uint32_t>(idx_rep.real()), restr.to<Restriction>() }; 
+						return PnTypedIdx(dst_index, PnNode::tree_match);
+					}
+					if (name == math_rep::multi_match_name) {
+						const IndexVector& multi_match_rep = *src_ref;
+						assert(multi_match_rep.size() == 3); //first param is name
+
+						assert(multi_match_rep[1].get_type() == Literal::complex); //convert to index part of PnTypedIdx
+						const Complex idx_rep = src_ref.new_at(multi_match_rep[1])->complex;
+						assert(has_form(idx_rep, Form::natural_0));
+
+						assert(multi_match_rep[2].get_type() == Literal::variable); //convert to .get_type() part of PnTypedIdx
+						const PnVariablesType type = type_of(src_ref.new_at(multi_match_rep[2])->char_vec);
+						assert(type.is<MultiPn>());
+
+						return PnTypedIdx(static_cast<std::uint32_t>(idx_rep.real()), type.to<MultiPn>());
+					}
+
+					if (!only_build_basic && name == math_rep::multi_match_name) {
+
+					}
+				} [[fallthrough]];
 				default: {
 					assert(src_ref.type.is<Function>());
 					StupidBufferVector<PnTypedIdx, 12> dst_parameters;
 					for (const TypedIdx src_param : fn::range(src_ref)) {
-						const PnTypedIdx dst_param = intermediate_to_pattern(src_ref.new_at(src_param), dst_store);
+						const PnTypedIdx dst_param = intermediate_to_pattern(src_ref.new_at(src_param), dst_store, only_build_basic);
 						dst_parameters.push_back(dst_param);
 					}
 					if (src_ref.type.is<NamedFn>()) {
 						const CharVector& name_ref = fn::named_fn_name(src_ref);
-						std::string name = std::string(name_ref.begin(), name_ref.end());
-						return fn::build_named_fn(dst_store, std::move(name), dst_parameters);
+						return fn::build_named_fn(dst_store, name_ref, dst_parameters);
 					}
 					else {
 						return PnTypedIdx(IndexVector::build(dst_store, dst_parameters), src_ref.type);
@@ -1307,8 +1343,7 @@ namespace bmath::intern {
 				} break;
 				case Type(Literal::variable): {
 					const CharVector& src_var = *src_ref;
-					const auto src_name = std::string(src_var.data(), src_var.size());
-					const std::size_t dst_index = CharVector::build(dst_store, src_name);
+					const std::size_t dst_index = CharVector::build(dst_store, src_var);
 					return PnTypedIdx(dst_index, src_ref.type);
 				} break;
 				case Type(Literal::complex): {
@@ -1324,8 +1359,8 @@ namespace bmath::intern {
 				case Type(PnNode::value_match): {
 					const pattern::ValueMatchVariable src_var = *src_ref;
 					auto dst_var = pattern::ValueMatchVariable(src_var.match_data_idx, src_var.form);
-					dst_var.mtch_idx = intermediate_to_pattern(src_ref.new_at(src_var.mtch_idx), dst_store);
-					dst_var.copy_idx = intermediate_to_pattern(src_ref.new_at(src_var.copy_idx), dst_store);
+					dst_var.mtch_idx = intermediate_to_pattern(src_ref.new_at(src_var.mtch_idx), dst_store, only_build_basic);
+					dst_var.copy_idx = intermediate_to_pattern(src_ref.new_at(src_var.copy_idx), dst_store, only_build_basic);
 					const std::size_t dst_index = dst_store.allocate_one();
 					dst_store.at(dst_index) = dst_var;
 					return PnTypedIdx(dst_index, src_ref.type);

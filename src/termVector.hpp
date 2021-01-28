@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <type_traits>
 #include <limits>
+#include <string_view>
 
 #include "termStore.hpp"
 
@@ -123,6 +124,10 @@ namespace bmath::intern {
 		//kinda unsave, as always :o
 		constexpr Value_T& operator[](const std::uint32_t at) noexcept { return *(this->data_ + at); }
 		constexpr const Value_T& operator[](const std::uint32_t at) const noexcept { return *(this->data_ + at); }
+
+		template<std::nullptr_t = nullptr> requires(std::is_same_v<Value_T, char>)
+		constexpr operator std::string_view() const noexcept { return { this->data(), this->size() }; }
+
 	}; //struct StoredVector
 
 	namespace stored_vector {

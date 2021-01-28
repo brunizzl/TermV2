@@ -8,7 +8,8 @@
 TODO:
 
 important:
- - build andf adjust IntermediateRewriteRule only using MathType
+ - distinguish between owning match variable and nonowning match variable
+ - build and adjust IntermediateRewriteRule only using MathType
  - adjust valid_storage() to allow forest
  - let type_table in ioArithmetic use names of fn
  - make pattern and usual term two distinct types (again...)
@@ -49,38 +50,38 @@ idea status:
 
 using namespace bmath::intern;
 
-void f(Type t) {
-	using Options = EnumSwitch<Type, 
-		meta::List<Variadic, NamedFn, Fn, /*Literal,*/ MatchType>
-		, std::to_array<Type>({ Type(Literal::complex), Type(Literal::variable) })
-	>;
-
-	std::cout << (unsigned)t << "\t";
-	
-	switch (Options::decide(t)) {
-	case Options::is_type<Variadic>:
-		std::cout << "Variadic\n";
-		break;
-	case Options::is_type<NamedFn>:
-		std::cout << "NamedFn\n";
-		break;
-	case Options::is_type<Fn>:
-		std::cout << "Fn\n";
-		break;
-	//case Options::is_type<Literal>() :
-	//	std::cout << "Literal\n";
-	//	break;
-	case Options::is_value<Literal::variable>:
-		std::cout << "variable\n";
-		break;
-	case Options::is_value<Literal::complex>:
-		std::cout << "complex\n";
-		break;
-	case Options::is_type<MatchType>:
-		std::cout << "MatchType\n";
-		break;
-	}
-}
+//void f(Type t) {
+//	using Options = EnumSwitch<Type, 
+//		meta::List<Variadic, NamedFn, Fn, /*Literal,*/ MatchType>
+//		, std::to_array<Type>({ Type(Literal::complex), Type(Literal::variable) })
+//	>;
+//
+//	std::cout << (unsigned)t << "\t";
+//	
+//	switch (Options::decide(t)) {
+//	case Options::is_type<Variadic>:
+//		std::cout << "Variadic\n";
+//		break;
+//	case Options::is_type<NamedFn>:
+//		std::cout << "NamedFn\n";
+//		break;
+//	case Options::is_type<Fn>:
+//		std::cout << "Fn\n";
+//		break;
+//	//case Options::is_type<Literal>() :
+//	//	std::cout << "Literal\n";
+//	//	break;
+//	case Options::is_value<Literal::variable>:
+//		std::cout << "variable\n";
+//		break;
+//	case Options::is_value<Literal::complex>:
+//		std::cout << "complex\n";
+//		break;
+//	case Options::is_type<MatchType>:
+//		std::cout << "MatchType\n";
+//		break;
+//	}
+//}
 
 int main()
 {
