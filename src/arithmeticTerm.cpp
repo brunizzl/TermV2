@@ -145,6 +145,170 @@ namespace bmath::intern {
 
 	} //namespace fn
 
+	//all patterns are initially build using only MathType, thus the pattern specific nodes 
+	//  are modeled with ones avaliable in math (most prominently: NamedFn)
+	namespace pattern::math_rep {
+
+		//TreeMatchVariable is modeled as NamedFn holding:
+		//  .match_data_idx as complex in first parameter
+		//  .restr as variable (same name as calling name_of(.restr)) in second parameter
+		template<ReferenceTo<MathUnion> R>
+		class IntermediateTreeMatch
+		{
+			R ref;
+
+			static constexpr std::string_view function_name = "__TreeMatch";
+
+			constexpr IntermediateTreeMatch(const R new_ref) noexcept :ref(new_ref) {}
+
+		public:
+			template<StoreLike S>
+			static constexpr TypedIdx build(S& store, const std::uint32_t match_data_idx, const Restriction restr)
+			{
+				const TypedIdx match_data_idx_pos = build_value(store, Complex{ match_data_idx, 0.0 });
+				const TypedIdx restr_pos = TypedIdx(CharVector::build(store, name_of(restr)), Type(Literal::variable));
+				return fn::build_named_fn(store, function_name, { match_data_idx_pos, restr_pos });
+			}
+
+			static constexpr std::optional<IntermediateTreeMatch> cast(const R new_ref)
+			{
+				if (new_ref.type == NamedFn{}) {
+					std::string_view ref_name = fn::named_fn_name(new_ref);
+					if (ref_name == function_name) {
+						const IndexVector& params = *new_ref;
+						assert(params.size() == 2);
+						assert(params[0].get_type() == Literal::complex); 
+						assert(has_form(*new_ref.new_at(params[0]), Form::natural_0));
+						assert(params[1].get_type() == Literal::variable); 
+						assert(type_of(new_ref.new_at(params[1])->char_vec).is<Restriction>());
+						return IntermediateTreeMatch(new_ref);
+					}
+				}
+				return std::nullopt;
+			}
+
+			constexpr std::uint32_t match_data_idx() const noexcept
+			{
+				const IndexVector& params = *this->ref;
+				return this->ref.new_at(params[0])->complex.real();
+			}
+
+			constexpr Restriction restr() const noexcept
+			{
+				const IndexVector& params = *this->ref;
+				return type_of(this->ref.new_at(params[1])->char_vec).to<Restriction>();
+			}
+		}; //class IntermediateTreeMatch
+
+		//(nonexisting) MultiMatchVariable is modeled as NamedFn holding:
+		//  .get_index() as complex in first parameter
+		//  .get_type() as variable (same name as calling name_of(.get_type())) in second parameter
+		template<ReferenceTo<MathUnion> R>
+		class IntermediateMultiMatch
+		{
+			R ref;
+
+			static constexpr std::string_view function_name = "__MultiMatch";
+
+			constexpr IntermediateMultiMatch(const R new_ref) noexcept :ref(new_ref) {}
+
+		public:
+			template<StoreLike S>
+			static constexpr TypedIdx build(S& store, const std::uint32_t idx, const MultiPn type)
+			{
+				const TypedIdx idx_pos = build_value(store, Complex{ idx, 0.0 });
+				const TypedIdx type_pos = TypedIdx(CharVector::build(store, name_of(type)), Type(Literal::variable));
+				return fn::build_named_fn(store, function_name, { idx_pos, type_pos });
+			}
+
+			static constexpr std::optional<IntermediateMultiMatch> cast(const R new_ref)
+			{
+				if (new_ref.type == NamedFn{}) {
+					std::string_view ref_name = fn::named_fn_name(new_ref);
+					if (ref_name == function_name) {
+						const IndexVector& params = *new_ref;
+						assert(params.size() == 2);
+						assert(params[0].get_type() == Literal::complex); 
+						assert(has_form(*new_ref.new_at(params[0]), Form::natural_0));
+						assert(params[1].get_type() == Literal::variable); 
+						assert(type_of(new_ref.new_at(params[1])->char_vec).is<MultiPn>());
+						return IntermediateMultiMatch(new_ref);
+					}
+				}
+				return std::nullopt;
+			}
+
+			constexpr std::uint32_t index() const noexcept
+			{
+				const IndexVector& params = *this->ref;
+				return this->ref.new_at(params[0])->complex.real();
+			}
+
+			constexpr MultiPn type() const noexcept
+			{
+				const IndexVector& params = *this->ref;
+				return type_of(this->ref.new_at(params[1])->char_vec).to<MultiPn>();
+			}
+		}; //class IntermediateMultiMatch
+
+		//ValueMatchVariable is modeled as NamedFn holding:
+		//  .mtch_idx as complex in first parameter
+		//  .copy_idx as complex in second parameter
+		//  .match_data_idx as complex in third parameter
+		//  .form as variable (same name as calling name_of(.restr)) in forth parameter
+		template<ReferenceTo<MathUnion> R>
+		class IntermediateValueMatch
+		{
+			R ref;
+
+			static constexpr std::string_view function_name = "__ValueMatch";
+
+			constexpr IntermediateValueMatch(const R new_ref) noexcept :ref(new_ref) {}
+
+		public:
+			template<StoreLike S>
+			static constexpr TypedIdx build(S& store, const TypedIdx mtch_idx, const TypedIdx copy_idx, 
+				const std::uint32_t match_data_idx, const Form form)
+			{
+				const TypedIdx match_data_idx_pos = build_value(store, Complex{ match_data_idx, 0.0 });
+				const TypedIdx form_pos = TypedIdx(CharVector::build(store, name_of(form)), Type(Literal::variable));
+				return fn::build_named_fn(store, function_name, { mtch_idx, copy_idx, match_data_idx_pos, form_pos });
+			}
+
+			static constexpr std::optional<IntermediateValueMatch> cast(const R new_ref)
+			{
+				if (new_ref.type == NamedFn{}) {
+					std::string_view ref_name = fn::named_fn_name(new_ref);
+					if (ref_name == function_name) {
+						const IndexVector& params = *new_ref;
+						assert(params.size() == 4);
+						assert(params[2].get_type() == Literal::complex); 
+						assert(has_form(*new_ref.new_at(params[2]), Form::natural_0));
+						assert(params[3].get_type() == Literal::variable); 
+						assert(type_of(new_ref.new_at(params[0])->char_vec).is<Form>());
+						return IntermediateValueMatch(new_ref);
+					}
+				}
+				return std::nullopt;
+			}
+
+			constexpr TypedIdx mtch_idx() const noexcept { return this->ref->parameters[0]; }
+			constexpr TypedIdx copy_idx() const noexcept { return this->ref->parameters[1]; }
+
+			constexpr std::uint32_t match_data_idx() const noexcept
+			{
+				const IndexVector& params = *this->ref;
+				return this->ref.new_at(params[2])->complex.real();
+			}
+
+			constexpr Form form() const noexcept
+			{
+				const IndexVector& params = *this->ref;
+				return type_of(this->ref.new_at(params[3])->char_vec).to<Form>();
+			}
+		}; //class IntermediateValueMatch
+	} //namespace pattern::math_rep
+
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	/////////////////////////////////////////////////////////////////////exported in header/////////////////////////////////////////////////////////////////////////////////
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1291,39 +1455,26 @@ namespace bmath::intern {
 				switch (src_ref.type) {
 				case Type(NamedFn{}): {
 					const std::string_view name = fn::named_fn_name(src_ref);
-					if (name == math_rep::tree_match_name) {
-						const IndexVector& tree_match_rep = *src_ref;
-						assert(tree_match_rep.size() == 3); //first param is name
-
-						assert(tree_match_rep[1].get_type() == Literal::complex); //convert to .match_data_idx
-						const Complex idx_rep = src_ref.new_at(tree_match_rep[1])->complex;
-						assert(has_form(idx_rep, Form::natural_0));
-
-						assert(tree_match_rep[2].get_type() == Literal::variable); //convert to .type
-						const PnVariablesType restr = type_of(src_ref.new_at(tree_match_rep[2])->char_vec);
-						assert(restr.is<Restriction>());
-
+					if (const auto tree_match = math_rep::IntermediateTreeMatch<UnsaveRef>::cast(src_ref)) {					
 						const std::size_t dst_index = dst_store.allocate_one();
-						dst_store.at(dst_index) = TreeMatchVariable{ static_cast<std::uint32_t>(idx_rep.real()), restr.to<Restriction>() }; 
+						dst_store.at(dst_index) = TreeMatchVariable{ tree_match->match_data_idx(), tree_match->restr() }; 
 						return PnTypedIdx(dst_index, PnNode::tree_match);
 					}
-					if (name == math_rep::multi_match_name) {
-						const IndexVector& multi_match_rep = *src_ref;
-						assert(multi_match_rep.size() == 3); //first param is name
-
-						assert(multi_match_rep[1].get_type() == Literal::complex); //convert to index part of PnTypedIdx
-						const Complex idx_rep = src_ref.new_at(multi_match_rep[1])->complex;
-						assert(has_form(idx_rep, Form::natural_0));
-
-						assert(multi_match_rep[2].get_type() == Literal::variable); //convert to .get_type() part of PnTypedIdx
-						const PnVariablesType type = type_of(src_ref.new_at(multi_match_rep[2])->char_vec);
-						assert(type.is<MultiPn>());
-
-						return PnTypedIdx(static_cast<std::uint32_t>(idx_rep.real()), type.to<MultiPn>());
+					if (const auto multi_match = math_rep::IntermediateMultiMatch<UnsaveRef>::cast(src_ref)) {
+						return PnTypedIdx(multi_match->index(), multi_match->type());
 					}
 
-					if (!only_build_basic && name == math_rep::multi_match_name) {
+					if (!only_build_basic) {
+						if (const auto value_match = math_rep::IntermediateValueMatch<UnsaveRef>::cast(src_ref)) {
+							const TypedIdx mtch_idx = intermediate_to_pattern(src_ref.new_at(value_match->mtch_idx()), dst_store, only_build_basic);
+							const TypedIdx copy_idx = intermediate_to_pattern(src_ref.new_at(value_match->copy_idx()), dst_store, only_build_basic);
+							const std::uint32_t match_data_idx = value_match->match_data_idx();
+							const Form form = value_match->form();
 
+							const std::size_t dst_index = dst_store.allocate_one();
+							dst_store.at(dst_index) = ValueMatchVariable(mtch_idx, copy_idx, match_data_idx, form); 
+							return PnTypedIdx(dst_index, PnNode::value_match);
+						}
 					}
 				} [[fallthrough]];
 				default: {

@@ -196,10 +196,14 @@ namespace bmath::intern {
 			std::uint32_t match_data_idx; //indexes in MatchData::value_match_data
 			Form form = Form::real;
 
-			ValueMatchVariable(std::uint32_t new_match_data_idx, Form new_form)
+			[[deprecated]] constexpr ValueMatchVariable(std::uint32_t new_match_data_idx, Form new_form) noexcept
 				:mtch_idx(TypedIdx(new_match_data_idx, PnNode::value_proxy)),
 				copy_idx(TypedIdx(new_match_data_idx, PnNode::value_proxy)),
 				match_data_idx(new_match_data_idx), form(new_form)
+			{}
+
+			constexpr ValueMatchVariable(TypedIdx new_match, TypedIdx new_copy, std::uint32_t new_match_data_idx, Form new_form) noexcept
+				:mtch_idx(new_match), copy_idx(new_copy), match_data_idx(new_match_data_idx), form(new_form)
 			{}
 		};
 
@@ -241,32 +245,6 @@ namespace bmath::intern {
 
 		constexpr std::string_view name_of(const PnVariablesType r) noexcept { return find(type_table, &TypeProps::type, r).name; }
 		constexpr PnVariablesType type_of(const std::string_view s) noexcept { return search(type_table, &TypeProps::name, s).type; }
-
-
-		//all patterns are initially build using only MathType, thus the pattern specific nodes 
-		//  are modeled with ones avaliable in math (most prominently: NamedFn)
-		namespace math_rep {
-
-			//TreeMatchVariable is modeled as NamedFn holding:
-			//  parsed name as variable in first parameter (not kept in final TreeMatchVariable)
-			//  .match_data_idx as complex in second parameter
-			//  .restr as variable (same name as calling name_of(.restr)) in third parameter
-			constexpr std::string_view tree_match_name = "__TreeMatch";
-			
-			//(nonexisting) MultiMatchVariable is modeled as NamedFn holding:
-			//  parsed name as variable in first parameter (obviously not kept in final PnTypedIdx)
-			//  .get_index() as complex in second parameter
-			//  .get_type() as variable (same name as calling name_of(.get_type())) in third parameter
-			constexpr std::string_view multi_match_name = "__MultiMatch";
-
-			//ValueMatchVariable is modeled as NamedFn holding:
-			//  parsed name as variable in first parameter (not kept in final ValueMatchVariable)
-			//  .mtch_idx as complex in second parameter
-			//  .copy_idx as complex in third parameter
-			//  .match_data_idx as complex in forth parameter
-			//  .form as variable (same name as calling name_of(.restr)) in fifth parameter
-			constexpr std::string_view value_match_name = "__ValueMatch";
-		} //namespace math_rep
 
 	} //namespace pattern
 
@@ -553,7 +531,6 @@ namespace bmath::intern {
 		static_assert(ReferenceTo<PnRef, PnUnion>);
 		static_assert(ReferenceTo<MutPnRef, PnUnion>);
 
-
 		bool meets_restriction(const UnsaveRef ref, const Restriction restr);
 
 		bool has_form(const Complex& nr, const Form form);
@@ -691,7 +668,7 @@ namespace bmath::intern {
 				//maximal number of unrelated TreeMatchVariables allowed per pattern
 				static constexpr std::size_t max_tree_match_count = 4u;	 
 				//maximal number of sums and products allowed per pattern
-				static constexpr std::size_t max_variadic_count = 4u;    //(max multi_match count is same)
+				static constexpr std::size_t max_variadic_count = 8u;    //(max multi_match count is same)
 
 				std::array<SharedValueDatum, max_value_match_count> value_match_data = {};
 				std::array<SharedTreeDatum, max_tree_match_count> tree_match_data = {};
