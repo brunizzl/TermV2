@@ -80,78 +80,93 @@ namespace bmath::intern {
 		return TypedIdx(result_idx, Type(Fn::pow));
 	}
 
-	namespace pattern {
+	struct SumTraits
+	{
+		static constexpr Type type_name = Type(Comm::sum);
+		static constexpr char operator_char = '+';
+		static constexpr char inverse_operator_char = '-';
+		static constexpr Token operator_token = token::sum;
+	};
 
-		struct [[nodiscard]] PatternParts
+	struct ProductTraits
+	{
+		static constexpr Type type_name = Type(Comm::product);
+		static constexpr char operator_char = '*';
+		static constexpr char inverse_operator_char = '/';
+		static constexpr Token operator_token = token::product;
+	};
+
+	//VariadicTraits must include:
+	//<Enum type> type_name: name of operation in enum representing all types in store
+	//char operator_char: the character symbolizing the operation, e.g. '+'
+	//char inverse_operator_char: the character symbolizing the inverse operation, e.g. '-'
+	//Token operator_token: the token symbolizing both normal and inverse operation, e.g. token::sum
+
+	//BuildInverse recieves an already build term (by TypedIdx) and returns the inverse (by TypedIdx)
+	//  e.g. for sum, it should turn "a" -> "a*(-1)", for product "a" -> "a^(-1)"
+	//BuildAny can build any type of term from a ParseView, this function will very likely already call build_variadic.
+	template<typename VariadicTraits, typename Store_T, typename BuildInverse, typename BuildAny>
+	TypedIdx build_variadic(Store_T& store, ParseView input, std::size_t op_idx, BuildInverse build_inverse, BuildAny build_any)
+	{
+		StupidBufferVector<TypedIdx, 16> result_buffer;
 		{
-			ParseView declarations;
-			ParseView lhs;
-			ParseView rhs;
+			const ParseView subterm_view = input.steal_prefix(op_idx);
+			result_buffer.push_back(build_any(store, subterm_view));
+		}
+		while (input.size()) {
+			const char current_operator = input.chars[0u];
+			input.remove_prefix(1u); //remove current_operator;
+			op_idx = find_first_of_skip_pars(input.tokens, VariadicTraits::operator_token);
+			const ParseView subterm_view = input.steal_prefix(op_idx);
+			const TypedIdx subterm = build_any(store, subterm_view);
+			switch (current_operator) {
+			case VariadicTraits::operator_char:
+				result_buffer.push_back(subterm);
+				break;
+			case VariadicTraits::inverse_operator_char:
+				result_buffer.push_back(build_inverse(store, subterm));
+				break;
+			default: assert(false);
+			}
+		}
+		return TypedIdx(IndexVector::build(store, result_buffer), VariadicTraits::type_name);
+	} //build_variadic
 
-			//input is assumed to be of form "<declarations> | <lhs> = <rhs>"
-			//or, if no MatchVariables occur, of form "<lhs> = <rhs>"
-			PatternParts(const ParseView input);
-		};
+	template<typename Store_T, typename BuildAny>
+	[[nodiscard]] TypedIdx build_function(Store_T& store, ParseView input, const std::size_t open_par, BuildAny build_any)
+	{
+		const std::string_view name = input.to_string_view(0u, open_par);
 
-		//data belonging to one TreeMatchVariable relevant while constructing pattern
-		struct [[nodiscard]] TreeNameLookup 
-		{
-			std::string_view name;
-			pattern::Restriction restr;
-			StupidBufferVector<TypedIdx, 4u> lhs_instances;
-			StupidBufferVector<TypedIdx, 4u> rhs_instances;
+		StupidBufferVector<TypedIdx, 12> result_parameters;
+		input.remove_suffix(1u);
+		input.remove_prefix(open_par + 1u);	//only arguments are left
+		if (input.size()) [[likely]] { //else no parameters at all
+			const std::size_t comma = find_first_of_skip_pars(input.tokens, token::comma);
+			const auto param_view = input.steal_prefix(comma); //now input starts with comma
+			result_parameters.push_back(build_any(store, param_view));
+		}
+			while (input.size()) {
+				input.remove_prefix(1u); //erase leading comma
+				const std::size_t comma = find_first_of_skip_pars(input.tokens, token::comma);
+				const auto param_view = input.steal_prefix(comma);
+				result_parameters.push_back(build_any(store, param_view));
+			}
 
-			TreeNameLookup(std::string_view new_name, pattern::Restriction new_restr) noexcept
-				:name(new_name), restr(new_restr) {}
-		};
-		
-		//data belonging to one ValueMatchVariable relevant while constructing pattern
-		struct [[nodiscard]] ValueNameLookup 
-		{
-			std::string_view name;
-			Form form;
-			StupidBufferVector<TypedIdx, 4u> lhs_instances;
-			StupidBufferVector<TypedIdx, 4u> rhs_instances;
+		if (const Fn type = fn::fn_type_of(name); type != Fn::COUNT) {
+			if (result_parameters.size() != fn::arity(type)) [[unlikely]] throw ParseFailure{ input.offset, 
+				"wrong numer of function parameters" };
+			return TypedIdx(IndexVector::build(store, result_parameters), Type(type));
+		}
+		else if (const Variadic type = fn::variadic_type_of(name); type != Variadic::COUNT) {
+			return TypedIdx(IndexVector::build(store, result_parameters), Type(type));
+		}
+		else { //build NamedFn
+			return fn::build_named_fn(store, name, result_parameters);
+		}
+	} //build_function
 
-			ValueNameLookup(std::string_view new_name, Form new_form) noexcept
-				:name(new_name), form(new_form) {}
-		};
 
-		struct [[nodiscard]] MultiNameLookup
-		{
-			std::string_view name;
-			std::size_t lhs_count; //(only used to throw error if multiple instances exist in lhs)
-			std::size_t rhs_count; //(only used to throw error if multiple instances exist in rhs)
-			MultiPn type;
 
-			MultiNameLookup(std::string_view new_name, const MultiPn new_type) noexcept 
-				:name(new_name), lhs_count(0u), rhs_count(0u), type(new_type) {}
-		};
-
-		//only exists during construction of pattern
-		struct NameLookupTable
-		{
-			std::vector<TreeNameLookup> tree_table;
-			std::vector<ValueNameLookup> value_table;
-			std::vector<MultiNameLookup> multi_table;
-			bool build_lhs = true; //false -> currently building rhs
-
-			//assumes to only get declarations part of pattern
-			NameLookupTable(ParseView declarations);
-
-			TypedIdx insert_instance(MathStore& store, const ParseView input);
-		};
-
-		struct PatternBuildFunction
-		{
-			//the index of name in table is also match_data_idx of TreeMatchVariable
-			NameLookupTable& table;
-
-			//equivalent to build() for pattern
-			TypedIdx operator()(MathStore& store, ParseView input);
-		};
-
-	} //namespace pattern
 
 	namespace print {
 

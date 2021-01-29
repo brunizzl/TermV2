@@ -247,6 +247,45 @@ namespace bmath::intern {
 		constexpr PnVariablesType type_of(const std::string_view s) noexcept { return search(type_table, &TypeProps::name, s).type; }
 
 	} //namespace pattern
+	
+	//if one pattern may compare equal to a term multiple ways (e.g. sum or product), it has high generality.
+	//there are 3 main levels of generality:
+	//  - unique (value 1xxx): pattern only matches one exact term e.g. pattern "2 'pi'" 
+	//                         (note: everything without pattern variables falls tecnically in this category)
+	//  - low    (value 2xxx): pattern is recursive, but has strong operands order (e.g. all in Fn), 
+	//                         thus matches unique on outhermost level, but may hold general operands
+	//  - high   (value 3xxx): sums / products containing pattern variables can match not only multiple terms, 
+	//                         but may also match specific terms in more than one way (also tree variables, duh)
+	//the table only differentiates between types, however (as described above) the real generality of a given term may be lower, 
+	//  than that of its outermost node listed here.
+	//as the goal of this endavour is (mostly) to sort the most general summands / factors in a pattern to the end, 
+	//  the sorting required for efficiently matching patterns may use this table, but has to check more.
+	constexpr int generality(Type type) noexcept 
+	{ 
+		constexpr auto type_generality_table = std::to_array<std::pair<Type, int>>({
+			{ Type(Literal::complex     ), 1000 }, 
+			{ Type(Literal::variable    ), 1001 },
+			{ Type(PnNode::value_match  ), 1002 }, //may match different subsets of complex numbers, but always requires an actual value to match against
+			{ Type(PnNode::value_proxy  ), 1003 }, //dont care really where this sits, as it never ist used in matching anyway
+			//values 2xxx are not present, as that would require every item in Fn to be listed here (instead default_generality kicks in here)
+			{ Type(NamedFn{})            , 3000 },
+			{ Type(Comm::multiset       ), 3002 },  
+			{ Type(Comm::set            ), 3003 },  
+			{ Type(Comm::sum            ), 3004 },  
+			{ Type(Comm::product        ), 3005 }, 
+			{ Type(PnNode::tree_match   ), 3006 }, 
+			{ Type(MultiPn::params      ), 3007 }, //kinda special, as they always succeed in matching -> need to be matched last 
+			{ Type(MultiPn::summands    ), 3008 }, //kinda special, as they always succeed in matching -> need to be matched last 
+			{ Type(MultiPn::factors     ), 3009 }, //kinda special, as they always succeed in matching -> need to be matched last 
+		});
+		static_assert(std::is_sorted(type_generality_table.begin(), type_generality_table.end(), 
+			[](auto a, auto b) { return a.second < b.second; }));
+		static_assert(static_cast<unsigned>(Type::COUNT) < 1000u, 
+			"else the 2xxx generalities may leak into the 3xxx ones in table");
+
+		const std::pair<Type, int> default_generality = { Type(0u), static_cast<unsigned>(type) + 2000 };
+		return search(type_generality_table, &std::pair<Type, int>::first, type, default_generality).second; 
+	}
 
 
 
@@ -302,6 +341,7 @@ namespace bmath::intern {
 
 	//utility for NamedFn, types in Fn and types in Variadic
 	namespace fn {
+		OptComplex eval(Fn type, const std::array<OptComplex, 4>& param_vals);
 
 		struct FnProperties
 		{
@@ -482,335 +522,13 @@ namespace bmath::intern {
 
 	} //namespace tree
 
-	//algorithms to compare pattern to usual term and find match
-	namespace pattern {
-
-		using PnType = SumEnum<MatchType, MathType>;
-		using PnTypedIdx = BasicTypedIdx<PnType>;
-
-		union PnUnion
-		{
-			Complex complex;
-			IndexVector parameters; //all in Variadic and all in Fn
-			CharVector char_vec;
-			pattern::TreeMatchVariable tree_match;    //only expected as part of pattern
-			pattern::ValueMatchVariable value_match;  //only expected as part of pattern
-
-			constexpr PnUnion(const Complex&                     val) noexcept :complex(val)     {}
-			constexpr PnUnion(const IndexVector&                 val) noexcept :parameters(val)  {}
-			constexpr PnUnion(const CharVector&                  val) noexcept :char_vec(val)    {}
-			constexpr PnUnion(const pattern::TreeMatchVariable&  val) noexcept :tree_match(val)  {}
-			constexpr PnUnion(const pattern::ValueMatchVariable& val) noexcept :value_match(val) {}
-			constexpr PnUnion()                                       noexcept :complex(0.0)     {}
-
-			constexpr auto operator<=>(const PnUnion&) const = default;
-
-			constexpr operator const Complex                    & () const noexcept { return this->complex;     }
-			constexpr operator const IndexVector                & () const noexcept { return this->parameters;  }
-			constexpr operator const CharVector                 & () const noexcept { return this->char_vec;    }
-			constexpr operator const pattern::TreeMatchVariable & () const noexcept { return this->tree_match;  }
-			constexpr operator const pattern::ValueMatchVariable& () const noexcept { return this->value_match; }
-			
-			constexpr operator Complex                    & () noexcept { return this->complex;     }
-			constexpr operator IndexVector                & () noexcept { return this->parameters;  }
-			constexpr operator CharVector                 & () noexcept { return this->char_vec;    }
-			constexpr operator pattern::TreeMatchVariable & () noexcept { return this->tree_match;  }
-			constexpr operator pattern::ValueMatchVariable& () noexcept { return this->value_match; }
-		};
-
-		using PnStore = BasicStore<PnUnion>;
-
-		static_assert(StoreLike<PnStore>);
-
-		using UnsavePnRef = BasicUnsaveRef<PnType, PnUnion>;
-		using PnRef = BasicSaveRef<PnType, const PnStore>;
-		using MutPnRef = BasicSaveRef<PnType, PnStore>;
-
-
-		static_assert(ReferenceTo<UnsavePnRef, PnUnion>);
-		static_assert(ReferenceTo<PnRef, PnUnion>);
-		static_assert(ReferenceTo<MutPnRef, PnUnion>);
-
-		bool meets_restriction(const UnsaveRef ref, const Restriction restr);
-
-		bool has_form(const Complex& nr, const Form form);
-
-		//representation of RewriteRule without pattern specific elements
-		// -> allows manipulation of rule with other rules
-		//can not be used to match against, but RewriteRule can be build from this
-		struct IntermediateRewriteRule 
-		{
-			TypedIdx lhs_head = TypedIdx();
-			TypedIdx rhs_head = TypedIdx();
-			MathStore store = {}; //acts as both store for rhs and lhs
-
-			MutRef lhs_mut_ref() noexcept { return MutRef(this->store, this->lhs_head); }
-			MutRef rhs_mut_ref() noexcept { return MutRef(this->store, this->rhs_head); }
-			Ref lhs_ref() const noexcept { return Ref(this->store, this->lhs_head); }
-			Ref rhs_ref() const noexcept { return Ref(this->store, this->rhs_head); }
-
-			IntermediateRewriteRule(std::string name);
-			std::string to_string() const;
-			std::string lhs_memory_layout() const;
-			std::string rhs_memory_layout() const;
-			std::string lhs_tree(const std::size_t offset = 0u) const;
-			std::string rhs_tree(const std::size_t offset = 0u) const;
-		};
-
-		//this is the form needed for a rule to be applied, however once it is in this form, 
-		//  it can not be manipulated further by other rules
-		struct RewriteRule
-		{
-			PnTypedIdx lhs_head;
-			PnTypedIdx rhs_head;
-			PnStore store; //acts as both store for rhs and lhs
-
-			RewriteRule(const PnTypedIdx new_lhs_head, const PnTypedIdx new_rhs_head, PnStore new_store) noexcept
-				:lhs_head(new_lhs_head), rhs_head(new_rhs_head), store(std::move(new_store)) {}
-
-			RewriteRule(std::string name);
-
-			MutPnRef lhs_mut_ref() noexcept { return MutPnRef(this->store, this->lhs_head); }
-			MutPnRef rhs_mut_ref() noexcept { return MutPnRef(this->store, this->rhs_head); }
-			PnRef lhs_ref() const noexcept { return PnRef(this->store, this->lhs_head); }
-			PnRef rhs_ref() const noexcept { return PnRef(this->store, this->rhs_head); }
-		};
-
-		//algorithms specific to patterns
-		namespace pn_tree {
-
-			//returns pointer to position in parent of value_match, where value_match is to be held in future
-			// (currently value_match is only somewhere in the subtree that it will own, not nesseccarily at the root.
-			//assumes head to be passed at reference to its own storage position
-			TypedIdx* find_value_match_subtree(MathStore& store, TypedIdx& head, const TypedIdx value_match);
-
-			//changes value_match from its state holding two value_proxy directly to actually
-			//having copy_idx and match_idx initialized (thus value_match also bubbles up a bit in term)
-			void rearrange_value_match(MathStore& store, TypedIdx& head, const TypedIdx value_match);
-
-			struct Equation { TypedIdx lhs_head, rhs_head; };
-
-			//reorders lhs and rhs until to_isolate is lhs_head, returns updated lhs_head and rhs_head
-			//(possible other subtrees identical to to_isolate are not considered, thus the name prefix)
-			//currently only used in rearrange_value_match, thus quite specialized
-			[[nodiscard]] Equation stupid_solve_for(MathStore& store, Equation eq, const TypedIdx to_isolate);
-
-			//mostly stripped down version of tree::combine_values_exact to find calculate SharedValueDatum.value
-			// from the start_val taken out of matched term
-			OptComplex eval_value_match(const UnsavePnRef ref, const Complex& start_val);
-
-			//copies math_ref into dst_store but changes math representations of pattern specific nodes 
-			//  to their final pattern versions
-			//if only_build_basic, only tree- and multimatch are converted to pattern form
-			//  (this is done to allow simple patterns as means to build more difficult patterns, e.g. reorder value match)
-			PnTypedIdx intermediate_to_pattern(const UnsaveRef math_ref, PnStore& dst_store, bool only_build_basic);
-			
-		} //namespace pn_tree
-
-		namespace match {
-
-			//all MatchVariables of same name in pattern (e.g. "a" in pattern "a*b+a" share the same SharedTreeDatum to know 
-			//whitch actually matched, and if the name "a" is already matched, even if the current instance is not.
-			struct SharedTreeDatum
-			{
-				TypedIdx match_idx = TypedIdx{}; //indexes in Term to simplify
-				TypedIdx responsible = TypedIdx{}; //the instance of TreeMatchVariable that was setting match_idx
-
-				constexpr bool is_set() const noexcept 
-				{ 
-					assert(equivalent(this->responsible != TypedIdx{}, this->match_idx != TypedIdx{}));
-					return  this->responsible != TypedIdx{};
-				}
-			};
-
-			struct SharedValueDatum
-			{
-				Complex value = std::numeric_limits<double>::quiet_NaN();
-				//the instance of ValueMatchVariable that was setting value_match (thus is also responsible for resetting)
-				TypedIdx responsible = TypedIdx{};
-
-				constexpr bool is_set() const noexcept
-				{
-					assert(equivalent(!std::isnan(this->value.real()), this->responsible != TypedIdx{}));
-					return  this->responsible != TypedIdx{};
-				}
-			};
-
-			struct SharedVariadicDatum
-			{
-				//no sum or product in a pattern may have more summands / factors than max_pn_variadic_params_count many
-				static constexpr std::size_t max_pn_variadic_params_count = 6u;
-
-				using MatchPos_T = decltype(IndexVector::Info::size);
-
-				//every element in pattern (except all MultiPn) has own entry which logs, 
-				//  with which element in term to match it currently is associated with.
-				std::array<MatchPos_T, max_pn_variadic_params_count> match_positions = {};
-
-				TypedIdx match_idx = TypedIdx{}; //indexes in Term to simplify (the haystack)
-
-				constexpr SharedVariadicDatum() noexcept { this->match_positions.fill(-1u); }
-
-				//checks this->match_positions if needle is contained
-				//use with care: might check more than actually contained in specific pattern!
-				constexpr bool index_matched(const MatchPos_T needle) const noexcept
-				{
-					const auto stop = this->match_positions.end();
-					return std::find(this->match_positions.begin(), stop, needle) != stop;
-				}
-			};
-
-			//to allow a constant RewriteRule to be matched against, all match info is stored here
-			struct MatchData
-			{
-				//maximal number of unrelated ValueMatchVariables allowed per pattern
-				static constexpr std::size_t max_value_match_count = 2u; 
-				//maximal number of unrelated TreeMatchVariables allowed per pattern
-				static constexpr std::size_t max_tree_match_count = 4u;	 
-				//maximal number of sums and products allowed per pattern
-				static constexpr std::size_t max_variadic_count = 8u;    //(max multi_match count is same)
-
-				std::array<SharedValueDatum, max_value_match_count> value_match_data = {};
-				std::array<SharedTreeDatum, max_tree_match_count> tree_match_data = {};
-				//key is index of sum / product in pattern beeing matched
-				StupidLinearMap<std::uint32_t, -1u, SharedVariadicDatum, max_variadic_count> variadic_data = {};
-
-				constexpr auto& info(const TreeMatchVariable& var) noexcept { return this->tree_match_data[var.match_data_idx]; }
-				constexpr auto& info(const ValueMatchVariable& var) noexcept { return this->value_match_data[var.match_data_idx]; }
-				constexpr auto& info(const TreeMatchVariable& var) const noexcept { return this->tree_match_data[var.match_data_idx]; }
-				constexpr auto& info(const ValueMatchVariable& var) const noexcept { return this->value_match_data[var.match_data_idx]; }
-
-				constexpr auto& multi_info(const std::uint32_t idx) noexcept { return this->variadic_data.vals[idx]; }
-				constexpr auto& multi_info(const std::uint32_t idx) const noexcept { return this->variadic_data.vals[idx]; }
-			};
-
-			//compares term starting at ref.index in ref.store with pattern starting at pn_ref.index in pn_ref.store
-			//if match is succsessfull, match_data stores what pattern's match variables matched and true is returned.
-			//if match was not succsessfull, match_data is NOT reset and false is returned
-			bool permutation_equals(const pattern::UnsavePnRef pn_ref, const UnsaveRef ref, MatchData& match_data);
-
-			//resets not all matched variables appearing in pn_ref, but only the ones also set by pn_ref
-			//example: in whole pattern "a+a*b" "a" may be matched as single summand, 
-			//  thus resetting own variables in part "a*b" will only reset "b".
-			void reset_own_matches(const pattern::UnsavePnRef pn_ref, MatchData& match_data);
-
-			//determines weather there is a way to match pn_ref in haystack_ref (thus pn_ref is assumed to part of a pattern)
-			//pn_i is the index of the first element in pn_ref to be matched. 
-			//if pn_i is not zero, it is assumed, that all previous elements in pn_ref are already matched.
-			//the first haystack_k elements of haystack_ref will be skipped for the first match attemt.
-			//it is assumed, that pn_ref and haystack_ref are both the same parameters type (eighter both sum or both product)
-			//returns if search was successfull
-			bool find_matching_permutation(const pattern::UnsavePnRef pn_ref, const UnsaveRef haystack_ref,
-				MatchData& match_data,	std::uint32_t pn_i, std::uint32_t haystack_k);
-
-			//expects pn_ref to already be matched to ref via match_data
-			//if one exists, this function finds a different match of pn_ref in ref, appearing after the current one
-			//  in all permutations
-			bool subsequent_permutation_equals(const pattern::UnsavePnRef pn_ref, const UnsaveRef ref, MatchData& match_data);
-
-			//copies pn_ref with match_data into dst_store, returns head of copied result.
-			[[nodiscard]] TypedIdx copy(const pattern::UnsavePnRef pn_ref, const MatchData& match_data,
-				const MathStore& src_store, MathStore& dst_store);
-
-			//this function is the primary function designed to be called from outside of this namespace.
-			//the function will try to match the head of in with the head of ref and if so, replace the matched part with out.
-			//if a transformation happened, Just the new subterm is returned to replace the TypedIdx 
-			//  of the old subterm in its parent, else nothing.
-			//if the result contains something, ref is no longer valid.
-			[[nodiscard]] std::optional<TypedIdx> match_and_replace(
-				const pattern::UnsavePnRef in, const pattern::UnsavePnRef out, const MutRef ref);
-
-			//tries to match in (in postoreder) against every subterm of ref and finally ref itself. if a deeper match was found, 
-			// snd of return value is true. 
-			//if fst of return value is valid, ref could be matched and got replaced by *fst of return value, 
-			//  meaning ref is no longer valid and caller needs to replace ref with *return_value.first  
-			[[nodiscard]] std::pair<std::optional<TypedIdx>, bool> recursive_match_and_replace(
-				const pattern::UnsavePnRef in, const pattern::UnsavePnRef out, const MutRef ref);
-
-		} //namespace match
-
-	} //namespace pattern
-
-	namespace fn {
-
-		constexpr auto&        range(const pattern::UnsavePnRef ref) noexcept { return ref->parameters; }
-		constexpr auto&        range(const pattern::      PnRef ref) noexcept { return ref->parameters; }
-		constexpr auto    save_range(const pattern::      PnRef ref) noexcept { return ref.cast<IndexVector>(); }
-		constexpr auto         range(const pattern::   MutPnRef ref) noexcept { return ref.cast<IndexVector>(); }
-		constexpr auto& unsave_range(const pattern::   MutPnRef ref) noexcept { return ref->parameters; }
-
-		constexpr const CharVector& named_fn_name(const pattern::UnsavePnRef named_fn) noexcept
-		{
-			return static_cast<const CharVector&>(*named_fn.raw_at(named_fn_name_index(named_fn)));
-		}
-	} //namespace fn
-
-	namespace fold {
-
-		template<typename Wrapped_T>
-		struct Find //the simple_fold evaluation stops early if cut is true and returns value (and cut)
-		{
-			Wrapped_T value;
-			bool cut = false;
-
-			constexpr bool return_early() const noexcept { return this->cut; }
-			constexpr Wrapped_T& operator*() noexcept { return this->value; }
-			constexpr const Wrapped_T& operator*() const noexcept { return this->value; }
-		};
-		template<typename Wrapped_T> constexpr Find<Wrapped_T> done(const Wrapped_T w) { return { w, true  }; }
-		template<typename Wrapped_T> constexpr Find<Wrapped_T> more(const Wrapped_T w) { return { w, false }; }
-		
-		struct FindTrue //the simple_fold evaluation stops early if cut is true and returns true
-		{
-			bool cut = false;
-
-			constexpr bool return_early() const noexcept { return this->cut; }
-			constexpr operator bool() const noexcept { return this->cut; }
-			constexpr FindTrue(bool init) :cut(init) {}
-			constexpr FindTrue() = default;
-		};
-
-
-		template<typename T, typename = void> 
-		struct ReturnEarlyPossible :std::false_type {};
-
-		template<typename T> 
-		struct ReturnEarlyPossible <T, std::void_t<decltype(std::declval<T>().return_early())>> :std::true_type {};
-
-		static_assert(ReturnEarlyPossible<Find<TypedIdx>>::value);
-		static_assert(ReturnEarlyPossible<FindTrue>::value);
-		static_assert(!ReturnEarlyPossible<bool>::value);
-
-
-		struct Void {}; //used if there is nothing to be returned from simple_fold
-
-		//calls apply with every node (postorder),
-		//Res_T might have nonstatic member return_early, to indicate if the fold may be stopped early, because the result is already known
-		//not really a fold function in the classical sense, as there is no information accumulated - 
-		//  eighter you have the final result or not. (or you only mutate the term and not return any result at all)
-		template<typename Res_T, ReferenceTo<MathUnion> R, CallableTo<Res_T, R> Apply>
-		Res_T simple_fold(const R ref, Apply apply);
-
-
-		template<typename A, typename Res_T>
-		concept Accumulator = requires(A a, Res_T r) {
-			{ a.consume(r) };
-			{ a.result() } -> std::convertible_to<Res_T>;
-		};
-
-		//this fold differentiates between recursive nodes (Function and ValueMatchVariable) and Leafes (values and variables)
-		//Acc is constructed before a recursive call is made and consumes each recursive result. It thus needs to at least
-		//  have a Constructor taking as arguments (BasicSaveRef<Union_T, Type_T, Const> ref, AccInit... init) 
-		//  and a consume method taking as single parameter of type Res_T
-		//  a result method taking no parameters and returning Res_T	
-		template<typename Res_T, Accumulator<Res_T> Acc, ReferenceTo<MathUnion> R, CallableTo<Res_T, R> LeafApply, typename... AccInit>
-		Res_T tree_fold(const R ref, LeafApply leaf_apply, const AccInit... init);
-
-	} //namespace fold
-
 }	//namespace bmath::intern
 
 namespace bmath {
+
+	namespace intern::pattern {
+		struct RewriteRule;
+	}
 
 	class Term
 	{

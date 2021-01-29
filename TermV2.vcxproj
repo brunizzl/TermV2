@@ -123,13 +123,16 @@
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\ioArithmetic.cpp" />
     <ClCompile Include="src\parseTerm.cpp" />
+    <ClCompile Include="src\pattern.cpp" />
     <ClCompile Include="src\transform.cpp" />
     <ClCompile Include="src\utility\typeDebug.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\arithmeticTerm.hpp" />
+    <ClInclude Include="src\fold.hpp" />
     <ClInclude Include="src\ioArithmetic.hpp" />
     <ClInclude Include="src\parseTerm.hpp" />
+    <ClInclude Include="src\pattern.hpp" />
     <ClInclude Include="src\reference.hpp" />
     <ClInclude Include="src\stupidTests.hpp" />
     <ClInclude Include="src\termVector.hpp" />
