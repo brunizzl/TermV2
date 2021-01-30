@@ -125,9 +125,9 @@ namespace bmath::intern::pattern {
 	using MutPnRef = BasicSaveRef<PnType, PnStore>;
 
 
-	static_assert(ReferenceTo<UnsavePnRef, PnUnion>);
-	static_assert(ReferenceTo<PnRef, PnUnion>);
-	static_assert(ReferenceTo<MutPnRef, PnUnion>);
+	static_assert(Reference<UnsavePnRef>);
+	static_assert(Reference<PnRef>);
+	static_assert(Reference<MutPnRef>);
 
 	bool meets_restriction(const UnsaveRef ref, const Restriction restr);
 
@@ -138,8 +138,8 @@ namespace bmath::intern::pattern {
 	//can not be used to match against, but RewriteRule can be build from this
 	struct IntermediateRewriteRule
 	{
-		TypedIdx lhs_head = TypedIdx();
-		TypedIdx rhs_head = TypedIdx();
+		TypedIdx lhs_head = TypedIdx{};
+		TypedIdx rhs_head = TypedIdx{};
 		MathStore store = {}; //acts as both store for rhs and lhs
 
 		MutRef lhs_mut_ref() noexcept { return MutRef(this->store, this->lhs_head); }
@@ -155,6 +155,10 @@ namespace bmath::intern::pattern {
 		std::string rhs_tree(const std::size_t offset = 0u) const;
 	};
 
+
+	enum class Side { lhs, rhs }; //site to match against vs. side to copy from
+	enum class Convert { all, basic }; //if basic, only TreeMatch and MultiMatch are converted
+
 	//this is the form needed for a rule to be applied, however once it is in this form, 
 	//  it can not be manipulated further by other rules
 	struct RewriteRule
@@ -163,10 +167,9 @@ namespace bmath::intern::pattern {
 		PnTypedIdx rhs_head;
 		PnStore store; //acts as both store for rhs and lhs
 
-		RewriteRule(const PnTypedIdx new_lhs_head, const PnTypedIdx new_rhs_head, PnStore new_store) noexcept
-			:lhs_head(new_lhs_head), rhs_head(new_rhs_head), store(std::move(new_store)) {}
-
-		RewriteRule(std::string name);
+		//if convert == Convert::basic only TreeMatch and MultiPn are converted from their NamedFn form
+		//  (enables to use rewrite rules to help building value match patterns)
+		RewriteRule(std::string name, Convert convert = Convert::all);
 
 		MutPnRef lhs_mut_ref() noexcept { return MutPnRef(this->store, this->lhs_head); }
 		MutPnRef rhs_mut_ref() noexcept { return MutPnRef(this->store, this->rhs_head); }
@@ -199,9 +202,7 @@ namespace bmath::intern::pattern {
 
 		//copies math_ref into dst_store but changes math representations of pattern specific nodes 
 		//  to their final pattern versions
-		//if only_build_basic, only tree- and multimatch are converted to pattern form
-		//  (this is done to allow simple patterns as means to build more difficult patterns, e.g. reorder value match)
-		PnTypedIdx intermediate_to_pattern(const UnsaveRef math_ref, PnStore& dst_store, bool only_build_basic);
+		PnTypedIdx intermediate_to_pattern(const UnsaveRef math_ref, PnStore& dst_store, const Side side, const Convert convert);
 
 	} //namespace pn_tree
 

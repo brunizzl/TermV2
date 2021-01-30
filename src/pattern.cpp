@@ -20,14 +20,13 @@ namespace bmath::intern::pattern {
 		//TreeMatchVariable is modeled as NamedFn holding:
 		//  .match_data_idx as complex in first parameter
 		//  .restr as variable (same name as calling name_of(.restr)) in second parameter
-		template<ReferenceTo<MathUnion> R>
 		class IntermediateTreeMatch
 		{
-			R ref;
+			UnsaveRef ref;
 
-			static constexpr std::string_view function_name = "__TreeMatch";
+			static constexpr std::string_view function_name = "__1TreeMatch";
 
-			constexpr IntermediateTreeMatch(const R new_ref) noexcept :ref(new_ref) {}
+			constexpr IntermediateTreeMatch(const UnsaveRef new_ref) noexcept :ref(new_ref) {}
 
 		public:
 			template<StoreLike S>
@@ -40,7 +39,7 @@ namespace bmath::intern::pattern {
 				return fn::build_named_fn(store, function_name, parameters);
 			}
 
-			static constexpr std::optional<IntermediateTreeMatch> cast(const R new_ref)
+			static constexpr std::optional<IntermediateTreeMatch> cast(const UnsaveRef new_ref)
 			{
 				if (new_ref.type == NamedFn{}) {
 					std::string_view ref_name = fn::named_fn_name(new_ref);
@@ -73,14 +72,13 @@ namespace bmath::intern::pattern {
 		//(nonexisting) MultiMatchVariable is modeled as NamedFn holding:
 		//  .get_index() as complex in first parameter
 		//  .get_type() as variable (same name as calling name_of(.get_type())) in second parameter
-		template<ReferenceTo<MathUnion> R>
 		class IntermediateMultiMatch
 		{
-			R ref;
+			UnsaveRef ref;
 
-			static constexpr std::string_view function_name = "__MultiMatch";
+			static constexpr std::string_view function_name = "__9MultiMatch";
 
-			constexpr IntermediateMultiMatch(const R new_ref) noexcept :ref(new_ref) {}
+			constexpr IntermediateMultiMatch(const UnsaveRef new_ref) noexcept :ref(new_ref) {}
 
 		public:
 			template<StoreLike S>
@@ -93,7 +91,7 @@ namespace bmath::intern::pattern {
 				return fn::build_named_fn(store, function_name, parameters);
 			}
 
-			static constexpr std::optional<IntermediateMultiMatch> cast(const R new_ref)
+			static constexpr std::optional<IntermediateMultiMatch> cast(const UnsaveRef new_ref)
 			{
 				if (new_ref.type == NamedFn{}) {
 					std::string_view ref_name = fn::named_fn_name(new_ref);
@@ -128,14 +126,13 @@ namespace bmath::intern::pattern {
 		//  .copy_idx as complex in second parameter
 		//  .match_data_idx as complex in third parameter
 		//  .form as variable (same name as calling name_of(.restr)) in forth parameter
-		template<ReferenceTo<MathUnion> R>
 		class IntermediateValueMatch
 		{
-			R ref;
+			UnsaveRef ref;
 
-			static constexpr std::string_view function_name = "__ValueMatch";
+			static constexpr std::string_view function_name = "__0ValueMatch";
 
-			constexpr IntermediateValueMatch(const R new_ref) noexcept :ref(new_ref) {}
+			constexpr IntermediateValueMatch(const UnsaveRef new_ref) noexcept :ref(new_ref) {}
 
 		public:
 			template<StoreLike S>
@@ -151,7 +148,7 @@ namespace bmath::intern::pattern {
 				return fn::build_named_fn(store, function_name, parameters);
 			}
 
-			static constexpr std::optional<IntermediateValueMatch> cast(const R new_ref)
+			static constexpr std::optional<IntermediateValueMatch> cast(const UnsaveRef new_ref)
 			{
 				if (new_ref.type == NamedFn{}) {
 					std::string_view ref_name = fn::named_fn_name(new_ref);
@@ -253,8 +250,10 @@ namespace bmath::intern::pattern {
 
 		if (const auto iter = search_name(this->tree_table); iter != this->tree_table.end()) {
 			const std::uint32_t match_data_idx = std::distance(this->tree_table.begin(), iter);
-			const TypedIdx result_typedidx = math_rep::IntermediateTreeMatch<Ref>::build(store, match_data_idx, iter->restr);
-			(this->build_lhs ? iter->lhs_instances : iter->rhs_instances).push_back(result_typedidx);
+			const TypedIdx result_typedidx = math_rep::IntermediateTreeMatch::build(store, match_data_idx, iter->restr);
+			(this->build_lhs ? 
+				iter->lhs_instances : 
+				iter->rhs_instances).push_back(result_typedidx);
 			return result_typedidx;
 		}
 		else if (const auto iter = search_name(this->value_table); iter != this->value_table.end()) {
@@ -262,12 +261,18 @@ namespace bmath::intern::pattern {
 			const std::size_t result_index = store.allocate_one();
 			store.at(result_index) = ValueMatchVariable{ match_data_idx, iter->form };
 			const TypedIdx result_typedidx = TypedIdx(result_index, PnNode::value_match);
-			(this->build_lhs ? iter->lhs_instances : iter->rhs_instances).push_back(result_typedidx);
+			(this->build_lhs ? 
+				iter->lhs_instances : 
+				iter->rhs_instances).push_back(result_typedidx);
 			return result_typedidx;
 		}
 		else if (const auto iter = search_name(this->multi_table); iter != this->multi_table.end()) {
 			const std::uint32_t match_data_idx = std::distance(this->multi_table.begin(), iter);
-			return TypedIdx(match_data_idx, iter->type);
+			const TypedIdx result_typedidx = math_rep::IntermediateMultiMatch::build(store, match_data_idx, iter->type);
+			this->build_lhs ? 
+				++(iter->lhs_count) : 
+				++(iter->rhs_count);
+			return result_typedidx;
 		}
 		throw ParseFailure{ input.offset, "match variable has not been declared" };
 	} //NameLookupTable::insert_instance
@@ -412,245 +417,33 @@ namespace bmath::intern::pattern {
 
 		//sorting and combining is done after rearanging value match to allow constructs 
 		//  like "a :real, b | (a+2)+b = ..." to take summands / factors into their value_match match part
-		this->lhs_head = tree::combine(MutRef(this->store, this->lhs_head), true);
-		this->rhs_head = tree::combine(MutRef(this->store, this->rhs_head), true);
-
-		//alternative to first combine then sort:
-		//this->lhs_head = tree::establish_basic_order(MutRef(this->store, this->lhs_head));
-		//this->rhs_head = tree::establish_basic_order(MutRef(this->store, this->rhs_head));
-
-		const auto sort_pattern = [](const MutRef ref) {
-			const auto sort_variadic = [&](MutRef ref) {
-				const auto compare_patterns = [&](const TypedIdx lhs, const TypedIdx rhs) {
-					const Ref lhs_ref = Ref(*ref.store, lhs);
-					const Ref rhs_ref = Ref(*ref.store, rhs);
-					{
-						const auto contains_general_match_variables = [](const Ref ref) -> bool {
-							const auto is_general_match_variable = [](const Ref ref) -> fold::FindTrue {
-								return ref.type.is<MultiPn>() || ref.type == PnNode::tree_match;
-							};
-							return fold::simple_fold<fold::FindTrue>(ref, is_general_match_variable);
-						};
-						const bool lhs_contains = contains_general_match_variables(lhs_ref);
-						const bool rhs_contains = contains_general_match_variables(rhs_ref);
-						if (lhs_contains != rhs_contains) {
-							return lhs_contains < rhs_contains;
-						}
-					}
-					{
-						const auto highest_literal_depth = [](const Ref ref) -> int {
-							struct Accumulator
-							{
-								int min_operand_depth = std::numeric_limits<int>::max();
-								Type ref_type;
-								constexpr Accumulator(const Ref ref) noexcept :ref_type(ref.type) {}
-								void consume(const int child_depth) noexcept { this->min_operand_depth = std::min(this->min_operand_depth, child_depth); }
-
-								auto result() noexcept
-								{
-									return this->ref_type == PnNode::value_match ? //literals held by value match dont count >:|
-										std::numeric_limits<int>::max() :
-										std::max(this->min_operand_depth, this->min_operand_depth + 1);  //std::max because +1 might cause overflow
-								}
-							};
-							const auto leaf_apply = [](const Ref ref) {
-								return ref.type.is<Literal>() ? 0 : std::numeric_limits<int>::max();
-							};
-							return fold::tree_fold<int, Accumulator>(ref, leaf_apply);
-						};
-						const int lhs_depth = highest_literal_depth(lhs_ref);
-						const int rhs_depth = highest_literal_depth(rhs_ref);
-						if (lhs_depth != rhs_depth) {
-							return lhs_depth < rhs_depth;
-						}
-					}
-					return tree::compare(lhs_ref, rhs_ref) == std::strong_ordering::less;
-				};
-
-				if (ref.type.is<Comm>()) {
-					IndexVector& operation = *ref;
-					std::sort(operation.begin(), operation.end(), compare_patterns);
-				}
-				return fold::Void{};
-			};
-
-			fold::simple_fold<fold::Void>(ref, sort_variadic);
-		};
-		sort_pattern(MutRef(this->store, this->lhs_head));
-		sort_pattern(MutRef(this->store, this->rhs_head));
+		this->lhs_head = tree::establish_basic_order(this->lhs_mut_ref());
+		this->rhs_head = tree::establish_basic_order(this->rhs_mut_ref());
 
 		{ //add implicit MultiPn::summands / MultiPn::factors if outermost type of lhs is sum / product
 			if (this->lhs_head.get_type() == Comm::sum || this->lhs_head.get_type() == Comm::product) {
 				const Type head_type = this->lhs_head.get_type();
 				const IndexVector& head_variadic = this->store.at(this->lhs_head.get_index());
-				if (!head_variadic.back().get_type().is<MultiPn>()) {
-					const TypedIdx new_multi_pn = TypedIdx(match_variables_table.multi_table.size(),
-						head_type == Comm::sum ? MultiPn::summands : MultiPn::factors);
+				if (!math_rep::IntermediateMultiMatch::cast(Ref(this->store, head_variadic.back()))) {
 					{ //adjust lhs
+						const TypedIdx new_multi = math_rep::IntermediateMultiMatch::build(this->store, match_variables_table.multi_table.size(),
+							head_type == Comm::sum ? MultiPn::summands : MultiPn::factors);
 						const std::size_t new_lhs_head_idx = this->store.allocate_one();
-						this->store.at(new_lhs_head_idx) = IndexVector({ this->lhs_head, new_multi_pn });
+						this->store.at(new_lhs_head_idx) = IndexVector({ this->lhs_head, new_multi });
 						this->lhs_head = TypedIdx(new_lhs_head_idx, head_type);
-						this->lhs_head = tree::combine(MutRef(this->store, this->lhs_head), true);
-						sort_pattern(MutRef(this->store, this->lhs_head));
+						this->lhs_head = tree::establish_basic_order(this->lhs_mut_ref());
 					}
 					{ //adjust rhs
+						const TypedIdx new_multi = math_rep::IntermediateMultiMatch::build(this->store, match_variables_table.multi_table.size(),
+							head_type == Comm::sum ? MultiPn::summands : MultiPn::factors);
 						const std::size_t new_rhs_head_idx = this->store.allocate_one();
-						this->store.at(new_rhs_head_idx) = IndexVector({ this->rhs_head, new_multi_pn });
+						this->store.at(new_rhs_head_idx) = IndexVector({ this->rhs_head, new_multi });
 						this->rhs_head = TypedIdx(new_rhs_head_idx, head_type);
-						this->rhs_head = tree::combine(MutRef(this->store, this->rhs_head), true);
-						sort_pattern(MutRef(this->store, this->rhs_head));
+						this->rhs_head = tree::establish_basic_order(this->rhs_mut_ref());
 					}
 				}
 			}
-		}
-
-		{ //adjusting MultiPn indices to SharedVariadicDatum index of each MulitPn on lhs (required to be done bevore changing MultiPn types!)
-
-			//has to be filled in same order as MatchData::variadic_data
-			//index of element in old_multis equals value of corrected MultiPn occurence (plus the type)
-			std::vector<TypedIdx> old_multis;
-			const auto catalog_lhs_occurences = [&old_multis](const Ref head) {
-				struct Acc
-				{
-					std::vector<TypedIdx>* old_multis;
-					std::uint32_t own_idx;
-
-					constexpr Acc(const Ref ref, std::vector<TypedIdx>* new_old_multis) noexcept
-						:old_multis(new_old_multis), own_idx(-1u)
-					{
-						if (ref.type.is<Variadic>()) { //these may contain MultiPn -> these have SharedVariadicDatum entry 
-							this->own_idx = this->old_multis->size(); //new last element 
-							this->old_multis->emplace_back(TypedIdx{}); //becomes only valid element, once consume found MultiPn
-						}
-					}
-
-					void consume(const TypedIdx child) noexcept
-					{
-						if (child.get_type().is<MultiPn>()) {
-							this->old_multis->at(this->own_idx) = child;
-						}
-					}
-
-					auto result() noexcept { return TypedIdx{}; }
-				};
-				(void)fold::tree_fold<TypedIdx, Acc>(head, [](const Ref ref) { return ref.typed_idx(); }, &old_multis);
-			};
-			catalog_lhs_occurences(Ref(this->store, this->lhs_head));
-
-			const auto replace_occurences = [&old_multis](const MutRef head, const bool test_lhs) -> bool {
-				const auto check_function_params = [&old_multis, test_lhs](const MutRef ref) -> fold::FindTrue {
-					if (ref.type.is<Function>()) {
-						for (auto& param : fn::unsave_range(ref)) {
-							if (param.get_type().is<MultiPn>()) {
-								if (!ref.type.is<Variadic>() && test_lhs) { //only Variadic may carry MultiPn in lhs
-									return true;
-								}
-								const auto new_param_pos = std::find(old_multis.begin(), old_multis.end(), param); //relative to begin() to be precise
-								if (new_param_pos == old_multis.end()) { //not found -> not present in lhs -> illegal!
-									assert(!test_lhs); //we just made old_multis from lhs, thus that should be correct
-									return true;
-								}
-								const std::uint32_t new_param_idx = std::distance(old_multis.begin(), new_param_pos);
-								param = TypedIdx(new_param_idx, param.get_type());
-							}
-						}
-					}
-					return false;
-				};
-				return fold::simple_fold<fold::FindTrue>(head, check_function_params);
-			};
-			throw_if(replace_occurences(MutRef(this->store, this->lhs_head), true), "MultiPn in unexpected place in lhs");
-			throw_if(replace_occurences(MutRef(this->store, this->rhs_head), false), "MultiPn only referenced in rhs");
-		}
-		{
-			//if MultiPn::params occurs in sum / product, it is replaced by legal and matching MultiPn version.
-			const auto test_and_replace_multi_pn = [](const MutRef head, const bool test_lhs) -> bool {
-				const auto inspect_variadic = [test_lhs](const MutRef ref) -> fold::FindTrue {
-					if (ref.type == Comm::sum || ref.type == Comm::product) {
-						const Type representing_type = ref.type == Comm::sum ? MultiPn::summands : MultiPn::factors;
-						for (TypedIdx& elem : fn::unsave_range(ref)) {
-							const Type elem_type = elem.get_type();
-							if (elem_type == representing_type) {
-								elem = TypedIdx(elem.get_index(), MultiPn::params); //params also represent summands / factors
-							}
-							else if (test_lhs && elem_type.is<MultiPn>() && elem_type != representing_type) {
-								//in lhs a sum may never hold factors directly and vice versa
-								return true;
-							}
-						}
-					}
-					return false;
-				};
-				return fold::simple_fold<fold::FindTrue>(head, inspect_variadic);
-			};
-			throw_if(test_and_replace_multi_pn(MutRef(this->store, this->lhs_head), true), "wrong MultiPn in lhs");
-			test_and_replace_multi_pn(MutRef(this->store, this->rhs_head), false);
-		}
-		{
-			const auto contains_illegal_value_match = [](const Ref head) -> bool {
-				const auto inspect_variadic = [](const Ref ref) -> fold::FindTrue {
-					if (ref.type == Comm::sum || ref.type == Comm::product) {
-						std::size_t nr_value_matches = 0u;
-						for (const TypedIdx elem : fn::range(ref)) {
-							nr_value_matches += (elem.get_type() == PnNode::value_match);
-						}
-						return nr_value_matches > 1u;
-					}
-					return false;
-				};
-				return fold::simple_fold<fold::FindTrue>(head, inspect_variadic);
-			};
-			throw_if(contains_illegal_value_match(Ref(this->store, this->lhs_head)), "no two value match variables may share the same sum / product in lhs.");
-		}
-		{
-			const auto contains_illegal_multi_match = [](const Ref head) -> bool {
-				const auto inspect_variadic = [](const Ref ref) -> fold::FindTrue {
-					if (ref.type == Comm::sum || ref.type == Comm::product) {
-						std::size_t nr_multi_matches = 0u;
-						for (const TypedIdx elem : fn::range(ref)) {
-							nr_multi_matches += elem.get_type().is<MultiPn>();
-						}
-						return nr_multi_matches > 1u;
-					}
-					return false;
-				};
-				return fold::simple_fold<fold::FindTrue>(head, inspect_variadic);
-			};
-			throw_if(contains_illegal_multi_match(Ref(this->store, this->lhs_head)), "no two multi match variables may share the same sum / product in lhs.");
-		}
-		{
-			const auto contains_to_long_variadic = [](const Ref head) -> bool {
-				const auto inspect_variadic = [](const Ref ref) -> fold::FindTrue {
-					if (ref.type == Comm::sum || ref.type == Comm::product) {
-						const std::uint32_t multi_at_back = ref->parameters.back().get_type().is<MultiPn>();
-						return ref->parameters.size() - multi_at_back > match::SharedVariadicDatum::max_pn_variadic_params_count;
-					}
-					return false;
-				};
-				return fold::simple_fold<fold::FindTrue>(head, inspect_variadic);
-			};
-			throw_if(contains_to_long_variadic(Ref(this->store, this->lhs_head)), "a sum / product in lhs contains to many operands.");
-		}
-		{
-			const auto contains_to_many_variadics = [](const Ref head) -> bool {
-				struct Acc
-				{
-					int acc;
-
-					constexpr Acc(const Ref ref) noexcept
-						:acc(ref.type == PnNode::value_match ?
-							std::numeric_limits<int>::min() : //subterms of value_match dont count -> initialize negative
-							(ref.type.is<Variadic>() || ref.type.is<NamedFn>())) //count only these two
-					{}
-
-					void consume(const int child_size) noexcept { this->acc += child_size; }
-					auto result() noexcept { return std::max(this->acc, 0); } //always this->acc if type was other than value_match
-				};
-				const int variadic_count = fold::tree_fold<std::size_t, Acc>(head, [](auto) { return 0; });
-				return variadic_count > match::MatchData::max_variadic_count;
-			};
-			throw_if(contains_to_many_variadics(Ref(this->store, this->lhs_head)), "lhs contains to many variadic functions / instances of NamedFn");
-		}
+		}			
 	} //RewriteRule::RewriteRule
 
 	std::string IntermediateRewriteRule::to_string() const
@@ -684,17 +477,165 @@ namespace bmath::intern::pattern {
 
 
 
-	RewriteRule::RewriteRule(std::string name)
+	RewriteRule::RewriteRule(std::string name, Convert convert)
 	{
 		IntermediateRewriteRule intermediate = IntermediateRewriteRule(std::move(name));
-		//std::cout << "--------------------------------------------\n";
-		//std::cout << intermediate.lhs_tree() << "\n\n";
-		//std::cout << intermediate.rhs_tree() << "\n\n";
+		std::cout << "--------------------------------------------\n";
+		std::cout << intermediate.lhs_tree() << "\n\n";
+		std::cout << intermediate.rhs_tree() << "\n\n";
 		std::cout << intermediate.to_string() << "\n";
 
 		this->store.reserve(intermediate.store.nr_used_slots());
-		this->lhs_head = pn_tree::intermediate_to_pattern(intermediate.lhs_ref(), this->store, false);
-		this->rhs_head = pn_tree::intermediate_to_pattern(intermediate.rhs_ref(), this->store, false);
+		this->lhs_head = pn_tree::intermediate_to_pattern(intermediate.lhs_ref(), this->store, Side::lhs, convert);
+		this->rhs_head = pn_tree::intermediate_to_pattern(intermediate.rhs_ref(), this->store, Side::rhs, convert);
+
+		{ //adjusting MultiPn indices to SharedVariadicDatum index of each MulitPn on lhs (required to be done bevore changing MultiPn types!)
+
+			//has to be filled in same order as MatchData::variadic_data
+			//index of element in old_multis equals value of corrected MultiPn occurence (plus the type)
+			std::vector<PnTypedIdx> old_multis;
+			const auto catalog_lhs_occurences = [&old_multis](const PnRef head) {
+				struct Acc
+				{
+					std::vector<PnTypedIdx>* old_multis;
+					std::uint32_t own_idx;
+
+					constexpr Acc(const PnRef ref, std::vector<PnTypedIdx>* new_old_multis) noexcept
+						:old_multis(new_old_multis), own_idx(-1u)
+					{
+						if (ref.type.is<Variadic>()) { //these may contain MultiPn -> these have SharedVariadicDatum entry 
+							this->own_idx = this->old_multis->size(); //new last element 
+							this->old_multis->emplace_back(PnTypedIdx{}); //becomes only valid element if consume finds MultiPn
+						}
+					}
+
+					void consume(const PnTypedIdx child) noexcept
+					{
+						if (child.get_type().is<MultiPn>()) {
+							this->old_multis->at(this->own_idx) = child;
+						}
+					}
+
+					auto result() noexcept { return PnTypedIdx{}; } //caution: only works as long as no multi is represented as Function
+				};
+				(void)fold::tree_fold<PnTypedIdx, Acc>(head, [](const PnRef ref) { return ref.typed_idx(); }, &old_multis);
+			};
+			catalog_lhs_occurences(this->lhs_ref());
+
+			const auto replace_occurences = [&old_multis](const MutPnRef head, const bool test_lhs) -> bool {
+				const auto check_function_params = [&old_multis, test_lhs](const MutPnRef ref) -> fold::FindTrue {
+					if (ref.type.is<Function>()) {
+						for (auto& param : fn::unsave_range(ref)) {
+							if (param.get_type().is<MultiPn>()) {
+								if (!ref.type.is<Variadic>() && test_lhs) { //only Variadic may carry MultiPn in lhs
+									return true;
+								}
+								const auto new_param_pos = std::find(old_multis.begin(), old_multis.end(), param); //relative to begin() to be precise
+								if (new_param_pos == old_multis.end()) { //not found -> not present in lhs -> illegal!
+									assert(!test_lhs); //we just made old_multis from lhs, thus that should be correct
+									return true;
+								}
+								const std::uint32_t new_param_idx = std::distance(old_multis.begin(), new_param_pos);
+								param = PnTypedIdx(new_param_idx, param.get_type());
+							}
+						}
+					}
+					return false;
+				};
+				return fold::simple_fold<fold::FindTrue>(head, check_function_params);
+			};
+			throw_if(replace_occurences(this->lhs_mut_ref(), true), "MultiPn in unexpected place in lhs");
+			throw_if(replace_occurences(this->rhs_mut_ref(), false), "MultiPn only referenced in rhs");
+		}
+		{
+			//if MultiPn::params occurs in sum / product, it is replaced by legal and matching MultiPn version.
+			const auto test_and_replace_multi_pn = [](const MutPnRef head, const bool test_lhs) -> bool {
+				const auto inspect_variadic = [test_lhs](const MutPnRef ref) -> fold::FindTrue {
+					if (ref.type == Comm::sum || ref.type == Comm::product) {
+						const PnType representing_type = ref.type == Comm::sum ? MultiPn::summands : MultiPn::factors;
+						for (PnTypedIdx& elem : fn::unsave_range(ref)) {
+							const PnType elem_type = elem.get_type();
+							if (elem_type == representing_type) {
+								elem = PnTypedIdx(elem.get_index(), MultiPn::params); //params also represent summands / factors
+							}
+							else if (test_lhs && elem_type.is<MultiPn>()) {
+								//in lhs a sum may never hold factors directly and vice versa
+								return true;
+							}
+						}
+					}
+					return false;
+				};
+				return fold::simple_fold<fold::FindTrue>(head, inspect_variadic);
+			};
+			throw_if(test_and_replace_multi_pn(this->lhs_mut_ref(), true), "wrong MultiPn in lhs");
+			test_and_replace_multi_pn(this->rhs_mut_ref(), false);
+		}
+		{
+			const auto contains_illegal_value_match = [](const PnRef head) -> bool {
+				const auto inspect_variadic = [](const PnRef ref) -> fold::FindTrue {
+					if (ref.type == Comm::sum || ref.type == Comm::product) {
+						std::size_t nr_value_matches = 0u;
+						for (const PnTypedIdx elem : fn::range(ref)) {
+							nr_value_matches += (elem.get_type() == PnNode::value_match);
+						}
+						return nr_value_matches > 1u;
+					}
+					return false;
+				};
+				return fold::simple_fold<fold::FindTrue>(head, inspect_variadic);
+			};
+			throw_if(contains_illegal_value_match(this->lhs_ref()), "no two value match variables may share the same sum / product in lhs.");
+		}
+		{
+			const auto contains_illegal_multi_match = [](const PnRef head) -> bool {
+				const auto inspect_variadic = [](const PnRef ref) -> fold::FindTrue {
+					if (ref.type == Comm::sum || ref.type == Comm::product) {
+						std::size_t nr_multi_matches = 0u;
+						for (const PnTypedIdx elem : fn::range(ref)) {
+							nr_multi_matches += elem.get_type().is<MultiPn>();
+						}
+						return nr_multi_matches > 1u;
+					}
+					return false;
+				};
+				return fold::simple_fold<fold::FindTrue>(head, inspect_variadic);
+			};
+			throw_if(contains_illegal_multi_match(this->lhs_ref()), "no two multi match variables may share the same sum / product in lhs.");
+		}
+		{
+			const auto contains_to_long_variadic = [](const PnRef head) -> bool {
+				const auto inspect_variadic = [](const PnRef ref) -> fold::FindTrue {
+					if (ref.type == Comm::sum || ref.type == Comm::product) {
+						const std::uint32_t multi_at_back = ref->parameters.back().get_type().is<MultiPn>();
+						return ref->parameters.size() - multi_at_back > match::SharedVariadicDatum::max_pn_variadic_params_count;
+					}
+					return false;
+				};
+				return fold::simple_fold<fold::FindTrue>(head, inspect_variadic);
+			};
+			throw_if(contains_to_long_variadic(this->lhs_ref()), "a sum / product in lhs contains to many operands.");
+		}
+		{
+			const auto contains_to_many_variadics = [](const PnRef head) -> bool {
+				struct Acc
+				{
+					int acc;
+
+					constexpr Acc(const PnRef ref) noexcept
+						:acc(ref.type == PnNode::value_match ?
+							std::numeric_limits<int>::min() : //subterms of value_match dont count -> initialize negative
+							(ref.type.is<Variadic>() || ref.type.is<NamedFn>())) //count only these two
+					{}
+
+					void consume(const int child_size) noexcept { this->acc += child_size; }
+					auto result() noexcept { return std::max(this->acc, 0); } //always this->acc if type was other than value_match
+				};
+				const int variadic_count = fold::tree_fold<std::size_t, Acc>(head, [](auto) { return 0; });
+				return variadic_count > match::MatchData::max_variadic_count;
+			};
+			throw_if(contains_to_many_variadics(this->lhs_ref()), "lhs contains to many variadic functions / instances of NamedFn");
+		}
 	} //RewriteRule::RewriteRule
 
 	namespace pn_tree {
@@ -946,24 +887,24 @@ namespace bmath::intern::pattern {
 			}
 		} //eval_value_match
 
-		PnTypedIdx intermediate_to_pattern(const UnsaveRef src_ref, PnStore& dst_store, bool only_build_basic)
+		PnTypedIdx intermediate_to_pattern(const UnsaveRef src_ref, PnStore& dst_store, const Side side, const Convert convert)
 		{
 			switch (src_ref.type) {
 			case Type(NamedFn{}): {
 				const std::string_view name = fn::named_fn_name(src_ref);
-				if (const auto tree_match = math_rep::IntermediateTreeMatch<UnsaveRef>::cast(src_ref)) {
+				if (const auto tree_match = math_rep::IntermediateTreeMatch::cast(src_ref)) {
 					const std::size_t dst_index = dst_store.allocate_one();
 					dst_store.at(dst_index) = TreeMatchVariable{ tree_match->match_data_idx(), tree_match->restr() };
 					return PnTypedIdx(dst_index, PnNode::tree_match);
 				}
-				if (const auto multi_match = math_rep::IntermediateMultiMatch<UnsaveRef>::cast(src_ref)) {
+				if (const auto multi_match = math_rep::IntermediateMultiMatch::cast(src_ref)) {
 					return PnTypedIdx(multi_match->index(), multi_match->type());
 				}
 
-				if (!only_build_basic) {
-					if (const auto value_match = math_rep::IntermediateValueMatch<UnsaveRef>::cast(src_ref)) {
-						const TypedIdx mtch_idx = intermediate_to_pattern(src_ref.new_at(value_match->mtch_idx()), dst_store, only_build_basic);
-						const TypedIdx copy_idx = intermediate_to_pattern(src_ref.new_at(value_match->copy_idx()), dst_store, only_build_basic);
+				if (convert == Convert::all) {
+					if (const auto value_match = math_rep::IntermediateValueMatch::cast(src_ref)) {
+						const TypedIdx mtch_idx = intermediate_to_pattern(src_ref.new_at(value_match->mtch_idx()), dst_store, side, convert);
+						const TypedIdx copy_idx = intermediate_to_pattern(src_ref.new_at(value_match->copy_idx()), dst_store, side, convert);
 						const std::uint32_t match_data_idx = value_match->match_data_idx();
 						const Form form = value_match->form();
 
@@ -972,12 +913,12 @@ namespace bmath::intern::pattern {
 						return PnTypedIdx(dst_index, PnNode::value_match);
 					}
 				}
-			} [[fallthrough]];
+			} [[fallthrough]]; //if NamedFn did not represent a match variable just keep it as is
 			default: {
 				assert(src_ref.type.is<Function>());
 				StupidBufferVector<PnTypedIdx, 12> dst_parameters;
 				for (const TypedIdx src_param : fn::range(src_ref)) {
-					const PnTypedIdx dst_param = intermediate_to_pattern(src_ref.new_at(src_param), dst_store, only_build_basic);
+					const PnTypedIdx dst_param = intermediate_to_pattern(src_ref.new_at(src_param), dst_store, side, convert);
 					dst_parameters.push_back(dst_param);
 				}
 				if (src_ref.type.is<NamedFn>()) {
@@ -1006,8 +947,8 @@ namespace bmath::intern::pattern {
 			case Type(PnNode::value_match): {
 				const pattern::ValueMatchVariable src_var = *src_ref;
 				auto dst_var = pattern::ValueMatchVariable(src_var.match_data_idx, src_var.form);
-				dst_var.mtch_idx = intermediate_to_pattern(src_ref.new_at(src_var.mtch_idx), dst_store, only_build_basic);
-				dst_var.copy_idx = intermediate_to_pattern(src_ref.new_at(src_var.copy_idx), dst_store, only_build_basic);
+				dst_var.mtch_idx = intermediate_to_pattern(src_ref.new_at(src_var.mtch_idx), dst_store, side, convert);
+				dst_var.copy_idx = intermediate_to_pattern(src_ref.new_at(src_var.copy_idx), dst_store, side, convert);
 				const std::size_t dst_index = dst_store.allocate_one();
 				dst_store.at(dst_index) = dst_var;
 				return PnTypedIdx(dst_index, src_ref.type);

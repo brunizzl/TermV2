@@ -268,7 +268,6 @@ namespace bmath::intern {
 			{ Type(PnNode::value_match  ), 1002 }, //may match different subsets of complex numbers, but always requires an actual value to match against
 			{ Type(PnNode::value_proxy  ), 1003 }, //dont care really where this sits, as it never ist used in matching anyway
 			//values 2xxx are not present, as that would require every item in Fn to be listed here (instead default_generality kicks in here)
-			{ Type(NamedFn{})            , 3000 },
 			{ Type(Comm::multiset       ), 3002 },  
 			{ Type(Comm::set            ), 3003 },  
 			{ Type(Comm::sum            ), 3004 },  
@@ -277,6 +276,7 @@ namespace bmath::intern {
 			{ Type(MultiPn::params      ), 3007 }, //kinda special, as they always succeed in matching -> need to be matched last 
 			{ Type(MultiPn::summands    ), 3008 }, //kinda special, as they always succeed in matching -> need to be matched last 
 			{ Type(MultiPn::factors     ), 3009 }, //kinda special, as they always succeed in matching -> need to be matched last 
+			{ Type(NamedFn{})            , 3010 },
 		});
 		static_assert(std::is_sorted(type_generality_table.begin(), type_generality_table.end(), 
 			[](auto a, auto b) { return a.second < b.second; }));
@@ -324,10 +324,10 @@ namespace bmath::intern {
 
 
 	template<typename T>
-	concept MathReference = ReferenceTo<T, MathUnion> && T::is_const;
+	concept MathReference = Reference<T> && T::is_const && std::is_same_v<typename T::value_type, MathUnion>;
 
 	template<typename T>
-	concept MutMathReference = ReferenceTo<T, MathUnion> && !T::is_const;
+	concept MutMathReference = Reference<T> && !T::is_const && std::is_same_v<typename T::value_type, MathUnion>;
 
 
 	using Ref = BasicSaveRef<Type, const MathStore>;

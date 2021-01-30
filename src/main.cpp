@@ -8,6 +8,7 @@
 TODO:
 
 important:
+ - sort pattern with care for match variables
  - distinguish between owning match variable and nonowning match variable
  - build and adjust IntermediateRewriteRule only using MathType
  - adjust valid_storage() to allow forest

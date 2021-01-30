@@ -45,7 +45,7 @@ namespace bmath::intern::fold {
 		//Res_T might have nonstatic member return_early, to indicate if the fold may be stopped early, because the result is already known
 		//not really a fold function in the classical sense, as there is no information accumulated - 
 		//  eighter you have the final result or not. (or you only mutate the term and not return any result at all)
-		template<typename Res_T, ReferenceTo<MathUnion> R, CallableTo<Res_T, R> Apply>
+		template<typename Res_T, Reference R, CallableTo<Res_T, R> Apply>
 		Res_T simple_fold(const R ref, Apply apply)
 		{
 			if (ref.type.is<Function>()) {
@@ -76,7 +76,7 @@ namespace bmath::intern::fold {
 		//  have a Constructor taking as arguments (BasicSaveRef<Union_T, Type_T, Const> ref, AccInit... init) 
 		//  and a consume method taking as single parameter of type Res_T
 		//  a result method taking no parameters and returning Res_T	
-		template<typename Res_T, Accumulator<Res_T> Acc, ReferenceTo<MathUnion> R, 
+		template<typename Res_T, Accumulator<Res_T> Acc, Reference R, 
             CallableTo<Res_T, R> LeafApply, typename... AccInit>
 		Res_T tree_fold(const R ref, LeafApply leaf_apply, const AccInit... init)
 		{

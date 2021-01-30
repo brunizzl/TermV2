@@ -6,11 +6,11 @@ namespace bmath::intern {
 
 	//it is advised to only use this concept to specify other concepts,
 	//  if both const and mut ref are semantically allowed, only enable const
-	template<typename R, typename T> 
-	concept ReferenceTo = 
+	template<typename R> 
+	concept Reference = 
 		requires(R a, BasicTypedIdx<typename R::marker_type> typed_idx) { 
-		{ a.operator*() } -> std::convertible_to<const T>;
-		{ a.operator->() } -> std::convertible_to<const T*>;
+		{ a.operator*() } -> std::convertible_to<const typename R::value_type>;
+		{ a.operator->() } -> std::convertible_to<const typename R::value_type*>;
 		{ a.new_at(typed_idx) } -> std::same_as<R>;
 	};
 
