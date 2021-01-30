@@ -10,7 +10,6 @@ TODO:
 important:
  - sort pattern with care for match variables
  - distinguish between owning match variable and nonowning match variable
- - adjust valid_storage() to allow forest
  - let type_table in ioArithmetic use names of fn
  - make pattern and usual term two distinct types (again...)
 	enables: 
@@ -29,7 +28,6 @@ important:
 
 nice to have:
  - pattern::match::copy should copy in same store (again...)
- - deprecate pattern::pn_tree::eval_value_match (instead remove value_match from rhs, just copy tree instead of value)
  - avoid copying pattern::MultiPn entries (needs to know original storage location of each entry, to steal it from there)
  - noexceptify everything
 

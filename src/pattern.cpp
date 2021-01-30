@@ -516,14 +516,9 @@ namespace bmath::intern::pattern {
 		return str;
 	}
 
-	std::string IntermediateRewriteRule::lhs_memory_layout() const
+	std::string IntermediateRewriteRule::to_memory_layout() const
 	{
-		return print::to_memory_layout(this->store, { this->lhs_head });
-	}
-
-	std::string IntermediateRewriteRule::rhs_memory_layout() const
-	{
-		return print::to_memory_layout(this->store, { this->rhs_head });
+		return print::to_memory_layout(this->store, { this->lhs_head, this->rhs_head });
 	}
 
 	std::string IntermediateRewriteRule::lhs_tree(const std::size_t offset) const
@@ -541,11 +536,12 @@ namespace bmath::intern::pattern {
 	RewriteRule::RewriteRule(std::string name, Convert convert)
 	{
 		IntermediateRewriteRule intermediate = IntermediateRewriteRule(std::move(name), convert);
+		assert(tree::valid_storage(intermediate.store, { intermediate.lhs_head, intermediate.rhs_head }));
+
 		std::cout << intermediate.to_string() << "\n";
 		std::cout << intermediate.lhs_tree() << "\n\n";
 		std::cout << intermediate.rhs_tree() << "\n\n";
-		std::cout << intermediate.lhs_memory_layout() << "\n\n";
-		std::cout << intermediate.rhs_memory_layout() << "\n\n";
+		std::cout << intermediate.to_memory_layout() << "\n\n";
 		std::cout << "------------------------------------------------------------------------\n";
 
 		this->store.reserve(intermediate.store.nr_used_slots());
@@ -703,7 +699,7 @@ namespace bmath::intern::pattern {
 
 	namespace pn_tree {
 
-		OptComplex eval_value_match(const UnsavePnRef ref, const Complex& start_val)
+		OptionalComplex eval_value_match(const UnsavePnRef ref, const Complex& start_val)
 		{
 			const auto get_divisor = [](const UnsavePnRef ref) -> std::optional<PnIdx> {
 				if (ref.type == Fn::pow) {
@@ -717,18 +713,18 @@ namespace bmath::intern::pattern {
 				return {}; //return nothing
 			};
 
-			const auto compute_exact = [](auto operate) -> OptComplex {
+			const auto compute_exact = [](auto operate) -> OptionalComplex {
 				std::feclearexcept(FE_ALL_EXCEPT);
-				const OptComplex result = operate();
-				return (!std::fetestexcept(FE_ALL_EXCEPT)) ? result : OptComplex();
+				const OptionalComplex result = operate();
+				return (!std::fetestexcept(FE_ALL_EXCEPT)) ? result : OptionalComplex();
 			};
 
 			switch (ref.type) {
 			case PnType(Comm::sum): {
-				OptComplex result_val = 0.0;
+				OptionalComplex result_val = 0.0;
 				for (auto& summand : fn::range(ref)) {
-					if (const OptComplex summand_val = eval_value_match(ref.new_at(summand), start_val)) {
-						if (const OptComplex res = compute_exact([&] {return result_val + summand_val; })) {
+					if (const OptionalComplex summand_val = eval_value_match(ref.new_at(summand), start_val)) {
+						if (const OptionalComplex res = compute_exact([&] {return result_val + summand_val; })) {
 							result_val = res;
 							continue;
 						}
@@ -738,19 +734,19 @@ namespace bmath::intern::pattern {
 				return result_val;
 			} break;
 			case PnType(Comm::product): {
-				OptComplex result_factor = 1.0;
-				OptComplex result_divisor = 1.0;
+				OptionalComplex result_factor = 1.0;
+				OptionalComplex result_divisor = 1.0;
 				for (auto& factor : fn::range(ref)) {
 					if (const std::optional<PnIdx> divisor = get_divisor(ref.new_at(factor))) {
-						if (const OptComplex divisor_val = eval_value_match(ref.new_at(*divisor), start_val)) {
-							if (const OptComplex res = compute_exact([&] { return result_divisor * divisor_val; })) {
+						if (const OptionalComplex divisor_val = eval_value_match(ref.new_at(*divisor), start_val)) {
+							if (const OptionalComplex res = compute_exact([&] { return result_divisor * divisor_val; })) {
 								result_divisor = res;
 								continue;
 							}
 						}
 					}
-					if (const OptComplex factor_val = eval_value_match(ref.new_at(factor), start_val)) {
-						if (const OptComplex res = compute_exact([&] {return result_factor * factor_val; })) {
+					if (const OptionalComplex factor_val = eval_value_match(ref.new_at(factor), start_val)) {
+						if (const OptionalComplex res = compute_exact([&] {return result_factor * factor_val; })) {
 							result_factor = res;
 							continue;
 						}
@@ -762,7 +758,7 @@ namespace bmath::intern::pattern {
 			default: {
 				assert(ref.type.is<Fn>());
 				if (const std::optional<PnIdx> divisor = get_divisor(ref)) {
-					if (const OptComplex divisor_val = eval_value_match(ref.new_at(*divisor), start_val)) {
+					if (const OptionalComplex divisor_val = eval_value_match(ref.new_at(*divisor), start_val)) {
 						return compute_exact([&] { return 1.0 / *divisor_val; });
 					}
 					else {
@@ -770,7 +766,7 @@ namespace bmath::intern::pattern {
 					}
 				}
 				const PnIdxVector& params = *ref;
-				std::array<OptComplex, 4> res_vals;
+				std::array<OptionalComplex, 4> res_vals;
 				for (std::size_t i = 0; i < fn::arity(ref.type.to<Function>()); i++) {
 					res_vals[i] = eval_value_match(ref.new_at(params[i]), start_val);
 					if (!res_vals[i]) {
@@ -802,14 +798,19 @@ namespace bmath::intern::pattern {
 
 				if (convert == Convert::all) {
 					if (const auto value_match = math_rep::IntermediateValueMatch::cast(src_ref)) {
-						const PnIdx mtch_idx = intermediate_to_pattern(src_ref.new_at(value_match->mtch_idx()), dst_store, side, convert);
-						const PnIdx copy_idx = intermediate_to_pattern(src_ref.new_at(value_match->copy_idx()), dst_store, side, convert);
-						const std::uint32_t match_data_idx = value_match->match_data_idx();
-						const Form form = value_match->form();
+						if (side == Side::lhs) {
+							const PnIdx mtch_idx = intermediate_to_pattern(src_ref.new_at(value_match->mtch_idx()), dst_store, side, convert);
+							const std::uint32_t match_data_idx = value_match->match_data_idx();
+							const Form form = value_match->form();
 
-						const std::size_t dst_index = dst_store.allocate_one();
-						dst_store.at(dst_index) = ValueMatchVariable(mtch_idx, copy_idx, match_data_idx, form);
-						return PnIdx(dst_index, PnNode::value_match);
+							const std::size_t dst_index = dst_store.allocate_one();
+							dst_store.at(dst_index) = ValueMatchVariable(mtch_idx, match_data_idx, form);
+							return PnIdx(dst_index, PnNode::value_match);
+						}
+						else {
+							assert(side == Side::rhs);
+							return intermediate_to_pattern(src_ref.new_at(value_match->copy_idx()), dst_store, side, convert);
+						}
 					}
 					if (const auto value_proxy = math_rep::IntermediateValueProxy::cast(src_ref)) {
 						return PnIdx(value_proxy->index(), PnNode::value_proxy);
@@ -950,7 +951,7 @@ namespace bmath::intern::pattern {
 				}
 				const ValueMatchVariable& var = *pn_ref;
 				auto& match_info = match_data.info(var);
-				const OptComplex this_value = pn_tree::eval_value_match(pn_ref.new_at(var.mtch_idx), *ref);
+				const OptionalComplex this_value = pn_tree::eval_value_match(pn_ref.new_at(var.mtch_idx), *ref);
 				if (!this_value || !has_form(*this_value, var.form)) {
 					return false;
 				}
@@ -1217,11 +1218,10 @@ namespace bmath::intern::pattern {
 				const SharedTreeDatum& info = match_data.info(pn_ref->tree_match);
 				assert(info.is_set());
 				return tree::copy(Ref(src_store, info.match_idx), dst_store); //call to different copy!
-			} break;
-			case PnType(PnNode::value_match): {
-				const ValueMatchVariable& var = *pn_ref;
-				return match::copy(pn_ref.new_at(var.copy_idx), match_data, src_store, dst_store);
-			} break;
+			} break; 
+			case PnType(PnNode::value_match):  //value_match is not expected in rhs, only value_proxy
+				assert(false);
+				return MathIdx();
 			case PnType(PnNode::value_proxy): {
 				const Complex& val = match_data.value_match_data[pn_ref.index].value;
 				const std::size_t dst_index = dst_store.allocate_one();

@@ -19,7 +19,7 @@ namespace bmath::intern {
 
 	namespace fn {
 
-		OptComplex eval(Fn type, const std::array<OptComplex, 4>& param_vals)
+		OptionalComplex eval(Fn type, const std::array<OptionalComplex, 4>& param_vals)
 		{
 			if (arity(type) == 1u) {
 				if (param_vals[0]->imag() == 0.0) {
@@ -89,10 +89,10 @@ namespace bmath::intern {
 						return std::log(param_vals[1]->real()) / std::log(param_vals[0]->real());
 					}
 					else {
-						const OptComplex num = (param_vals[1]->imag() == 0.0) ?
+						const OptionalComplex num = (param_vals[1]->imag() == 0.0) ?
 							std::log(param_vals[1]->real()) :
 							std::log(*param_vals[1]);
-						const OptComplex denom = (param_vals[0]->imag() == 0.0) ?
+						const OptionalComplex denom = (param_vals[0]->imag() == 0.0) ?
 							std::log(param_vals[0]->real()) :
 							std::log(*param_vals[0]);
 						return num / denom;
@@ -138,17 +138,17 @@ namespace bmath::intern {
 
 		MathIdx combine(const MutRef ref, const bool exact)
 		{
-			const auto compute = [exact](auto operate) -> OptComplex {
+			const auto compute = [exact](auto operate) -> OptionalComplex {
 				if (exact) {
 					std::feclearexcept(FE_ALL_EXCEPT);
 				}
-				const OptComplex result = operate();
-				return (!exact || !std::fetestexcept(FE_ALL_EXCEPT)) ? result : OptComplex();
+				const OptionalComplex result = operate();
+				return (!exact || !std::fetestexcept(FE_ALL_EXCEPT)) ? result : OptionalComplex();
 			};
 
 			switch (ref.type) {
 			case MathType(Comm::sum): {
-				OptComplex value_acc = 0.0; //stores sum of values encountered as summands
+				OptionalComplex value_acc = 0.0; //stores sum of values encountered as summands
 				StupidBufferVector<MathIdx, 16> new_sum;
 
 				for (MathIdx& summand : fn::unsave_range(ref)) {
@@ -161,7 +161,7 @@ namespace bmath::intern {
 						IndexVector::free(*ref.store, summand.get_index()); //free nested sum, but not nested summands
 						break;
 					case MathType(Literal::complex):
-						if (const OptComplex res = compute([&] { return value_acc + ref.store->at(summand.get_index()).complex; })) {
+						if (const OptionalComplex res = compute([&] { return value_acc + ref.store->at(summand.get_index()).complex; })) {
 							value_acc = res;
 							tree::free(ref.new_at(summand));
 							break;
@@ -192,8 +192,8 @@ namespace bmath::intern {
 			case MathType(Comm::product): {
 				//unlike with summands, where an inversion is just flipping the sign bit, not every multiplicativly inverse of a floating point number 
 				//  can be stored as floating point number without rounding -> we need two value accumulators. sigh.
-				OptComplex factor_acc = 1.0;
-				OptComplex divisor_acc = 1.0; 
+				OptionalComplex factor_acc = 1.0;
+				OptionalComplex divisor_acc = 1.0; 
 				StupidBufferVector<MathIdx, 16> new_product;
 
 				for (MathIdx& factor : fn::unsave_range(ref)) {
@@ -202,13 +202,13 @@ namespace bmath::intern {
 					case MathType(Fn::pow): {
 						IndexVector& power = *ref.new_at(factor);
 						if (power[0].get_type() == Literal::complex && power[1].get_type() == Literal::complex) {
-							std::array<OptComplex, 4> power_params = {
+							std::array<OptionalComplex, 4> power_params = {
 								ref.store->at(power[0].get_index()).complex,
 								ref.store->at(power[1].get_index()).complex,
 							};
 							if (power_params[1]->imag() == 0.0 && power_params[1]->real() < 0.0) {
 								power_params[1] *= -1.0;
-								if (const OptComplex res = compute([&] { return divisor_acc * fn::eval(Fn::pow, power_params); })) {
+								if (const OptionalComplex res = compute([&] { return divisor_acc * fn::eval(Fn::pow, power_params); })) {
 									divisor_acc = res;
 									tree::free(ref.new_at(factor)); //free whole power
 									break;
@@ -224,7 +224,7 @@ namespace bmath::intern {
 						IndexVector::free(*ref.store, factor.get_index()); //free nested product, but not nested factors
 						break;
 					case MathType(Literal::complex):
-						if (const OptComplex res = compute([&] { return factor_acc * ref.store->at(factor.get_index()).complex; })) {
+						if (const OptionalComplex res = compute([&] { return factor_acc * ref.store->at(factor.get_index()).complex; })) {
 							factor_acc = res;
 							tree::free(ref.new_at(factor));
 							break;
@@ -237,7 +237,7 @@ namespace bmath::intern {
 				}
 
 				//reinserting the computed value(s)					
-				if (const OptComplex result_val = compute([&] { return factor_acc / divisor_acc; }); 
+				if (const OptionalComplex result_val = compute([&] { return factor_acc / divisor_acc; }); 
 					result_val && *result_val != 1.0) 
 				{
 					new_product.push_back(build_value(*ref.store, *result_val));
@@ -282,7 +282,7 @@ namespace bmath::intern {
 			default: 
 				if (ref.type.is<Fn>()) {
 					IndexVector& params = *ref;
-					std::array<OptComplex, 4> res_vals = { OptComplex{}, {}, {}, {} }; //default initialized to NaN
+					std::array<OptionalComplex, 4> res_vals = { OptionalComplex{}, {}, {}, {} }; //default initialized to NaN
 					assert(fn::arity(ref.type) <= 4); //else res_vals size to small
 					for (std::size_t i = 0; i < fn::arity(ref.type); i++) {
 						params[i] = tree::combine(ref.new_at(params[i]), exact);
@@ -290,7 +290,7 @@ namespace bmath::intern {
 							res_vals[i] = ref.store->at(params[i].get_index()).complex;
 						}
 					}
-					if (const OptComplex res = compute([&] { return fn::eval(ref.type.to<Fn>(), res_vals); })) {
+					if (const OptionalComplex res = compute([&] { return fn::eval(ref.type.to<Fn>(), res_vals); })) {
 						tree::free(ref);
 						return build_value(*ref.store, *res);
 					}
@@ -471,10 +471,11 @@ namespace bmath::intern {
 			return combine_result;
 		} //establish_basic_order
 
-		bool valid_storage(const Ref ref)
+
+		bool valid_storage(const MathStore& store, const std::initializer_list<MathIdx> heads)
 		{
-			BitVector store_positions = ref.store->storage_occupancy(); //every index in store is represented as bit here. false -> currently free	
-			const auto reset_and_check_position = [&store_positions](const Ref ref) -> fold::FindTrue { //doubles in function as 				
+			BitVector store_positions = store.storage_occupancy(); //every index in store is represented as bit here. false -> currently free	
+			const auto reset_and_check_position = [&store_positions](const UnsaveRef ref) -> fold::FindTrue { //doubles in function as 				
 				const auto set_all_in_range = [&store_positions](std::size_t index, const std::size_t end) {
 					while (index < end) {
 						if (store_positions.test(index) == false) { //meaning eighter free or already reset by some other node
@@ -504,8 +505,13 @@ namespace bmath::intern {
 				}
 				return false; //found no double use (not at this node anyway)
 			};
-			const bool found_double_use = fold::simple_fold<fold::FindTrue>(ref, reset_and_check_position);
-			return !found_double_use && store_positions.none();
+
+			for (const MathIdx head : heads) {
+				if (fold::simple_fold<fold::FindTrue>((UnsaveRef)Ref(store, head), reset_and_check_position)) {
+					false;
+				}
+			}
+			return store_positions.none();
 		} //valid_storage
 
 		bool contains_variables(const UnsaveRef ref)

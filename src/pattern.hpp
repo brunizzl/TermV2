@@ -88,20 +88,17 @@ namespace bmath::intern::pattern {
 	//that is achieved by not actually storing "2*k+1" as such, but as "k", with match_idx of k containing the 
 	//  inverse operation: "(p-1)/2", where "p" is not an actual node, but just a PnVariable::value_proxy 
 	//  to indicate the original position of k.
-	//to still allow to copy "2*k+1", the copy_idx of k contains a copy of the original suroundings of k, but again with a "p"
-	//  in there: "2*p+1". this "p" is required to also store ValueMatchVariable::match_data_idx as it's index.
 	//in praxis a TypedIdx with .get_type() == PnVariable::value_proxy works similar to (imagined) MultiMatchVariable, as
 	//  .get_index() also does not point in store of pattern, but in an array of MatchData.
 	struct ValueMatchVariable
 	{
 		PnIdx mtch_idx;
-		PnIdx copy_idx;
 		std::uint32_t match_data_idx; //indexes in MatchData::value_match_data
 		Form form = Form::real;
 
-		constexpr ValueMatchVariable(PnIdx new_match, PnIdx new_copy,
+		constexpr ValueMatchVariable(PnIdx new_match,
 			std::uint32_t new_match_data_idx, Form new_form) noexcept
-			:mtch_idx(new_match), copy_idx(new_copy), match_data_idx(new_match_data_idx), form(new_form)
+			:mtch_idx(new_match), match_data_idx(new_match_data_idx), form(new_form)
 		{}
 	};
 
@@ -294,8 +291,7 @@ namespace bmath::intern::pattern {
 
 		IntermediateRewriteRule(std::string name, Convert convert = Convert::all);
 		std::string to_string() const;
-		std::string lhs_memory_layout() const;
-		std::string rhs_memory_layout() const;
+		std::string to_memory_layout() const;
 		std::string lhs_tree(const std::size_t offset = 0u) const;
 		std::string rhs_tree(const std::size_t offset = 0u) const;
 	};
@@ -323,7 +319,7 @@ namespace bmath::intern::pattern {
 
 		//mostly stripped down version of tree::combine_values_exact to find calculate SharedValueDatum.value
 		// from the start_val taken out of matched term
-		OptComplex eval_value_match(const UnsavePnRef ref, const Complex& start_val);
+		OptionalComplex eval_value_match(const UnsavePnRef ref, const Complex& start_val);
 
 		//copies math_ref into dst_store but changes math representations of pattern specific nodes 
 		//  to their final pattern versions

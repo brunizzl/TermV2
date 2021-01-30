@@ -80,9 +80,9 @@ namespace bmath::intern::debug {
 			{ "x, a, b | x^a x^b = x^(a + b)" },
 			{ "x :factors, y | exp(x ln(y)) = y^x" },
 			
-			{ "a, b          | a^2 + 2 a b   + b^2 = (a + b)^2" }, 
-			{ "a, b          | a^2 - 2 a b   + b^2 = (a - b)^2" }, 
-			{ "a :complex, b | a^2 + (2 a) b + b^2 = (a + b)^2" }, 
+			{ "a, b          | a^2 + 2 a b + b^2 = (a + b)^2" }, 
+			{ "a, b          | a^2 - 2 a b + b^2 = (a - b)^2" }, 
+			{ "a :complex, b | a^2 + 2 a b + b^2 = (a + b)^2" }, 
 			
 			{ "a :no_val, bs :factors, cs :factors | a bs + a cs = a (bs + cs)" },
 			{ "a :no_val, bs :factors              | a bs + a    = a (bs + 1)" }, 
@@ -174,13 +174,13 @@ namespace bmath::intern::debug {
 				bmath::Term test(name); 
 				std::cout << "input:  " << test.to_string() << "\n";
 				test.head = pattern::match::apply_rule_range(rules.begin(), rules.end(), test.mut_ref());
+
 				std::cout << "    = " << test.to_pretty_string() << "\n";
-				std::cout << test.to_memory_layout() << "\n";
-				std::cout << test.to_tree() << "\n";
+				//std::cout << test.to_memory_layout() << "\n";
+				//std::cout << test.to_tree() << "\n";
 				std::cout << "\n";
 
-				tree::free(test.mut_ref());
-				assert(test.store.storage_occupancy().none());
+				assert(tree::valid_storage(test.store, { test.head }));
 			}
 			catch (bmath::ParseFailure failure) {
 				std::cout << "parse failure: " << failure.what << '\n';

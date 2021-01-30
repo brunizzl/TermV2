@@ -177,7 +177,7 @@ namespace bmath::intern {
 
 	//utility for NamedFn, types in Fn and types in Variadic
 	namespace fn {
-		OptComplex eval(Fn type, const std::array<OptComplex, 4>& param_vals);
+		OptionalComplex eval(Fn type, const std::array<OptionalComplex, 4>& param_vals);
 
 		struct FnProperties
 		{
@@ -349,9 +349,8 @@ namespace bmath::intern {
 		//calls first tree::combine, then tree::sort
 		[[nodiscard]] MathIdx establish_basic_order(MutRef ref);
 
-		//expects ref to be head of term and ref.store to house ref exclusively 
-		//(-> every position in store eighter free or used by (children of) ref exactly once)
-		bool valid_storage(const Ref ref);
+		//(true -> every position in store eighter free or used by (children of) heads exactly once)
+		bool valid_storage(const MathStore& store, const std::initializer_list<MathIdx> heads);
 
 	} //namespace tree
 

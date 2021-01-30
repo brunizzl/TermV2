@@ -146,13 +146,13 @@ namespace bmath::intern {
 
     
 	//can be used like std::optional<double>, but with extra double operations
-	struct OptDouble
+	struct OptionalDouble
 	{
 		static_assert(std::numeric_limits<double>::has_quiet_NaN);
 		double val = std::numeric_limits<double>::quiet_NaN(); //default initialize to invalid state
 
-		constexpr OptDouble(const double new_val) noexcept :val(new_val) {}
-		constexpr OptDouble() noexcept = default;
+		constexpr OptionalDouble(const double new_val) noexcept :val(new_val) {}
+		constexpr OptionalDouble() noexcept = default;
 
 		bool has_value() const noexcept { return !std::isnan(this->val); }
 		explicit operator bool() const noexcept { return this->has_value(); }
@@ -160,26 +160,26 @@ namespace bmath::intern {
 		constexpr double& operator*() noexcept { return this->val; }
 		constexpr const double& operator*() const noexcept { return this->val; }
 
-		constexpr OptDouble operator+(const OptDouble snd) const noexcept { return this->val + snd.val; }
-		constexpr OptDouble operator-(const OptDouble snd) const noexcept { return this->val - snd.val; }
-		constexpr OptDouble operator*(const OptDouble snd) const noexcept { return this->val * snd.val; }
-		constexpr OptDouble operator/(const OptDouble snd) const noexcept { return this->val / snd.val; }
+		constexpr OptionalDouble operator+(const OptionalDouble snd) const noexcept { return this->val + snd.val; }
+		constexpr OptionalDouble operator-(const OptionalDouble snd) const noexcept { return this->val - snd.val; }
+		constexpr OptionalDouble operator*(const OptionalDouble snd) const noexcept { return this->val * snd.val; }
+		constexpr OptionalDouble operator/(const OptionalDouble snd) const noexcept { return this->val / snd.val; }
 
-		constexpr OptDouble operator+=(const OptDouble snd) noexcept { this->val += snd.val; return *this; }
-		constexpr OptDouble operator-=(const OptDouble snd) noexcept { this->val -= snd.val; return *this; }
-		constexpr OptDouble operator*=(const OptDouble snd) noexcept { this->val *= snd.val; return *this; }
-		constexpr OptDouble operator/=(const OptDouble snd) noexcept { this->val /= snd.val; return *this; }
-	}; //struct OptDouble
+		constexpr OptionalDouble operator+=(const OptionalDouble snd) noexcept { this->val += snd.val; return *this; }
+		constexpr OptionalDouble operator-=(const OptionalDouble snd) noexcept { this->val -= snd.val; return *this; }
+		constexpr OptionalDouble operator*=(const OptionalDouble snd) noexcept { this->val *= snd.val; return *this; }
+		constexpr OptionalDouble operator/=(const OptionalDouble snd) noexcept { this->val /= snd.val; return *this; }
+	}; //struct OptionalDouble
 
 	//can be used like std::optional<std::complex<double>>, but with extra complex operations
-	struct OptComplex
+	struct OptionalComplex
 	{
 		static_assert(std::numeric_limits<double>::has_quiet_NaN);
 		std::complex<double> val = std::numeric_limits<double>::quiet_NaN(); //default initialize to invalid state
 
-		constexpr OptComplex(const std::complex<double>& new_val) noexcept :val(new_val) {}
-		constexpr OptComplex(const double new_val) noexcept :val(new_val) {}
-		constexpr OptComplex() noexcept = default;
+		constexpr OptionalComplex(const std::complex<double>& new_val) noexcept :val(new_val) {}
+		constexpr OptionalComplex(const double new_val) noexcept :val(new_val) {}
+		constexpr OptionalComplex() noexcept = default;
 
 		bool has_value() const noexcept { return !std::isnan(this->val.real()); }
 		explicit operator bool() const noexcept { return this->has_value(); }
@@ -189,15 +189,15 @@ namespace bmath::intern {
 		constexpr const std::complex<double>& operator*() const noexcept { return this->val; }
 		constexpr const std::complex<double>* operator->() const noexcept { return &this->val; }
 
-		constexpr OptComplex operator+(const OptComplex& snd) const noexcept { return this->val + snd.val; }
-		constexpr OptComplex operator-(const OptComplex& snd) const noexcept { return this->val - snd.val; }
-		constexpr OptComplex operator*(const OptComplex& snd) const noexcept { return this->val * snd.val; }
-		constexpr OptComplex operator/(const OptComplex& snd) const noexcept { return this->val / snd.val; }		
+		constexpr OptionalComplex operator+(const OptionalComplex& snd) const noexcept { return this->val + snd.val; }
+		constexpr OptionalComplex operator-(const OptionalComplex& snd) const noexcept { return this->val - snd.val; }
+		constexpr OptionalComplex operator*(const OptionalComplex& snd) const noexcept { return this->val * snd.val; }
+		constexpr OptionalComplex operator/(const OptionalComplex& snd) const noexcept { return this->val / snd.val; }		
 
-		constexpr OptComplex& operator+=(const OptComplex& snd) noexcept { this->val += snd.val; return *this; }
-		constexpr OptComplex& operator-=(const OptComplex& snd) noexcept { this->val -= snd.val; return *this; }
-		constexpr OptComplex& operator*=(const OptComplex& snd) noexcept { this->val *= snd.val; return *this; }
-		constexpr OptComplex& operator/=(const OptComplex& snd) noexcept { this->val /= snd.val; return *this; }
-	}; //struct OptComplex
+		constexpr OptionalComplex& operator+=(const OptionalComplex& snd) noexcept { this->val += snd.val; return *this; }
+		constexpr OptionalComplex& operator-=(const OptionalComplex& snd) noexcept { this->val -= snd.val; return *this; }
+		constexpr OptionalComplex& operator*=(const OptionalComplex& snd) noexcept { this->val *= snd.val; return *this; }
+		constexpr OptionalComplex& operator/=(const OptionalComplex& snd) noexcept { this->val /= snd.val; return *this; }
+	}; //struct OptionalComplex
     
 } //namespace bmath::intern

@@ -367,7 +367,7 @@ namespace bmath::intern {
 
 			bool need_parentheses = infixr(ref.type) <= parent_infixr;
 
-			const auto get_negative_real = [](const UnsaveRef ref) ->OptDouble {
+			const auto get_negative_real = [](const UnsaveRef ref) ->OptionalDouble {
 				if (ref.type == Literal::complex) {
 					const Complex& complex = *ref;
 					if (complex.real() < 0.0 && complex.imag() == 0.0) {
@@ -469,7 +469,7 @@ namespace bmath::intern {
 			} break;
 			case MathType(Fn::pow): {
 				const IndexVector& params = *ref;
-				if (const OptDouble negative_expo = get_negative_real(ref.new_at(params[1]))) {
+				if (const OptionalDouble negative_expo = get_negative_real(ref.new_at(params[1]))) {
 					str += "1/";
 					str += print::to_pretty_string(ref.new_at(params[0]), infixr(Fn::pow));
 					if (*negative_expo != -1.0) {
