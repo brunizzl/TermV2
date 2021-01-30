@@ -24,11 +24,11 @@ namespace bmath::intern::pattern {
 		{
 			UnsaveRef ref;
 
-			static constexpr std::string_view function_name = "__1TreeMatch";
-
 			constexpr IntermediateTreeMatch(const UnsaveRef new_ref) noexcept :ref(new_ref) {}
 
 		public:
+			static constexpr std::string_view function_name = "__1TreeMatch";
+
 			template<StoreLike S>
 			static constexpr TypedIdx build(S& store, const std::uint32_t match_data_idx, const Restriction restr)
 			{
@@ -70,17 +70,17 @@ namespace bmath::intern::pattern {
 		}; //class IntermediateTreeMatch
 
 		//(nonexisting) MultiMatchVariable is modeled as NamedFn holding:
-		//  .get_index() as complex in first parameter
-		//  .get_type() as variable (same name as calling name_of(.get_type())) in second parameter
+		//  .index() as complex in first parameter
+		//  .type() as variable (same name as calling name_of(.get_type())) in second parameter
 		class IntermediateMultiMatch
 		{
 			UnsaveRef ref;
 
-			static constexpr std::string_view function_name = "__9MultiMatch";
-
 			constexpr IntermediateMultiMatch(const UnsaveRef new_ref) noexcept :ref(new_ref) {}
 
 		public:
+			static constexpr std::string_view function_name = "__9MultiMatch";
+
 			template<StoreLike S>
 			static constexpr TypedIdx build(S& store, const std::uint32_t idx, const MultiPn type)
 			{
@@ -121,27 +121,69 @@ namespace bmath::intern::pattern {
 			}
 		}; //class IntermediateMultiMatch
 
+
+		//(nonexisting) ValueProxy is modeled as NamedFn holding:
+		//  .index() as complex in first parameter
+		class IntermediateValueProxy
+		{
+			UnsaveRef ref;
+
+			constexpr IntermediateValueProxy(const UnsaveRef new_ref) noexcept :ref(new_ref) {}
+
+		public:
+			static constexpr std::string_view function_name = "__0ValueProxy";
+
+			template<StoreLike S>
+			static constexpr TypedIdx build(S& store, const std::uint32_t index)
+			{
+				const std::array<TypedIdx, 1> parameters = {
+					build_value(store, Complex{ static_cast<double>(index), 0.0 }),
+				};
+				return fn::build_named_fn(store, function_name, parameters);
+			}
+
+			static constexpr std::optional<IntermediateValueProxy> cast(const UnsaveRef new_ref)
+			{
+				if (new_ref.type == NamedFn{}) {
+					std::string_view ref_name = fn::named_fn_name(new_ref);
+					if (ref_name == function_name) {
+						const IndexVector& params = *new_ref;
+						assert(params.size() == 1);
+						assert(params[0].get_type() == Literal::complex);
+						assert(has_form(*new_ref.new_at(params[0]), Form::natural_0));
+						return IntermediateValueProxy(new_ref);
+					}
+				}
+				return std::nullopt;
+			}
+
+			constexpr std::uint32_t index() const noexcept
+			{
+				const IndexVector& params = *this->ref;
+				return this->ref.new_at(params[0])->complex.real();
+			}
+		}; //class IntermediateValueProxy
+
 		//ValueMatchVariable is modeled as NamedFn holding:
-		//  .mtch_idx as complex in first parameter
-		//  .copy_idx as complex in second parameter
+		//  .mtch_idx in first parameter
+		//  .copy_idx in second parameter
 		//  .match_data_idx as complex in third parameter
 		//  .form as variable (same name as calling name_of(.restr)) in forth parameter
 		class IntermediateValueMatch
 		{
 			UnsaveRef ref;
 
-			static constexpr std::string_view function_name = "__0ValueMatch";
-
 			constexpr IntermediateValueMatch(const UnsaveRef new_ref) noexcept :ref(new_ref) {}
 
 		public:
+			static constexpr std::string_view function_name = "__0ValueMatch";
+
 			template<StoreLike S>
-			static constexpr TypedIdx build(S& store, const TypedIdx mtch_idx, const TypedIdx copy_idx,
-				const std::uint32_t match_data_idx, const Form form)
+			static constexpr TypedIdx build(S& store, const std::uint32_t match_data_idx, const Form form)
 			{
 				const std::array<TypedIdx, 4> parameters = {
-					mtch_idx,
-					copy_idx,
+					IntermediateValueProxy::build(store, match_data_idx),
+					IntermediateValueProxy::build(store, match_data_idx),
 					build_value(store, Complex{ static_cast<double>(match_data_idx), 0.0 }),
 					TypedIdx(CharVector::build(store, name_of(form)), Type(Literal::variable)),
 				};
@@ -158,7 +200,7 @@ namespace bmath::intern::pattern {
 						assert(params[2].get_type() == Literal::complex);
 						assert(has_form(*new_ref.new_at(params[2]), Form::natural_0));
 						assert(params[3].get_type() == Literal::variable);
-						assert(type_of(new_ref.new_at(params[0])->char_vec).is<Form>());
+						assert(type_of(new_ref.new_at(params[3])->char_vec).is<Form>());
 						return IntermediateValueMatch(new_ref);
 					}
 				}
@@ -258,9 +300,7 @@ namespace bmath::intern::pattern {
 		}
 		else if (const auto iter = search_name(this->value_table); iter != this->value_table.end()) {
 			const std::uint32_t match_data_idx = std::distance(this->value_table.begin(), iter);
-			const std::size_t result_index = store.allocate_one();
-			store.at(result_index) = ValueMatchVariable{ match_data_idx, iter->form };
-			const TypedIdx result_typedidx = TypedIdx(result_index, PnNode::value_match);
+			const TypedIdx result_typedidx = math_rep::IntermediateValueMatch::build(store, match_data_idx, iter->form);
 			(this->build_lhs ? 
 				iter->lhs_instances : 
 				iter->rhs_instances).push_back(result_typedidx);
@@ -388,7 +428,7 @@ namespace bmath::intern::pattern {
 	} //has_form
 
 
-	IntermediateRewriteRule::IntermediateRewriteRule(std::string name)
+	IntermediateRewriteRule::IntermediateRewriteRule(std::string name, Convert convert)
 	{
 		//parsing and such
 		auto parse_string = ParseString(name);
@@ -403,14 +443,35 @@ namespace bmath::intern::pattern {
 		match_variables_table.build_lhs = false;
 		this->rhs_head = build_function(this->store, parts.rhs);
 
-		for (const auto& value : match_variables_table.value_table) {
-			for (const auto lhs_instance : value.lhs_instances) {
-				pn_tree::rearrange_value_match(this->store, this->lhs_head, lhs_instance);;
-			}
-			for (const auto rhs_instance : value.rhs_instances) {
-				pn_tree::rearrange_value_match(this->store, this->rhs_head, rhs_instance);
-			}
+		if (convert == Convert::all) {
+			static_assert("__0ValueMatch" == math_rep::IntermediateValueMatch::function_name);
+			//computable operations around value_match are "sucked in" by value match into .copy_idx
+			static const auto bubble_up_value_match = std::to_array<RewriteRule>({
+				{ "a :value, m, c, mdi, f |      __0ValueMatch(m, c, mdi, f) + a = __0ValueMatch(m, c + a  , mdi, f)", Convert::basic },
+				{ "a :value, m, c, mdi, f |      __0ValueMatch(m, c, mdi, f) * a = __0ValueMatch(m, c * a  , mdi, f)", Convert::basic },
+				{ "          m, c, mdi, f |      __0ValueMatch(m, c, mdi, f) ^ 2 = __0ValueMatch(m, c^2    , mdi, f)", Convert::basic },
+				{ "          m, c, mdi, f | sqrt(__0ValueMatch(m, c, mdi, f))    = __0ValueMatch(m, sqrt(c), mdi, f)", Convert::basic },
+				//mtch_idx gets two versions, one populated with content of copy_idx. this pattern enables the next step and is only applied if no other options match
+				{ "          m, c, mdi, f |      __0ValueMatch(m, c, mdi, f)     = __Temp(m, c, c, mdi, f)"          , Convert::basic },
+			});
+			this->lhs_head = match::apply_rule_range(bubble_up_value_match.begin(), bubble_up_value_match.end(), this->lhs_mut_ref());
+			this->rhs_head = match::apply_rule_range(bubble_up_value_match.begin(), bubble_up_value_match.end(), this->rhs_mut_ref());
+
+			//the matching of a ValueMatchVariable works by applying the inverse of the operation written down in parsed string to the value to match.
+			//this inverse is build here by unwrapping the second parameter and applying the inverse of the unwrapped operations to the first parameter.
+			//(the result is found at ValueMatchVariable::mtch_idx)
+			static const auto invert_match_subtree = std::to_array<RewriteRule>({
+				{ "val :value, m1, m2, c, mdi, f | __Temp(m1, m2 + val, c, mdi, f) = __Temp(m1 - val, m2, c, mdi, f)", Convert::basic },
+				{ "val :value, m1, m2, c, mdi, f | __Temp(m1, m2 * val, c, mdi, f) = __Temp(m1 / val, m2, c, mdi, f)", Convert::basic },
+				{ "            m1, m2, c, mdi, f | __Temp(m1, m2 ^ 2  , c, mdi, f) = __Temp(sqrt(m1), m2, c, mdi, f)", Convert::basic },
+				{ "            m1, m2, c, mdi, f | __Temp(m1, sqrt(m2), c, mdi, f) = __Temp(m1 ^ 2  , m2, c, mdi, f)", Convert::basic },
+				//applied once m2 is fully unwrapped: converting back
+				{ "            m1, m2, c, mdi, f | __Temp(m1, m2, c, mdi, f)       = __0ValueMatch(m1, c, mdi, f)"   , Convert::basic },
+			});
+			this->lhs_head = match::apply_rule_range(invert_match_subtree.begin(), invert_match_subtree.end(), this->lhs_mut_ref());
+			this->rhs_head = match::apply_rule_range(invert_match_subtree.begin(), invert_match_subtree.end(), this->rhs_mut_ref());
 		}
+
 		for (const auto& multi_match : match_variables_table.multi_table) {
 			throw_if(multi_match.lhs_count > 1u, "pattern only allows single use of each MultiPn in lhs.");
 		}
@@ -479,7 +540,7 @@ namespace bmath::intern::pattern {
 
 	RewriteRule::RewriteRule(std::string name, Convert convert)
 	{
-		IntermediateRewriteRule intermediate = IntermediateRewriteRule(std::move(name));
+		IntermediateRewriteRule intermediate = IntermediateRewriteRule(std::move(name), convert);
 		std::cout << "--------------------------------------------\n";
 		std::cout << intermediate.lhs_tree() << "\n\n";
 		std::cout << intermediate.rhs_tree() << "\n\n";
@@ -640,170 +701,6 @@ namespace bmath::intern::pattern {
 
 	namespace pn_tree {
 
-		TypedIdx* find_value_match_subtree(MathStore& store, TypedIdx& head, const TypedIdx value)
-		{
-			struct MatchTraits
-			{
-				bool has_match = false; //true if subterm contains value_match
-				bool computable = true; //more fitting name would be "computable if value_match would not present"
-
-				constexpr void combine(const MatchTraits snd) noexcept
-				{
-					this->has_match |= snd.has_match;
-					this->computable &= snd.computable;
-				}
-			}; //struct MatchTraits	
-
-			//Yaaa in kow. Big O hates this implementation. I tried it in efficient and it looked so mutch worse. this is better. trust me.
-			const auto classify_subterm = [&store, value](const TypedIdx head) -> MatchTraits {
-				struct Acc
-				{
-					MatchTraits acc;
-
-					constexpr Acc(const Ref ref, const TypedIdx value, const TypedIdx value_proxy)
-						:acc({ .has_match = false, .computable = true })
-					{
-						switch (ref.type) {
-						case Type(Comm::sum):     break;
-						case Type(Comm::product): break;
-						case Type(Fn::pow):     break;// for now only allow these Fn to be computed in value
-						case Type(Fn::sqrt):    break;// for now only allow these Fn to be computed in value  
-						default:
-							assert(ref.type.is<Function>());
-							[[fallthrough]];
-						case Type(PnNode::value_match): {
-							const bool is_right_match = TypedIdx(ref.index, ref.type) == value;
-							this->acc = MatchTraits{ .has_match = is_right_match, .computable = is_right_match };
-							break;
-						}
-						}
-					} //ctor
-
-					constexpr void consume(const MatchTraits elem_res) { this->acc.combine(elem_res); }
-					constexpr MatchTraits result() const noexcept { return this->acc; }
-				}; //struct Acc
-
-				const auto leaf_apply = [](const Ref ref) -> MatchTraits {
-					return MatchTraits{ false, is_one_of<Literal::complex, PnNode::value_proxy>(ref.type) };
-				};
-
-				const ValueMatchVariable& var = store.at(value.get_index()).value_match;
-				assert(var.copy_idx == var.mtch_idx);
-
-				return fold::tree_fold<MatchTraits, Acc>(Ref(store, head), leaf_apply, value, var.copy_idx);
-			}; //classify_subterm
-
-			const MatchTraits this_traits = classify_subterm(head);
-			if (this_traits.computable && this_traits.has_match) {
-				return &head;
-			}
-			else if (this_traits.has_match) { //this contains match, but also other junk -> just return part with match
-				assert(head.get_type().is<Function>());
-				for (TypedIdx& elem : fn::unsave_range(MutRef(store, head))) {
-					if (TypedIdx* const elem_res = find_value_match_subtree(store, elem, value)) {
-						return elem_res;
-					}
-				}
-				assert(false); //we have match -> we will find it in operands
-			}
-			return nullptr;
-		} //find_value_match_subtree
-
-		void rearrange_value_match(MathStore& store, TypedIdx& head, const TypedIdx value_match)
-		{
-			TypedIdx* const value_match_subtree = find_value_match_subtree(store, head, value_match);
-			TypedIdx* const value_match_storage = tree::find_subtree_owner(store, head, value_match);
-
-			if (value_match_storage != value_match_subtree) { //else value owns just itself, no nodes upstream
-				using VarRef = BasicNodeRef<ValueMatchVariable, MathStore>;
-				const VarRef var = VarRef(store, value_match.get_index());
-				const TypedIdx proxy_value = var->copy_idx;
-				assert(var->copy_idx == var->mtch_idx);
-
-				var->copy_idx = *value_match_subtree; //keep the nodes now owned by value in current arrangement as tree to copy
-				*value_match_storage = proxy_value; //value_match_storage is now owned by value. it would break the tree structure to leave the reference to itself there
-				*value_match_subtree = value_match; //previous owner of subtree now belonging to value becomes owner of value itself (value now bubbled up)
-
-				const TypedIdx match_data = tree::copy(Ref(store, var->copy_idx), store); //this and the following step might invalidate pointers into store data
-				const auto [new_match_data, new_match_idx] = stupid_solve_for(store, { match_data, proxy_value }, proxy_value); //rhs starts with just proxy_value
-				assert(new_match_data == proxy_value); //all terms around old position of value have been reversed around new_match_idx -> lhs should only have proxy left
-				var->mtch_idx = new_match_idx;
-
-				var->mtch_idx = tree::establish_basic_order(MutRef(store, var->mtch_idx));
-			}
-		} //rearrange_value_match
-
-		Equation stupid_solve_for(MathStore& store, Equation eq, const TypedIdx to_isolate)
-		{
-			assert(tree::contains(Ref(store, eq.lhs_head), to_isolate));
-
-			while (eq.lhs_head != to_isolate) {
-
-				const Type lhs_type = eq.lhs_head.get_type();
-				const std::uint32_t lhs_index = eq.lhs_head.get_index();
-				switch (lhs_type) {
-				case Type(Comm::sum):
-					[[fallthrough]];
-				case Type(Comm::product):
-				{
-					StupidBufferVector<TypedIdx, 8> result_buffer = { eq.rhs_head };
-					for (const TypedIdx elem : fn::range(MutRef(store, eq.lhs_head))) {
-						if (tree::contains(Ref(store, elem), to_isolate)) {
-							eq.lhs_head = elem;
-						}
-						else {
-							const TypedIdx new_rhs_elem = (lhs_type == Comm::sum ?
-								build_negated(store, elem) :
-								build_inverted(store, elem));
-							result_buffer.push_back(new_rhs_elem);
-						}
-					}
-					//all factors (summands) have been shifted to rhs -> delete SLC (but not recursively, elems have new owner!)
-					IndexVector::free(store, lhs_index);
-					//new eq.rhs_head is product (sum) of old eq.rhs_head divided by (minus) eq.lhs_head factors (summands).
-					eq.rhs_head = TypedIdx(IndexVector::build(store, result_buffer), lhs_type);
-				} break;
-				case Type(Fn::pow): {
-					IndexVector* params = &store.at(lhs_index).parameters;
-					if (tree::contains(Ref(store, (*params)[0u]), to_isolate)) { //case <contains var>^<computable>
-						if ((*params)[1u].get_type() == Literal::complex && MutRef(store, (*params)[1u])->complex == 2.0) { //special case <contains var>^2 -> use sqrt, not <...>^0.5
-							tree::free(MutRef(store, (*params)[1u]));
-							(*params)[1u] = TypedIdx();
-							params->size() = 1u;
-							eq.lhs_head = (*params)[0u];
-							eq.rhs_head = TypedIdx(lhs_index, Type(Fn::sqrt));
-						}
-						else {
-							eq.lhs_head = (*params)[0u];
-							(*params)[0u] = eq.rhs_head;
-							const TypedIdx inverse_expo = build_inverted(store, (*params)[1u]);
-							params = &store.at(lhs_index).parameters;
-							(*params)[1u] = inverse_expo;
-							eq.rhs_head = TypedIdx(lhs_index, Type(Fn::pow));
-						}
-					}
-					else { //case <computable>^<contains var>
-						eq.lhs_head = (*params)[1u];
-						(*params)[0u] = eq.rhs_head;
-						eq.rhs_head = TypedIdx(lhs_index, Type(Fn::log));
-					}
-				} break;
-				case Type(Fn::sqrt): { //repurpose params from lhs as pow in "<prev. rhs> ^ 2"
-					IndexVector* params = &store.at(lhs_index).parameters;
-					eq.lhs_head = (*params)[0u];
-					(*params)[0u] = eq.rhs_head;
-					const TypedIdx square = build_value(store, 2.0);
-					params = &store.at(lhs_index).parameters;
-					(*params)[1u] = square;
-					eq.rhs_head = TypedIdx(lhs_index, Type(Fn::pow));
-				} break;
-				default:
-					assert(false);
-				}
-			}
-			return eq;
-		} //stupid_solve_for
-
 		OptComplex eval_value_match(const UnsavePnRef ref, const Complex& start_val)
 		{
 			const auto get_divisor = [](const UnsavePnRef ref) -> std::optional<TypedIdx> {
@@ -903,14 +800,17 @@ namespace bmath::intern::pattern {
 
 				if (convert == Convert::all) {
 					if (const auto value_match = math_rep::IntermediateValueMatch::cast(src_ref)) {
-						const TypedIdx mtch_idx = intermediate_to_pattern(src_ref.new_at(value_match->mtch_idx()), dst_store, side, convert);
-						const TypedIdx copy_idx = intermediate_to_pattern(src_ref.new_at(value_match->copy_idx()), dst_store, side, convert);
+						const PnTypedIdx mtch_idx = intermediate_to_pattern(src_ref.new_at(value_match->mtch_idx()), dst_store, side, convert);
+						const PnTypedIdx copy_idx = intermediate_to_pattern(src_ref.new_at(value_match->copy_idx()), dst_store, side, convert);
 						const std::uint32_t match_data_idx = value_match->match_data_idx();
 						const Form form = value_match->form();
 
 						const std::size_t dst_index = dst_store.allocate_one();
 						dst_store.at(dst_index) = ValueMatchVariable(mtch_idx, copy_idx, match_data_idx, form);
 						return PnTypedIdx(dst_index, PnNode::value_match);
+					}
+					if (const auto value_proxy = math_rep::IntermediateValueProxy::cast(src_ref)) {
+						return PnTypedIdx(value_proxy->index(), PnNode::value_proxy);
 					}
 				}
 			} [[fallthrough]]; //if NamedFn did not represent a match variable just keep it as is
@@ -945,13 +845,14 @@ namespace bmath::intern::pattern {
 				return PnTypedIdx(dst_index, src_ref.type);
 			} break;
 			case Type(PnNode::value_match): {
-				const pattern::ValueMatchVariable src_var = *src_ref;
-				auto dst_var = pattern::ValueMatchVariable(src_var.match_data_idx, src_var.form);
-				dst_var.mtch_idx = intermediate_to_pattern(src_ref.new_at(src_var.mtch_idx), dst_store, side, convert);
-				dst_var.copy_idx = intermediate_to_pattern(src_ref.new_at(src_var.copy_idx), dst_store, side, convert);
-				const std::size_t dst_index = dst_store.allocate_one();
-				dst_store.at(dst_index) = dst_var;
-				return PnTypedIdx(dst_index, src_ref.type);
+				assert(false);
+				//const pattern::ValueMatchVariable src_var = *src_ref;
+				//auto dst_var = pattern::ValueMatchVariable(src_var.match_data_idx, src_var.form);
+				//dst_var.mtch_idx = intermediate_to_pattern(src_ref.new_at(src_var.mtch_idx), dst_store, side, convert);
+				//dst_var.copy_idx = intermediate_to_pattern(src_ref.new_at(src_var.copy_idx), dst_store, side, convert);
+				//const std::size_t dst_index = dst_store.allocate_one();
+				//dst_store.at(dst_index) = dst_var;
+				//return PnTypedIdx(dst_index, src_ref.type);
 			} break;
 			case Type(PnNode::value_proxy): //return same ref, as proxy does not own any nodes in src_store anyway (index has different meaning)
 				[[fallthrough]];
@@ -1407,6 +1308,5 @@ namespace bmath::intern::pattern {
 		} //recursive_match_and_replace
 
 	} //namespace match
-
 
 } //namespace bmath::intern::pattern

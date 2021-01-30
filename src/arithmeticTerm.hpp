@@ -196,13 +196,8 @@ namespace bmath::intern {
 			std::uint32_t match_data_idx; //indexes in MatchData::value_match_data
 			Form form = Form::real;
 
-			[[deprecated]] constexpr ValueMatchVariable(std::uint32_t new_match_data_idx, Form new_form) noexcept
-				:mtch_idx(TypedIdx(new_match_data_idx, PnNode::value_proxy)),
-				copy_idx(TypedIdx(new_match_data_idx, PnNode::value_proxy)),
-				match_data_idx(new_match_data_idx), form(new_form)
-			{}
-
-			constexpr ValueMatchVariable(TypedIdx new_match, TypedIdx new_copy, std::uint32_t new_match_data_idx, Form new_form) noexcept
+			constexpr ValueMatchVariable(TypedIdx new_match, TypedIdx new_copy, 
+				std::uint32_t new_match_data_idx, Form new_form) noexcept
 				:mtch_idx(new_match), copy_idx(new_copy), match_data_idx(new_match_data_idx), form(new_form)
 			{}
 		};
@@ -526,10 +521,6 @@ namespace bmath::intern {
 
 namespace bmath {
 
-	namespace intern::pattern {
-		struct RewriteRule;
-	}
-
 	class Term
 	{
 	public:
@@ -549,7 +540,6 @@ namespace bmath {
 
 		intern::MutRef mut_ref() noexcept;
 		intern::Ref ref() const noexcept;
-		bool match_and_replace(const intern::pattern::RewriteRule& p) noexcept; //returns true if match was found 
 	};	//class Term
 
 }	//namespace bmath

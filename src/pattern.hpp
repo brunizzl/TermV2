@@ -133,6 +133,10 @@ namespace bmath::intern::pattern {
 
 	bool has_form(const Complex& nr, const Form form);
 
+
+	enum class Side { lhs, rhs }; //site to match against vs. side to copy from
+	enum class Convert { all, basic }; //if basic, only TreeMatch and MultiMatch are converted
+
 	//representation of RewriteRule without pattern specific elements
 	// -> allows manipulation of rule with other rules
 	//can not be used to match against, but RewriteRule can be build from this
@@ -147,17 +151,13 @@ namespace bmath::intern::pattern {
 		Ref lhs_ref() const noexcept { return Ref(this->store, this->lhs_head); }
 		Ref rhs_ref() const noexcept { return Ref(this->store, this->rhs_head); }
 
-		IntermediateRewriteRule(std::string name);
+		IntermediateRewriteRule(std::string name, Convert convert = Convert::all);
 		std::string to_string() const;
 		std::string lhs_memory_layout() const;
 		std::string rhs_memory_layout() const;
 		std::string lhs_tree(const std::size_t offset = 0u) const;
 		std::string rhs_tree(const std::size_t offset = 0u) const;
 	};
-
-
-	enum class Side { lhs, rhs }; //site to match against vs. side to copy from
-	enum class Convert { all, basic }; //if basic, only TreeMatch and MultiMatch are converted
 
 	//this is the form needed for a rule to be applied, however once it is in this form, 
 	//  it can not be manipulated further by other rules
@@ -179,22 +179,6 @@ namespace bmath::intern::pattern {
 
 	//algorithms specific to patterns
 	namespace pn_tree {
-
-		//returns pointer to position in parent of value_match, where value_match is to be held in future
-		// (currently value_match is only somewhere in the subtree that it will own, not nesseccarily at the root.
-		//assumes head to be passed at reference to its own storage position
-		TypedIdx* find_value_match_subtree(MathStore& store, TypedIdx& head, const TypedIdx value_match);
-
-		//changes value_match from its state holding two value_proxy directly to actually
-		//having copy_idx and match_idx initialized (thus value_match also bubbles up a bit in term)
-		void rearrange_value_match(MathStore& store, TypedIdx& head, const TypedIdx value_match);
-
-		struct Equation { TypedIdx lhs_head, rhs_head; };
-
-		//reorders lhs and rhs until to_isolate is lhs_head, returns updated lhs_head and rhs_head
-		//(possible other subtrees identical to to_isolate are not considered, thus the name prefix)
-		//currently only used in rearrange_value_match, thus quite specialized
-		[[nodiscard]] Equation stupid_solve_for(MathStore& store, Equation eq, const TypedIdx to_isolate);
 
 		//mostly stripped down version of tree::combine_values_exact to find calculate SharedValueDatum.value
 		// from the start_val taken out of matched term
@@ -265,7 +249,7 @@ namespace bmath::intern::pattern {
 			//maximal number of unrelated ValueMatchVariables allowed per pattern
 			static constexpr std::size_t max_value_match_count = 2u;
 			//maximal number of unrelated TreeMatchVariables allowed per pattern
-			static constexpr std::size_t max_tree_match_count = 4u;
+			static constexpr std::size_t max_tree_match_count = 8u;
 			//maximal number of sums and products allowed per pattern
 			static constexpr std::size_t max_variadic_count = 8u;    //(max multi_match count is same)
 
@@ -311,7 +295,6 @@ namespace bmath::intern::pattern {
 		[[nodiscard]] TypedIdx copy(const pattern::UnsavePnRef pn_ref, const MatchData& match_data,
 			const MathStore& src_store, MathStore& dst_store);
 
-		//this function is the primary function designed to be called from outside of this namespace.
 		//the function will try to match the head of in with the head of ref and if so, replace the matched part with out.
 		//if a transformation happened, Just the new subterm is returned to replace the TypedIdx 
 		//  of the old subterm in its parent, else nothing.
@@ -325,6 +308,31 @@ namespace bmath::intern::pattern {
 		//  meaning ref is no longer valid and caller needs to replace ref with *return_value.first  
 		[[nodiscard]] std::pair<std::optional<TypedIdx>, bool> recursive_match_and_replace(
 			const pattern::UnsavePnRef in, const pattern::UnsavePnRef out, const MutRef ref);
+
+
+		//all rules in [start, stop) are applied until no matching rule is found. in between tree::establish_basic_order is called
+		//the new head of ref is retuned
+		template<intern::IterOver<const intern::pattern::RewriteRule> Iter>
+		TypedIdx apply_rule_range(const Iter start, const Iter stop, const MutRef ref)
+		{
+			TypedIdx head = tree::establish_basic_order(ref);
+		try_all_rules:
+			for (auto rule = start; rule != stop; ++rule) {
+				const auto [head_match, deeper_match] =
+					recursive_match_and_replace(rule->lhs_ref(), rule->rhs_ref(), ref.new_at(head));
+
+				if (head_match) {
+					head = *head_match;
+				}
+				if (head_match || deeper_match) {
+					//assert(tree::valid_storage(ref.new_at(head)));
+					head = tree::establish_basic_order(ref.new_at(head));
+					//assert(tree::valid_storage(ref.new_at(head)));
+					goto try_all_rules;
+				}
+			}
+			return head;
+		}
 
 	} //namespace match
 

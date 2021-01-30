@@ -3,6 +3,7 @@
 #include <type_traits>
 #include <concepts>
 #include <compare>
+#include <iterator>
 
 //general concepts
 namespace bmath::intern {
@@ -56,6 +57,15 @@ namespace bmath::intern {
 
 	template<typename T, template<typename...> class Template>
 	concept InstanceOf = DecideInstanceOf<T, Template>::value;
+
+
+	/////////////////   IterOver
+
+	template<typename I, typename T>
+	concept IterOver = std::random_access_iterator<I> &&
+		requires (I i) {
+			{*i} -> std::same_as<T&>;
+	};
 
 } //namespace bmath::intern
 

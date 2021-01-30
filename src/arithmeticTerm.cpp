@@ -516,13 +516,14 @@ namespace bmath::intern {
 				return TypedIdx(dst_index, src_ref.type);
 			} break;
 			case Type(PnNode::value_match): {
-				const pattern::ValueMatchVariable src_var = *src_ref;
-				auto dst_var = pattern::ValueMatchVariable(src_var.match_data_idx, src_var.form);
-				dst_var.mtch_idx = tree::copy(src_ref.new_at(src_var.mtch_idx), dst_store);
-				dst_var.copy_idx = tree::copy(src_ref.new_at(src_var.copy_idx), dst_store);
-				const std::size_t dst_index = dst_store.allocate_one();
-				dst_store.at(dst_index) = dst_var;
-				return TypedIdx(dst_index, src_ref.type);
+				assert(false);
+				//const pattern::ValueMatchVariable src_var = *src_ref;
+				//auto dst_var = pattern::ValueMatchVariable(src_var.match_data_idx, src_var.form);
+				//dst_var.mtch_idx = tree::copy(src_ref.new_at(src_var.mtch_idx), dst_store);
+				//dst_var.copy_idx = tree::copy(src_ref.new_at(src_var.copy_idx), dst_store);
+				//const std::size_t dst_index = dst_store.allocate_one();
+				//dst_store.at(dst_index) = dst_var;
+				//return TypedIdx(dst_index, src_ref.type);
 			} break;
 			case Type(PnNode::value_proxy): //return same ref, as proxy does not own any nodes in src_store anyway (index has different meaning)
 				[[fallthrough]];
@@ -713,15 +714,6 @@ namespace bmath {
 	Ref Term::ref() const noexcept
 	{
 		return Ref(this->store, this->head);
-	}
-
-	bool Term::match_and_replace(const intern::pattern::RewriteRule& p) noexcept
-	{
-		const auto [head_match, deeper_match] = pattern::match::recursive_match_and_replace(p.lhs_ref(), p.rhs_ref(), this->mut_ref());
-		if (head_match) {
-			this->head = *head_match;
-		}
-		return head_match || deeper_match;
 	}
 
 } //namespace bmath
