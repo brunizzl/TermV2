@@ -10,7 +10,6 @@ TODO:
 important:
  - sort pattern with care for match variables
  - distinguish between owning match variable and nonowning match variable
- - build and adjust IntermediateRewriteRule only using MathType
  - adjust valid_storage() to allow forest
  - let type_table in ioArithmetic use names of fn
  - make pattern and usual term two distinct types (again...)

@@ -51,38 +51,38 @@ namespace bmath::intern {
 	[[nodiscard]] Head find_head_type(const ParseView view);
 
 	//returns head
-	[[nodiscard]] TypedIdx build(MathStore& store, ParseView view);
+	[[nodiscard]] MathIdx build(MathStore& store, ParseView view);
 
 
 	template<typename Store_T>
-	[[nodiscard]] TypedIdx build_value(Store_T& store, const std::complex<double> complex) noexcept
+	[[nodiscard]] MathIdx build_value(Store_T& store, const std::complex<double> complex) noexcept
 	{
 		const std::size_t result_idx = store.allocate_one();
 		new (&store.at(result_idx)) MathUnion(complex);
-		return TypedIdx(result_idx, Type(Literal::complex));
+		return MathIdx(result_idx, Literal::complex);
 	}
 
 	template<typename Store_T>
-	[[nodiscard]] TypedIdx build_negated(Store_T& store, const TypedIdx to_negate) noexcept
+	[[nodiscard]] MathIdx build_negated(Store_T& store, const MathIdx to_negate) noexcept
 	{
-		const TypedIdx minus_1 = build_value(store, -1.0);
+		const MathIdx minus_1 = build_value(store, -1.0);
 		const std::size_t result_idx = store.allocate_one();
 		new (&store.at(result_idx)) MathUnion(IndexVector({ minus_1, to_negate }));
-		return TypedIdx(result_idx, Type(Comm::product));
+		return MathIdx(result_idx, Comm::product);
 	}
 
 	template<typename Store_T>
-	[[nodiscard]] TypedIdx build_inverted(Store_T& store, const TypedIdx to_invert) noexcept
+	[[nodiscard]] MathIdx build_inverted(Store_T& store, const MathIdx to_invert) noexcept
 	{
-		const TypedIdx minus_1 = build_value(store, -1.0);
+		const MathIdx minus_1 = build_value(store, -1.0);
 		const std::size_t result_idx = store.allocate_one();
 		new (&store.at(result_idx)) MathUnion(IndexVector({ to_invert, minus_1 }));
-		return TypedIdx(result_idx, Type(Fn::pow));
+		return MathIdx(result_idx, Fn::pow);
 	}
 
 	struct SumTraits
 	{
-		static constexpr Type type_name = Type(Comm::sum);
+		static constexpr MathType type_name = MathType(Comm::sum);
 		static constexpr char operator_char = '+';
 		static constexpr char inverse_operator_char = '-';
 		static constexpr Token operator_token = token::sum;
@@ -90,7 +90,7 @@ namespace bmath::intern {
 
 	struct ProductTraits
 	{
-		static constexpr Type type_name = Type(Comm::product);
+		static constexpr MathType type_name = MathType(Comm::product);
 		static constexpr char operator_char = '*';
 		static constexpr char inverse_operator_char = '/';
 		static constexpr Token operator_token = token::product;
@@ -106,9 +106,9 @@ namespace bmath::intern {
 	//  e.g. for sum, it should turn "a" -> "a*(-1)", for product "a" -> "a^(-1)"
 	//BuildAny can build any type of term from a ParseView, this function will very likely already call build_variadic.
 	template<typename VariadicTraits, typename Store_T, typename BuildInverse, typename BuildAny>
-	TypedIdx build_variadic(Store_T& store, ParseView input, std::size_t op_idx, BuildInverse build_inverse, BuildAny build_any)
+	MathIdx build_variadic(Store_T& store, ParseView input, std::size_t op_idx, BuildInverse build_inverse, BuildAny build_any)
 	{
-		StupidBufferVector<TypedIdx, 16> result_buffer;
+		StupidBufferVector<MathIdx, 16> result_buffer;
 		{
 			const ParseView subterm_view = input.steal_prefix(op_idx);
 			result_buffer.push_back(build_any(store, subterm_view));
@@ -118,7 +118,7 @@ namespace bmath::intern {
 			input.remove_prefix(1u); //remove current_operator;
 			op_idx = find_first_of_skip_pars(input.tokens, VariadicTraits::operator_token);
 			const ParseView subterm_view = input.steal_prefix(op_idx);
-			const TypedIdx subterm = build_any(store, subterm_view);
+			const MathIdx subterm = build_any(store, subterm_view);
 			switch (current_operator) {
 			case VariadicTraits::operator_char:
 				result_buffer.push_back(subterm);
@@ -129,15 +129,15 @@ namespace bmath::intern {
 			default: assert(false);
 			}
 		}
-		return TypedIdx(IndexVector::build(store, result_buffer), VariadicTraits::type_name);
+		return MathIdx(IndexVector::build(store, result_buffer), VariadicTraits::type_name);
 	} //build_variadic
 
 	template<typename Store_T, typename BuildAny>
-	[[nodiscard]] TypedIdx build_function(Store_T& store, ParseView input, const std::size_t open_par, BuildAny build_any)
+	[[nodiscard]] MathIdx build_function(Store_T& store, ParseView input, const std::size_t open_par, BuildAny build_any)
 	{
 		const std::string_view name = input.to_string_view(0u, open_par);
 
-		StupidBufferVector<TypedIdx, 12> result_parameters;
+		StupidBufferVector<MathIdx, 12> result_parameters;
 		input.remove_suffix(1u);
 		input.remove_prefix(open_par + 1u);	//only arguments are left
 		if (input.size()) [[likely]] { //else no parameters at all
@@ -155,13 +155,13 @@ namespace bmath::intern {
 		if (const Fn type = fn::fn_type_of(name); type != Fn::COUNT) {
 			if (result_parameters.size() != fn::arity(type)) [[unlikely]] throw ParseFailure{ input.offset, 
 				"wrong numer of function parameters" };
-			return TypedIdx(IndexVector::build(store, result_parameters), Type(type));
+			return MathIdx(IndexVector::build(store, result_parameters), type);
 		}
 		else if (const Variadic type = fn::variadic_type_of(name); type != Variadic::COUNT) {
-			return TypedIdx(IndexVector::build(store, result_parameters), Type(type));
+			return MathIdx(IndexVector::build(store, result_parameters), type);
 		}
 		else { //build NamedFn
-			return fn::build_named_fn(store, name, result_parameters);
+			return fn::build_named_fn<MathType>(store, name, result_parameters);
 		}
 	} //build_function
 
@@ -175,7 +175,7 @@ namespace bmath::intern {
 		//prettier, but also slower
 		std::string to_pretty_string(const Ref ref, const int parent_infixr = 0);
 
-		std::string to_memory_layout(const MathStore& store, const std::initializer_list<const TypedIdx> heads);
+		std::string to_memory_layout(const MathStore& store, const std::initializer_list<const MathIdx> heads);
 
 		//returns tree representation of ref
 		//offset specifies how far the whole tree is shifted to the right

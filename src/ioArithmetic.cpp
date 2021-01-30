@@ -15,26 +15,20 @@ namespace bmath::intern {
 	namespace print {
 
 		//operator precedence (used to decide if parentheses are nessecary in out string)
-		constexpr int infixr(Type type) 
+		constexpr int infixr(MathType type) 
 		{ 
-			constexpr auto infixr_table = std::to_array<std::pair<Type, int>>({
-				{ Type(NamedFn{})          , 0 },
-				{ Type(Comm::sum          ), 2 },
-				{ Type(Comm::product      ), 4 },	
-				{ Type(Fn::pow            ), 5 }, //not between other function types -> assumed to be printed with '^'  
-				{ Type(Literal::variable  ), 6 },
-				{ Type(Literal::complex   ), 6 }, //may be printed as sum/product itself, then (maybe) has to add parentheses on its own
-				{ Type(PnNode::tree_match ), 6 },
-				{ Type(PnNode::value_match), 6 },
-				{ Type(PnNode::value_proxy), 6 },
-				{ Type(MultiPn::summands  ), 6 },
-				{ Type(MultiPn::factors   ), 6 },
-				{ Type(MultiPn::params    ), 6 },
+			constexpr auto infixr_table = std::to_array<std::pair<MathType, int>>({
+				{ MathType(NamedFn{})          , 0 },
+				{ MathType(Comm::sum          ), 2 },
+				{ MathType(Comm::product      ), 4 },	
+				{ MathType(Fn::pow            ), 5 }, //not between other function types -> assumed to be printed with '^'  
+				{ MathType(Literal::variable  ), 6 },
+				{ MathType(Literal::complex   ), 6 }, //may be printed as sum/product itself, then (maybe) has to add parentheses on its own
 			});
 			static_assert(std::is_sorted(infixr_table.begin(), infixr_table.end(), [](auto a, auto b) { return a.second < b.second; }));
 
-			constexpr std::pair<Type, int> default_infixr = std::make_pair(Type(0u), 0);
-			return search(infixr_table, &std::pair<Type, int>::first, type, default_infixr).second;
+			constexpr std::pair<MathType, int> default_infixr = std::make_pair(MathType(0u), 0);
+			return search(infixr_table, &std::pair<MathType, int>::first, type, default_infixr).second;
 		}
 
 		void append_complex(const std::complex<double> val, std::string& dest, int parent_infixr)
@@ -60,17 +54,17 @@ namespace bmath::intern {
 			bool parentheses = false;
 
 			if (val.real() != 0.0 && val.imag() != 0.0) {
-				parentheses = parent_infixr > infixr(Type(Comm::sum));
+				parentheses = parent_infixr > infixr(MathType(Comm::sum));
 				buffer << val.real();
 				add_im_to_stream(val.imag(), Flag::showpos);		
 			}
 			else if (val.real() != 0.0 && val.imag() == 0.0) {
-				parentheses = val.real() < 0.0 && parent_infixr >= infixr(Type(Comm::sum));	//leading '-'
+				parentheses = val.real() < 0.0 && parent_infixr >= infixr(MathType(Comm::sum));	//leading '-'
 				buffer << val.real();
 			}
 			else if (val.real() == 0.0 && val.imag() != 0.0) {
-				parentheses = val.imag() < 0.0 && parent_infixr >= infixr(Type(Comm::sum));	//leading '-'	
-				parentheses |= parent_infixr > infixr(Type(Comm::product));	//*i
+				parentheses = val.imag() < 0.0 && parent_infixr >= infixr(MathType(Comm::sum));	//leading '-'	
+				parentheses |= parent_infixr > infixr(MathType(Comm::product));	//*i
 				add_im_to_stream(val.imag(), Flag::noshowpos);
 			}
 			else {
@@ -249,7 +243,7 @@ namespace bmath::intern {
 		}
 	} //find_head_type
 
-	TypedIdx build(MathStore& store, ParseView input)
+	MathIdx build(MathStore& store, ParseView input)
 	{
 		if (input.size() == 0u) [[unlikely]] throw ParseFailure{ input.offset, "recieved empty substring" };
 		Head head = find_head_type(input);
@@ -264,7 +258,7 @@ namespace bmath::intern {
 		} break;
 		case Head::Type::negate: {
 			input.remove_prefix(1u);  //remove minus sign
-			const TypedIdx to_negate = build(store, input);
+			const MathIdx to_negate = build(store, input);
 			return build_negated(store, to_negate);
 		} break;
 		case Head::Type::product: {
@@ -273,11 +267,11 @@ namespace bmath::intern {
 		case Head::Type::power: {
 			const auto base_view = input.steal_prefix(head.where);
 			input.remove_prefix(1u); //remove hat
-			const TypedIdx base = build(store, base_view);
-			const TypedIdx expo = build(store, input);
+			const MathIdx base = build(store, base_view);
+			const MathIdx expo = build(store, input);
 			const std::size_t result_index = store.allocate_one();
 			store.at(result_index) = IndexVector{ base, expo };
-			return TypedIdx(result_index, Type(Fn::pow));
+			return MathIdx(result_index, Fn::pow);
 		} break;
 		case Head::Type::complex_computable: {
 			return build_value(store, compute::eval_complex(input));
@@ -296,11 +290,11 @@ namespace bmath::intern {
 			return build_function(store, input, head.where, build);
 		} break;
 		case Head::Type::variable: {
-			return TypedIdx(CharVector::build(store, input.to_string_view()), Type(Literal::variable));
+			return MathIdx(CharVector::build(store, input.to_string_view()), Literal::variable);
 		} break;
 		default: 
 			assert(false); 
-			return TypedIdx();
+			return MathIdx();
 		}
 	} //build
 
@@ -308,32 +302,27 @@ namespace bmath::intern {
 
 		void append_to_string(const Ref ref, std::string& str, const int parent_infixr)
 		{
-			if (!ref.store->valid_idx(ref.index) && ref.type != PnNode::value_proxy && !ref.type.is<MultiPn>()) {
-				str.append("ERROR");
-				return;
-			}
-
 			const int own_infixr = infixr(ref.type);
 			if (own_infixr <= parent_infixr) {
 				str.push_back('(');
 			}
 
 			switch (ref.type) {
-			case Type(Comm::sum): {
+			case MathType(Comm::sum): {
 				const char* seperator = "";
 				for (const auto summand : fn::range(ref)) {
 					str.append(std::exchange(seperator, "+"));
 					print::append_to_string(ref.new_at(summand), str, own_infixr);
 				}
 			} break;
-			case Type(Comm::product): {
+			case MathType(Comm::product): {
 				const char* seperator = "";
 				for (const auto factor : fn::range(ref)) {
 					str.append(std::exchange(seperator, "*"));
 					print::append_to_string(ref.new_at(factor), str, own_infixr);
 				}
 			} break;
-			case Type(Fn::pow): {
+			case MathType(Fn::pow): {
 				const IndexVector& params = *ref;
 				print::append_to_string(ref.new_at(params[0]), str, own_infixr);
 				str.push_back('^');
@@ -359,51 +348,11 @@ namespace bmath::intern {
 					print::append_to_string(ref.new_at(param), str, own_infixr);
 				}
 			} break;
-			case Type(Literal::variable): {
+			case MathType(Literal::variable): {
 				str += std::string_view(ref->char_vec.data(), ref->char_vec.size());
 			} break;
-			case Type(Literal::complex): {
+			case MathType(Literal::complex): {
 				append_complex(ref->complex, str, parent_infixr);
-			} break;
-			case Type(PnNode::tree_match): {
-				const pattern::TreeMatchVariable& var = *ref;
-				str.append("{T");
-				str.append(std::to_string(var.match_data_idx));
-				if (var.restr != pattern::Restr::any) {
-					str.push_back(':');
-					str.append(name_of(var.restr));
-				}
-				str.push_back('}');
-			} break;
-			case Type(PnNode::value_match): {
-				const pattern::ValueMatchVariable& var = *ref;
-				str.append("{V");
-				str.append(std::to_string(var.match_data_idx));
-				str.push_back(':');
-				str.append(name_of(var.form));
-				str.append(", ");
-				print::append_to_string(ref.new_at(var.mtch_idx), str);
-				str.append(", ");
-				print::append_to_string(ref.new_at(var.copy_idx), str);
-				str.push_back('}');
-			} break;
-			case Type(PnNode::value_proxy): {
-				str.push_back('P');
-			} break;
-			case Type(MultiPn::summands): {
-				str.push_back('S');
-				str.append(std::to_string(ref.index));
-				str.append("...");
-			} break;
-			case Type(MultiPn::factors): {
-				str.push_back('F');
-				str.append(std::to_string(ref.index));
-				str.append("...");
-			} break;
-			case Type(MultiPn::params): {
-				str.push_back('P');
-				str.append(std::to_string(ref.index));
-				str.append("...");
 			} break;
 			}
 
@@ -429,7 +378,7 @@ namespace bmath::intern {
 			}; //get_negative_real
 
 			 //returns base, if ref is actually <base>^(-1)
-			const auto get_pow_neg1 = [get_negative_real](const Ref ref) -> std::optional<TypedIdx> {
+			const auto get_pow_neg1 = [get_negative_real](const Ref ref) -> std::optional<MathIdx> {
 				if (ref.type == Fn::pow) {
 					const IndexVector& params = *ref;
 					if (const auto expo = get_negative_real(ref.new_at(params[1]))) {
@@ -441,10 +390,10 @@ namespace bmath::intern {
 				return {};
 			}; //get_pow_neg1
 
-			struct GetNegativeProductResult { double negative_factor; StupidBufferVector<TypedIdx, 8> other_factors; };
+			struct GetNegativeProductResult { double negative_factor; StupidBufferVector<MathIdx, 8> other_factors; };
 			const auto get_negative_product = [get_negative_real](const Ref ref) -> std::optional<GetNegativeProductResult> {
 				if (ref.type == Comm::product) {
-					StupidBufferVector<TypedIdx, 8> other_factors;
+					StupidBufferVector<MathIdx, 8> other_factors;
 					double negative_factor;
 					bool found_negative_factor = false;
 					for (const auto factor : fn::range(ref)) {
@@ -472,13 +421,13 @@ namespace bmath::intern {
 					}
 					else if (const auto base = get_pow_neg1(ref.new_at(elem))) {
 						str += (first ? "1/" : "/"); 
-						str += print::to_pretty_string(ref.new_at(*base), infixr(Type(Comm::product)));
+						str += print::to_pretty_string(ref.new_at(*base), infixr(Comm::product));
 						first = false;
 					}
 					else {
 						str += (first ? "" : " ");
 						//str += (first ? "" : "*");
-						str += print::to_pretty_string(ref.new_at(elem), infixr(Type(Comm::product)));
+						str += print::to_pretty_string(ref.new_at(elem), infixr(Comm::product));
 						first = false;
 					}
 				}
@@ -486,7 +435,7 @@ namespace bmath::intern {
 			}; //append_product
 
 			switch (ref.type) {
-			case Type(Comm::sum): {
+			case MathType(Comm::sum): {
 				bool first = true;
 				for (const auto summand : fn::range(ref)) {
 					if (const auto val = get_negative_real(ref.new_at(summand))) {
@@ -515,14 +464,14 @@ namespace bmath::intern {
 				}
 				assert(!first && "found sum with zero summands");
 			} break;
-			case Type(Comm::product): {
+			case MathType(Comm::product): {
 				append_product(fn::range(ref));
 			} break;
-			case Type(Fn::pow): {
+			case MathType(Fn::pow): {
 				const IndexVector& params = *ref;
 				if (const OptDouble negative_expo = get_negative_real(ref.new_at(params[1]))) {
 					str += "1/";
-					str += print::to_pretty_string(ref.new_at(params[0]), infixr(Type(Fn::pow)));
+					str += print::to_pretty_string(ref.new_at(params[0]), infixr(Fn::pow));
 					if (*negative_expo != -1.0) {
 						str += "^";
 						append_real(-*negative_expo, str);
@@ -555,51 +504,11 @@ namespace bmath::intern {
 				}
 				str.push_back(')');
 			} break;
-			case Type(Literal::variable): {
+			case MathType(Literal::variable): {
 				str += std::string_view(ref->char_vec.data(), ref->char_vec.size());
 			} break;
-			case Type(Literal::complex): {
+			case MathType(Literal::complex): {
 				append_complex(ref->complex, str, parent_infixr);
-			} break;
-			case Type(PnNode::tree_match): {
-				const pattern::TreeMatchVariable& var = *ref;
-				str.append("{T");
-				str.append(std::to_string(var.match_data_idx));
-				if (var.restr != pattern::Restr::any) {
-					str.push_back(':');
-					str.append(name_of(var.restr));
-				}
-				str.push_back('}');
-			} break;
-			case Type(PnNode::value_match): {
-				const pattern::ValueMatchVariable& var = *ref;
-				str.append("{V");
-				str.append(std::to_string(var.match_data_idx));
-				str.push_back(':');
-				str.append(name_of(var.form));
-				str.append(", ");
-				print::append_to_string(ref.new_at(var.mtch_idx), str);
-				str.append(", ");
-				print::append_to_string(ref.new_at(var.copy_idx), str);
-				str.push_back('}');
-			} break;
-			case Type(PnNode::value_proxy): {
-				str.push_back('P');
-			} break;
-			case Type(MultiPn::summands): {
-				str.push_back('S');
-				str.append(std::to_string(ref.index));
-				str.append("...");
-			} break;
-			case Type(MultiPn::factors): {
-				str.push_back('F');
-				str.append(std::to_string(ref.index));
-				str.append("...");
-			} break;
-			case Type(MultiPn::params): {
-				str.push_back('P');
-				str.append(std::to_string(ref.index));
-				str.append("...");
 			} break;
 			}
 
@@ -636,14 +545,9 @@ namespace bmath::intern {
 				}
 			};
 
-			if (!ref.store->valid_idx(ref.index) && ref.type != PnNode::value_proxy && !ref.type.is<MultiPn>()) {
-				rows.front().append("ERROR");
-				return;
-			}
-
 			std::string& current_str = rows[ref.index];
 			switch (ref.type) {
-			case Type(Comm::sum): {
+			case MathType(Comm::sum): {
 				current_str.append("sum        : {");
 				const char* separator = "";
 				for (const auto elem : fn::range(ref)) {
@@ -654,7 +558,7 @@ namespace bmath::intern {
 				current_str.push_back('}');
 				show_typedidx_vec_nodes(ref.index, false);
 			} break;
-			case Type(Comm::product): {
+			case MathType(Comm::product): {
 				current_str.append("product    : {");
 				const char* separator = "";
 				const IndexVector test = *ref;
@@ -681,34 +585,13 @@ namespace bmath::intern {
 				current_str.push_back('}');
 				show_typedidx_vec_nodes(ref.index, false);
 			} break;
-			case Type(Literal::variable): {
+			case MathType(Literal::variable): {
 				current_str.append("variable   : ");
 				show_string_nodes(ref.index, false);
 			} break;
-			case Type(Literal::complex): {
+			case MathType(Literal::complex): {
 				current_str.append("value      : ");
 			} break;
-			case Type(PnNode::tree_match): {
-				current_str.append("tree_match : ");
-			} break;
-			case Type(PnNode::value_match): {
-				const pattern::ValueMatchVariable& var = *ref;
-				current_str.append("value: {m:");
-				current_str.append(std::to_string(var.mtch_idx.get_index()));
-				current_str.append(" c:");
-				current_str.append(std::to_string(var.copy_idx.get_index()));
-				current_str.push_back('}');
-				print::append_memory_row(ref.new_at(var.mtch_idx), rows);
-				print::append_memory_row(ref.new_at(var.copy_idx), rows);
-			} break;
-			case Type(PnNode::value_proxy): 
-				[[fallthrough]];
-			case Type(MultiPn::summands):
-				[[fallthrough]];
-			case Type(MultiPn::factors):
-				[[fallthrough]];
-			case Type(MultiPn::params):
-				return;
 			}
 
 			//append name of subterm to line
@@ -716,11 +599,11 @@ namespace bmath::intern {
 			print::append_to_string(ref, current_str, 0);
 		} //append_memory_row
 
-		std::string to_memory_layout(const MathStore& store, const std::initializer_list<const TypedIdx> heads)
+		std::string to_memory_layout(const MathStore& store, const std::initializer_list<const MathIdx> heads)
 		{
 			std::vector<std::string> rows(std::max(store.size(), pattern::match::MatchData::max_variadic_count), "");
 
-			std::string result((heads.size() == 1u) ? "   | head at index: " : "   | heads at indices: ");
+			std::string result((heads.size() == 1u) ? "  head at index: " : "  heads at indices: ");
 			result.reserve(store.size() * 15);
 			{
 				const char* separator = "";
@@ -735,6 +618,9 @@ namespace bmath::intern {
 				const BitVector used_positions = store.storage_occupancy();
 				for (int i = 0; i < store.size(); i++) {
 					if (i < 10) { //please std::format, i need you :(
+						result += "  ";
+					}
+					else if (i < 100) {
 						result += " ";
 					}
 					result += std::to_string(i);
@@ -793,53 +679,17 @@ namespace bmath::intern {
 					assert(ref.type.is<Variadic>());
 					current_str += fn::name_of(ref.type.to<Variadic>());
 				}
-				for (const TypedIdx param : fn::range(ref)) {
+				for (const MathIdx param : fn::range(ref)) {
 					print::append_tree_row(ref.new_at(param), rows, offset + tab_width);
 				}
 			} break;
-			case Type(Literal::variable): {
+			case MathType(Literal::variable): {
 				current_str += ' ';
 				current_str += std::string_view(ref->char_vec.data(), ref->char_vec.size());
 			} break;
-			case Type(Literal::complex): {
+			case MathType(Literal::complex): {
 				current_str += ' ';
 				print::append_complex(*ref, current_str, 0u);
-			} break;
-			case Type(PnNode::tree_match): {
-				const pattern::TreeMatchVariable& var = *ref;
-				current_str += "T";
-				current_str += std::to_string(var.match_data_idx);
-				if (var.restr != pattern::Restr::any) {
-					current_str += " :";
-					current_str += name_of(var.restr);
-				}
-			} break;
-			case Type(PnNode::value_match): {
-				const pattern::ValueMatchVariable& var = *ref;
-				current_str += 'V';
-				current_str += std::to_string(var.match_data_idx);
-				current_str += " :";
-				current_str += name_of(var.form);
-				print::append_tree_row(ref.new_at(var.mtch_idx), rows, offset + tab_width);
-				print::append_tree_row(ref.new_at(var.copy_idx), rows, offset + tab_width);
-			} break;
-			case Type(PnNode::value_proxy): {
-				current_str += 'P';			
-			} break;
-			case Type(MultiPn::summands): {
-				current_str += 'S';		
-				current_str += std::to_string(ref.index);
-				current_str += "...";
-			} break;
-			case Type(MultiPn::factors): {
-				current_str += 'F';		
-				current_str += std::to_string(ref.index);
-				current_str += "...";
-			} break;
-			case Type(MultiPn::params): {
-				current_str += 'P';		
-				current_str += std::to_string(ref.index);
-				current_str += "...";
 			} break;
 			}
 		} //append_tree_row

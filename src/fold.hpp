@@ -34,7 +34,7 @@ namespace bmath::intern::fold {
 		template<typename T> 
 		struct ReturnEarlyPossible <T, std::void_t<decltype(std::declval<T>().return_early())>> :std::true_type {};
 
-		static_assert(ReturnEarlyPossible<Find<TypedIdx>>::value);
+		static_assert(ReturnEarlyPossible<Find<int>>::value);
 		static_assert(ReturnEarlyPossible<FindTrue>::value);
 		static_assert(!ReturnEarlyPossible<bool>::value);
 
@@ -53,13 +53,6 @@ namespace bmath::intern::fold {
 					const Res_T elem_res = fold::simple_fold<Res_T>(ref.new_at(elem), apply);
 					if constexpr (ReturnEarlyPossible<Res_T>::value) { if (elem_res.return_early()) { return elem_res; } }
 				}
-			}
-			else if (ref.type == PnNode::value_match) {
-				const pattern::ValueMatchVariable var = *ref;
-				const Res_T elem_res_1 = fold::simple_fold<Res_T>(ref.new_at(var.mtch_idx), apply);
-				if constexpr (ReturnEarlyPossible<Res_T>::value) { if (elem_res_1.return_early()) { return elem_res_1; } }
-				const Res_T elem_res_2 = fold::simple_fold<Res_T>(ref.new_at(var.copy_idx), apply);
-				if constexpr (ReturnEarlyPossible<Res_T>::value) { if (elem_res_2.return_early()) { return elem_res_2; } }
 			}
 			return apply(ref); 
 		} //simple_fold
@@ -85,13 +78,6 @@ namespace bmath::intern::fold {
 				for (const auto elem : fn::range(ref)) {
 					acc.consume(fold::tree_fold<Res_T, Acc>(ref.new_at(elem), leaf_apply, init...));
 				}
-				return acc.result();
-			}
-			else if (ref.type == PnNode::value_match) {
-				Acc acc(ref, init...);
-				const pattern::ValueMatchVariable var = *ref;
-				acc.consume(fold::tree_fold<Res_T, Acc>(ref.new_at(var.mtch_idx), leaf_apply, init...));
-				acc.consume(fold::tree_fold<Res_T, Acc>(ref.new_at(var.copy_idx), leaf_apply, init...));
 				return acc.result();
 			}
 			else {

@@ -116,7 +116,7 @@ namespace bmath::intern {
 			switch (ref.type) {
 			default: 
 				assert(ref.type.is<Function>());
-				for (const TypedIdx elem : fn::unsave_range(ref)) {
+				for (const MathIdx elem : fn::unsave_range(ref)) {
 					tree::free(ref.new_at(elem));
 				}
 				if (ref.type.is<NamedFn>()) { //also free name
@@ -127,33 +127,16 @@ namespace bmath::intern {
 					IndexVector::free(*ref.store, ref.index);
 				}
 				break;
-			case Type(Literal::variable): 
+			case MathType(Literal::variable): 
 				CharVector::free(*ref.store, ref.index);
 				break;
-			case Type(Literal::complex):
+			case MathType(Literal::complex):
 				ref.store->free_one(ref.index);
-				break;
-			case Type(PnNode::tree_match):
-				ref.store->free_one(ref.index);
-				break;
-			case Type(PnNode::value_match): {
-				pattern::ValueMatchVariable& var = *ref;
-				tree::free(ref.new_at(var.mtch_idx));
-				tree::free(ref.new_at(var.copy_idx));
-				ref.store->free_one(ref.index);
-			} break;
-			case Type(PnNode::value_proxy):
-				break;
-			case Type(MultiPn::summands):
-				break;
-			case Type(MultiPn::factors):
-				break;
-			case Type(MultiPn::params):
 				break;
 			}
 		} //free
 
-		TypedIdx combine(const MutRef ref, const bool exact)
+		MathIdx combine(const MutRef ref, const bool exact)
 		{
 			const auto compute = [exact](auto operate) -> OptComplex {
 				if (exact) {
@@ -164,20 +147,20 @@ namespace bmath::intern {
 			};
 
 			switch (ref.type) {
-			case Type(Comm::sum): {
+			case MathType(Comm::sum): {
 				OptComplex value_acc = 0.0; //stores sum of values encountered as summands
-				StupidBufferVector<TypedIdx, 16> new_sum;
+				StupidBufferVector<MathIdx, 16> new_sum;
 
-				for (TypedIdx& summand : fn::unsave_range(ref)) {
+				for (MathIdx& summand : fn::unsave_range(ref)) {
 					summand = tree::combine(ref.new_at(summand), exact);
 					switch (summand.get_type()) {
-					case Type(Comm::sum):
-						for (const TypedIdx nested_summand : fn::unsave_range(ref.new_at(summand))) {
+					case MathType(Comm::sum):
+						for (const MathIdx nested_summand : fn::unsave_range(ref.new_at(summand))) {
 							new_sum.push_back(nested_summand);
 						}						
 						IndexVector::free(*ref.store, summand.get_index()); //free nested sum, but not nested summands
 						break;
-					case Type(Literal::complex):						
+					case MathType(Literal::complex):
 						if (const OptComplex res = compute([&] { return value_acc + ref.store->at(summand.get_index()).complex; })) {
 							value_acc = res;
 							tree::free(ref.new_at(summand));
@@ -203,20 +186,20 @@ namespace bmath::intern {
 				}
 				else {
 					IndexVector::free(*ref.store, ref.index); //free old sum (but not old summands)
-					return TypedIdx(IndexVector::build(*ref.store, new_sum), Type(Comm::sum));
+					return MathIdx(IndexVector::build(*ref.store, new_sum), MathType(Comm::sum));
 				}
 			} break;
-			case Type(Comm::product): {
+			case MathType(Comm::product): {
 				//unlike with summands, where an inversion is just flipping the sign bit, not every multiplicativly inverse of a floating point number 
 				//  can be stored as floating point number without rounding -> we need two value accumulators. sigh.
 				OptComplex factor_acc = 1.0;
 				OptComplex divisor_acc = 1.0; 
-				StupidBufferVector<TypedIdx, 16> new_product;
+				StupidBufferVector<MathIdx, 16> new_product;
 
-				for (TypedIdx& factor : fn::unsave_range(ref)) {
+				for (MathIdx& factor : fn::unsave_range(ref)) {
 					factor = tree::combine(ref.new_at(factor), exact);
 					switch (factor.get_type()) {
-					case Type(Fn::pow): {
+					case MathType(Fn::pow): {
 						IndexVector& power = *ref.new_at(factor);
 						if (power[0].get_type() == Literal::complex && power[1].get_type() == Literal::complex) {
 							std::array<OptComplex, 4> power_params = {
@@ -234,13 +217,13 @@ namespace bmath::intern {
 						}
 						new_product.push_back(factor);
 					} break;
-					case Type(Comm::product):
-						for (const TypedIdx nested_factor : fn::unsave_range(ref.new_at(factor))) {
+					case MathType(Comm::product):
+						for (const MathIdx nested_factor : fn::unsave_range(ref.new_at(factor))) {
 							new_product.push_back(nested_factor);
 						}
 						IndexVector::free(*ref.store, factor.get_index()); //free nested product, but not nested factors
 						break;
-					case Type(Literal::complex):
+					case MathType(Literal::complex):
 						if (const OptComplex res = compute([&] { return factor_acc * ref.store->at(factor.get_index()).complex; })) {
 							factor_acc = res;
 							tree::free(ref.new_at(factor));
@@ -266,7 +249,7 @@ namespace bmath::intern {
 					if (*divisor_acc != 1.0) {
 						const std::uint32_t divisor_idx = ref.store->allocate_one();
 						new (&ref.store->at(divisor_idx)) MathUnion(*divisor_acc);
-						new_product.push_back(build_inverted(*ref.store, TypedIdx(divisor_idx, Literal::complex)));
+						new_product.push_back(build_inverted(*ref.store, MathIdx(divisor_idx, Literal::complex)));
 					}
 				}
 
@@ -284,14 +267,14 @@ namespace bmath::intern {
 				}
 				else {
 					IndexVector::free(*ref.store, ref.index); //free old product (but not old factors)
-					return TypedIdx(IndexVector::build(*ref.store, new_product), Type(Comm::product));
+					return MathIdx(IndexVector::build(*ref.store, new_product), Comm::product);
 				}
 			} break;
-			case Type(Fn::force): {
-				TypedIdx& param = ref->parameters[0];
+			case MathType(Fn::force): {
+				MathIdx& param = ref->parameters[0];
 				param = tree::combine(ref.new_at(param), false);
 				if (param.get_type() == Literal::complex) {
-					const TypedIdx result_val = param;
+					const MathIdx result_val = param;
 					ref.store->free_one(ref.index);
 					return result_val;
 				}
@@ -313,11 +296,11 @@ namespace bmath::intern {
 					}
 				} 
 				else if (ref.type.is<Variadic>() && fn::is_associative(ref.type)) { //-> flatten nested instances allowed
-					StupidBufferVector<TypedIdx, 16> new_parameters;
-					for (const TypedIdx param : fn::unsave_range(ref)) {
-						const TypedIdx new_param = tree::combine(ref.new_at(param), exact);
+					StupidBufferVector<MathIdx, 16> new_parameters;
+					for (const MathIdx param : fn::unsave_range(ref)) {
+						const MathIdx new_param = tree::combine(ref.new_at(param), exact);
 						if (new_param.get_type() == ref.type) {
-							for (const TypedIdx nested_param : fn::unsave_range(ref.new_at(new_param))) {
+							for (const MathIdx nested_param : fn::unsave_range(ref.new_at(new_param))) {
 								new_parameters.push_back(nested_param);
 							}
 							IndexVector::free(*ref.store, new_param.get_index()); //free nested variadic itself, but not nested params
@@ -331,37 +314,20 @@ namespace bmath::intern {
 					}
 					else {
 						IndexVector::free(*ref.store, ref.index); //free old variadic itself, but not its params
-						return TypedIdx(IndexVector::build(*ref.store, new_parameters), ref.type);
+						return MathIdx(IndexVector::build(*ref.store, new_parameters), ref.type);
 					}
 				}
 				else {
 					assert(ref.type.is<Variadic>() || ref.type.is<NamedFn>()); 
-					for (TypedIdx& param : fn::unsave_range(ref)) {
+					for (MathIdx& param : fn::unsave_range(ref)) {
 						param = tree::combine(ref.new_at(param), exact);
 
 					}
 				}
+				break; 
+			case MathType(Literal::variable):
 				break;
-			case Type(Literal::variable): 
-				break;
-			case Type(Literal::complex): 
-				break;
-			case Type(PnNode::tree_match): 
-				break;
-			case Type(PnNode::value_match): {
-				pattern::ValueMatchVariable& var = *ref;
-				var.mtch_idx = tree::combine(ref.new_at(var.mtch_idx), exact);
-				var.copy_idx = tree::combine(ref.new_at(var.copy_idx), exact);
-				assert(var.mtch_idx.get_type() != Literal::complex); //subtree always contains value_proxy, thus should never be evaluatable    
-				assert(var.copy_idx.get_type() != Literal::complex);  //subtree always contains value_proxy, thus should never be evaluatable    
-			} break;
-			case Type(PnNode::value_proxy): 
-				break;
-			case Type(MultiPn::summands):
-				break;
-			case Type(MultiPn::factors):
-				break;
-			case Type(MultiPn::params):
+			case MathType(Literal::complex):
 				break;
 			}
 			return ref.typed_idx();
@@ -379,13 +345,12 @@ namespace bmath::intern {
 				return fst.size() <=> snd.size();
 			};
 
-
 			if (ref_1.type != ref_2.type) [[likely]] {
 				return generality(ref_1.type) <=> generality(ref_2.type);
 			}
 
 			switch (ref_1.type) {
-			case Type(NamedFn{}): {
+			case MathType(NamedFn{}): {
 				const CharVector& name_1 = fn::named_fn_name(ref_1);
 				const CharVector& name_2 = fn::named_fn_name(ref_2);
 				if (const auto cmp = compare_char_vecs(name_1, name_2); cmp != std::strong_ordering::equal) {
@@ -413,39 +378,11 @@ namespace bmath::intern {
 				}
 				return std::strong_ordering::equal;
 			} break;			
-			case Type(Literal::variable): {
+			case MathType(Literal::variable): {
 				return compare_char_vecs(*ref_1, *ref_2);
 			} break;
-			case Type(Literal::complex): {
+			case MathType(Literal::complex): {
 				return compare_complex(*ref_1, *ref_2);
-			} break;
-			case Type(PnNode::tree_match): {
-				const pattern::TreeMatchVariable& var_1 = *ref_1;
-				const pattern::TreeMatchVariable& var_2 = *ref_2;
-				return var_1.match_data_idx <=> var_2.match_data_idx;
-			} break;
-			case Type(PnNode::value_match): {
-				const pattern::ValueMatchVariable& var_1 = *ref_1;
-				const pattern::ValueMatchVariable& var_2 = *ref_2;
-				if (var_1.form != var_2.form) {
-					return var_1.form <=> var_2.form;
-				}
-				if (var_1.match_data_idx != var_2.match_data_idx) {
-					return var_1.match_data_idx <=> var_2.match_data_idx;
-				}
-				if (const auto cmp = tree::compare(ref_1.new_at(var_1.mtch_idx), ref_2.new_at(var_2.mtch_idx)); cmp != std::strong_ordering::equal) {
-					return cmp;
-				}
-				return tree::compare(ref_1.new_at(var_1.copy_idx), ref_2.new_at(var_2.copy_idx));
-			} break;
-			case Type(PnNode::value_proxy): 
-				[[fallthrough]];
-			case Type(MultiPn::summands): 
-				[[fallthrough]];
-			case Type(MultiPn::factors): 
-				[[fallthrough]];
-			case Type(MultiPn::params): {
-				return ref_1.index <=> ref_2.index;
 			} break;
 			}
 			assert(false); 
@@ -455,7 +392,7 @@ namespace bmath::intern {
 		void sort(const MutRef ref)
 		{
 			const auto sort_variadic = [](const MutRef ref) {
-				const auto compare_function = [&](const TypedIdx lhs, const TypedIdx rhs) {
+				const auto compare_function = [&](const MathIdx lhs, const MathIdx rhs) {
 					return tree::compare(Ref(*ref.store, lhs), Ref(*ref.store, rhs)) == std::strong_ordering::less;
 				};
 
@@ -483,63 +420,43 @@ namespace bmath::intern {
 			return fold::tree_fold<std::size_t, Acc>(ref, [](auto) { return 1u; });
 		} //count
 
-		[[nodiscard]] TypedIdx copy(const Ref src_ref, MathStore& dst_store)
+		[[nodiscard]] MathIdx copy(const Ref src_ref, MathStore& dst_store)
 		{
 			switch (src_ref.type) {			
 			default: {
 				assert(src_ref.type.is<Function>());
-				StupidBufferVector<TypedIdx, 12> dst_parameters;
-				for (const TypedIdx src_param : fn::save_range(src_ref)) {
-					const TypedIdx dst_param = tree::copy(src_ref.new_at(src_param), dst_store);
+				StupidBufferVector<MathIdx, 12> dst_parameters;
+				for (const MathIdx src_param : fn::save_range(src_ref)) {
+					const MathIdx dst_param = tree::copy(src_ref.new_at(src_param), dst_store);
 					dst_parameters.push_back(dst_param);
 				}
 				if (src_ref.type.is<NamedFn>()) {
 					const CharVector& name_ref = fn::named_fn_name(src_ref);
 					std::string name = std::string(name_ref.begin(), name_ref.end());
-					return fn::build_named_fn(dst_store, std::move(name), dst_parameters);
+					return fn::build_named_fn<MathType>(dst_store, std::move(name), dst_parameters);
 				}
 				else {
-					return TypedIdx(IndexVector::build(dst_store, dst_parameters), src_ref.type);
+					return MathIdx(IndexVector::build(dst_store, dst_parameters), src_ref.type);
 				}
 			} break;
-			case Type(Literal::variable): {
+			case MathType(Literal::variable): {
 				const CharVector& src_var = *src_ref;
 				const auto src_name = std::string(src_var.data(), src_var.size());
 				const std::size_t dst_index = CharVector::build(dst_store, src_name);
-				return TypedIdx(dst_index, src_ref.type);
+				return MathIdx(dst_index, src_ref.type);
 			} break;
-			case Type(Literal::complex): 
-				[[fallthrough]];
-			case Type(PnNode::tree_match): {
+			case MathType(Literal::complex): {
 				const std::size_t dst_index = dst_store.allocate_one();
 				dst_store.at(dst_index) = *src_ref; //bitwise copy of src
-				return TypedIdx(dst_index, src_ref.type);
+				return MathIdx(dst_index, src_ref.type);
 			} break;
-			case Type(PnNode::value_match): {
-				assert(false);
-				//const pattern::ValueMatchVariable src_var = *src_ref;
-				//auto dst_var = pattern::ValueMatchVariable(src_var.match_data_idx, src_var.form);
-				//dst_var.mtch_idx = tree::copy(src_ref.new_at(src_var.mtch_idx), dst_store);
-				//dst_var.copy_idx = tree::copy(src_ref.new_at(src_var.copy_idx), dst_store);
-				//const std::size_t dst_index = dst_store.allocate_one();
-				//dst_store.at(dst_index) = dst_var;
-				//return TypedIdx(dst_index, src_ref.type);
-			} break;
-			case Type(PnNode::value_proxy): //return same ref, as proxy does not own any nodes in src_store anyway (index has different meaning)
-				[[fallthrough]];
-			case Type(MultiPn::summands):
-				[[fallthrough]];
-			case Type(MultiPn::factors):
-				[[fallthrough]];
-			case Type(MultiPn::params):
-				return src_ref.typed_idx();
 			}
 			assert(false); 
-			return TypedIdx();
+			return MathIdx();
 		} //copy
 
 
-		bool contains(const UnsaveRef ref, const TypedIdx to_contain)
+		bool contains(const UnsaveRef ref, const MathIdx to_contain)
 		{
 			return fold::simple_fold<fold::FindTrue>(ref, 
 				[to_contain](const UnsaveRef ref) -> fold::FindTrue
@@ -547,71 +464,43 @@ namespace bmath::intern {
 			);
 		} //contains
 
-		TypedIdx establish_basic_order(MutRef ref)
+		MathIdx establish_basic_order(MutRef ref)
 		{
-			const TypedIdx combine_result = tree::combine(ref, true);
+			const MathIdx combine_result = tree::combine(ref, true);
 			tree::sort(ref.new_at(combine_result));
 			return combine_result;
 		} //establish_basic_order
 
-		TypedIdx* find_subtree_owner(MathStore& store, TypedIdx& head, const TypedIdx subtree)
-		{
-			if (head == subtree) {
-				return &head;
-			}
-
-			const Type type = head.get_type();
-			if (type.is<Function>()) {
-				for (TypedIdx& elem : fn::range(MutRef(store, head))) {
-					if (TypedIdx* const elem_res = tree::find_subtree_owner(store, elem, subtree)) {
-						return elem_res;
-					}
-				}
-			}
-			else if (type == PnNode::value_match) {
-				pattern::ValueMatchVariable& var = store.at(head.get_index()).value_match;
-				if (TypedIdx* const copy_res = tree::find_subtree_owner(store, var.copy_idx, subtree)) {
-					return copy_res;
-				}
-				if (TypedIdx* const match_res = tree::find_subtree_owner(store, var.mtch_idx, subtree)) {
-					return match_res;
-				}
-			}
-			return nullptr;
-
-		} //find_subtree_owner
-
 		bool valid_storage(const Ref ref)
 		{
 			BitVector store_positions = ref.store->storage_occupancy(); //every index in store is represented as bit here. false -> currently free	
-			const auto reset_and_check_position = [&store_positions](const Ref ref) -> fold::FindTrue { //doubles in function as 
-				if (!ref.type.is<MultiPn>() && !(ref.type == PnNode::value_proxy)) { //else index does not point in store anyway
-					const auto set_all_in_range = [&store_positions](std::size_t index, const std::size_t end) {
-						while (index < end) {
-							if (store_positions.test(index) == false) { //meaning eighter free or already reset by some other node
-								return true; //return found double use
-							}
-							store_positions.reset(index);
-							index++;
+			const auto reset_and_check_position = [&store_positions](const Ref ref) -> fold::FindTrue { //doubles in function as 				
+				const auto set_all_in_range = [&store_positions](std::size_t index, const std::size_t end) {
+					while (index < end) {
+						if (store_positions.test(index) == false) { //meaning eighter free or already reset by some other node
+							return true; //return found double use
 						}
-						return false;
-					};
-					if (ref.type.is<Function>()) {
-						const IndexVector& vec = *ref;
-						if (set_all_in_range(ref.index, ref.index + vec.node_count())) return true;
-						if (ref.type.is<NamedFn>()) {
-							const std::size_t name_index = fn::named_fn_name_index(ref);
-							const std::size_t name_node_count = fn::named_fn_name(ref).node_count();
-							if (set_all_in_range(name_index, name_index + name_node_count)) return true;
-						}
-					}					
-					else if (ref.type == Literal::variable) {
-						const CharVector& vec = *ref;
-						if (set_all_in_range(ref.index, ref.index + vec.node_count())) return true;
+						store_positions.reset(index);
+						index++;
 					}
-					else {
-						if (set_all_in_range(ref.index, ref.index + 1ull)) return true;
+					return false;
+				};
+
+				if (ref.type.is<Function>()) {
+					const IndexVector& vec = *ref;
+					if (set_all_in_range(ref.index, ref.index + vec.node_count())) return true;
+					if (ref.type.is<NamedFn>()) {
+						const std::size_t name_index = fn::named_fn_name_index(ref);
+						const std::size_t name_node_count = fn::named_fn_name(ref).node_count();
+						if (set_all_in_range(name_index, name_index + name_node_count)) return true;
 					}
+				}					
+				else if (ref.type == Literal::variable) {
+					const CharVector& vec = *ref;
+					if (set_all_in_range(ref.index, ref.index + vec.node_count())) return true;
+				}
+				else {
+					if (set_all_in_range(ref.index, ref.index + 1ull)) return true;
 				}
 				return false; //found no double use (not at this node anyway)
 			};
@@ -623,19 +512,19 @@ namespace bmath::intern {
 		{
 			using namespace pattern;
 			const auto test_for_variables = [](const UnsaveRef ref) -> fold::FindTrue {
-				return ref.type == Literal::variable || ref.type.is<MatchType>();
+				return ref.type == Literal::variable;
 			};
 			return fold::simple_fold<fold::FindTrue>(ref, test_for_variables);
 		} //contains_variables
 
-		TypedIdx search_variable(const UnsaveRef ref, const std::string_view name)
+		MathIdx search_variable(const UnsaveRef ref, const std::string_view name)
 		{
-			const auto test_for_name = [name](UnsaveRef ref) -> fold::Find<TypedIdx> {
+			const auto test_for_name = [name](UnsaveRef ref) -> fold::Find<MathIdx> {
 				return (ref.type == Literal::variable && std::string_view(ref->char_vec.data(), ref->char_vec.size()) == name) ?
-					fold::done(TypedIdx(ref.index, ref.type)) : //name was found -> cut tree evaluation here
-					fold::more(TypedIdx());
+					fold::done(MathIdx(ref.index, ref.type)) : //name was found -> cut tree evaluation here
+					fold::more(MathIdx());
 			};
-			return *fold::simple_fold<fold::Find<TypedIdx>>(ref, test_for_name);
+			return *fold::simple_fold<fold::Find<MathIdx>>(ref, test_for_name);
 		} //search_variable	
 
 	} //namespace tree

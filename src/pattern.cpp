@@ -30,13 +30,13 @@ namespace bmath::intern::pattern {
 			static constexpr std::string_view function_name = "__1TreeMatch";
 
 			template<StoreLike S>
-			static constexpr TypedIdx build(S& store, const std::uint32_t match_data_idx, const Restriction restr)
+			static constexpr MathIdx build(S& store, const std::uint32_t match_data_idx, const Restriction restr)
 			{
-				const std::array<TypedIdx, 2> parameters = {
+				const std::array<MathIdx, 2> parameters = {
 					build_value(store, Complex{ static_cast<double>(match_data_idx), 0.0 }),
-					TypedIdx(CharVector::build(store, name_of(restr)), Type(Literal::variable)),
+					MathIdx(CharVector::build(store, name_of(restr)), MathType(Literal::variable)),
 				};
-				return fn::build_named_fn(store, function_name, parameters);
+				return fn::build_named_fn<MathType>(store, function_name, parameters);
 			}
 
 			static constexpr std::optional<IntermediateTreeMatch> cast(const UnsaveRef new_ref)
@@ -82,13 +82,13 @@ namespace bmath::intern::pattern {
 			static constexpr std::string_view function_name = "__9MultiMatch";
 
 			template<StoreLike S>
-			static constexpr TypedIdx build(S& store, const std::uint32_t idx, const MultiPn type)
+			static constexpr MathIdx build(S& store, const std::uint32_t idx, const MultiPn type)
 			{
-				const std::array<TypedIdx, 2> parameters = {
+				const std::array<MathIdx, 2> parameters = {
 					build_value(store, Complex{ static_cast<double>(idx), 0.0 }),
-					TypedIdx(CharVector::build(store, name_of(type)), Type(Literal::variable)),
+					MathIdx(CharVector::build(store, name_of(type)), MathType(Literal::variable)),
 				};
-				return fn::build_named_fn(store, function_name, parameters);
+				return fn::build_named_fn<MathType>(store, function_name, parameters);
 			}
 
 			static constexpr std::optional<IntermediateMultiMatch> cast(const UnsaveRef new_ref)
@@ -134,12 +134,12 @@ namespace bmath::intern::pattern {
 			static constexpr std::string_view function_name = "__0ValueProxy";
 
 			template<StoreLike S>
-			static constexpr TypedIdx build(S& store, const std::uint32_t index)
+			static constexpr MathIdx build(S& store, const std::uint32_t index)
 			{
-				const std::array<TypedIdx, 1> parameters = {
+				const std::array<MathIdx, 1> parameters = {
 					build_value(store, Complex{ static_cast<double>(index), 0.0 }),
 				};
-				return fn::build_named_fn(store, function_name, parameters);
+				return fn::build_named_fn<MathType>(store, function_name, parameters);
 			}
 
 			static constexpr std::optional<IntermediateValueProxy> cast(const UnsaveRef new_ref)
@@ -179,15 +179,15 @@ namespace bmath::intern::pattern {
 			static constexpr std::string_view function_name = "__0ValueMatch";
 
 			template<StoreLike S>
-			static constexpr TypedIdx build(S& store, const std::uint32_t match_data_idx, const Form form)
+			static constexpr MathIdx build(S& store, const std::uint32_t match_data_idx, const Form form)
 			{
-				const std::array<TypedIdx, 4> parameters = {
+				const std::array<MathIdx, 4> parameters = {
 					IntermediateValueProxy::build(store, match_data_idx),
 					IntermediateValueProxy::build(store, match_data_idx),
 					build_value(store, Complex{ static_cast<double>(match_data_idx), 0.0 }),
-					TypedIdx(CharVector::build(store, name_of(form)), Type(Literal::variable)),
+					MathIdx(CharVector::build(store, name_of(form)), MathType(Literal::variable)),
 				};
-				return fn::build_named_fn(store, function_name, parameters);
+				return fn::build_named_fn<MathType>(store, function_name, parameters);
 			}
 
 			static constexpr std::optional<IntermediateValueMatch> cast(const UnsaveRef new_ref)
@@ -207,8 +207,8 @@ namespace bmath::intern::pattern {
 				return std::nullopt;
 			}
 
-			constexpr TypedIdx mtch_idx() const noexcept { return this->ref->parameters[0]; }
-			constexpr TypedIdx copy_idx() const noexcept { return this->ref->parameters[1]; }
+			constexpr MathIdx mtch_idx() const noexcept { return this->ref->parameters[0]; }
+			constexpr MathIdx copy_idx() const noexcept { return this->ref->parameters[1]; }
 
 			constexpr std::uint32_t match_data_idx() const noexcept
 			{
@@ -283,7 +283,7 @@ namespace bmath::intern::pattern {
 		}
 	} //NameLookupTable::NameLookupTable
 
-	TypedIdx NameLookupTable::insert_instance(MathStore& store, const ParseView input)
+	MathIdx NameLookupTable::insert_instance(MathStore& store, const ParseView input)
 	{
 		const auto name = input.to_string_view();
 		const auto search_name = [name](auto& vec) {
@@ -292,7 +292,7 @@ namespace bmath::intern::pattern {
 
 		if (const auto iter = search_name(this->tree_table); iter != this->tree_table.end()) {
 			const std::uint32_t match_data_idx = std::distance(this->tree_table.begin(), iter);
-			const TypedIdx result_typedidx = math_rep::IntermediateTreeMatch::build(store, match_data_idx, iter->restr);
+			const MathIdx result_typedidx = math_rep::IntermediateTreeMatch::build(store, match_data_idx, iter->restr);
 			(this->build_lhs ? 
 				iter->lhs_instances : 
 				iter->rhs_instances).push_back(result_typedidx);
@@ -300,7 +300,7 @@ namespace bmath::intern::pattern {
 		}
 		else if (const auto iter = search_name(this->value_table); iter != this->value_table.end()) {
 			const std::uint32_t match_data_idx = std::distance(this->value_table.begin(), iter);
-			const TypedIdx result_typedidx = math_rep::IntermediateValueMatch::build(store, match_data_idx, iter->form);
+			const MathIdx result_typedidx = math_rep::IntermediateValueMatch::build(store, match_data_idx, iter->form);
 			(this->build_lhs ? 
 				iter->lhs_instances : 
 				iter->rhs_instances).push_back(result_typedidx);
@@ -308,7 +308,7 @@ namespace bmath::intern::pattern {
 		}
 		else if (const auto iter = search_name(this->multi_table); iter != this->multi_table.end()) {
 			const std::uint32_t match_data_idx = std::distance(this->multi_table.begin(), iter);
-			const TypedIdx result_typedidx = math_rep::IntermediateMultiMatch::build(store, match_data_idx, iter->type);
+			const MathIdx result_typedidx = math_rep::IntermediateMultiMatch::build(store, match_data_idx, iter->type);
 			this->build_lhs ? 
 				++(iter->lhs_count) : 
 				++(iter->rhs_count);
@@ -317,7 +317,7 @@ namespace bmath::intern::pattern {
 		throw ParseFailure{ input.offset, "match variable has not been declared" };
 	} //NameLookupTable::insert_instance
 
-	TypedIdx PatternBuildFunction::operator()(MathStore& store, ParseView input)
+	MathIdx PatternBuildFunction::operator()(MathStore& store, ParseView input)
 	{
 		if (input.size() == 0u) [[unlikely]] throw ParseFailure{ input.offset, "recieved empty substring" };
 		Head head = find_head_type(input);
@@ -332,7 +332,7 @@ namespace bmath::intern::pattern {
 		} break;
 		case Head::Type::negate: {
 			input.remove_prefix(1u);  //remove minus sign
-			const TypedIdx to_negate = this->operator()(store, input);
+			const MathIdx to_negate = this->operator()(store, input);
 			return build_negated(store, to_negate);
 		} break;
 		case Head::Type::product: {
@@ -341,11 +341,11 @@ namespace bmath::intern::pattern {
 		case Head::Type::power: {
 			const auto base_view = input.steal_prefix(head.where);
 			input.remove_prefix(1u); //remove hat
-			const TypedIdx base = this->operator()(store, base_view);
-			const TypedIdx expo = this->operator()(store, input);
+			const MathIdx base = this->operator()(store, base_view);
+			const MathIdx expo = this->operator()(store, input);
 			const std::size_t result_index = store.allocate_one();
 			store.at(result_index) = IndexVector{ base, expo };
-			return TypedIdx(result_index, Type(Fn::pow));
+			return MathIdx(result_index, MathType(Fn::pow));
 		} break;
 		case Head::Type::complex_computable: {
 			return build_value(store, compute::eval_complex(input));
@@ -366,7 +366,7 @@ namespace bmath::intern::pattern {
 		case Head::Type::variable: {
 			if (input.chars[0u] == '\'') {
 				if (input.chars[input.size() - 1u] != '\'') [[unlikely]] throw ParseFailure{ input.offset + 1u, "found no matching \"'\"" };
-				return TypedIdx(CharVector::build(store, input.to_string_view(1u, input.size() - 1u)), Type(Literal::variable));
+				return MathIdx(CharVector::build(store, input.to_string_view(1u, input.size() - 1u)), MathType(Literal::variable));
 			}
 			else {
 				return this->table.insert_instance(store, input);
@@ -374,7 +374,7 @@ namespace bmath::intern::pattern {
 		} break;
 		default:
 			assert(false);
-			return TypedIdx();
+			return MathIdx();
 		}
 	} //PatternBuildFunction::operator()
 
@@ -483,23 +483,23 @@ namespace bmath::intern::pattern {
 
 		{ //add implicit MultiPn::summands / MultiPn::factors if outermost type of lhs is sum / product
 			if (this->lhs_head.get_type() == Comm::sum || this->lhs_head.get_type() == Comm::product) {
-				const Type head_type = this->lhs_head.get_type();
+				const MathType head_type = this->lhs_head.get_type();
 				const IndexVector& head_variadic = this->store.at(this->lhs_head.get_index());
 				if (!math_rep::IntermediateMultiMatch::cast(Ref(this->store, head_variadic.back()))) {
 					{ //adjust lhs
-						const TypedIdx new_multi = math_rep::IntermediateMultiMatch::build(this->store, match_variables_table.multi_table.size(),
+						const MathIdx new_multi = math_rep::IntermediateMultiMatch::build(this->store, match_variables_table.multi_table.size(),
 							head_type == Comm::sum ? MultiPn::summands : MultiPn::factors);
 						const std::size_t new_lhs_head_idx = this->store.allocate_one();
 						this->store.at(new_lhs_head_idx) = IndexVector({ this->lhs_head, new_multi });
-						this->lhs_head = TypedIdx(new_lhs_head_idx, head_type);
+						this->lhs_head = MathIdx(new_lhs_head_idx, head_type);
 						this->lhs_head = tree::establish_basic_order(this->lhs_mut_ref());
 					}
 					{ //adjust rhs
-						const TypedIdx new_multi = math_rep::IntermediateMultiMatch::build(this->store, match_variables_table.multi_table.size(),
+						const MathIdx new_multi = math_rep::IntermediateMultiMatch::build(this->store, match_variables_table.multi_table.size(),
 							head_type == Comm::sum ? MultiPn::summands : MultiPn::factors);
 						const std::size_t new_rhs_head_idx = this->store.allocate_one();
 						this->store.at(new_rhs_head_idx) = IndexVector({ this->rhs_head, new_multi });
-						this->rhs_head = TypedIdx(new_rhs_head_idx, head_type);
+						this->rhs_head = MathIdx(new_rhs_head_idx, head_type);
 						this->rhs_head = tree::establish_basic_order(this->rhs_mut_ref());
 					}
 				}
@@ -554,32 +554,32 @@ namespace bmath::intern::pattern {
 
 			//has to be filled in same order as MatchData::variadic_data
 			//index of element in old_multis equals value of corrected MultiPn occurence (plus the type)
-			std::vector<PnTypedIdx> old_multis;
+			std::vector<PnIdx> old_multis;
 			const auto catalog_lhs_occurences = [&old_multis](const PnRef head) {
 				struct Acc
 				{
-					std::vector<PnTypedIdx>* old_multis;
+					std::vector<PnIdx>* old_multis;
 					std::uint32_t own_idx;
 
-					constexpr Acc(const PnRef ref, std::vector<PnTypedIdx>* new_old_multis) noexcept
+					constexpr Acc(const PnRef ref, std::vector<PnIdx>* new_old_multis) noexcept
 						:old_multis(new_old_multis), own_idx(-1u)
 					{
 						if (ref.type.is<Variadic>()) { //these may contain MultiPn -> these have SharedVariadicDatum entry 
 							this->own_idx = this->old_multis->size(); //new last element 
-							this->old_multis->emplace_back(PnTypedIdx{}); //becomes only valid element if consume finds MultiPn
+							this->old_multis->emplace_back(PnIdx{}); //becomes only valid element if consume finds MultiPn
 						}
 					}
 
-					void consume(const PnTypedIdx child) noexcept
+					void consume(const PnIdx child) noexcept
 					{
 						if (child.get_type().is<MultiPn>()) {
 							this->old_multis->at(this->own_idx) = child;
 						}
 					}
 
-					auto result() noexcept { return PnTypedIdx{}; } //caution: only works as long as no multi is represented as Function
+					auto result() noexcept { return PnIdx{}; } //caution: only works as long as no multi is represented as Function
 				};
-				(void)fold::tree_fold<PnTypedIdx, Acc>(head, [](const PnRef ref) { return ref.typed_idx(); }, &old_multis);
+				(void)fold::tree_fold<PnIdx, Acc>(head, [](const PnRef ref) { return ref.typed_idx(); }, &old_multis);
 			};
 			catalog_lhs_occurences(this->lhs_ref());
 
@@ -597,7 +597,7 @@ namespace bmath::intern::pattern {
 									return true;
 								}
 								const std::uint32_t new_param_idx = std::distance(old_multis.begin(), new_param_pos);
-								param = PnTypedIdx(new_param_idx, param.get_type());
+								param = PnIdx(new_param_idx, param.get_type());
 							}
 						}
 					}
@@ -614,10 +614,10 @@ namespace bmath::intern::pattern {
 				const auto inspect_variadic = [test_lhs](const MutPnRef ref) -> fold::FindTrue {
 					if (ref.type == Comm::sum || ref.type == Comm::product) {
 						const PnType representing_type = ref.type == Comm::sum ? MultiPn::summands : MultiPn::factors;
-						for (PnTypedIdx& elem : fn::unsave_range(ref)) {
+						for (PnIdx& elem : fn::unsave_range(ref)) {
 							const PnType elem_type = elem.get_type();
 							if (elem_type == representing_type) {
-								elem = PnTypedIdx(elem.get_index(), MultiPn::params); //params also represent summands / factors
+								elem = PnIdx(elem.get_index(), MultiPn::params); //params also represent summands / factors
 							}
 							else if (test_lhs && elem_type.is<MultiPn>()) {
 								//in lhs a sum may never hold factors directly and vice versa
@@ -637,7 +637,7 @@ namespace bmath::intern::pattern {
 				const auto inspect_variadic = [](const PnRef ref) -> fold::FindTrue {
 					if (ref.type == Comm::sum || ref.type == Comm::product) {
 						std::size_t nr_value_matches = 0u;
-						for (const PnTypedIdx elem : fn::range(ref)) {
+						for (const PnIdx elem : fn::range(ref)) {
 							nr_value_matches += (elem.get_type() == PnNode::value_match);
 						}
 						return nr_value_matches > 1u;
@@ -653,7 +653,7 @@ namespace bmath::intern::pattern {
 				const auto inspect_variadic = [](const PnRef ref) -> fold::FindTrue {
 					if (ref.type == Comm::sum || ref.type == Comm::product) {
 						std::size_t nr_multi_matches = 0u;
-						for (const PnTypedIdx elem : fn::range(ref)) {
+						for (const PnIdx elem : fn::range(ref)) {
 							nr_multi_matches += elem.get_type().is<MultiPn>();
 						}
 						return nr_multi_matches > 1u;
@@ -703,9 +703,9 @@ namespace bmath::intern::pattern {
 
 		OptComplex eval_value_match(const UnsavePnRef ref, const Complex& start_val)
 		{
-			const auto get_divisor = [](const UnsavePnRef ref) -> std::optional<TypedIdx> {
+			const auto get_divisor = [](const UnsavePnRef ref) -> std::optional<PnIdx> {
 				if (ref.type == Fn::pow) {
-					const IndexVector& params = *ref;
+					const PnIdxVector& params = *ref;
 					if (params[1].get_type() == Literal::complex) {
 						if (ref.new_at(params[1])->complex == -1.0) {
 							return { params[0] }; //return just base
@@ -722,7 +722,7 @@ namespace bmath::intern::pattern {
 			};
 
 			switch (ref.type) {
-			case Type(Comm::sum): {
+			case PnType(Comm::sum): {
 				OptComplex result_val = 0.0;
 				for (auto& summand : fn::range(ref)) {
 					if (const OptComplex summand_val = eval_value_match(ref.new_at(summand), start_val)) {
@@ -735,11 +735,11 @@ namespace bmath::intern::pattern {
 				}
 				return result_val;
 			} break;
-			case Type(Comm::product): {
+			case PnType(Comm::product): {
 				OptComplex result_factor = 1.0;
 				OptComplex result_divisor = 1.0;
 				for (auto& factor : fn::range(ref)) {
-					if (const std::optional<TypedIdx> divisor = get_divisor(ref.new_at(factor))) {
+					if (const std::optional<PnIdx> divisor = get_divisor(ref.new_at(factor))) {
 						if (const OptComplex divisor_val = eval_value_match(ref.new_at(*divisor), start_val)) {
 							if (const OptComplex res = compute_exact([&] { return result_divisor * divisor_val; })) {
 								result_divisor = res;
@@ -759,7 +759,7 @@ namespace bmath::intern::pattern {
 			} break;
 			default: {
 				assert(ref.type.is<Fn>());
-				if (const std::optional<TypedIdx> divisor = get_divisor(ref)) {
+				if (const std::optional<PnIdx> divisor = get_divisor(ref)) {
 					if (const OptComplex divisor_val = eval_value_match(ref.new_at(*divisor), start_val)) {
 						return compute_exact([&] { return 1.0 / *divisor_val; });
 					}
@@ -767,9 +767,9 @@ namespace bmath::intern::pattern {
 						return {};
 					}
 				}
-				const IndexVector& params = *ref;
+				const PnIdxVector& params = *ref;
 				std::array<OptComplex, 4> res_vals;
-				for (std::size_t i = 0; i < fn::arity(ref.type); i++) {
+				for (std::size_t i = 0; i < fn::arity(ref.type.to<Function>()); i++) {
 					res_vals[i] = eval_value_match(ref.new_at(params[i]), start_val);
 					if (!res_vals[i]) {
 						return {};
@@ -777,94 +777,71 @@ namespace bmath::intern::pattern {
 				}
 				return compute_exact([&] { return fn::eval(ref.type.to<Fn>(), res_vals); });
 			} break;
-			case Type(Literal::complex):
+			case PnType(Literal::complex):
 				return ref->complex;
-			case Type(PnNode::value_proxy):
+			case PnType(PnNode::value_proxy):
 				return start_val;
 			}
 		} //eval_value_match
 
-		PnTypedIdx intermediate_to_pattern(const UnsaveRef src_ref, PnStore& dst_store, const Side side, const Convert convert)
+		PnIdx intermediate_to_pattern(const UnsaveRef src_ref, PnStore& dst_store, const Side side, const Convert convert)
 		{
 			switch (src_ref.type) {
-			case Type(NamedFn{}): {
+			case MathType(NamedFn{}): {
 				const std::string_view name = fn::named_fn_name(src_ref);
 				if (const auto tree_match = math_rep::IntermediateTreeMatch::cast(src_ref)) {
 					const std::size_t dst_index = dst_store.allocate_one();
 					dst_store.at(dst_index) = TreeMatchVariable{ tree_match->match_data_idx(), tree_match->restr() };
-					return PnTypedIdx(dst_index, PnNode::tree_match);
+					return PnIdx(dst_index, PnNode::tree_match);
 				}
 				if (const auto multi_match = math_rep::IntermediateMultiMatch::cast(src_ref)) {
-					return PnTypedIdx(multi_match->index(), multi_match->type());
+					return PnIdx(multi_match->index(), multi_match->type());
 				}
 
 				if (convert == Convert::all) {
 					if (const auto value_match = math_rep::IntermediateValueMatch::cast(src_ref)) {
-						const PnTypedIdx mtch_idx = intermediate_to_pattern(src_ref.new_at(value_match->mtch_idx()), dst_store, side, convert);
-						const PnTypedIdx copy_idx = intermediate_to_pattern(src_ref.new_at(value_match->copy_idx()), dst_store, side, convert);
+						const PnIdx mtch_idx = intermediate_to_pattern(src_ref.new_at(value_match->mtch_idx()), dst_store, side, convert);
+						const PnIdx copy_idx = intermediate_to_pattern(src_ref.new_at(value_match->copy_idx()), dst_store, side, convert);
 						const std::uint32_t match_data_idx = value_match->match_data_idx();
 						const Form form = value_match->form();
 
 						const std::size_t dst_index = dst_store.allocate_one();
 						dst_store.at(dst_index) = ValueMatchVariable(mtch_idx, copy_idx, match_data_idx, form);
-						return PnTypedIdx(dst_index, PnNode::value_match);
+						return PnIdx(dst_index, PnNode::value_match);
 					}
 					if (const auto value_proxy = math_rep::IntermediateValueProxy::cast(src_ref)) {
-						return PnTypedIdx(value_proxy->index(), PnNode::value_proxy);
+						return PnIdx(value_proxy->index(), PnNode::value_proxy);
 					}
 				}
 			} [[fallthrough]]; //if NamedFn did not represent a match variable just keep it as is
 			default: {
 				assert(src_ref.type.is<Function>());
-				StupidBufferVector<PnTypedIdx, 12> dst_parameters;
-				for (const TypedIdx src_param : fn::range(src_ref)) {
-					const PnTypedIdx dst_param = intermediate_to_pattern(src_ref.new_at(src_param), dst_store, side, convert);
+				StupidBufferVector<PnIdx, 12> dst_parameters;
+				for (const MathIdx src_param : fn::range(src_ref)) {
+					const PnIdx dst_param = intermediate_to_pattern(src_ref.new_at(src_param), dst_store, side, convert);
 					dst_parameters.push_back(dst_param);
 				}
 				if (src_ref.type.is<NamedFn>()) {
 					const CharVector& name_ref = fn::named_fn_name(src_ref);
-					return fn::build_named_fn(dst_store, name_ref, dst_parameters);
+					return fn::build_named_fn<PnType>(dst_store, name_ref, dst_parameters);
 				}
 				else {
-					return PnTypedIdx(IndexVector::build(dst_store, dst_parameters), src_ref.type);
+					return PnIdx(PnIdxVector::build(dst_store, dst_parameters), src_ref.type);
 				}
 			} break;
-			case Type(Literal::variable): {
+			case MathType(Literal::variable): {
 				const CharVector& src_var = *src_ref;
 				const std::size_t dst_index = CharVector::build(dst_store, src_var);
-				return PnTypedIdx(dst_index, src_ref.type);
+				return PnIdx(dst_index, src_ref.type);
 			} break;
-			case Type(Literal::complex): {
+			case MathType(Literal::complex): {
 				const std::size_t dst_index = dst_store.allocate_one();
 				dst_store.at(dst_index) = src_ref->complex; //bitwise copy of src
-				return PnTypedIdx(dst_index, src_ref.type);
+				return PnIdx(dst_index, src_ref.type);
 			} break;
-			case Type(PnNode::tree_match): {
-				const std::size_t dst_index = dst_store.allocate_one();
-				dst_store.at(dst_index) = src_ref->tree_match; //bitwise copy of src
-				return PnTypedIdx(dst_index, src_ref.type);
-			} break;
-			case Type(PnNode::value_match): {
-				assert(false);
-				//const pattern::ValueMatchVariable src_var = *src_ref;
-				//auto dst_var = pattern::ValueMatchVariable(src_var.match_data_idx, src_var.form);
-				//dst_var.mtch_idx = intermediate_to_pattern(src_ref.new_at(src_var.mtch_idx), dst_store, side, convert);
-				//dst_var.copy_idx = intermediate_to_pattern(src_ref.new_at(src_var.copy_idx), dst_store, side, convert);
-				//const std::size_t dst_index = dst_store.allocate_one();
-				//dst_store.at(dst_index) = dst_var;
-				//return PnTypedIdx(dst_index, src_ref.type);
-			} break;
-			case Type(PnNode::value_proxy): //return same ref, as proxy does not own any nodes in src_store anyway (index has different meaning)
-				[[fallthrough]];
-			case Type(MultiPn::summands):
-				[[fallthrough]];
-			case Type(MultiPn::factors):
-				[[fallthrough]];
-			case Type(MultiPn::params):
-				return PnTypedIdx(src_ref.index, PnType(src_ref.type));
 			}
 			assert(false);
-			return PnTypedIdx();
+			return PnIdx();
 		} //intermediate_to_pattern
 
 	} //namespace pn_tree
@@ -877,7 +854,7 @@ namespace bmath::intern::pattern {
 				return false;
 			}
 			switch (pn_ref.type) {
-			case Type(NamedFn{}): {
+			case PnType(NamedFn{}): {
 				const CharVector& name = fn::named_fn_name(ref);
 				const CharVector& pn_name = fn::named_fn_name(pn_ref);
 				if (std::string_view(name.data(), name.size()) != std::string_view(pn_name.data(), pn_name.size())) {
@@ -894,7 +871,7 @@ namespace bmath::intern::pattern {
 					return find_matching_permutation(pn_ref, ref, match_data, 0u, 0u);
 				}
 				else if (pn_ref.type.is<Fn>()) {
-					const IndexVector& pn_range = fn::range(pn_ref);
+					const PnIdxVector& pn_range = fn::range(pn_ref);
 					const IndexVector& range = fn::range(ref);
 					auto pn_iter = pn_range.begin();
 					const auto pn_stop = pn_range.end();
@@ -908,7 +885,7 @@ namespace bmath::intern::pattern {
 				}
 				else {
 					assert(pn_ref.type.is<NonComm>() || pn_ref.type.is<NamedFn>());
-					const IndexVector& pn_range = fn::range(pn_ref);
+					const PnIdxVector& pn_range = fn::range(pn_ref);
 					const IndexVector& range = fn::range(ref);
 					auto pn_iter = pn_range.begin();
 					auto iter = range.begin();
@@ -940,17 +917,17 @@ namespace bmath::intern::pattern {
 					return true;
 				}
 			} break;
-			case Type(Literal::variable): {
+			case PnType(Literal::variable): {
 				const CharVector& var = *ref;
 				const CharVector& pn_var = *pn_ref;
 				return std::string_view(var.data(), var.size()) == std::string_view(pn_var.data(), pn_var.size());
 			} break;
-			case Type(Literal::complex): {
+			case PnType(Literal::complex): {
 				const Complex& complex = *ref;
 				const Complex& pn_complex = *pn_ref;
 				return compare_complex(complex, pn_complex) == std::strong_ordering::equal;
 			} break;
-			case Type(PnNode::tree_match): {
+			case PnType(PnNode::tree_match): {
 				const TreeMatchVariable& var = *pn_ref;
 				if (!meets_restriction(ref, var.restr)) {
 					return false;
@@ -965,7 +942,7 @@ namespace bmath::intern::pattern {
 					return true;
 				}
 			} break;
-			case Type(PnNode::value_match): {
+			case PnType(PnNode::value_match): {
 				if (ref.type != Literal::complex) { //only this test allows us to pass *ref to evaluate this_value
 					return false;
 				}
@@ -984,14 +961,14 @@ namespace bmath::intern::pattern {
 					return true;
 				}
 			} break;
-			case Type(PnNode::value_proxy): //may only be encountered in pn_tree::eval_value_match (as value_match does no permutation_equals call)
+			case PnType(PnNode::value_proxy): //may only be encountered in pn_tree::eval_value_match (as value_match does no permutation_equals call)
 				assert(false);
 				return false;
-			case Type(MultiPn::summands): //not expected in matching side of pattern, only in replacement side
+			case PnType(MultiPn::summands): //not expected in matching side of pattern, only in replacement side
 				[[fallthrough]];
-			case Type(MultiPn::factors): //not expected in matching side of pattern, only in replacement side
+			case PnType(MultiPn::factors): //not expected in matching side of pattern, only in replacement side
 				[[fallthrough]];
-			case Type(MultiPn::params): //assumed to be handeled only as param of named_fn or ordered elements in Variadic 
+			case PnType(MultiPn::params): //assumed to be handeled only as param of named_fn or ordered elements in Variadic 
 				assert(false);
 				return false;
 			}
@@ -1002,28 +979,28 @@ namespace bmath::intern::pattern {
 			switch (pn_ref.type) {
 			default:
 				if (pn_ref.type.is<Function>()) {
-					for (const PnTypedIdx elem : fn::range(pn_ref)) {
+					for (const PnIdx elem : fn::range(pn_ref)) {
 						reset_own_matches(pn_ref.new_at(elem), match_data);
 					}
 				}
 				break;
-			case Type(PnNode::tree_match): {
+			case PnType(PnNode::tree_match): {
 				SharedTreeDatum& info = match_data.info(pn_ref->tree_match);
 				if (info.responsible == pn_ref.typed_idx()) {
 					info = SharedTreeDatum();
 				}
 			} break;
-			case Type(PnNode::value_match): {
+			case PnType(PnNode::value_match): {
 				SharedValueDatum& info = match_data.info(pn_ref->value_match);
 				if (info.responsible == pn_ref.typed_idx()) {
 					info = SharedValueDatum();
 				}
 			} break;
-			case Type(MultiPn::summands): //nothing to do for these (done by variadic)
+			case PnType(MultiPn::summands): //nothing to do for these (done by variadic)
 				break;
-			case Type(MultiPn::factors):
+			case PnType(MultiPn::factors):
 				break;
-			case Type(MultiPn::params):
+			case PnType(MultiPn::params):
 				break;
 			}
 		} //reset_own_matches
@@ -1035,7 +1012,7 @@ namespace bmath::intern::pattern {
 			}
 			if (pn_ref.type.is<Comm>()) {
 				SharedVariadicDatum& variadic_datum = match_data.variadic_data.at(pn_ref.index);
-				const IndexVector& pn_params = *pn_ref;
+				const PnIdxVector& pn_params = *pn_ref;
 				assert(variadic_datum.match_idx == ref.typed_idx()); //assert pn_ref is currently matched in ref
 				std::uint32_t pn_i = pn_params.size() - 1u;
 				if (pn_params[pn_i].get_type().is<MultiPn>()) {
@@ -1068,7 +1045,7 @@ namespace bmath::intern::pattern {
 		{
 			assert(pn_ref.type == haystack_ref.type && (haystack_ref.type.is<Comm>()));
 
-			const IndexVector& pn_params = *pn_ref;
+			const PnIdxVector& pn_params = *pn_ref;
 			const IndexVector& haystack_params = *haystack_ref;
 
 			assert(std::is_sorted(haystack_params.begin(), haystack_params.end(), [&](auto lhs, auto rhs) {
@@ -1084,7 +1061,7 @@ namespace bmath::intern::pattern {
 			}
 
 			while (pn_i < pn_params.size()) {
-				const Type pn_i_type = pn_params[pn_i].get_type();
+				const PnType pn_i_type = pn_params[pn_i].get_type();
 				assert((!pn_i_type.is<MultiPn>() || pn_i_type == MultiPn::params) && "only MultiPn expected in lhs is params");
 				if (pn_i_type == MultiPn::params) [[unlikely]] { //also summands and factors are matched as params
 					assert(pn_i + 1ull == pn_params.size() && "MultiPn is only valid as last element -> only one per variadic");
@@ -1093,9 +1070,9 @@ namespace bmath::intern::pattern {
 				}
 				else if (pn_i_type.is<MathType>() || pn_i_type == PnNode::value_match) {
 					const pattern::UnsavePnRef pn_i_ref = pn_ref.new_at(pn_params[pn_i]);
-					const int pn_i_generality = generality(pn_i_type);
+					const int pn_i_generality = generality(pn_i_type.to<MathType>());
 					for (; haystack_k < haystack_params.size(); haystack_k++) {
-						static_assert(generality(PnNode::value_match) > generality(Literal::complex));
+						//static_assert(generality(PnNode::value_match) > generality(Literal::complex));
 						if (pn_i_generality < generality(haystack_params[haystack_k].get_type())) {
 							goto rematch_last_pn_i; //specimen of pn_i_type in haystack sorted in front of k -> no hope left finding them here or later
 						}
@@ -1191,105 +1168,104 @@ namespace bmath::intern::pattern {
 			return pn_params.size() == haystack_params.size();
 		} //find_matching_permutation
 
-		TypedIdx copy(const pattern::UnsavePnRef pn_ref, const MatchData& match_data, const MathStore& src_store, MathStore& dst_store)
+		MathIdx copy(const pattern::UnsavePnRef pn_ref, const MatchData& match_data, const MathStore& src_store, MathStore& dst_store)
 		{
 			switch (pn_ref.type) {
 			default: {
 				assert(pn_ref.type.is<Function>());
-				StupidBufferVector<TypedIdx, 12> dst_parameters;
-				for (const TypedIdx pn_param : fn::range(pn_ref)) {
+				StupidBufferVector<MathIdx, 12> dst_parameters;
+				for (const PnIdx pn_param : fn::range(pn_ref)) {
 					if (pn_param.get_type() == MultiPn::params) { //summands and factors need stay their type (summands always to sum...)
 						const SharedVariadicDatum& info = match_data.multi_info(pn_param.get_index());
 						const auto src_range = fn::save_range(Ref(src_store, info.match_idx));
 						const auto src_stop = end(src_range);
 						for (auto src_iter = begin(src_range); src_iter != src_stop; ++src_iter) {
 							if (!info.index_matched(src_iter.array_idx)) {
-								const TypedIdx dst_param = tree::copy(Ref(src_store, *src_iter), dst_store); //call normal copy!
+								const MathIdx dst_param = tree::copy(Ref(src_store, *src_iter), dst_store); //call normal copy!
 								dst_parameters.push_back(dst_param);
 							}
 						}
 					}
 					else {
-						const TypedIdx dst_param = match::copy(pn_ref.new_at(pn_param), match_data, src_store, dst_store);
+						const MathIdx dst_param = match::copy(pn_ref.new_at(pn_param), match_data, src_store, dst_store);
 						dst_parameters.push_back(dst_param);
 					}
 				}
 				if (pn_ref.type.is<NamedFn>()) {
 					const CharVector& name_ref = fn::named_fn_name(pn_ref);
 					std::string name = std::string(name_ref.begin(), name_ref.end());
-					return fn::build_named_fn(dst_store, std::move(name), dst_parameters);
+					return fn::build_named_fn<MathType>(dst_store, std::move(name), dst_parameters);
 				}
 				else {
-					return TypedIdx(IndexVector::build(dst_store, dst_parameters), pn_ref.type);
+					return MathIdx(IndexVector::build(dst_store, dst_parameters), pn_ref.type.to<MathType>());
 				}
 			} break;
-			case Type(Literal::variable): {
+			case PnType(Literal::variable): {
 				const CharVector& src_var = *pn_ref;
 				const auto src_name = std::string(src_var.data(), src_var.size());
 				const std::size_t dst_index = CharVector::build(dst_store, src_name);
-				return TypedIdx(dst_index, pn_ref.type);
+				return MathIdx(dst_index, pn_ref.type.to<MathType>());
 			} break;
-			case Type(Literal::complex): {
+			case PnType(Literal::complex): {
 				const std::size_t dst_index = dst_store.allocate_one();
 				dst_store.at(dst_index) = pn_ref->complex; //bitwise copy
-				return TypedIdx(dst_index, pn_ref.type);
+				return MathIdx(dst_index, pn_ref.type.to<MathType>());
 			} break;
-			case Type(PnNode::tree_match): {
+			case PnType(PnNode::tree_match): {
 				const SharedTreeDatum& info = match_data.info(pn_ref->tree_match);
 				assert(info.is_set());
 				return tree::copy(Ref(src_store, info.match_idx), dst_store); //call to different copy!
 			} break;
-			case Type(PnNode::value_match): {
+			case PnType(PnNode::value_match): {
 				const ValueMatchVariable& var = *pn_ref;
 				return match::copy(pn_ref.new_at(var.copy_idx), match_data, src_store, dst_store);
 			} break;
-			case Type(PnNode::value_proxy): {
+			case PnType(PnNode::value_proxy): {
 				const Complex& val = match_data.value_match_data[pn_ref.index].value;
 				const std::size_t dst_index = dst_store.allocate_one();
 				dst_store.at(dst_index) = val;
-				return TypedIdx(dst_index, Type(Literal::complex));
+				return MathIdx(dst_index, MathType(Literal::complex));
 			} break;
-			case Type(MultiPn::summands):
+			case PnType(MultiPn::summands):
 				[[fallthrough]];
-			case Type(MultiPn::factors): {
-				StupidBufferVector<TypedIdx, 12> dst_parameters;
+			case PnType(MultiPn::factors): {
+				StupidBufferVector<MathIdx, 12> dst_parameters;
 				const SharedVariadicDatum& info = match_data.multi_info(pn_ref.index);
 				const auto src_range = fn::save_range(Ref(src_store, info.match_idx));
 				const auto src_stop = end(src_range);
 				for (auto src_iter = begin(src_range); src_iter != src_stop; ++src_iter) {
 
 					if (!info.index_matched(src_iter.array_idx)) {
-						const TypedIdx dst_param = tree::copy(Ref(src_store, *src_iter), dst_store); //call normal copy!
+						const MathIdx dst_param = tree::copy(Ref(src_store, *src_iter), dst_store); //call normal copy!
 						dst_parameters.push_back(dst_param);
 					}
 				}
 
 				const std::uint32_t res_idx = IndexVector::build(dst_store, dst_parameters);
-				return TypedIdx(res_idx, pn_ref.type == MultiPn::summands ? Type(Comm::sum) : Type(Comm::product));
+				return MathIdx(res_idx, pn_ref.type == MultiPn::summands ? MathType(Comm::sum) : MathType(Comm::product));
 			} break;
-			case Type(MultiPn::params):  //already handeled in named_fn
+			case PnType(MultiPn::params):  //already handeled in named_fn
 				assert(false);
-				return TypedIdx();
+				return MathIdx();
 			}
 		} //copy
 
-		std::optional<TypedIdx> match_and_replace(const pattern::UnsavePnRef from, const pattern::UnsavePnRef to, const MutRef ref)
+		std::optional<MathIdx> match_and_replace(const pattern::UnsavePnRef from, const pattern::UnsavePnRef to, const MutRef ref)
 		{
 			MatchData match_data;
 			if (match::permutation_equals(from, ref, match_data)) {
 				MathStore copy_buffer;
 				copy_buffer.reserve(32u);
-				const TypedIdx buffer_head = match::copy(to, match_data, *ref.store, copy_buffer);
+				const MathIdx buffer_head = match::copy(to, match_data, *ref.store, copy_buffer);
 				tree::free(ref);
-				const TypedIdx result_head = tree::copy(Ref(copy_buffer, buffer_head), *ref.store);
+				const MathIdx result_head = tree::copy(Ref(copy_buffer, buffer_head), *ref.store);
 				return { result_head };
 			}
 			return {};
 		} //match_and_replace
 
-		std::pair<std::optional<TypedIdx>, bool> recursive_match_and_replace(const pattern::UnsavePnRef in, const pattern::UnsavePnRef out, const MutRef ref)
+		std::pair<std::optional<MathIdx>, bool> recursive_match_and_replace(const pattern::UnsavePnRef in, const pattern::UnsavePnRef out, const MutRef ref)
 		{
-			assert(ref.type.is<MathType>());
 			if (ref.type.is<Function>()) {
 				auto range = fn::range(ref);
 				const auto stop = end(range);
