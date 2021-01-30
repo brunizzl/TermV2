@@ -170,16 +170,16 @@ namespace bmath::intern {
 
 	namespace print {
 
-		void append_to_string(const Ref ref, std::string& str, const int parent_infixr = 0);
+		void append_to_string(const UnsaveRef ref, std::string& str, const int parent_infixr = 0);
 
 		//prettier, but also slower
-		std::string to_pretty_string(const Ref ref, const int parent_infixr = 0);
+		std::string to_pretty_string(const UnsaveRef ref, const int parent_infixr = 0);
 
 		std::string to_memory_layout(const MathStore& store, const std::initializer_list<const MathIdx> heads);
 
 		//returns tree representation of ref
 		//offset specifies how far the whole tree is shifted to the right
-		std::string to_tree(const Ref ref, const std::size_t offset = 0u);
+		std::string to_tree(const UnsaveRef ref, const std::size_t offset = 0u);
 
 	} //namespace print
 

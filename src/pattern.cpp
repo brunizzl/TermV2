@@ -541,10 +541,12 @@ namespace bmath::intern::pattern {
 	RewriteRule::RewriteRule(std::string name, Convert convert)
 	{
 		IntermediateRewriteRule intermediate = IntermediateRewriteRule(std::move(name), convert);
-		std::cout << "--------------------------------------------\n";
+		std::cout << intermediate.to_string() << "\n";
 		std::cout << intermediate.lhs_tree() << "\n\n";
 		std::cout << intermediate.rhs_tree() << "\n\n";
-		std::cout << intermediate.to_string() << "\n";
+		std::cout << intermediate.lhs_memory_layout() << "\n\n";
+		std::cout << intermediate.rhs_memory_layout() << "\n\n";
+		std::cout << "------------------------------------------------------------------------\n";
 
 		this->store.reserve(intermediate.store.nr_used_slots());
 		this->lhs_head = pn_tree::intermediate_to_pattern(intermediate.lhs_ref(), this->store, Side::lhs, convert);

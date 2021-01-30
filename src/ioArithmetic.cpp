@@ -300,7 +300,7 @@ namespace bmath::intern {
 
 	namespace print {
 
-		void append_to_string(const Ref ref, std::string& str, const int parent_infixr)
+		void append_to_string(const UnsaveRef ref, std::string& str, const int parent_infixr)
 		{
 			const int own_infixr = infixr(ref.type);
 			if (own_infixr <= parent_infixr) {
@@ -361,13 +361,13 @@ namespace bmath::intern {
 			}
 		} //append_to_string
 
-		std::string to_pretty_string(const Ref ref, const int parent_infixr)
+		std::string to_pretty_string(const UnsaveRef ref, const int parent_infixr)
 		{
 			std::string str;
 
 			bool need_parentheses = infixr(ref.type) <= parent_infixr;
 
-			const auto get_negative_real = [](const Ref ref) ->OptDouble {
+			const auto get_negative_real = [](const UnsaveRef ref) ->OptDouble {
 				if (ref.type == Literal::complex) {
 					const Complex& complex = *ref;
 					if (complex.real() < 0.0 && complex.imag() == 0.0) {
@@ -378,7 +378,7 @@ namespace bmath::intern {
 			}; //get_negative_real
 
 			 //returns base, if ref is actually <base>^(-1)
-			const auto get_pow_neg1 = [get_negative_real](const Ref ref) -> std::optional<MathIdx> {
+			const auto get_pow_neg1 = [get_negative_real](const UnsaveRef ref) -> std::optional<MathIdx> {
 				if (ref.type == Fn::pow) {
 					const IndexVector& params = *ref;
 					if (const auto expo = get_negative_real(ref.new_at(params[1]))) {
@@ -391,7 +391,7 @@ namespace bmath::intern {
 			}; //get_pow_neg1
 
 			struct GetNegativeProductResult { double negative_factor; StupidBufferVector<MathIdx, 8> other_factors; };
-			const auto get_negative_product = [get_negative_real](const Ref ref) -> std::optional<GetNegativeProductResult> {
+			const auto get_negative_product = [get_negative_real](const UnsaveRef ref) -> std::optional<GetNegativeProductResult> {
 				if (ref.type == Comm::product) {
 					StupidBufferVector<MathIdx, 8> other_factors;
 					double negative_factor;
@@ -636,7 +636,7 @@ namespace bmath::intern {
 		} //to_memory_layout
 
 		//line name assumes '\0' as last character
-		void append_tree_row(const Ref ref, std::vector<std::string>& rows, const std::size_t offset)
+		void append_tree_row(const UnsaveRef ref, std::vector<std::string>& rows, const std::size_t offset)
 		{
 			constexpr std::size_t tab_width = 3u; //specifies how may more characters the subtrees of ref are shifted right, compared to ref
 
@@ -694,7 +694,7 @@ namespace bmath::intern {
 			}
 		} //append_tree_row
 
-		std::string to_tree(const Ref ref, const std::size_t offset)
+		std::string to_tree(const UnsaveRef ref, const std::size_t offset)
 		{
 			std::vector<std::string> rows;
 			rows.push_back(std::string(offset, ' ') + "head");
