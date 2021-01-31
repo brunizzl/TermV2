@@ -18,12 +18,11 @@ namespace bmath::intern {
 		constexpr int infixr(MathType type) 
 		{ 
 			constexpr auto infixr_table = std::to_array<std::pair<MathType, int>>({
-				{ MathType(NamedFn{})          , 0 },
-				{ MathType(Comm::sum          ), 2 },
-				{ MathType(Comm::product      ), 4 },	
-				{ MathType(Fn::pow            ), 5 }, //not between other function types -> assumed to be printed with '^'  
-				{ MathType(Literal::variable  ), 6 },
-				{ MathType(Literal::complex   ), 6 }, //may be printed as sum/product itself, then (maybe) has to add parentheses on its own
+				{ Comm::sum          , 2 },
+				{ Comm::product      , 4 },	
+				{ Fn::pow            , 5 }, //not between other function types -> assumed to be printed with '^'  
+				{ Literal::variable  , 6 },
+				{ Literal::complex   , 6 }, //may be printed as sum/product itself, then (maybe) has to add parentheses on its own
 			});
 			static_assert(std::is_sorted(infixr_table.begin(), infixr_table.end(), [](auto a, auto b) { return a.second < b.second; }));
 
@@ -332,7 +331,7 @@ namespace bmath::intern {
 				str.pop_back(); //pop '('
 				if (ref.type.is<NamedFn>()) {
 					const CharVector& name = fn::named_fn_name(ref);
-					str.append(std::string_view(name.data(), name.size()));
+					str.append(name);
 				}
 				else if (ref.type.is<Fn>()) {
 					str.append(fn::name_of(ref.type.to<Fn>()));
@@ -349,7 +348,7 @@ namespace bmath::intern {
 				}
 			} break;
 			case MathType(Literal::variable): {
-				str += std::string_view(ref->char_vec.data(), ref->char_vec.size());
+				str += ref->char_vec;
 			} break;
 			case MathType(Literal::complex): {
 				append_complex(ref->complex, str, parent_infixr);
@@ -359,7 +358,83 @@ namespace bmath::intern {
 			if (own_infixr <= parent_infixr) {
 				str.push_back(')');
 			}
-		} //append_to_string
+		} //append_to_string (for math)
+
+		void append_to_string(const pattern::UnsavePnRef ref, std::string& str, const int depth)
+		{
+			using namespace pattern;
+
+			const char open_paren = std::array<char, 3>{ '(', '[', '{' } [depth % 3];
+			const char clse_paren = std::array<char, 3>{ ')', ']', '}' } [depth % 3];
+
+			switch (ref.type) {
+			default: {
+				if (ref.type.is<NamedFn>()) {
+					const CharVector& name = fn::named_fn_name(ref);
+					str.append(name);
+				}
+				else if (ref.type.is<Fn>()) {
+					str.append(fn::name_of(ref.type.to<Fn>()));
+				}
+				else {
+					assert(ref.type.is<Variadic>());
+					str.append(fn::name_of(ref.type.to<Variadic>()));
+				}
+				str.push_back(open_paren);
+				const char* seperator = "";
+				for (const auto param : fn::range(ref)) {
+					str.append(std::exchange(seperator, ", "));
+					print::append_to_string(ref.new_at(param), str, depth + 1);
+				}
+				str.push_back(clse_paren);
+			} break;
+			case PnType(Literal::variable): {
+				str += ref->char_vec;
+			} break;
+			case PnType(Literal::complex): {
+				append_complex(ref->complex, str, 0);
+			} break;
+			case PnType(PnNode::tree_match): {
+				const TreeMatchVariable& var = *ref;
+				str.append("_T");
+				str.append(std::to_string(var.match_data_idx));
+				if (var.restr != Restr::any) {
+					str.push_back(open_paren);
+					str.append(name_of(var.restr));
+					str.push_back(clse_paren);
+				}
+			} break;
+			case PnType(PnNode::value_match): {
+				const ValueMatchVariable& var = *ref;
+				str.append("_V");
+				str.append(std::to_string(var.match_data_idx));
+				str.push_back(open_paren);
+				str.append(name_of(var.form));
+				str.append(", ");
+				print::append_to_string(ref.new_at(var.mtch_idx), str, depth + 1);
+				str.push_back(clse_paren);
+			} break;
+			case PnType(PnNode::value_proxy): {
+				str.append("_VP");
+				str.append(std::to_string(ref.index));
+			} break;
+			case PnType(MultiPn::summands): {
+				str.append("_S");
+				str.append(std::to_string(ref.index));
+				str.append("...");
+			} break;
+			case PnType(MultiPn::factors): {
+				str.append("_F");
+				str.append(std::to_string(ref.index));
+				str.append("...");
+			} break;
+			case PnType(MultiPn::params): {
+				str.append("_P");
+				str.append(std::to_string(ref.index));
+				str.append("...");
+			} break;
+			}
+		} //append_to_string (for pattern)
 
 		std::string to_pretty_string(const UnsaveRef ref, const int parent_infixr)
 		{

@@ -22,16 +22,6 @@ namespace bmath::intern::debug {
 	{
 		using namespace pattern;
 		std::cout
-			<< "PnType(Comm::sum)                = " << unsigned(PnType(Comm::sum))                << "\n"
-			<< "PnType(Comm::product)            = " << unsigned(PnType(Comm::product))            << "\n"
-			<< "PnType(Comm::multiset)           = " << unsigned(PnType(Comm::multiset))           << "\n"
-			<< "PnType(Comm::set)                = " << unsigned(PnType(Comm::set))                << "\n"
-			<< "PnType(Comm::union_)             = " << unsigned(PnType(Comm::union_))             << "\n"
-			<< "PnType(Comm::intersection)       = " << unsigned(PnType(Comm::intersection))       << "\n\n"
-			<< "PnType(NonComm::list)            = " << unsigned(PnType(NonComm::list))            << "\n"
-			<< "PnType(NonComm::ordered_sum)     = " << unsigned(PnType(NonComm::ordered_sum))     << "\n"
-			<< "PnType(NonComm::ordered_product) = " << unsigned(PnType(NonComm::ordered_product)) << "\n\n"
-			<< "PnType(NamedFn{})                = " << unsigned(PnType(NamedFn{}))                << "\n\n"
 			<< "PnType(Fn::pow)                  = " << unsigned(PnType(Fn::pow))                  << "\n"
 			<< "PnType(Fn::log)                  = " << unsigned(PnType(Fn::log))                  << "\n"
 			<< "PnType(Fn::sqrt)                 = " << unsigned(PnType(Fn::sqrt))                 << "\n"
@@ -55,6 +45,16 @@ namespace bmath::intern::debug {
 			<< "PnType(Fn::im)                   = " << unsigned(PnType(Fn::im))                   << "\n"
 			<< "PnType(Fn::force)                = " << unsigned(PnType(Fn::force))                << "\n"
 			<< "PnType(Fn::diff)                 = " << unsigned(PnType(Fn::diff))                 << "\n\n"
+			<< "PnType(NamedFn{})                = " << unsigned(PnType(NamedFn{}))                << "\n\n"
+			<< "PnType(NonComm::list)            = " << unsigned(PnType(NonComm::list))            << "\n"
+			<< "PnType(NonComm::ordered_sum)     = " << unsigned(PnType(NonComm::ordered_sum))     << "\n"
+			<< "PnType(NonComm::ordered_product) = " << unsigned(PnType(NonComm::ordered_product)) << "\n\n"
+			<< "PnType(Comm::sum)                = " << unsigned(PnType(Comm::sum))                << "\n"
+			<< "PnType(Comm::product)            = " << unsigned(PnType(Comm::product))            << "\n"
+			<< "PnType(Comm::multiset)           = " << unsigned(PnType(Comm::multiset))           << "\n"
+			<< "PnType(Comm::set)                = " << unsigned(PnType(Comm::set))                << "\n"
+			<< "PnType(Comm::union_)             = " << unsigned(PnType(Comm::union_))             << "\n"
+			<< "PnType(Comm::intersection)       = " << unsigned(PnType(Comm::intersection))       << "\n\n"
 			<< "PnType(Literal::variable)        = " << unsigned(PnType(Literal::variable))        << "\n"
 			<< "PnType(Literal::complex)         = " << unsigned(PnType(Literal::complex))         << "\n\n"
 			<< "PnType(PnNode::value_match)      = " << unsigned(PnType(PnNode::value_match))      << "\n"
@@ -162,9 +162,11 @@ namespace bmath::intern::debug {
 			{ "x                                       | intersection(x)                            = x" },
 			{ "x, xs :params, ys :params, sets :params | intersection(set(x, xs), set(x, ys), sets) = union(intersection(set(x), sets), intersection(set(xs), set(ys), sets))" }, 
 			{ "                           sets :params | intersection(sets)                         = set()" }, 
-
-			{ "a, b          | a^2 + 2 a b   + b^2 = (a + b)^2" }, 
 		});
+
+		for (const auto& rule : rules) {
+			std::cout << rule.to_string() << "\n\n";
+		}
 
 		while (true) {
 			std::string name;
@@ -172,7 +174,7 @@ namespace bmath::intern::debug {
 			std::getline(std::cin, name);
 			try {
 				bmath::Term test(name); 
-				std::cout << "input:  " << test.to_string() << "\n";
+				std::cout << "input:  " << test.to_pretty_string() << "\n";
 				test.head = pattern::match::apply_rule_range(rules.begin(), rules.end(), test.mut_ref());
 
 				std::cout << "    = " << test.to_pretty_string() << "\n";

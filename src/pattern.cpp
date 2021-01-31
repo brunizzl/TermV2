@@ -27,7 +27,7 @@ namespace bmath::intern::pattern {
 			constexpr IntermediateTreeMatch(const UnsaveRef new_ref) noexcept :ref(new_ref) {}
 
 		public:
-			static constexpr std::string_view function_name = "__1TreeMatch";
+			static constexpr std::string_view function_name = "_TM";
 
 			template<StoreLike S>
 			static constexpr MathIdx build(S& store, const std::uint32_t match_data_idx, const Restriction restr)
@@ -79,7 +79,7 @@ namespace bmath::intern::pattern {
 			constexpr IntermediateMultiMatch(const UnsaveRef new_ref) noexcept :ref(new_ref) {}
 
 		public:
-			static constexpr std::string_view function_name = "__9MultiMatch";
+			static constexpr std::string_view function_name = "_MM";
 
 			template<StoreLike S>
 			static constexpr MathIdx build(S& store, const std::uint32_t idx, const MultiPn type)
@@ -131,7 +131,7 @@ namespace bmath::intern::pattern {
 			constexpr IntermediateValueProxy(const UnsaveRef new_ref) noexcept :ref(new_ref) {}
 
 		public:
-			static constexpr std::string_view function_name = "__0ValueProxy";
+			static constexpr std::string_view function_name = "_VP";
 
 			template<StoreLike S>
 			static constexpr MathIdx build(S& store, const std::uint32_t index)
@@ -166,9 +166,8 @@ namespace bmath::intern::pattern {
 
 		//ValueMatchVariable is modeled as NamedFn holding:
 		//  .mtch_idx in first parameter
-		//  .copy_idx in second parameter
-		//  .match_data_idx as complex in third parameter
-		//  .form as variable (same name as calling name_of(.restr)) in forth parameter
+		//  .match_data_idx as complex in second parameter
+		//  .form as variable (same name as calling name_of(.restr)) in third parameter
 		class IntermediateValueMatch
 		{
 			UnsaveRef ref;
@@ -176,13 +175,12 @@ namespace bmath::intern::pattern {
 			constexpr IntermediateValueMatch(const UnsaveRef new_ref) noexcept :ref(new_ref) {}
 
 		public:
-			static constexpr std::string_view function_name = "__0ValueMatch";
+			static constexpr std::string_view function_name = "_VM";
 
 			template<StoreLike S>
 			static constexpr MathIdx build(S& store, const std::uint32_t match_data_idx, const Form form)
 			{
-				const std::array<MathIdx, 4> parameters = {
-					IntermediateValueProxy::build(store, match_data_idx),
+				const std::array<MathIdx, 3> parameters = {
 					IntermediateValueProxy::build(store, match_data_idx),
 					build_value(store, Complex{ static_cast<double>(match_data_idx), 0.0 }),
 					MathIdx(CharVector::build(store, name_of(form)), MathType(Literal::variable)),
@@ -196,11 +194,11 @@ namespace bmath::intern::pattern {
 					std::string_view ref_name = fn::named_fn_name(new_ref);
 					if (ref_name == function_name) {
 						const IndexVector& params = *new_ref;
-						assert(params.size() == 4);
-						assert(params[2].get_type() == Literal::complex);
-						assert(has_form(*new_ref.new_at(params[2]), Form::natural_0));
-						assert(params[3].get_type() == Literal::variable);
-						assert(type_of(new_ref.new_at(params[3])->char_vec).is<Form>());
+						assert(params.size() == 3);
+						assert(params[1].get_type() == Literal::complex);
+						assert(has_form(*new_ref.new_at(params[1]), Form::natural_0));
+						assert(params[2].get_type() == Literal::variable);
+						assert(type_of(new_ref.new_at(params[2])->char_vec).is<Form>());
 						return IntermediateValueMatch(new_ref);
 					}
 				}
@@ -208,18 +206,17 @@ namespace bmath::intern::pattern {
 			}
 
 			constexpr MathIdx mtch_idx() const noexcept { return this->ref->parameters[0]; }
-			constexpr MathIdx copy_idx() const noexcept { return this->ref->parameters[1]; }
 
 			constexpr std::uint32_t match_data_idx() const noexcept
 			{
 				const IndexVector& params = *this->ref;
-				return this->ref.new_at(params[2])->complex.real();
+				return this->ref.new_at(params[1])->complex.real();
 			}
 
 			constexpr Form form() const noexcept
 			{
 				const IndexVector& params = *this->ref;
-				return type_of(this->ref.new_at(params[3])->char_vec).to<Form>();
+				return type_of(this->ref.new_at(params[2])->char_vec).to<Form>();
 			}
 		}; //class IntermediateValueMatch
 	} //namespace math_rep
@@ -231,12 +228,19 @@ namespace bmath::intern::pattern {
 	PatternParts::PatternParts(const ParseView input)
 	{
 		const std::size_t bar = find_first_of_skip_pars(input.tokens, token::bar);
-		if (count_skip_pars(input.tokens, token::bar) > 1u) [[unlikely]] throw ParseFailure{ input.offset + bar, "expected only this '|', no further ones at top grouping level" };
+		if (bar != TokenView::npos) {
+			if (count_skip_pars(input.tokens, token::bar) > 1u) [[unlikely]] throw ParseFailure{ input.offset + bar, "expected only this '|', no further ones at top grouping level" };
+
+			const char illegal_tokens[] = { token::number, token::imag_unit, token::unary_minus, token::sum, token::product, token::hat, token::equals, '\0' };
+			const std::size_t illegal_pos = input.tokens.find_first_of(illegal_tokens);
+			if (illegal_pos < bar) [[unlikely]] throw ParseFailure{ input.offset + illegal_pos, "unexpected token in declaration" };
+		}
+
 		const std::size_t equals = find_first_of_skip_pars(input.tokens, token::equals);
 		if (count_skip_pars(input.tokens, token::equals) > 1u) [[unlikely]] throw ParseFailure{ input.offset + equals, "expected only this '=', no further ones at top grouping level" };
 		if (equals == TokenView::npos) [[unlikely]] throw ParseFailure{ input.size() - 1u, "expected '=' at top grouping level" };
 
-		if (bar != TokenView::npos) [[likely]] {
+		if (bar != TokenView::npos) {
 			this->declarations = input.substr(0u, bar);
 			this->lhs = input.substr(bar + 1u, equals - bar - 1u);
 			this->rhs = input.substr(equals + 1u);
@@ -443,33 +447,35 @@ namespace bmath::intern::pattern {
 		match_variables_table.build_lhs = false;
 		this->rhs_head = build_function(this->store, parts.rhs);
 
-		if (convert == Convert::all) {
-			static_assert("__0ValueMatch" == math_rep::IntermediateValueMatch::function_name);
-			//computable operations around value_match are "sucked in" by value match into .copy_idx
+		if (convert == Convert::all) {	
+			static_assert("_VM" == math_rep::IntermediateValueMatch::function_name);
+			static_assert("_VP" == math_rep::IntermediateValueProxy::function_name);
 			static const auto bubble_up_value_match = std::to_array<RewriteRule>({
-				{ "a :value, m, c, mdi, f |      __0ValueMatch(m, c, mdi, f) + a = __0ValueMatch(m, c + a  , mdi, f)", Convert::basic },
-				{ "a :value, m, c, mdi, f |      __0ValueMatch(m, c, mdi, f) * a = __0ValueMatch(m, c * a  , mdi, f)", Convert::basic },
-				{ "          m, c, mdi, f |      __0ValueMatch(m, c, mdi, f) ^ 2 = __0ValueMatch(m, c^2    , mdi, f)", Convert::basic },
-				{ "          m, c, mdi, f | sqrt(__0ValueMatch(m, c, mdi, f))    = __0ValueMatch(m, sqrt(c), mdi, f)", Convert::basic },
-				//mtch_idx gets two versions, one populated with content of copy_idx. this pattern enables the next step and is only applied if no other options match
-				{ "          m, c, mdi, f |      __0ValueMatch(m, c, mdi, f)     = __Temp(m, c, c, mdi, f)"          , Convert::basic },
+				//mtch_idx gets two versions, the second one keeps the original ValueProxy (_VP) with the right match_data_idx (i)
+				{ "             k, f |      _VM(_VP(k), k, f)          = _Temp(_VP(k), _VP(k) , k, f)", Convert::basic },
+
+				//computable computations surrounding ValueMatch are "sucked in" to second parameter of (_Temp representation of) ValueMatch
+				{ "a :value, m, k, f |      _Temp(_VP(k), m, k, f) + a = _Temp(_VP(k), m + a  , k, f)", Convert::basic },
+				{ "a :value, m, k, f |      _Temp(_VP(k), m, k, f) * a = _Temp(_VP(k), m * a  , k, f)", Convert::basic },
+				{ "          m, k, f |      _Temp(_VP(k), m, k, f) ^ 2 = _Temp(_VP(k), m ^ 2  , k, f)", Convert::basic },
+				{ "          m, k, f | sqrt(_Temp(_VP(k), m, k, f))    = _Temp(_VP(k), sqrt(m), k, f)", Convert::basic },
 			});
 			this->lhs_head = match::apply_rule_range(bubble_up_value_match.begin(), bubble_up_value_match.end(), this->lhs_mut_ref());
-			this->rhs_head = match::apply_rule_range(bubble_up_value_match.begin(), bubble_up_value_match.end(), this->rhs_mut_ref());
 
 			//the matching of a ValueMatchVariable works by applying the inverse of the operation written down in parsed string to the value to match.
 			//this inverse is build here by unwrapping the second parameter and applying the inverse of the unwrapped operations to the first parameter.
 			//(the result is found at ValueMatchVariable::mtch_idx)
 			static const auto invert_match_subtree = std::to_array<RewriteRule>({
-				{ "val :value, m1, m2, c, mdi, f | __Temp(m1, m2 + val, c, mdi, f) = __Temp(m1 - val, m2, c, mdi, f)", Convert::basic },
-				{ "val :value, m1, m2, c, mdi, f | __Temp(m1, m2 * val, c, mdi, f) = __Temp(m1 / val, m2, c, mdi, f)", Convert::basic },
-				{ "            m1, m2, c, mdi, f | __Temp(m1, m2 ^ 2  , c, mdi, f) = __Temp(sqrt(m1), m2, c, mdi, f)", Convert::basic },
-				{ "            m1, m2, c, mdi, f | __Temp(m1, sqrt(m2), c, mdi, f) = __Temp(m1 ^ 2  , m2, c, mdi, f)", Convert::basic },
+				{ "val :value, m1, m2, k, f | _Temp(m1, m2 + val, k, f) = _Temp(m1 - val, m2, k, f)", Convert::basic },
+				{ "val :value, m1, m2, k, f | _Temp(m1, m2 * val, k, f) = _Temp(m1 / val, m2, k, f)", Convert::basic },
+				{ "            m1, m2, k, f | _Temp(m1, m2 ^ 2  , k, f) = _Temp(sqrt(m1), m2, k, f)", Convert::basic },
+				{ "            m1, m2, k, f | _Temp(m1, sqrt(m2), k, f) = _Temp(m1 ^ 2  , m2, k, f)", Convert::basic },
 				//applied once m2 is fully unwrapped: converting back
-				{ "            m1, m2, c, mdi, f | __Temp(m1, m2, c, mdi, f)       = __0ValueMatch(m1, c, mdi, f)"   , Convert::basic },
+				{ "            m1,     k, f | _Temp(m1, _VP(k)  , k, f) = _VM(m1, k, f)",             Convert::basic },
 			});
 			this->lhs_head = match::apply_rule_range(invert_match_subtree.begin(), invert_match_subtree.end(), this->lhs_mut_ref());
-			this->rhs_head = match::apply_rule_range(invert_match_subtree.begin(), invert_match_subtree.end(), this->rhs_mut_ref());
+			//note it is sometimes desired to use a ValueMatchVariable in a context not allowing it to swallow any of its surroundings. 
+			//combining both rulesets would therefore result in an infinite loop in that case, as the very first and very last pattern convert between each other.
 		}
 
 		for (const auto& multi_match : match_variables_table.multi_table) {
@@ -535,19 +541,16 @@ namespace bmath::intern::pattern {
 
 	RewriteRule::RewriteRule(std::string name, Convert convert)
 	{
-		IntermediateRewriteRule intermediate = IntermediateRewriteRule(std::move(name), convert);
-		assert(tree::valid_storage(intermediate.store, { intermediate.lhs_head, intermediate.rhs_head }));
+		{
+			IntermediateRewriteRule intermediate = IntermediateRewriteRule(std::move(name), convert);
+			assert(tree::valid_storage(intermediate.store, { intermediate.lhs_head, intermediate.rhs_head }));
 
-		std::cout << intermediate.to_string() << "\n";
-		std::cout << intermediate.lhs_tree() << "\n\n";
-		std::cout << intermediate.rhs_tree() << "\n\n";
-		std::cout << intermediate.to_memory_layout() << "\n\n";
-		std::cout << "------------------------------------------------------------------------\n";
-
-		this->store.reserve(intermediate.store.nr_used_slots());
-		this->lhs_head = pn_tree::intermediate_to_pattern(intermediate.lhs_ref(), this->store, Side::lhs, convert);
-		this->rhs_head = pn_tree::intermediate_to_pattern(intermediate.rhs_ref(), this->store, Side::rhs, convert);
-
+			this->store.reserve(intermediate.store.nr_used_slots());
+			this->lhs_head = pn_tree::intermediate_to_pattern(intermediate.lhs_ref(), this->store, Side::lhs, convert);
+			this->rhs_head = pn_tree::intermediate_to_pattern(intermediate.rhs_ref(), this->store, Side::rhs, convert);
+			pn_tree::sort(this->lhs_mut_ref());
+			pn_tree::sort(this->rhs_mut_ref());
+		}
 		{ //adjusting MultiPn indices to SharedVariadicDatum index of each MulitPn on lhs (required to be done bevore changing MultiPn types!)
 
 			//has to be filled in same order as MatchData::variadic_data
@@ -697,6 +700,15 @@ namespace bmath::intern::pattern {
 		}
 	} //RewriteRule::RewriteRule
 
+	std::string RewriteRule::to_string() const
+	{
+		std::string str;
+		print::append_to_string(this->lhs_ref(), str);
+		str.append(" = ");
+		print::append_to_string(this->rhs_ref(), str);
+		return str;
+	} //RewriteRule::to_string
+
 	namespace pn_tree {
 
 		OptionalComplex eval_value_match(const UnsavePnRef ref, const Complex& start_val)
@@ -809,10 +821,14 @@ namespace bmath::intern::pattern {
 						}
 						else {
 							assert(side == Side::rhs);
-							return intermediate_to_pattern(src_ref.new_at(value_match->copy_idx()), dst_store, side, convert);
+
+							const auto value_proxy = math_rep::IntermediateValueProxy::cast(src_ref.new_at(value_match->mtch_idx()));
+							assert(value_proxy);
+							return PnIdx(value_proxy->index(), PnNode::value_proxy);
 						}
 					}
 					if (const auto value_proxy = math_rep::IntermediateValueProxy::cast(src_ref)) {
+						assert(side == Side::lhs);
 						return PnIdx(value_proxy->index(), PnNode::value_proxy);
 					}
 				}
@@ -846,6 +862,85 @@ namespace bmath::intern::pattern {
 			assert(false);
 			return PnIdx();
 		} //intermediate_to_pattern
+
+		std::strong_ordering pn_tree::compare(const UnsavePnRef fst, const UnsavePnRef snd)
+		{
+			const auto compare_char_vecs = [](const CharVector& fst, const CharVector& snd) -> std::strong_ordering {
+				const std::size_t size = std::min(fst.size(), snd.size());
+				if (const std::strong_ordering cmp = compare_arrays(fst.data(), snd.data(), size);
+					cmp != std::strong_ordering::equal)
+				{
+					return cmp;
+				}
+				return fst.size() <=> snd.size();
+			};
+
+			if (fst.type != snd.type) {
+				return generality(fst.type) <=> generality(snd.type);
+			}
+			
+			switch (fst.type) {
+			case PnType(NamedFn{}): {
+				const CharVector& name_1 = fn::named_fn_name(fst);
+				const CharVector& name_2 = fn::named_fn_name(snd);
+				if (const std::strong_ordering cmp = compare_char_vecs(name_1, name_2); 
+					cmp != std::strong_ordering::equal) {
+					return cmp;
+				}
+			} [[fallthrough]];
+			default: {
+				assert(fst.type.is<Function>());
+				const PnIdxVector& fst_vec = *fst;
+				const PnIdxVector& snd_vec = *snd;
+
+				auto iter_1 = fst_vec.begin();
+				auto iter_2 = snd_vec.begin();
+				const auto stop_1 = fst_vec.end();
+				const auto stop_2 = snd_vec.end();
+				for (; iter_1 != stop_1 && iter_2 != stop_2; ++iter_1, ++iter_2) {
+					const auto iter_cmp = pn_tree::compare(fst.new_at(*iter_1), snd.new_at(*iter_2));
+					if (iter_cmp != std::strong_ordering::equal) {
+						return iter_cmp;
+					}
+				}
+				return fst_vec.size() <=> snd_vec.size();
+			} break;
+			case PnType(Literal::variable): {
+				return compare_char_vecs(*fst, *snd);
+			} break;
+			case PnType(Literal::complex): {
+				return compare_complex(*fst, *snd);
+			} break;
+			case PnType(PnNode::tree_match): {
+				return fst->tree_match.match_data_idx <=> snd->tree_match.match_data_idx;
+			} break;
+			case PnType(PnNode::value_match): {
+				return fst->value_match.match_data_idx <=> snd->value_match.match_data_idx;
+			} break;
+			case PnType(PnNode::value_proxy):
+			case PnType(MultiPn::summands): 
+			case PnType(MultiPn::factors): 
+			case PnType(MultiPn::params): 
+				return fst.index <=> snd.index;
+			}
+		} //compare
+
+		void sort(const MutPnRef ref) 
+		{
+			const auto sort_variadic = [](const MutPnRef ref) {
+				const auto compare_function = [&](const PnIdx lhs, const PnIdx rhs) {
+					return pn_tree::compare(PnRef(*ref.store, lhs), PnRef(*ref.store, rhs)) == std::strong_ordering::less;
+				};
+
+				if (ref.type.is<Comm>()) {
+					PnIdxVector& operation = *ref;
+					std::sort(operation.begin(), operation.end(), compare_function);
+				}
+				return fold::Void{};
+			};
+
+			fold::simple_fold<fold::Void>(ref, sort_variadic);
+		} //sort
 
 	} //namespace pn_tree
 

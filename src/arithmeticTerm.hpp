@@ -19,7 +19,6 @@
 namespace bmath::intern {
 
 	//matching algorithm will try to also match permutations
-	//-> advised to add entry to function generality() found in .cpp for these
 	enum class Comm //short for Commutative
 	{
 		sum,
@@ -39,7 +38,7 @@ namespace bmath::intern {
 		COUNT
 	};
 
-	using Variadic = SumEnum<NonComm, Comm>;
+	using Variadic = SumEnum<Comm, NonComm>;
 
 	//all functions known at compile time will not store their name with every instance in the store. this does.
 	//the memory is sectioned in two parts: 
@@ -80,7 +79,7 @@ namespace bmath::intern {
 		COUNT
 	};
 
-	using Function = SumEnum<Fn, NamedFn, Variadic>;
+	using Function = SumEnum<Variadic, NamedFn, Fn>;
 
 	//the only leaves in MathType
 	enum class Literal
@@ -97,39 +96,6 @@ namespace bmath::intern {
 	using IndexVector = StoredVector<MathIdx>;
 	using CharVector = StoredVector<char>;
 	using Complex = std::complex<double>;
-	
-	//if one pattern may compare equal to a term multiple ways (e.g. sum or product), it has high generality.
-	//there are 3 main levels of generality:
-	//  - unique (value 1xxx): pattern only matches one exact term e.g. pattern "2 'pi'" 
-	//                         (note: everything without pattern variables falls tecnically in this category)
-	//  - low    (value 2xxx): pattern is recursive, but has strong operands order (e.g. all in Fn), 
-	//                         thus matches unique on outhermost level, but may hold general operands
-	//  - high   (value 3xxx): sums / products containing pattern variables can match not only multiple terms, 
-	//                         but may also match specific terms in more than one way (also tree variables, duh)
-	//the table only differentiates between types, however (as described above) the real generality of a given term may be lower, 
-	//  than that of its outermost node listed here.
-	//as the goal of this endavour is (mostly) to sort the most general summands / factors in a pattern to the end, 
-	//  the sorting required for efficiently matching patterns may use this table, but has to check more.
-	constexpr int generality(MathType type) noexcept
-	{ 
-		constexpr auto type_generality_table = std::to_array<std::pair<MathType, int>>({
-			{ MathType(Literal::complex     ), 1000 }, 
-			{ MathType(Literal::variable    ), 1001 },
-			//values 2xxx are not present, as that would require every item in Fn to be listed here (instead default_generality kicks in here)
-			{ MathType(Comm::multiset       ), 3002 },  
-			{ MathType(Comm::set            ), 3003 },  
-			{ MathType(Comm::sum            ), 3004 },  
-			{ MathType(Comm::product        ), 3005 }, 
-			{ MathType(NamedFn{})            , 3010 },
-		});
-		static_assert(std::is_sorted(type_generality_table.begin(), type_generality_table.end(), 
-			[](auto a, auto b) { return a.second < b.second; }));
-		static_assert(static_cast<unsigned>(MathType::COUNT) < 1000u, 
-			"else the 2xxx generalities may leak into the 3xxx ones in table");
-
-		const std::pair<MathType, int> default_generality = { MathType(0u), static_cast<unsigned>(type) + 2000 };
-		return search(type_generality_table, &std::pair<MathType, int>::first, type, default_generality).second; 
-	}
 
 
 
@@ -240,15 +206,15 @@ namespace bmath::intern {
 
 		//every item enumerated in Variadic (except COUNT, duh) may be listed here in order of apperance in Variadic
 		constexpr auto variadic_props_table = std::to_array<VariadicProperties>({
+			{ NonComm::list           , "list"        , false },
+			{ NonComm::ordered_sum    , "sum'"        , true  },
+			{ NonComm::ordered_product, "product'"    , true  },
 			{ Comm::sum               , "sum"         , true  },
 			{ Comm::product           , "product"     , true  },
 			{ Comm::multiset          , "multiset"    , false },
 			{ Comm::set               , "set"         , false },
 			{ Comm::union_            , "union"       , true  },
 			{ Comm::intersection      , "intersection", true  },
-			{ NonComm::list           , "list"        , false },
-			{ NonComm::ordered_sum    , "sum'"        , true  },
-			{ NonComm::ordered_product, "product'"    , true  },
 		});
 		static_assert(static_cast<unsigned>(variadic_props_table.front().type) == 0u);
 		static_assert(std::is_sorted(variadic_props_table.begin(), variadic_props_table.end(), 

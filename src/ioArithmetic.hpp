@@ -2,6 +2,7 @@
 
 #include "parseTerm.hpp"
 #include "arithmeticTerm.hpp"
+#include "pattern.hpp"
 
 namespace bmath::intern {
 
@@ -171,6 +172,8 @@ namespace bmath::intern {
 	namespace print {
 
 		void append_to_string(const UnsaveRef ref, std::string& str, const int parent_infixr = 0);
+
+		void append_to_string(const pattern::UnsavePnRef ref, std::string& str, const int depth = 0);
 
 		//prettier, but also slower
 		std::string to_pretty_string(const UnsaveRef ref, const int parent_infixr = 0);

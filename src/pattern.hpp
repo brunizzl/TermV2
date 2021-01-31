@@ -307,6 +307,7 @@ namespace bmath::intern::pattern {
 		//if convert == Convert::basic only TreeMatch and MultiPn are converted from their NamedFn form
 		//  (enables to use rewrite rules to help building value match patterns)
 		RewriteRule(std::string name, Convert convert = Convert::all);
+		std::string to_string() const;
 
 		MutPnRef lhs_mut_ref() noexcept { return MutPnRef(this->store, this->lhs_head); }
 		MutPnRef rhs_mut_ref() noexcept { return MutPnRef(this->store, this->rhs_head); }
@@ -324,6 +325,10 @@ namespace bmath::intern::pattern {
 		//copies math_ref into dst_store but changes math representations of pattern specific nodes 
 		//  to their final pattern versions
 		PnIdx intermediate_to_pattern(const UnsaveRef math_ref, PnStore& dst_store, const Side side, const Convert convert);
+
+		std::strong_ordering compare(const UnsavePnRef fst, const UnsavePnRef snd);
+
+		void sort(const MutPnRef ref);
 
 	} //namespace pn_tree
 
@@ -489,3 +494,48 @@ namespace bmath::intern::fn {
 	}
 
 } //namespace bmath::intern::fn
+
+namespace bmath::intern {
+
+	//if one pattern may compare equal to a term multiple ways (e.g. sum or product), it has high generality.
+	//there are 3 main levels of generality:
+	//  - unique (value 1xxx): pattern only matches one exact term e.g. pattern "2 'pi'" 
+	//                         (note: everything without pattern variables falls tecnically in this category)
+	//  - low    (value 2xxx): pattern is recursive, but has strong operands order (e.g. all in Fn), 
+	//                         thus matches unique on outhermost level, but may hold general operands
+	//  - high   (value 2xxx and 3xxx): sums / products containing pattern variables can match not only multiple terms, 
+	//                         but may also match specific terms in more than one way (also tree variables, duh)
+	//the table only differentiates between types, however (as described above) the real generality of a given term may be lower, 
+	//  than that of its outermost node listed here.
+	//as the goal of this endavour is (mostly) to sort the most general summands / factors in a pattern to the end, 
+	//  the sorting required for efficiently matching patterns may use this table, but has to check more.
+	constexpr int generality(const pattern::PnType type) noexcept
+	{
+		using namespace pattern;
+		constexpr auto type_generality_table = std::to_array<std::pair<PnType, int>>({
+			{ Literal::complex   , 1000 },
+			{ Literal::variable  , 1001 },
+			{ PnNode::value_match, 1002 }, //may match different subsets of complex numbers, but always requires an actual value to match against
+			{ PnNode::value_proxy, 1003 }, //dont care really where this sits, as it never ist used in matching anyway
+			//values 2xxx are not present, as that would require every item in Fn to be listed here (instead default_generality kicks in here)			
+			{ PnNode::tree_match , 3006 },
+			{ MultiPn::params    , 3007 }, //kinda special, as they always succeed in matching -> need to be matched last 
+			{ MultiPn::summands  , 3008 }, //kinda special, as they always succeed in matching -> need to be matched last 
+			{ MultiPn::factors   , 3009 }, //kinda special, as they always succeed in matching -> need to be matched last 
+		});
+		static_assert(std::is_sorted(type_generality_table.begin(), type_generality_table.end(),
+			[](auto a, auto b) { return a.second < b.second; }));
+		static_assert(static_cast<unsigned>(PnType::COUNT) < 1000u,
+			"else the 2xxx generalities may leak into the 3xxx ones in table");
+		static_assert(static_cast<unsigned>(PnType::COUNT) == 
+			type_generality_table.size() + static_cast<unsigned>(Function::COUNT),
+			"all but elements in function need to be listed in table");
+
+		if (type.is<Function>()) {
+			return static_cast<unsigned>(type) + 2000;
+		}
+		else {
+			return find(type_generality_table, &std::pair<PnType, int>::first, type).second;
+		}
+	}
+} //namespace bmath::intern
