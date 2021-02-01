@@ -55,7 +55,7 @@ namespace bmath::intern {
 	[[nodiscard]] MathIdx build(MathStore& store, ParseView view);
 
 
-	template<typename Store_T>
+	template<StoreLike Store_T>
 	[[nodiscard]] MathIdx build_value(Store_T& store, const std::complex<double> complex) noexcept
 	{
 		const std::size_t result_idx = store.allocate_one();
@@ -63,7 +63,7 @@ namespace bmath::intern {
 		return MathIdx(result_idx, Literal::complex);
 	}
 
-	template<typename Store_T>
+	template<StoreLike Store_T>
 	[[nodiscard]] MathIdx build_negated(Store_T& store, const MathIdx to_negate) noexcept
 	{
 		const MathIdx minus_1 = build_value(store, -1.0);
@@ -72,7 +72,7 @@ namespace bmath::intern {
 		return MathIdx(result_idx, Comm::product);
 	}
 
-	template<typename Store_T>
+	template<StoreLike Store_T>
 	[[nodiscard]] MathIdx build_inverted(Store_T& store, const MathIdx to_invert) noexcept
 	{
 		const MathIdx minus_1 = build_value(store, -1.0);
@@ -106,7 +106,7 @@ namespace bmath::intern {
 	//BuildInverse recieves an already build term (by TypedIdx) and returns the inverse (by TypedIdx)
 	//  e.g. for sum, it should turn "a" -> "a*(-1)", for product "a" -> "a^(-1)"
 	//BuildAny can build any type of term from a ParseView, this function will very likely already call build_variadic.
-	template<typename VariadicTraits, typename Store_T, typename BuildInverse, typename BuildAny>
+	template<typename VariadicTraits, StoreLike Store_T, typename BuildInverse, typename BuildAny>
 	MathIdx build_variadic(Store_T& store, ParseView input, std::size_t op_idx, BuildInverse build_inverse, BuildAny build_any)
 	{
 		StupidBufferVector<MathIdx, 16> result_buffer;
@@ -133,7 +133,7 @@ namespace bmath::intern {
 		return MathIdx(IndexVector::build(store, result_buffer), VariadicTraits::type_name);
 	} //build_variadic
 
-	template<typename Store_T, typename BuildAny>
+	template<StoreLike Store_T, typename BuildAny>
 	[[nodiscard]] MathIdx build_function(Store_T& store, ParseView input, const std::size_t open_par, BuildAny build_any)
 	{
 		const std::string_view name = input.to_string_view(0u, open_par);

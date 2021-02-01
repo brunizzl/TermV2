@@ -393,16 +393,16 @@ namespace bmath::intern {
 		static constexpr auto all_options = compute_all_options();
 
 		template<std::array Options>
-		static constexpr CaseIdentifier decide_impl(const SumEnum_T e) noexcept
+		static constexpr CaseIdentifier decide_subrange(const SumEnum_T e) noexcept
 		{
 			if constexpr (Options.size() > 1u) {
 				constexpr std::size_t mid = Options.size() / 2u;
 
 				if (static_cast<unsigned>(e) < Options[mid].begin_) {
-					return EnumSwitch::decide_impl<arr::take<mid>(Options)>(e);
+					return EnumSwitch::decide_subrange<arr::take<mid>(Options)>(e);
 				}
 				else {
-					return EnumSwitch::decide_impl<arr::drop<mid>(Options)>(e);
+					return EnumSwitch::decide_subrange<arr::drop<mid>(Options)>(e);
 				}
 			}
 			else {
@@ -413,7 +413,7 @@ namespace bmath::intern {
 	public:
 		static constexpr CaseIdentifier decide(const SumEnum_T e) noexcept 
 		{ 
-			return EnumSwitch::decide_impl<all_options>(e); 
+			return EnumSwitch::decide_subrange<all_options>(e); 
 		}
 
 		template<typename E>

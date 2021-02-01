@@ -49,7 +49,7 @@ namespace bmath::intern::pattern {
 						assert(params[0].get_type() == Literal::complex);
 						assert(has_form(*new_ref.new_at(params[0]), Form::natural_0));
 						assert(params[1].get_type() == Literal::variable);
-						assert(type_of(new_ref.new_at(params[1])->char_vec).is<Restriction>());
+						assert(type_of(new_ref.new_at(params[1])->characters).is<Restriction>());
 						return IntermediateTreeMatch(new_ref);
 					}
 				}
@@ -65,7 +65,7 @@ namespace bmath::intern::pattern {
 			constexpr Restriction restr() const noexcept
 			{
 				const IndexVector& params = *this->ref;
-				return type_of(this->ref.new_at(params[1])->char_vec).to<Restriction>();
+				return type_of(this->ref.new_at(params[1])->characters).to<Restriction>();
 			}
 		}; //class IntermediateTreeMatch
 
@@ -101,7 +101,7 @@ namespace bmath::intern::pattern {
 						assert(params[0].get_type() == Literal::complex);
 						assert(has_form(*new_ref.new_at(params[0]), Form::natural_0));
 						assert(params[1].get_type() == Literal::variable);
-						assert(type_of(new_ref.new_at(params[1])->char_vec).is<MultiPn>());
+						assert(type_of(new_ref.new_at(params[1])->characters).is<MultiPn>());
 						return IntermediateMultiMatch(new_ref);
 					}
 				}
@@ -117,7 +117,7 @@ namespace bmath::intern::pattern {
 			constexpr MultiPn type() const noexcept
 			{
 				const IndexVector& params = *this->ref;
-				return type_of(this->ref.new_at(params[1])->char_vec).to<MultiPn>();
+				return type_of(this->ref.new_at(params[1])->characters).to<MultiPn>();
 			}
 		}; //class IntermediateMultiMatch
 
@@ -198,7 +198,7 @@ namespace bmath::intern::pattern {
 						assert(params[1].get_type() == Literal::complex);
 						assert(has_form(*new_ref.new_at(params[1]), Form::natural_0));
 						assert(params[2].get_type() == Literal::variable);
-						assert(type_of(new_ref.new_at(params[2])->char_vec).is<Form>());
+						assert(type_of(new_ref.new_at(params[2])->characters).is<Form>());
 						return IntermediateValueMatch(new_ref);
 					}
 				}
@@ -216,7 +216,7 @@ namespace bmath::intern::pattern {
 			constexpr Form form() const noexcept
 			{
 				const IndexVector& params = *this->ref;
-				return type_of(this->ref.new_at(params[2])->char_vec).to<Form>();
+				return type_of(this->ref.new_at(params[2])->characters).to<Form>();
 			}
 		}; //class IntermediateValueMatch
 	} //namespace math_rep
@@ -556,33 +556,35 @@ namespace bmath::intern::pattern {
 			//has to be filled in same order as MatchData::variadic_data
 			//index of element in old_multis equals value of corrected MultiPn occurence (plus the type)
 			std::vector<PnIdx> old_multis;
-			const auto catalog_lhs_occurences = [&old_multis](const PnRef head) {
+			const auto catalog_lhs_occurences = [&old_multis](const MutPnRef head) {
 				struct Acc
 				{
 					std::vector<PnIdx>* old_multis;
 					std::uint32_t own_idx;
 
-					constexpr Acc(const PnRef ref, std::vector<PnIdx>* new_old_multis) noexcept
+					constexpr Acc(const MutPnRef ref, std::vector<PnIdx>* new_old_multis) noexcept
 						:old_multis(new_old_multis), own_idx(-1u)
 					{
 						if (ref.type.is<Variadic>()) { //these may contain MultiPn -> these have SharedVariadicDatum entry 
 							this->own_idx = this->old_multis->size(); //new last element 
+							variadic_meta_data(ref).match_data_idx = this->own_idx;
 							this->old_multis->emplace_back(PnIdx{}); //becomes only valid element if consume finds MultiPn
 						}
 					}
 
-					void consume(const PnIdx child) noexcept
+					void consume(const PnIdx child)
 					{
 						if (child.get_type().is<MultiPn>()) {
+							if (this->own_idx == -1) throw std::exception("found MultiPn in unexprected place");
 							this->old_multis->at(this->own_idx) = child;
 						}
 					}
 
 					auto result() noexcept { return PnIdx{}; } //caution: only works as long as no multi is represented as Function
 				};
-				(void)fold::tree_fold<PnIdx, Acc>(head, [](const PnRef ref) { return ref.typed_idx(); }, &old_multis);
+				(void)fold::tree_fold<PnIdx, Acc>(head, [](const MutPnRef ref) { return ref.typed_idx(); }, &old_multis);
 			};
-			catalog_lhs_occurences(this->lhs_ref());
+			catalog_lhs_occurences(this->lhs_mut_ref());
 
 			const auto replace_occurences = [&old_multis](const MutPnRef head, const bool test_lhs) -> bool {
 				const auto check_function_params = [&old_multis, test_lhs](const MutPnRef ref) -> fold::FindTrue {
@@ -687,7 +689,7 @@ namespace bmath::intern::pattern {
 					constexpr Acc(const PnRef ref) noexcept
 						:acc(ref.type == PnNode::value_match ?
 							std::numeric_limits<int>::min() : //subterms of value_match dont count -> initialize negative
-							(ref.type.is<Variadic>() || ref.type.is<NamedFn>())) //count only these two
+							ref.type.is<Variadic>()) //count only these
 					{}
 
 					void consume(const int child_size) noexcept { this->acc += child_size; }
@@ -696,7 +698,7 @@ namespace bmath::intern::pattern {
 				const int variadic_count = fold::tree_fold<std::size_t, Acc>(head, [](auto) { return 0; });
 				return variadic_count > match::MatchData::max_variadic_count;
 			};
-			throw_if(contains_to_many_variadics(this->lhs_ref()), "lhs contains to many variadic functions / instances of NamedFn");
+			throw_if(contains_to_many_variadics(this->lhs_ref()), "lhs contains to many variadic functions");
 		}
 	} //RewriteRule::RewriteRule
 
@@ -844,6 +846,13 @@ namespace bmath::intern::pattern {
 					const CharVector& name_ref = fn::named_fn_name(src_ref);
 					return fn::build_named_fn<PnType>(dst_store, name_ref, dst_parameters);
 				}
+				else if (src_ref.type.is<Variadic>()) { //allocate one extra for metadata
+					const std::size_t alloc_capacity = PnIdxVector::smallest_fit_capacity(dst_parameters.size());
+					const std::size_t alloc_idx = dst_store.allocate_n(1u + PnIdxVector::_node_count(alloc_capacity)) + 1u; //1u for metadata
+					PnIdxVector::emplace(dst_store.at(alloc_idx), dst_parameters, alloc_capacity);
+					dst_store.at(alloc_idx - 1u) = VariadicMetaData{}; //still needs to be set to corrent values
+					return PnIdx(alloc_idx, src_ref.type);
+				}
 				else {
 					return PnIdx(PnIdxVector::build(dst_store, dst_parameters), src_ref.type);
 				}
@@ -953,9 +962,12 @@ namespace bmath::intern::pattern {
 			}
 			switch (pn_ref.type) {
 			case PnType(NamedFn{}): {
+				if (pn_ref->parameters.size() != ref->parameters.size()) {
+					return false;
+				}
 				const CharVector& name = fn::named_fn_name(ref);
 				const CharVector& pn_name = fn::named_fn_name(pn_ref);
-				if (std::string_view(name.data(), name.size()) != std::string_view(pn_name.data(), pn_name.size())) {
+				if (std::string_view(name) != std::string_view(pn_name)) {
 					return false;
 				}
 			} [[fallthrough]];
@@ -968,7 +980,8 @@ namespace bmath::intern::pattern {
 					}
 					return find_matching_permutation(pn_ref, ref, match_data, 0u, 0u);
 				}
-				else if (pn_ref.type.is<Fn>()) {
+				else if (pn_ref.type.is<Fn>() || pn_ref.type.is<NamedFn>()) {
+					assert(pn_ref->parameters.size() == ref->parameters.size()); //true for NamedFn because we tested earlier and always true for Fn 
 					const PnIdxVector& pn_range = fn::range(pn_ref);
 					const IndexVector& range = fn::range(ref);
 					auto pn_iter = pn_range.begin();
@@ -982,7 +995,7 @@ namespace bmath::intern::pattern {
 					return true;
 				}
 				else {
-					assert(pn_ref.type.is<NonComm>() || pn_ref.type.is<NamedFn>());
+					assert(pn_ref.type.is<NonComm>());
 					const PnIdxVector& pn_range = fn::range(pn_ref);
 					const IndexVector& range = fn::range(ref);
 					auto pn_iter = pn_range.begin();
@@ -1007,7 +1020,6 @@ namespace bmath::intern::pattern {
 
 				found_multi_pn:
 					auto& info = match_data.multi_info(pn_iter->get_index());
-					const BitSet64 first_pn_elems_many_true = (1ull << (pn_range.size() - 1u)) - 1u; //more precisly: last elem not counted, as it is MultiPn 
 					for (std::uint32_t i = 0u; i < pn_range.size() - 1u; i++) {
 						info.match_positions[i] = i;
 					}
@@ -1018,7 +1030,7 @@ namespace bmath::intern::pattern {
 			case PnType(Literal::variable): {
 				const CharVector& var = *ref;
 				const CharVector& pn_var = *pn_ref;
-				return std::string_view(var.data(), var.size()) == std::string_view(pn_var.data(), pn_var.size());
+				return std::string_view(var) == std::string_view(pn_var);
 			} break;
 			case PnType(Literal::complex): {
 				const Complex& complex = *ref;
@@ -1060,14 +1072,14 @@ namespace bmath::intern::pattern {
 				}
 			} break;
 			case PnType(PnNode::value_proxy): //may only be encountered in pn_tree::eval_value_match (as value_match does no permutation_equals call)
-				assert(false);
-				return false;
+				[[fallthrough]];
 			case PnType(MultiPn::summands): //not expected in matching side of pattern, only in replacement side
 				[[fallthrough]];
 			case PnType(MultiPn::factors): //not expected in matching side of pattern, only in replacement side
 				[[fallthrough]];
 			case PnType(MultiPn::params): //assumed to be handeled only as param of named_fn or ordered elements in Variadic 
 				assert(false);
+				BMATH_UNREACHABLE;
 				return false;
 			}
 		} //permutation_equals
@@ -1143,6 +1155,8 @@ namespace bmath::intern::pattern {
 		{
 			assert(pn_ref.type == haystack_ref.type && (haystack_ref.type.is<Comm>()));
 
+			const VariadicMetaData meta_data = variadic_meta_data(pn_ref);
+
 			const PnIdxVector& pn_params = *pn_ref;
 			const IndexVector& haystack_params = *haystack_ref;
 
@@ -1150,7 +1164,7 @@ namespace bmath::intern::pattern {
 				return tree::compare(haystack_ref.new_at(lhs), haystack_ref.new_at(rhs)) == std::strong_ordering::less;
 				}));
 
-			SharedVariadicDatum& variadic_datum = match_data.variadic_data.at_or_insert(pn_ref.index);
+			SharedVariadicDatum& variadic_datum = match_data.variadic_data[meta_data.match_data_idx];
 			variadic_datum.match_idx = haystack_ref.typed_idx();
 
 			BitVector currently_matched = BitVector(haystack_params.size()); //one bit for each element in haystack_params

@@ -102,35 +102,47 @@ namespace bmath::intern::pattern {
 		{}
 	};
 
+	//in a pattern Variadic is actually preceeded by an element of this
+	struct VariadicMetaData 
+	{
+		std::uint32_t match_data_idx = -1u; //indexes in MatchData::variadic_match_data
+		BitSet32 rematchable = -1u; //bit i dertermines wether parameter i is rematchable
+	};
+
 	union PnUnion
 	{
 		Complex complex;
 		PnIdxVector parameters; //all in Variadic and all in Fn
-		CharVector char_vec;
+		VariadicMetaData variadic_data;
+		CharVector characters;
 		TreeMatchVariable tree_match;    //only expected as part of pattern
 		ValueMatchVariable value_match;  //only expected as part of pattern
 
-		constexpr PnUnion(const Complex& val) noexcept :complex(val) {}
-		constexpr PnUnion(const PnIdxVector& val) noexcept :parameters(val) {}
-		constexpr PnUnion(const CharVector& val) noexcept :char_vec(val) {}
-		constexpr PnUnion(const TreeMatchVariable& val) noexcept :tree_match(val) {}
-		constexpr PnUnion(const ValueMatchVariable& val) noexcept :value_match(val) {}
-		constexpr PnUnion()                              noexcept :complex(0.0) {}
+		constexpr PnUnion(const Complex&            val) noexcept :complex(val)       {}
+		constexpr PnUnion(const PnIdxVector&        val) noexcept :parameters(val)    {}
+		constexpr PnUnion(const VariadicMetaData&   val) noexcept :variadic_data(val) {}
+		constexpr PnUnion(const CharVector&         val) noexcept :characters(val)    {}
+		constexpr PnUnion(const TreeMatchVariable&  val) noexcept :tree_match(val)    {}
+		constexpr PnUnion(const ValueMatchVariable& val) noexcept :value_match(val)   {}
+		constexpr PnUnion()                              noexcept :complex(0.0)       {}
 
 		constexpr auto operator<=>(const PnUnion&) const = default;
 
-		constexpr operator const Complex& () const noexcept { return this->complex; }
-		constexpr operator const PnIdxVector& () const noexcept { return this->parameters; }
-		constexpr operator const CharVector& () const noexcept { return this->char_vec; }
-		constexpr operator const TreeMatchVariable& () const noexcept { return this->tree_match; }
-		constexpr operator const ValueMatchVariable& () const noexcept { return this->value_match; }
+		constexpr operator const Complex&            () const noexcept { return this->complex;       }
+		constexpr operator const PnIdxVector&        () const noexcept { return this->parameters;    }
+		constexpr operator const VariadicMetaData&   () const noexcept { return this->variadic_data; }
+		constexpr operator const CharVector&         () const noexcept { return this->characters;    }
+		constexpr operator const TreeMatchVariable&  () const noexcept { return this->tree_match;    }
+		constexpr operator const ValueMatchVariable& () const noexcept { return this->value_match;   }
 
-		constexpr operator Complex& () noexcept { return this->complex; }
-		constexpr operator PnIdxVector& () noexcept { return this->parameters; }
-		constexpr operator CharVector& () noexcept { return this->char_vec; }
-		constexpr operator TreeMatchVariable& () noexcept { return this->tree_match; }
-		constexpr operator ValueMatchVariable& () noexcept { return this->value_match; }
+		constexpr operator Complex&            () noexcept { return this->complex;       }
+		constexpr operator PnIdxVector&        () noexcept { return this->parameters;    }
+		constexpr operator VariadicMetaData&   () noexcept { return this->variadic_data; }
+		constexpr operator CharVector&         () noexcept { return this->characters;    }
+		constexpr operator TreeMatchVariable&  () noexcept { return this->tree_match;    }
+		constexpr operator ValueMatchVariable& () noexcept { return this->value_match;   }
 	};
+	static_assert(sizeof(PnUnion) == sizeof(Complex));
 
 	using PnStore = BasicStore<PnUnion>;
 
@@ -146,6 +158,14 @@ namespace bmath::intern::pattern {
 	static_assert(Reference<MutPnRef>);
 
 
+
+	constexpr const VariadicMetaData& variadic_meta_data(const UnsavePnRef ref) noexcept {
+		return *ref.raw_at(ref.index - 1u);
+	}
+
+	constexpr VariadicMetaData& variadic_meta_data(const MutPnRef ref) noexcept {
+		return ref.store->at(ref.index - 1u);
+	}
 
 
 
@@ -393,20 +413,19 @@ namespace bmath::intern::pattern {
 			//maximal number of unrelated TreeMatchVariables allowed per pattern
 			static constexpr std::size_t max_tree_match_count = 8u;
 			//maximal number of sums and products allowed per pattern
-			static constexpr std::size_t max_variadic_count = 8u;    //(max multi_match count is same)
+			static constexpr std::size_t max_variadic_count = 4u;    //(max multi_match count is same)
 
 			std::array<SharedValueDatum, max_value_match_count> value_match_data = {};
 			std::array<SharedTreeDatum, max_tree_match_count> tree_match_data = {};
-			//key is index of sum / product in pattern beeing matched
-			StupidLinearMap<std::uint32_t, -1u, SharedVariadicDatum, max_variadic_count> variadic_data = {};
+			std::array<SharedVariadicDatum, max_variadic_count> variadic_data = {};
 
 			constexpr auto& info(const TreeMatchVariable& var) noexcept { return this->tree_match_data[var.match_data_idx]; }
 			constexpr auto& info(const ValueMatchVariable& var) noexcept { return this->value_match_data[var.match_data_idx]; }
 			constexpr auto& info(const TreeMatchVariable& var) const noexcept { return this->tree_match_data[var.match_data_idx]; }
 			constexpr auto& info(const ValueMatchVariable& var) const noexcept { return this->value_match_data[var.match_data_idx]; }
 
-			constexpr auto& multi_info(const std::uint32_t idx) noexcept { return this->variadic_data.vals[idx]; }
-			constexpr auto& multi_info(const std::uint32_t idx) const noexcept { return this->variadic_data.vals[idx]; }
+			constexpr auto& multi_info(const std::uint32_t idx) noexcept { return this->variadic_data[idx]; }
+			constexpr auto& multi_info(const std::uint32_t idx) const noexcept { return this->variadic_data[idx]; }
 		};
 
 		//compares term starting at ref.index in ref.store with pattern starting at pn_ref.index in pn_ref.store
@@ -455,21 +474,18 @@ namespace bmath::intern::pattern {
 		//all rules in [start, stop) are applied until no matching rule is found. in between tree::establish_basic_order is called
 		//the new head of ref is retuned
 		template<intern::IterOver<const intern::pattern::RewriteRule> Iter>
-		MathIdx apply_rule_range(const Iter start, const Iter stop, const MutRef ref)
+		[[nodiscard]] MathIdx apply_rule_range(const Iter start, const Iter stop, const MutRef ref)
 		{
 			MathIdx head = tree::establish_basic_order(ref);
 		try_all_rules:
-			for (auto rule = start; rule != stop; ++rule) {
+			for (Iter rule = start; rule != stop; ++rule) {
 				const auto [head_match, deeper_match] =
 					recursive_match_and_replace(rule->lhs_ref(), rule->rhs_ref(), ref.new_at(head));
-
 				if (head_match) {
 					head = *head_match;
 				}
 				if (head_match || deeper_match) {
-					//assert(tree::valid_storage(ref.new_at(head)));
 					head = tree::establish_basic_order(ref.new_at(head));
-					//assert(tree::valid_storage(ref.new_at(head)));
 					goto try_all_rules;
 				}
 			}

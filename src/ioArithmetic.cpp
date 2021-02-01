@@ -348,7 +348,7 @@ namespace bmath::intern {
 				}
 			} break;
 			case MathType(Literal::variable): {
-				str += ref->char_vec;
+				str += ref->characters;
 			} break;
 			case MathType(Literal::complex): {
 				append_complex(ref->complex, str, parent_infixr);
@@ -389,7 +389,7 @@ namespace bmath::intern {
 				str.push_back(clse_paren);
 			} break;
 			case PnType(Literal::variable): {
-				str += ref->char_vec;
+				str += ref->characters;
 			} break;
 			case PnType(Literal::complex): {
 				append_complex(ref->complex, str, 0);
@@ -580,7 +580,7 @@ namespace bmath::intern {
 				str.push_back(')');
 			} break;
 			case MathType(Literal::variable): {
-				str += std::string_view(ref->char_vec.data(), ref->char_vec.size());
+				str += std::string_view(ref->characters.data(), ref->characters.size());
 			} break;
 			case MathType(Literal::complex): {
 				append_complex(ref->complex, str, parent_infixr);
@@ -760,7 +760,7 @@ namespace bmath::intern {
 			} break;
 			case MathType(Literal::variable): {
 				current_str += ' ';
-				current_str += std::string_view(ref->char_vec.data(), ref->char_vec.size());
+				current_str += std::string_view(ref->characters.data(), ref->characters.size());
 			} break;
 			case MathType(Literal::complex): {
 				current_str += ' ';

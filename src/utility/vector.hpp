@@ -15,28 +15,30 @@ namespace bmath::intern {
 		static_assert(std::is_trivially_destructible_v<Value_T>); //thus the "Stupid" in the name
 
 		std::size_t size_ = 0u;
-		Value_T* data_ = &local_data[0];
-		union
+		Value_T* data_ = &u.local_data[0];
+		union U
 		{
-			std::size_t capacity = 0u;
+			std::size_t capacity;
 			Value_T local_data[BufferSize];
-		};
+
+			constexpr U() :capacity(0u) {}
+		} u = {};
 
 		template<typename SndValue_T, std::size_t SndBuffer>
 		friend class StupidBufferVector;
 
 		constexpr void unsave_reallocate(const std::size_t new_capacity) noexcept
 		{
-			assert(new_capacity > BufferSize && (this->data_ == this->local_data || new_capacity > this->capacity) && 
+			assert(new_capacity > BufferSize && (this->data_ == this->u.local_data || new_capacity > this->u.capacity) && 
 				"no reallocation neccesairy");
 
 			Value_T* const new_data = new Value_T[new_capacity];
-			std::move(this->data_, this->data_ + this->size_, new_data);
-			if (this->data_ != this->local_data) {
+			std::copy_n(this->data_, this->size_, new_data);
+			if (this->data_ != this->u.local_data) {
 				delete[] this->data_; //only works for trivially destructible Value_T
 			}
 			this->data_ = new_data;
-			this->capacity = new_capacity;
+			this->u.capacity = new_capacity;
 		}
 
 	public:
@@ -50,14 +52,14 @@ namespace bmath::intern {
 		{
 			if (init.size() > BufferSize) [[unlikely]] {
 				this->data_ = new Value_T[init.size()];
-				this->capacity = init.size();
+				this->u.capacity = init.size();
 			}
 			std::copy(init.begin(), init.end(), this->data_);
 		}
 
 		~StupidBufferVector() noexcept
 		{
-			if (this->data_ != this->local_data) {
+			if (this->data_ != this->u.local_data) {
 				delete[] this->data_; //only works for trivially destructible Value_T
 			}
 		}
@@ -65,7 +67,7 @@ namespace bmath::intern {
 		constexpr void reserve(const std::size_t new_capacity) noexcept
 		{
 			if (new_capacity > BufferSize && 
-				(this->data_ == this->local_data || new_capacity > this->capacity)) 
+				(this->data_ == this->u.local_data || new_capacity > this->u.capacity)) 
 			{
 				this->unsave_reallocate(new_capacity);
 			}
@@ -85,18 +87,19 @@ namespace bmath::intern {
 		template<std::size_t SndBuffer>
 		StupidBufferVector& operator=(StupidBufferVector<Value_T, SndBuffer>&& snd) noexcept
 		{
-			this->~StupidBufferVector();
-			new (this) StupidBufferVector();
-
-			if (snd.data_ != snd.local_data) { //only works for trivially destructible Value_T
+			assert(false && "please be aware this function is not yet tested");
+			if (snd.data_ != snd.u.local_data) { //only works for trivially destructible Value_T
+				if (this->data_ != this->u.local_data) {
+					delete[] this->data_;
+				}
 				this->data_ = std::exchange(snd.data_, nullptr);
-				this->capacity = std::exchange(snd.capacity, 0u);
+				this->u.capacity = std::exchange(snd.u.capacity, 0u);
 				this->size_ = std::exchange(snd.size_, 0u);
 			}
 			else {
 				this->reserve(snd.size_);
 				this->size_ = snd.size_;
-				std::move(snd.data_, snd.data_ + snd.size_, this->data_);
+				std::copy_n(snd.data_, snd.size_, this->data_);
 				snd.clear();
 			} 
 			return *this;
@@ -104,9 +107,9 @@ namespace bmath::intern {
 
 		constexpr StupidBufferVector(StupidBufferVector&& snd) noexcept :size_(std::exchange(snd.size_, 0u))
 		{
-			if (snd.data_ != snd.local_data) {
+			if (snd.data_ != snd.u.local_data) {
 				this->data_ = std::exchange(snd.data_, nullptr);
-				this->capacity = std::exchange(snd.capacity, 0u);
+				this->u.capacity = std::exchange(snd.u.capacity, 0u);
 			}
 			else {
 				std::move(snd.data_, snd.data_ + this->size_, this->data_);
@@ -117,8 +120,8 @@ namespace bmath::intern {
 		constexpr Value_T& emplace_back(Args&&... args) noexcept
 		{
 			if (this->size_ > BufferSize) {
-				if (this->size_ == this->capacity) [[unlikely]] {
-					this->unsave_reallocate(this->capacity * 2u);
+				if (this->size_ == this->u.capacity) [[unlikely]] {
+					this->unsave_reallocate(this->u.capacity * 2u);
 				}
 			}
 			else if (this->size_ == BufferSize) [[unlikely]] {
@@ -134,7 +137,7 @@ namespace bmath::intern {
 
 		constexpr Value_T pop_back() noexcept
 		{ 
-			assert(this->size_ > 0u && "tried popping on empty data_vector");
+			assert(this->size_ > 0u && "tried popping on empty vector");
 			return this->data_[--this->size_]; //only works for trivially destructible Value_T
 		}
 
@@ -202,7 +205,7 @@ namespace bmath::intern {
 		template<typename... Args>
 		constexpr Value_T& emplace_back(Args&&... args) noexcept
 		{
-			assert(this->size_ < MaxSize && "tried pushing on full data_vector");
+			assert(this->size_ < MaxSize && "tried pushing on full vector");
 			Value_T* const addr = &this->data_[this->size_++];
 			new (addr) Value_T{ args... };
 			return *addr;
@@ -212,7 +215,7 @@ namespace bmath::intern {
 
 		constexpr void pop_back() noexcept
 		{ 
-			assert(this->size_ > 0u && "tried popping on empty data_vector");
+			assert(this->size_ > 0u && "tried popping on empty vector");
 			this->data_[--this->size_].~Value_T();
 		}
 

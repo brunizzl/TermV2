@@ -27,6 +27,7 @@ important:
  - allow to restrict a variables possibility space e.g. natural, integer, real, complex (split Literal::variable in own enum?)
 
 nice to have:
+ - enable StupidBufferVector to handle non-trivial destructible types -> advance him to BufferVector
  - pattern::match::copy should copy in same store (again...)
  - avoid copying pattern::MultiPn entries (needs to know original storage location of each entry, to steal it from there)
  - noexceptify everything

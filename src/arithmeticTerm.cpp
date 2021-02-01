@@ -526,7 +526,7 @@ namespace bmath::intern {
 		MathIdx search_variable(const UnsaveRef ref, const std::string_view name)
 		{
 			const auto test_for_name = [name](UnsaveRef ref) -> fold::Find<MathIdx> {
-				return (ref.type == Literal::variable && std::string_view(ref->char_vec.data(), ref->char_vec.size()) == name) ?
+				return (ref.type == Literal::variable && std::string_view(ref->characters.data(), ref->characters.size()) == name) ?
 					fold::done(MathIdx(ref.index, ref.type)) : //name was found -> cut tree evaluation here
 					fold::more(MathIdx());
 			};

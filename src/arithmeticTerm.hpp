@@ -103,22 +103,22 @@ namespace bmath::intern {
 	{
 		Complex complex;
 		IndexVector parameters; //all in Variadic and all in Fn
-		CharVector char_vec;
+		CharVector characters;
 
 		constexpr MathUnion(const Complex    & val) noexcept :complex(val)     {}
 		constexpr MathUnion(const IndexVector& val) noexcept :parameters(val)  {}
-		constexpr MathUnion(const CharVector & val) noexcept :char_vec(val)    {} 
+		constexpr MathUnion(const CharVector & val) noexcept :characters(val)  {} 
 		constexpr MathUnion()                       noexcept :complex(0.0)     {} 
 
 		constexpr auto operator<=>(const MathUnion&) const = default;
 
 		constexpr operator const Complex    &() const noexcept { return this->complex;     }
 		constexpr operator const IndexVector&() const noexcept { return this->parameters;  }
-		constexpr operator const CharVector &() const noexcept { return this->char_vec;    }
+		constexpr operator const CharVector &() const noexcept { return this->characters;  }
 
 		constexpr operator Complex    &() noexcept { return this->complex;     }
 		constexpr operator IndexVector&() noexcept { return this->parameters;  }
-		constexpr operator CharVector &() noexcept { return this->char_vec;    }
+		constexpr operator CharVector &() noexcept { return this->characters;  }
 	};
 
 	static_assert(sizeof(MathUnion) * 8 == 128);

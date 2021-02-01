@@ -57,12 +57,6 @@ namespace bmath::intern {
 		}
 
 		template<typename Own_T>
-		constexpr auto new_as(const std::uint32_t new_index) const noexcept 
-		{ 
-			return BasicNodeRef<Own_T, Store_T>(*this->store, new_index); 
-		}
-
-		template<typename Own_T>
 		constexpr auto cast() const noexcept 
 		{
 			return BasicNodeRef<Own_T, Store_T>(*this->store, this->index); 
@@ -123,11 +117,6 @@ namespace bmath::intern {
 
 		constexpr BasicNodeRef(Store_T& new_store, const std::uint32_t new_index) noexcept
 			:store(&new_store), index(new_index) {}
-
-		constexpr auto new_at(const std::size_t new_index) const noexcept 
-		{ 
-			return BasicNodeRef(*this->store, new_index); 
-		}
 
 		using Allowed_T = std::conditional_t<is_const, const Own_T, Own_T>;
 		constexpr auto& operator*() const { return static_cast<Allowed_T&>(store->at(index)); }
