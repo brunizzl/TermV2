@@ -625,9 +625,7 @@ namespace bmath::intern::pattern {
 					if (!meets_restriction(ref, pn_ref.type.to<TreeMatchOwning>())) {
 						return false;
 					}
-					auto& match_info = match_data.tree_info(pn_ref.index);
-					assert(!match_info.is_set());
-					match_info.match_idx = ref.typed_idx();
+					match_data.tree_info(pn_ref.index).match_idx = ref.typed_idx();
 					return true;
 				}
 				assert(pn_ref.type.is<Function>());
@@ -700,35 +698,28 @@ namespace bmath::intern::pattern {
 				assert(match_info.is_set());
 				return tree::compare(ref, ref.new_at(match_info.match_idx)) == std::strong_ordering::equal;
 			} break;
-			case PnType(ValueMatch::owning): {
-				if (ref.type != Literal::complex) { //only this test allows us to pass *ref to evaluate this_value
-					return false;
-				}
-				const ValueMatchVariable& var = *pn_ref;
-				auto& match_info = match_data.info(var);
-				assert(!match_info.is_set());
-				const OptionalComplex this_value = pn_tree::eval_value_match(pn_ref.new_at(var.mtch_idx), *ref);
-				if (!this_value || !in_domain(*this_value, var.domain)) {
-					return false;
-				}
-				else {
-					match_info.value = *this_value;
-					return true;
-				}
-			} break;
+			case PnType(ValueMatch::owning): 
+				[[fallthrough]];
 			case PnType(ValueMatch::non_owning): {
 				if (ref.type != Literal::complex) { //only this test allows us to pass *ref to evaluate this_value
 					return false;
 				}
 				const ValueMatchVariable& var = *pn_ref;
-				const auto& match_info = match_data.info(var);
-				assert(match_info.is_set());
 				const OptionalComplex this_value = pn_tree::eval_value_match(pn_ref.new_at(var.mtch_idx), *ref);
 				if (!this_value || !in_domain(*this_value, var.domain)) {
 					return false;
 				}
 				else {
-					return *this_value == match_info.value;
+					auto& match_info = match_data.info(var);
+					if (pn_ref.type == ValueMatch::non_owning) {
+						assert(match_info.is_set());
+						return *this_value == match_info.value;
+					}
+					else {
+						assert(pn_ref.type == ValueMatch::owning);
+						match_info.value = *this_value;
+						return true;
+					}
 				}
 			} break;
 			case PnType(ValueProxy{}): //may only be encountered in pn_tree::eval_value_match (as value_match does no permutation_equals call)
@@ -739,29 +730,6 @@ namespace bmath::intern::pattern {
 				return false;
 			}
 		} //permutation_equals
-
-		void reset_own_matches(const pattern::UnsavePnRef pn_ref, MatchData& match_data)
-		{
-			switch (pn_ref.type) {
-			default:
-				if (pn_ref.type.is<Function>()) {
-					for (const PnIdx elem : fn::range(pn_ref)) {
-						reset_own_matches(pn_ref.new_at(elem), match_data);
-					}
-				}
-				else if (pn_ref.type.is<TreeMatchOwning>()) {
-					SharedTreeDatum& info = match_data.tree_info(pn_ref.index);
-					info = SharedTreeDatum();
-				}
-				break;
-			case PnType(ValueMatch::owning): {
-				SharedValueDatum& info = match_data.info(pn_ref->value_match);
-				info = SharedValueDatum();
-			} break;
-			case PnType(MultiParams{}):
-				break;
-			}
-		} //reset_own_matches
 
 		bool subsequent_permutation_equals(const pattern::UnsavePnRef pn_ref, const UnsaveRef ref, MatchData& match_data)
 		{
@@ -780,7 +748,6 @@ namespace bmath::intern::pattern {
 					pn_i--;
 				}
 				assert(!pn_params[pn_i].get_type().is<MultiParams>()); //there may only be a single one in each variadic
-				reset_own_matches(pn_ref, match_data);
 				const std::uint32_t last_haystack_k = variadic_datum.match_positions[pn_i];
 				return find_matching_permutation(pn_ref, ref, match_data, pn_i, last_haystack_k + 1u);
 			}
@@ -821,15 +788,14 @@ namespace bmath::intern::pattern {
 			}
 
 			while (pn_i < pn_params.size()) {
-				const PnType pn_i_type = pn_params[pn_i].get_type();
-				if (pn_i_type.is<MultiParams>()) [[unlikely]] { //also summands and factors are matched as params
+				const pattern::UnsavePnRef pn_i_ref = pn_ref.new_at(pn_params[pn_i]);
+				if (pn_i_ref.type.is<MultiParams>()) [[unlikely]] { //also summands and factors are matched as params
 					assert(pn_i + 1ull == pn_params.size() && "MultiParams is only valid as last element -> only one per variadic");
 					assert(&match_data.multi_info(pn_params[pn_i].get_index()) == &variadic_datum); //just out of paranoia
 					return true;
 				}
-				else if (pn_i_type.is<MathType>() || pn_i_type.is<ValueMatch>()) {
-					const pattern::UnsavePnRef pn_i_ref = pn_ref.new_at(pn_params[pn_i]);
-					const int pn_i_generality = generality(pn_i_type.to<MathType>());
+				else if (pn_i_ref.type.is<MathType>() || pn_i_ref.type.is<ValueMatch>()) {
+					const int pn_i_generality = generality(pn_i_ref.type.to<MathType>());
 					for (; haystack_k < haystack_params.size(); haystack_k++) {
 						//static_assert(generality(PnNode::value_match) > generality(Literal::complex));
 						if (pn_i_generality < generality(haystack_params[haystack_k].get_type())) {
@@ -841,52 +807,49 @@ namespace bmath::intern::pattern {
 						if (match::permutation_equals(pn_i_ref, haystack_ref.new_at(haystack_params[haystack_k]), match_data)) {
 							goto prepare_next_pn_i; //next while iteration
 						}
-						reset_own_matches(pn_i_ref, match_data);
+					}
+				}
+				else if (pn_i_ref.type.is<TreeMatchOwning>()) { //match info is not yet set -> test all
+					for (; haystack_k < haystack_params.size(); haystack_k++) {
+						if (currently_matched.test(haystack_k)) {
+							continue;
+						}
+						if (match::permutation_equals(pn_i_ref, haystack_ref.new_at(haystack_params[haystack_k]), match_data)) {
+							goto prepare_next_pn_i;
+						}
 					}
 				}
 				else {
-					assert(pn_i_type.is<TreeMatch>()); //other may not be encoountered in this function
-					const pattern::UnsavePnRef pn_i_ref = pn_ref.new_at(pn_params[pn_i]);
+					assert(pn_i_ref.type.is<TreeMatchNonOwning>()); //other may not be encoountered in this function
 					const auto& match_info = match_data.tree_info(pn_i_ref.index);
+					assert(match_info.is_set());
 
-					if (match_info.is_set()) { //binary search for needle over part of haystack allowed to search in
-						const UnsaveRef needle = haystack_ref.new_at(match_info.match_idx);
-						std::uint32_t search_begin = haystack_k;
-						std::uint32_t search_end = haystack_params.size();
+					const UnsaveRef needle = haystack_ref.new_at(match_info.match_idx);
+					std::uint32_t search_begin = haystack_k;
+					std::uint32_t search_end = haystack_params.size();
 
-						while (search_begin < search_end) {
-							const std::uint32_t midpoint = std::midpoint(search_begin, search_end); //rounded torwards search_begin
-							haystack_k = midpoint; //only call tree::compare where not currently matched
-							while (currently_matched.test(haystack_k) && haystack_k < search_end) {
-								haystack_k++;
-							}
-							if (haystack_k == search_end) {
-								search_end = midpoint;
-								continue;
-							}
-
-							const UnsaveRef search_ref = haystack_ref.new_at(haystack_params[haystack_k]);
-							const std::strong_ordering cmp = tree::compare(search_ref, needle);
-							if (cmp == std::strong_ordering::equal) {
-								goto prepare_next_pn_i;
-							}
-							else if (cmp == std::strong_ordering::less) {
-								search_begin = haystack_k + 1u;
-							}
-							else {
-								assert(cmp == std::strong_ordering::greater);
-								search_end = midpoint;
-							}
+					while (search_begin < search_end) {
+						const std::uint32_t midpoint = std::midpoint(search_begin, search_end); //rounded torwards search_begin
+						haystack_k = midpoint; //only call tree::compare where not currently matched
+						while (currently_matched.test(haystack_k) && haystack_k < search_end) {
+							haystack_k++;
 						}
-					}
-					else { //match info is not yet set -> test all
-						for (; haystack_k < haystack_params.size(); haystack_k++) {
-							if (currently_matched.test(haystack_k)) {
-								continue;
-							}
-							if (match::permutation_equals(pn_i_ref, haystack_ref.new_at(haystack_params[haystack_k]), match_data)) {
-								goto prepare_next_pn_i;
-							}
+						if (haystack_k == search_end) {
+							search_end = midpoint;
+							continue;
+						}
+
+						const UnsaveRef search_ref = haystack_ref.new_at(haystack_params[haystack_k]);
+						const std::strong_ordering cmp = tree::compare(search_ref, needle);
+						if (cmp == std::strong_ordering::equal) {
+							goto prepare_next_pn_i;
+						}
+						else if (cmp == std::strong_ordering::less) {
+							search_begin = haystack_k + 1u;
+						}
+						else {
+							assert(cmp == std::strong_ordering::greater);
+							search_end = midpoint;
 						}
 					}
 				}
@@ -912,7 +875,6 @@ namespace bmath::intern::pattern {
 					else {
 						//could not rematch last successfully matched element with same element in haystack 
 						//  -> try succeeding elements in haystack in next loop iteration
-						reset_own_matches(pn_i_ref, match_data);
 						currently_matched.reset(haystack_k);
 						haystack_k++;
 					}

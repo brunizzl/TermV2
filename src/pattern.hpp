@@ -312,11 +312,6 @@ namespace bmath::intern::pattern {
 		//if match was not succsessfull, match_data is NOT reset and false is returned
 		bool permutation_equals(const pattern::UnsavePnRef pn_ref, const UnsaveRef ref, MatchData& match_data);
 
-		//resets not all matched variables appearing in pn_ref, but only the ones also set by pn_ref
-		//example: in whole pattern "a+a*b" "a" may be matched as single summand, 
-		//  thus resetting own variables in part "a*b" will only reset "b".
-		void reset_own_matches(const pattern::UnsavePnRef pn_ref, MatchData& match_data);
-
 		//determines weather there is a way to match pn_ref in haystack_ref (thus pn_ref is assumed to part of a pattern)
 		//pn_i is the index of the first element in pn_ref to be matched. 
 		//if pn_i is not zero, it is assumed, that all previous elements in pn_ref are already matched.
