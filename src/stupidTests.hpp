@@ -56,11 +56,25 @@ namespace bmath::intern::debug {
 			<< "PnType(Comm::union_)             = " << unsigned(PnType(Comm::union_))             << "\n"
 			<< "PnType(Comm::intersection)       = " << unsigned(PnType(Comm::intersection))       << "\n\n"
 			<< "PnType(Literal::variable)        = " << unsigned(PnType(Literal::variable))        << "\n"
-			<< "PnType(Literal::complex)         = " << unsigned(PnType(Literal::complex))         << "\n\n"
-			<< "PnType(PnNode::value_match)      = " << unsigned(PnType(PnNode::value_match))      << "\n"
-			<< "PnType(PnNode::value_proxy)      = " << unsigned(PnType(PnNode::value_proxy))      << "\n"
-			<< "PnType(PnNode::tree_match)       = " << unsigned(PnType(PnNode::tree_match))       << "\n\n"
-			<< "PnType(MultiParams{})          = " << unsigned(PnType(MultiParams{}))          << "\n\n\n"
+			<< "PnType(Literal::complex)         = " << unsigned(PnType(Literal::complex))         << "\n\n\n\n"
+			<< "PnType(TreeMatchNonOwning{})     = " << unsigned(PnType(TreeMatchNonOwning{}))     << "\n\n"
+			<< "PnType(Restriction::any)         = " << unsigned(PnType(Restriction::any))         << "\n"
+			<< "PnType(Restriction::nn1)         = " << unsigned(PnType(Restriction::nn1))         << "\n"
+			<< "PnType(Restriction::no_val)      = " << unsigned(PnType(Restriction::no_val))      << "\n"
+			<< "PnType(Restriction::variable)    = " << unsigned(PnType(Restriction::variable))    << "\n\n"
+			<< "PnType(Domain::natural)          = " << unsigned(PnType(Domain::natural))          << "\n"
+			<< "PnType(Domain::natural_0)        = " << unsigned(PnType(Domain::natural_0))        << "\n"
+			<< "PnType(Domain::integer)          = " << unsigned(PnType(Domain::integer))          << "\n"
+			<< "PnType(Domain::negative)         = " << unsigned(PnType(Domain::negative))         << "\n"
+			<< "PnType(Domain::positive)         = " << unsigned(PnType(Domain::positive))         << "\n"
+			<< "PnType(Domain::not_negative)     = " << unsigned(PnType(Domain::not_negative))     << "\n"
+			<< "PnType(Domain::not_positive)     = " << unsigned(PnType(Domain::not_positive))     << "\n"
+			<< "PnType(Domain::real)             = " << unsigned(PnType(Domain::real))             << "\n"
+			<< "PnType(Domain::complex)          = " << unsigned(PnType(Domain::complex))          << "\n\n"
+			<< "PnType(MultiParams{})            = " << unsigned(PnType(MultiParams{}))            << "\n\n"
+			<< "PnType(ValueProxy{})             = " << unsigned(PnType(ValueProxy{}))             << "\n"
+			<< "PnType(ValueMatch::owning)       = " << unsigned(PnType(ValueMatch::owning))       << "\n"
+			<< "PnType(ValueMatch::non_owning)   = " << unsigned(PnType(ValueMatch::non_owning))   << "\n\n\n"
 		;
 	} //enumerate_type
 
@@ -169,7 +183,7 @@ namespace bmath::intern::debug {
 			try {
 				bmath::Term test(name); 
 				std::cout << "input:  " << test.to_pretty_string() << "\n";
-				test.head = pattern::match::apply_rule_range(rules.begin(), rules.end(), test.mut_ref());
+				test.head = pattern::match::apply_rule_range(rules.data(), rules.data() + rules.size(), test.mut_ref());
 
 				std::cout << "    = " << test.to_pretty_string() << "\n";
 				//std::cout << test.to_memory_layout() << "\n";

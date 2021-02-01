@@ -369,6 +369,16 @@ namespace bmath::intern {
 
 			switch (ref.type) {
 			default: {
+				if (ref.type.is<TreeMatchOwning>()) {
+					str.append("_T");
+					str.append(std::to_string(ref.index));
+					if (ref.type != Restriction::any) {
+						str.push_back(open_paren);
+						str.append(name_of(ref.type.to<TreeMatchOwning>()));
+						str.push_back(clse_paren);
+					}
+					break;
+				}
 				if (ref.type.is<NamedFn>()) {
 					const CharVector& name = fn::named_fn_name(ref);
 					str.append(name);
@@ -394,27 +404,27 @@ namespace bmath::intern {
 			case PnType(Literal::complex): {
 				append_complex(ref->complex, str, 0);
 			} break;
-			case PnType(PnNode::tree_match): {
-				const TreeMatchVariable& var = *ref;
+			case PnType(TreeMatchNonOwning{}): {
 				str.append("_T");
-				str.append(std::to_string(var.match_data_idx));
-				if (var.restr != Restr::any) {
-					str.push_back(open_paren);
-					str.append(name_of(var.restr));
-					str.push_back(clse_paren);
-				}
+				str.append(std::to_string(ref.index));
+				str.push_back('\'');
 			} break;
-			case PnType(PnNode::value_match): {
+			case PnType(ValueMatch::non_owning):
+				[[fallthrough]];
+			case PnType(ValueMatch::owning): {
 				const ValueMatchVariable& var = *ref;
 				str.append("_V");
 				str.append(std::to_string(var.match_data_idx));
+				if (ref.type == ValueMatch::non_owning) {
+					str.push_back('\'');
+				}
 				str.push_back(open_paren);
-				str.append(name_of(var.form));
+				str.append(name_of(var.domain));
 				str.append(", ");
 				print::append_to_string(ref.new_at(var.mtch_idx), str, depth + 1);
 				str.push_back(clse_paren);
 			} break;
-			case PnType(PnNode::value_proxy): {
+			case PnType(ValueProxy{}): {
 				str.append("_VP");
 				str.append(std::to_string(ref.index));
 			} break;

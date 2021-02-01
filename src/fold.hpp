@@ -88,15 +88,15 @@ namespace bmath::intern::fold {
 
 		//calls apply with every node (postorder), and assigns the result to the position the node is stored at.
 		//a change of storage location while the function executes is tolerated.
-		template<Reference R, Callable<R> Apply> requires (!R::is_const)
-			[[nodiscard]] auto mutate_fold(const R ref, Apply apply)
+		template<typename TypedIdx, Reference R, CallableTo<TypedIdx, R> Apply> requires (!R::is_const)
+		[[nodiscard]] TypedIdx mutate_fold(const R ref, Apply apply)
 		{
 			if (ref.type.is<Function>()) {
 				const auto range = fn::range(ref);
 				const auto stop = end(range);
 				auto iter = begin(range);
 				for (; iter != stop; ++iter) {
-					*iter = fold::mutate_fold(ref.new_at(*iter), apply);
+					*iter = fold::mutate_fold<TypedIdx>(ref.new_at(*iter), apply);
 				}
 			}
 			return apply(ref);

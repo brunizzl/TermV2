@@ -1,53 +1,70 @@
 #pragma once
 
-#include <iostream>
-
 #include "arithmeticTerm.hpp"
 
 namespace bmath::intern::pattern {
 
-	enum class PnNode
+
+	enum class Restriction
 	{
-		value_match, //real nodes appearing as elements in the store, just as everything of MathType
-		value_proxy, //not actual node in tree, just "end" indicator for value subtrees
-		tree_match,  //real nodes appearing as elements in the store, just as everything of MathType
+		any,
+		nn1, //compact for "not negative one" (basically any, but the exact term "-1" will not be accepted)
+		no_val, //any, but Literal::complex is forbidden    
+		variable, //only Literal::variable is accepted
 		COUNT
+	};
+
+	//specifies more constraints on a value
+	enum class Domain
+	{
+		natural,   //{ 1, 2, 3, ... }
+		natural_0, //{ 0, 1, 2, ... }
+		integer,
+		negative,     //implies real   
+		positive,     //implies real     	
+		not_negative, //implies real  
+		not_positive, //implies real 
+		real,
+		complex,
+		COUNT
+	};
+
+	using TreeMatchOwning = SumEnum<Domain, Restriction>;
+
+	struct TreeMatchNonOwning :SingleSumEnumEntry {};
+
+	using TreeMatch = SumEnum<TreeMatchOwning, TreeMatchNonOwning>;
+
+
+	struct ValueProxy :SingleSumEnumEntry {};
+
+	enum class ValueMatch 
+	{
+		owning, non_owning, COUNT
 	};
 
 	//represent not actual nodes in pattern tree, as all match info is stored in VariadicMatchDatum in MatchData	
 	//thus all info required in the tree is given in the typed_idx, where the index is repurposed to point elsewhere
 	//(elsewhere means that VariadicMatchDatum array in MatchData)
-
 	struct MultiParams :SingleSumEnumEntry {};
 
-	using MatchType = SumEnum<MultiParams, PnNode>;
+	//all values contained within Proxy dont reference an element in the pattern tree, but in MatchData
+	using Proxy = SumEnum <ValueProxy, MultiParams, TreeMatch>;
+
+	using MatchType = SumEnum<ValueMatch, Proxy>;
+
+
 
 	using PnType = SumEnum<MatchType, MathType>;
 	using PnIdx = BasicTypedIdx<PnType>;
 	using PnIdxVector = StoredVector<PnIdx>;
 
 
-	enum class Restr
-	{
-		any,
-		nn1, //compact for "not negative one" (basically any, but the exact term "-1" will not be accepted)
-		no_val, //basically any, but Literal::complex is forbidden    
-		function, //packs Variadic, NamedFn and Fn together
-		COUNT
-	};
-
-	//note: of Type, only sum, product, complex or variable may be used, as there is (currently)
-	//  no need to differentiate between any of the functions of Fn and unknown_function.
-	using Restriction = SumEnum<Restr, MathType>;
 
 	//in a valid pattern, all TreeMatchVariables of same name share the same restr and the same match_data_idx.
 	//it is allowed to have multiple instances of the same TreeMatchVariable per side.
 	//this variation of the match variable can match a subtree occuring in a term
-	struct TreeMatchVariable
-	{
-		std::uint32_t match_data_idx; //indexes in MatchData::tree_match_data
-		Restriction restr = pattern::Restr::any;
-	};
+	
 
 	//although the type MultiMatchVariable does not exist as type of node in term, other nodes may reference it
 	// (now called PnVariable::summands or PnVariable::factors)
@@ -61,23 +78,10 @@ namespace bmath::intern::pattern {
 	//struct MultiMatchVariable {}; //<- just to help your imagination out a bit.
 	//Note: there may be only a single instance of a given MultiMatchVariable with given name per pattern per side.
 
-	//specifies more constraints on a value
-	enum class Form :std::uint32_t
-	{
-		natural,   //{1, 2, 3, ...}
-		natural_0, //{0, 1, 2, ...}
-		integer,
-		real,
-		complex,
-		negative,     //implies real   
-		positive,     //implies real     	
-		not_negative, //implies real  
-		not_positive, //implies real 
-		COUNT
-	};
 
+	using ValueDomain = OpaqueEnum<Domain>;
 	//in a valid pattern, all ValueMatchVariables of same name (although that is thrown away after building) 
-	//share the same form and the same MatchData index
+	//share the same domain and the same MatchData index
 	//it is allowed to have multiple instances of the same ValueMatchVariable per side.
 	//this variation of the match variable can match a value of specific form occuring in a term,
 	//  the form of this value may also be specified using arithmetic operations. 
@@ -91,11 +95,10 @@ namespace bmath::intern::pattern {
 	{
 		PnIdx mtch_idx;
 		std::uint32_t match_data_idx; //indexes in MatchData::value_match_data
-		Form form = Form::real;
+		ValueDomain domain;
 
-		constexpr ValueMatchVariable(PnIdx new_match,
-			std::uint32_t new_match_data_idx, Form new_form) noexcept
-			:mtch_idx(new_match), match_data_idx(new_match_data_idx), form(new_form)
+		constexpr ValueMatchVariable(PnIdx new_match, std::uint32_t new_match_data_idx, ValueDomain new_form) noexcept
+			:mtch_idx(new_match), match_data_idx(new_match_data_idx), domain(new_form)
 		{}
 	};
 
@@ -112,14 +115,12 @@ namespace bmath::intern::pattern {
 		PnIdxVector parameters; //all in Variadic and all in Fn
 		VariadicMetaData variadic_data;
 		CharVector characters;
-		TreeMatchVariable tree_match;    //only expected as part of pattern
 		ValueMatchVariable value_match;  //only expected as part of pattern
 
 		constexpr PnUnion(const Complex&            val) noexcept :complex(val)       {}
 		constexpr PnUnion(const PnIdxVector&        val) noexcept :parameters(val)    {}
 		constexpr PnUnion(const VariadicMetaData&   val) noexcept :variadic_data(val) {}
 		constexpr PnUnion(const CharVector&         val) noexcept :characters(val)    {}
-		constexpr PnUnion(const TreeMatchVariable&  val) noexcept :tree_match(val)    {}
 		constexpr PnUnion(const ValueMatchVariable& val) noexcept :value_match(val)   {}
 		constexpr PnUnion()                              noexcept :complex(0.0)       {}
 
@@ -129,14 +130,12 @@ namespace bmath::intern::pattern {
 		constexpr operator const PnIdxVector&        () const noexcept { return this->parameters;    }
 		constexpr operator const VariadicMetaData&   () const noexcept { return this->variadic_data; }
 		constexpr operator const CharVector&         () const noexcept { return this->characters;    }
-		constexpr operator const TreeMatchVariable&  () const noexcept { return this->tree_match;    }
 		constexpr operator const ValueMatchVariable& () const noexcept { return this->value_match;   }
 
 		constexpr operator Complex&            () noexcept { return this->complex;       }
 		constexpr operator PnIdxVector&        () noexcept { return this->parameters;    }
 		constexpr operator VariadicMetaData&   () noexcept { return this->variadic_data; }
 		constexpr operator CharVector&         () noexcept { return this->characters;    }
-		constexpr operator TreeMatchVariable&  () noexcept { return this->tree_match;    }
 		constexpr operator ValueMatchVariable& () noexcept { return this->value_match;   }
 	};
 	static_assert(sizeof(PnUnion) == sizeof(Complex));
@@ -174,8 +173,8 @@ namespace bmath::intern::pattern {
 
 	using Multi = OpaqueEnum<Variadic>;
 
-	//intermediary used in build process
-	using PnVariablesType = SumEnum<Restriction, Form, Multi, UnknownPnVar>;
+	//intermediary used in build process:
+	using PnVariablesType = SumEnum<TreeMatchOwning, ValueDomain, Multi, UnknownPnVar>;
 
 
 
@@ -194,11 +193,11 @@ namespace bmath::intern::pattern {
 	struct [[nodiscard]] TreeNameLookup
 	{
 		std::string_view name;
-		pattern::Restriction restr;
+		TreeMatchOwning restr;
 		StupidBufferVector<MathIdx, 4u> lhs_instances;
 		StupidBufferVector<MathIdx, 4u> rhs_instances;
 
-		TreeNameLookup(std::string_view new_name, pattern::Restriction new_restr) noexcept
+		TreeNameLookup(std::string_view new_name, TreeMatchOwning new_restr) noexcept
 			:name(new_name), restr(new_restr) {}
 	};
 
@@ -206,12 +205,12 @@ namespace bmath::intern::pattern {
 	struct [[nodiscard]] ValueNameLookup
 	{
 		std::string_view name;
-		Form form;
+		ValueDomain domain;
 		StupidBufferVector<MathIdx, 4u> lhs_instances;
 		StupidBufferVector<MathIdx, 4u> rhs_instances;
 
-		ValueNameLookup(std::string_view new_name, Form new_form) noexcept
-			:name(new_name), form(new_form) {}
+		ValueNameLookup(std::string_view new_name, Domain new_form) noexcept
+			:name(new_name), domain(new_form) {}
 	};
 
 	struct [[nodiscard]] MultiNameLookup
@@ -255,24 +254,21 @@ namespace bmath::intern::pattern {
 	};
 
 	constexpr auto type_table = std::to_array<TypeProps>({
-		{ Comm::sum           , "sum"           },
-		{ Comm::product       , "product"       },
-		{ Literal::variable   , "variable"      },
-		{ Literal::complex    , "value"         }, //not to be mistaken for Form::complex
-		{ Restr::function     , "fn"            },
-		{ Form::natural       , "nat"           },
-		{ Form::natural_0     , "nat0"          },
-		{ Form::integer       , "int"           },
-		{ Form::real          , "real"          },
-		{ Form::complex       , "complex"       }, //not to be mistaken for Literal::complex
-		{ Form::negative      , "negative"      },
-		{ Form::not_negative  , "not_negative"  },
-		{ Form::positive      , "positive"      },
-		{ Form::not_positive  , "not_positive"  },
-		{ Restr::any          , "any"           },
-		{ Restr::nn1          , "nn1"           },
-		{ Restr::no_val       , "no_val"        },
-		});
+		{ Restriction::any                 , "any"           },
+		{ Restriction::nn1                 , "nn1"           },
+		{ Restriction::no_val              , "no_val"        },
+		{ Restriction::variable            , "variable"      },
+		{ Domain::complex                  , "value"         }, //not to be mistaken for ValueDomain(Domain::complex)
+		{ ValueDomain(Domain::natural     ), "nat"           },
+		{ ValueDomain(Domain::natural_0   ), "nat0"          },
+		{ ValueDomain(Domain::integer     ), "int"           },
+		{ ValueDomain(Domain::real        ), "real"          },
+		{ ValueDomain(Domain::complex     ), "complex"       }, //not to be mistaken for Domain::complex
+		{ ValueDomain(Domain::negative    ), "negative"      },
+		{ ValueDomain(Domain::not_negative), "not_negative"  },
+		{ ValueDomain(Domain::positive    ), "positive"      },
+		{ ValueDomain(Domain::not_positive), "not_positive"  },
+	});
 
 
 	constexpr auto make_multi_names = []() {
@@ -322,9 +318,9 @@ namespace bmath::intern::pattern {
 	////////////////////////////////////////  tree manipulation  /////////////////////////////
 	//////////////////////////////////////////////////////////////////////////////////////////
 
-	bool meets_restriction(const UnsaveRef ref, const Restriction restr);
+	bool meets_restriction(const UnsaveRef ref, const TreeMatchOwning restr);
 
-	bool has_form(const Complex& nr, const Form form);
+	bool in_domain(const Complex& nr, const Domain domain);
 
 
 	enum class Side { lhs, rhs }; //site to match against vs. side to copy from
@@ -395,12 +391,10 @@ namespace bmath::intern::pattern {
 		struct SharedTreeDatum
 		{
 			MathIdx match_idx = MathIdx{}; //indexes in Term to simplify
-			PnIdx responsible = PnIdx{}; //the instance of TreeMatchVariable that was setting match_idx
 
 			constexpr bool is_set() const noexcept
 			{
-				assert(equivalent(this->responsible != PnIdx{}, this->match_idx != MathIdx{}));
-				return  this->responsible != PnIdx{};
+				return  this->match_idx != MathIdx{};
 			}
 		};
 
@@ -455,10 +449,11 @@ namespace bmath::intern::pattern {
 			std::array<SharedTreeDatum, max_tree_match_count> tree_match_data = {};
 			std::array<SharedVariadicDatum, max_variadic_count> variadic_data = {};
 
-			constexpr auto& info(const TreeMatchVariable& var) noexcept { return this->tree_match_data[var.match_data_idx]; }
 			constexpr auto& info(const ValueMatchVariable& var) noexcept { return this->value_match_data[var.match_data_idx]; }
-			constexpr auto& info(const TreeMatchVariable& var) const noexcept { return this->tree_match_data[var.match_data_idx]; }
 			constexpr auto& info(const ValueMatchVariable& var) const noexcept { return this->value_match_data[var.match_data_idx]; }
+
+			constexpr auto& tree_info(const std::uint32_t idx) noexcept { return this->tree_match_data[idx]; }
+			constexpr auto& tree_info(const std::uint32_t idx) const noexcept { return this->tree_match_data[idx]; }
 
 			constexpr auto& multi_info(const std::uint32_t idx) noexcept { return this->variadic_data[idx]; }
 			constexpr auto& multi_info(const std::uint32_t idx) const noexcept { return this->variadic_data[idx]; }
@@ -508,24 +503,7 @@ namespace bmath::intern::pattern {
 
 		//all rules in [start, stop) are applied until no matching rule is found. in between tree::establish_basic_order is called
 		//the new head of ref is retuned
-		template<intern::IterOver<const intern::pattern::RewriteRule> Iter>
-		[[nodiscard]] MathIdx apply_rule_range(const Iter start, const Iter stop, const MutRef ref)
-		{
-			MathIdx head = tree::establish_basic_order(ref);
-		try_all_rules:
-			for (Iter rule = start; rule != stop; ++rule) {
-				const auto [head_match, deeper_match] =
-					recursive_match_and_replace(rule->lhs_ref(), rule->rhs_ref(), ref.new_at(head));
-				if (head_match) {
-					head = *head_match;
-				}
-				if (head_match || deeper_match) {
-					head = tree::establish_basic_order(ref.new_at(head));
-					goto try_all_rules;
-				}
-			}
-			return head;
-		}
+		[[nodiscard]] MathIdx apply_rule_range(const RewriteRule* const start, const RewriteRule* const stop, const MutRef ref);
 
 	} //namespace match
 
@@ -564,24 +542,24 @@ namespace bmath::intern {
 	{
 		using namespace pattern;
 		constexpr auto type_generality_table = std::to_array<std::pair<PnType, int>>({
-			{ Literal::complex   , 1000 },
-			{ Literal::variable  , 1001 },
-			{ PnNode::value_match, 1002 }, //may match different subsets of complex numbers, but always requires an actual value to match against
-			{ PnNode::value_proxy, 1003 }, //dont care really where this sits, as it never ist used in matching anyway
-			//values 2xxx are not present, as that would require every item in Fn to be listed here (instead default_generality kicks in here)			
-			{ PnNode::tree_match , 3006 },
-			{ MultiParams{}    , 3007 }, //kinda special, as they always succeed in matching -> need to be matched last 
+			{ Literal::complex      , 1000 },
+			{ Literal::variable     , 1001 },
+			{ ValueMatch::owning    , 1002 }, //may match different subsets of complex numbers, but always requires an actual value to match against
+			{ ValueMatch::non_owning, 1003 }, //dont care really where this sits, as it never ist used in matching anyway
+			//values 2xxx are not present, as that would require every item in Fn to be listed here (instead default_generality kicks in here)	
+			//values 3xxx are not present, as that would require every item in Domain to be listed here
 		});
 		static_assert(std::is_sorted(type_generality_table.begin(), type_generality_table.end(),
 			[](auto a, auto b) { return a.second < b.second; }));
-		static_assert(static_cast<unsigned>(PnType::COUNT) < 1000u,
-			"else the 2xxx generalities may leak into the 3xxx ones in table");
 		static_assert(static_cast<unsigned>(PnType::COUNT) == 
-			type_generality_table.size() + static_cast<unsigned>(Function::COUNT),
-			"all but elements in function need to be listed in table");
+			type_generality_table.size() + static_cast<unsigned>(Function::COUNT) + static_cast<unsigned>(Proxy::COUNT),
+			"all but elements in Function and Proxy need to be listed in table");
 
 		if (type.is<Function>()) {
 			return static_cast<unsigned>(type) + 2000;
+		}
+		else if (type.is<Proxy>()) {
+			return static_cast<unsigned>(type) + 3000;
 		}
 		else {
 			return find(type_generality_table, &std::pair<PnType, int>::first, type).second;

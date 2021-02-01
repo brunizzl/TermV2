@@ -30,7 +30,7 @@ namespace bmath::intern::pattern {
 			static constexpr std::string_view function_name = "_TM";
 
 			template<StoreLike S>
-			static constexpr MathIdx build(S& store, const std::uint32_t match_data_idx, const Restriction restr)
+			static constexpr MathIdx build(S& store, const std::uint32_t match_data_idx, const TreeMatchOwning restr)
 			{
 				const std::array<MathIdx, 2> parameters = {
 					build_value(store, Complex{ static_cast<double>(match_data_idx), 0.0 }),
@@ -47,9 +47,9 @@ namespace bmath::intern::pattern {
 						const IndexVector& params = *new_ref;
 						assert(params.size() == 2);
 						assert(params[0].get_type() == Literal::complex);
-						assert(has_form(*new_ref.new_at(params[0]), Form::natural_0));
+						assert(in_domain(*new_ref.new_at(params[0]), Domain::natural_0));
 						assert(params[1].get_type() == Literal::variable);
-						assert(type_of(new_ref.new_at(params[1])->characters).is<Restriction>());
+						assert(type_of(new_ref.new_at(params[1])->characters).is<TreeMatchOwning>());
 						return IntermediateTreeMatch(new_ref);
 					}
 				}
@@ -62,7 +62,7 @@ namespace bmath::intern::pattern {
 				return this->ref.new_at(params[0])->complex.real();
 			}
 
-			constexpr Restriction restr() const noexcept
+			constexpr TreeMatchOwning restr() const noexcept
 			{
 				const IndexVector& params = *this->ref;
 				return type_of(this->ref.new_at(params[1])->characters).to<Restriction>();
@@ -99,7 +99,7 @@ namespace bmath::intern::pattern {
 						const IndexVector& params = *new_ref;
 						assert(params.size() == 2);
 						assert(params[0].get_type() == Literal::complex);
-						assert(has_form(*new_ref.new_at(params[0]), Form::natural_0));
+						assert(in_domain(*new_ref.new_at(params[0]), Domain::natural_0));
 						assert(params[1].get_type() == Literal::variable);
 						assert(type_of(new_ref.new_at(params[1])->characters).is<Multi>());
 						return IntermediateMultiMatch(new_ref);
@@ -150,7 +150,7 @@ namespace bmath::intern::pattern {
 						const IndexVector& params = *new_ref;
 						assert(params.size() == 1);
 						assert(params[0].get_type() == Literal::complex);
-						assert(has_form(*new_ref.new_at(params[0]), Form::natural_0));
+						assert(in_domain(*new_ref.new_at(params[0]), Domain::natural_0));
 						return IntermediateValueProxy(new_ref);
 					}
 				}
@@ -167,7 +167,7 @@ namespace bmath::intern::pattern {
 		//ValueMatchVariable is modeled as NamedFn holding:
 		//  .mtch_idx in first parameter
 		//  .match_data_idx as complex in second parameter
-		//  .form as variable (same name as calling name_of(.restr)) in third parameter
+		//  .domain as variable (same name as calling name_of(.restr)) in third parameter
 		class IntermediateValueMatch
 		{
 			UnsaveRef ref;
@@ -178,12 +178,12 @@ namespace bmath::intern::pattern {
 			static constexpr std::string_view function_name = "_VM";
 
 			template<StoreLike S>
-			static constexpr MathIdx build(S& store, const std::uint32_t match_data_idx, const Form form)
+			static constexpr MathIdx build(S& store, const std::uint32_t match_data_idx, const ValueDomain domain)
 			{
 				const std::array<MathIdx, 3> parameters = {
 					IntermediateValueProxy::build(store, match_data_idx),
 					build_value(store, Complex{ static_cast<double>(match_data_idx), 0.0 }),
-					MathIdx(CharVector::build(store, name_of(form)), MathType(Literal::variable)),
+					MathIdx(CharVector::build(store, name_of(domain)), MathType(Literal::variable)),
 				};
 				return fn::build_named_fn<MathType>(store, function_name, parameters);
 			}
@@ -196,9 +196,9 @@ namespace bmath::intern::pattern {
 						const IndexVector& params = *new_ref;
 						assert(params.size() == 3);
 						assert(params[1].get_type() == Literal::complex);
-						assert(has_form(*new_ref.new_at(params[1]), Form::natural_0));
+						assert(in_domain(*new_ref.new_at(params[1]), Domain::natural_0));
 						assert(params[2].get_type() == Literal::variable);
-						assert(type_of(new_ref.new_at(params[2])->characters).is<Form>());
+						assert(type_of(new_ref.new_at(params[2])->characters).is<ValueDomain>());
 						return IntermediateValueMatch(new_ref);
 					}
 				}
@@ -213,10 +213,10 @@ namespace bmath::intern::pattern {
 				return this->ref.new_at(params[1])->complex.real();
 			}
 
-			constexpr Form form() const noexcept
+			constexpr ValueDomain domain() const noexcept
 			{
 				const IndexVector& params = *this->ref;
-				return type_of(this->ref.new_at(params[2])->characters).to<Form>();
+				return type_of(this->ref.new_at(params[2])->characters).to<ValueDomain>();
 			}
 		}; //class IntermediateValueMatch
 	} //namespace math_rep
@@ -260,19 +260,19 @@ namespace bmath::intern::pattern {
 				const PnVariablesType type = type_of(var_view.to_string_view(colon + 1u));
 				if (type.is<UnknownPnVar>()) [[unlikely]] throw ParseFailure{ var_view.offset + colon + 1u, "unknown restriction" };
 
-				if (type.is<Form>()) {
-					this->value_table.emplace_back(var_view.to_string_view(0, colon), type.to<Form>());
+				if (type.is<ValueDomain>()) {
+					this->value_table.emplace_back(var_view.to_string_view(0, colon), type.to<ValueDomain>());
 				}
 				else if (type.is<Multi>()) {
 					this->multi_table.emplace_back(var_view.to_string_view(0, colon), type.to<Multi>());
 				}
 				else {
-					assert(type.is<Restriction>());
-					this->tree_table.emplace_back(var_view.to_string_view(0, colon), type.to<Restriction>());
+					assert(type.is<TreeMatchOwning>());
+					this->tree_table.emplace_back(var_view.to_string_view(0, colon), type.to<TreeMatchOwning>());
 				}
 			}
 			else {
-				this->tree_table.emplace_back(var_view.to_string_view(), Restriction(Restr::any));
+				this->tree_table.emplace_back(var_view.to_string_view(), Restriction::any);
 			}
 		};
 
@@ -304,7 +304,7 @@ namespace bmath::intern::pattern {
 		}
 		else if (const auto iter = search_name(this->value_table); iter != this->value_table.end()) {
 			const std::uint32_t match_data_idx = std::distance(this->value_table.begin(), iter);
-			const MathIdx result_typedidx = math_rep::IntermediateValueMatch::build(store, match_data_idx, iter->form);
+			const MathIdx result_typedidx = math_rep::IntermediateValueMatch::build(store, match_data_idx, iter->domain);
 			(this->build_lhs ? 
 				iter->lhs_instances : 
 				iter->rhs_instances).push_back(result_typedidx);
@@ -387,24 +387,7 @@ namespace bmath::intern::pattern {
 	/////////////////////////////////////////////////////////////////////////  tree manipulation  //////////////////////////////////////////////////////////////////////////
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	bool meets_restriction(const UnsaveRef ref, const Restriction restr)
-	{
-		switch (restr) {
-		case Restriction(Restr::any):
-			return true;
-		case Restriction(Restr::no_val):
-			return ref.type != Literal::complex;
-		case Restriction(Restr::nn1):
-			return (ref.type != Literal::complex) || (ref->complex != -1.0);
-		case Restriction(Restr::function):
-			return ref.type.is<Variadic>() || ref.type.is<Fn>();
-		default:
-			assert(restr.is<MathType>());
-			return restr == ref.type;
-		}
-	} //meets_restriction
-
-	bool has_form(const Complex& nr, const Form form)
+	bool in_domain(const Complex& nr, const Domain domain)
 	{
 		constexpr double max_save_int = 9007199254740991; //== 2^53 - 1, largest integer explicitly stored in double
 
@@ -412,24 +395,48 @@ namespace bmath::intern::pattern {
 		const double im = nr.imag();
 
 		bool accept = true;
-		switch (form) {
-		case Form::natural:   accept &= re > 0.0; [[fallthrough]];
-		case Form::natural_0: accept &= re >= 0.0; [[fallthrough]];
-		case Form::integer:   accept &= re - std::int64_t(re) == 0.0;
-			accept &= (std::abs(re) <= max_save_int); [[fallthrough]];
-		case Form::real:      accept &= im == 0.0; [[fallthrough]];
-		case Form::complex:
+		switch (domain) {
+		case Domain::natural:   accept &= re > 0.0;                       [[fallthrough]];
+		case Domain::natural_0: accept &= re >= 0.0;                      [[fallthrough]];
+		case Domain::integer:   accept &= re - std::int64_t(re) == 0.0;
+			                    accept &= (std::abs(re) <= max_save_int); [[fallthrough]];
+		case Domain::real:      accept &= im == 0.0;                      [[fallthrough]];
+		case Domain::complex:
 			return accept;
 
-		case Form::negative:      return re < 0.0 && im == 0.0;
-		case Form::positive:      return re > 0.0 && im == 0.0;
-		case Form::not_negative:  return re >= 0.0 && im == 0.0;
-		case Form::not_positive:  return re <= 0.0 && im == 0.0;
+		case Domain::negative:      return re  < 0.0 && im == 0.0;
+		case Domain::positive:      return re  > 0.0 && im == 0.0;
+		case Domain::not_negative:  return re >= 0.0 && im == 0.0;
+		case Domain::not_positive:  return re <= 0.0 && im == 0.0;
 		default:
 			assert(false);
+			BMATH_UNREACHABLE;
 			return false;
 		}
 	} //has_form
+
+	bool meets_restriction(const UnsaveRef ref, const TreeMatchOwning restr)
+	{
+		if (restr == Restriction::any) {
+			return true;
+		}
+		switch (restr) {
+		case TreeMatchOwning(Restriction::variable):
+			return ref.type == Literal::variable;
+		case TreeMatchOwning(Restriction::no_val):
+			return ref.type != Literal::complex;
+		case TreeMatchOwning(Restriction::nn1):
+			return (ref.type != Literal::complex) || (ref->complex != -1.0);
+		default:
+			assert(restr.is<Domain>());
+			if (ref.type == Literal::complex) {
+				return in_domain(*ref, restr.to<Domain>());
+			}
+			else {
+				return false;
+			}
+		}
+	} //meets_restriction
 
 
 	IntermediateRewriteRule::IntermediateRewriteRule(std::string name, Convert convert)
@@ -460,7 +467,7 @@ namespace bmath::intern::pattern {
 				{ "          m, k, f |      _Temp(_VP(k), m, k, f) ^ 2 = _Temp(_VP(k), m ^ 2  , k, f)", Convert::basic },
 				{ "          m, k, f | sqrt(_Temp(_VP(k), m, k, f))    = _Temp(_VP(k), sqrt(m), k, f)", Convert::basic },
 			});
-			this->lhs_head = match::apply_rule_range(bubble_up_value_match.begin(), bubble_up_value_match.end(), this->lhs_mut_ref());
+			this->lhs_head = match::apply_rule_range(bubble_up_value_match.data(), bubble_up_value_match.data() + bubble_up_value_match.size(), this->lhs_mut_ref());
 
 			//the matching of a ValueMatchVariable works by applying the inverse of the operation written down in parsed string to the value to match.
 			//this inverse is build here by unwrapping the second parameter and applying the inverse of the unwrapped operations to the first parameter.
@@ -473,7 +480,7 @@ namespace bmath::intern::pattern {
 				//applied once m2 is fully unwrapped: converting back
 				{ "            m1,     k, f | _Temp(m1, _VP(k)  , k, f) = _VM(m1, k, f)",             Convert::basic },
 			});
-			this->lhs_head = match::apply_rule_range(invert_match_subtree.begin(), invert_match_subtree.end(), this->lhs_mut_ref());
+			this->lhs_head = match::apply_rule_range(invert_match_subtree.data(), invert_match_subtree.data() + invert_match_subtree.size(), this->lhs_mut_ref());
 			//note it is sometimes desired to use a ValueMatchVariable in a context not allowing it to swallow any of its surroundings. 
 			//combining both rulesets would therefore result in an infinite loop in that case, as the very first and very last pattern convert between each other.
 		}
@@ -547,13 +554,12 @@ namespace bmath::intern::pattern {
 			IntermediateRewriteRule intermediate = IntermediateRewriteRule(name, convert);
 			assert(tree::valid_storage(intermediate.store, { intermediate.lhs_head, intermediate.rhs_head }));
 
-			this->store.reserve(intermediate.store.nr_used_slots());
 			this->lhs_head = pn_tree::intermediate_to_pattern(intermediate.lhs_ref(), this->store, Side::lhs, convert, PnType::COUNT);
 			this->rhs_head = pn_tree::intermediate_to_pattern(intermediate.rhs_ref(), this->store, Side::rhs, convert, PnType::COUNT);
 			pn_tree::sort(this->lhs_mut_ref());
 			pn_tree::sort(this->rhs_mut_ref());
 		}
-		{ //adjusting MultiParams indices to SharedVariadicDatum index of each MulitPn on lhs
+		{ //adjusting MultiParams indices to SharedVariadicDatum index of each MulitPn on lhs and setting .match_data_idx of VariadicMetaData
 
 			//has to be filled in same order as MatchData::variadic_data
 			//index of element in old_multis equals value of corrected MultiParams occurence (plus the type)
@@ -619,7 +625,7 @@ namespace bmath::intern::pattern {
 					if (ref.type == Comm::sum || ref.type == Comm::product) {
 						std::size_t nr_value_matches = 0u;
 						for (const PnIdx elem : fn::range(ref)) {
-							nr_value_matches += (elem.get_type() == PnNode::value_match);
+							nr_value_matches += (elem.get_type().is<ValueMatch>());
 						}
 						return nr_value_matches > 1u;
 					}
@@ -665,7 +671,7 @@ namespace bmath::intern::pattern {
 					int acc;
 
 					constexpr Acc(const PnRef ref) noexcept
-						:acc(ref.type == PnNode::value_match ?
+						:acc(ref.type.is<ValueMatch>() ?
 							std::numeric_limits<int>::min() : //subterms of value_match dont count -> initialize negative
 							ref.type.is<Variadic>()) //count only these
 					{}
@@ -677,6 +683,43 @@ namespace bmath::intern::pattern {
 				return variadic_count > match::MatchData::max_variadic_count;
 			};
 			throw_if(contains_to_many_variadics(this->lhs_ref()), "lhs contains to many variadic functions");
+		}
+		{ //set all but first TreeMatch of one index to TreeMatchNonOwning
+			const auto disappropriate_tree_match_variables = [](const MutPnRef ref) {
+				//tree_match_occurences[i] counts how often tree match with index i has been encountered in tree
+				std::array<int, match::MatchData::max_tree_match_count> tree_match_occurences = {};
+
+				const auto disappropriate_tree_match_variable = [&tree_match_occurences](const MutPnRef ref) -> PnIdx {
+					if (ref.type.is<TreeMatchOwning>()) {	
+						if (tree_match_occurences[ref.index]++) {
+							return PnIdx(ref.index, TreeMatchNonOwning{});
+						}
+					}
+					return ref.typed_idx();
+				};
+				const PnIdx new_head = fold::mutate_fold<PnIdx>(ref, disappropriate_tree_match_variable);
+				assert(new_head == ref.typed_idx()); //no top level match variables allowed!
+			};
+			disappropriate_tree_match_variables(this->lhs_mut_ref());
+		}
+		{ //set all but first ValueMatch of one index to ValueMatch::non_owning
+			const auto disappropriate_value_match_variables = [](const MutPnRef ref) {
+				//tree_match_occurences[i] counts how often value match with .match_data_idx i has been encountered in tree
+				std::array<int, match::MatchData::max_value_match_count> value_match_occurences = {};
+
+				const auto disappropriate_value_match_variable = [&value_match_occurences](const MutPnRef ref) -> PnIdx {
+					if (ref.type == ValueMatch::owning) {
+						const ValueMatchVariable& var = *ref;
+						if (value_match_occurences[var.match_data_idx]++) {
+							return PnIdx(ref.index, ValueMatch::non_owning);
+						}
+					}
+					return ref.typed_idx();
+				};
+				const PnIdx new_head = fold::mutate_fold<PnIdx>(ref, disappropriate_value_match_variable);
+				assert(new_head == ref.typed_idx()); //no top level match variables allowed!
+			};
+			disappropriate_value_match_variables(this->lhs_mut_ref());
 		}
 	} //RewriteRule::RewriteRule
 
@@ -769,7 +812,7 @@ namespace bmath::intern::pattern {
 			} break;
 			case PnType(Literal::complex):
 				return ref->complex;
-			case PnType(PnNode::value_proxy):
+			case PnType(ValueProxy{}):
 				return start_val;
 			}
 		} //eval_value_match
@@ -780,9 +823,7 @@ namespace bmath::intern::pattern {
 			case MathType(NamedFn{}): {
 				const std::string_view name = fn::named_fn_name(src_ref);
 				if (const auto tree_match = math_rep::IntermediateTreeMatch::cast(src_ref)) {
-					const std::size_t dst_index = dst_store.allocate_one();
-					dst_store.at(dst_index) = TreeMatchVariable{ tree_match->match_data_idx(), tree_match->restr() };
-					return PnIdx(dst_index, PnNode::tree_match);
+					return PnIdx(tree_match->match_data_idx(), tree_match->restr());
 				}
 				if (const auto multi_match = math_rep::IntermediateMultiMatch::cast(src_ref)) {
 					const Variadic multi_parent = multi_match->type();
@@ -800,25 +841,25 @@ namespace bmath::intern::pattern {
 				if (convert == Convert::all) {
 					if (const auto value_match = math_rep::IntermediateValueMatch::cast(src_ref)) {
 						if (side == Side::lhs) {
-							const PnIdx mtch_idx = intermediate_to_pattern(src_ref.new_at(value_match->mtch_idx()), dst_store, side, convert, PnNode::value_match);
+							const PnIdx mtch_idx = intermediate_to_pattern(src_ref.new_at(value_match->mtch_idx()), dst_store, side, convert, ValueMatch::owning);
 							const std::uint32_t match_data_idx = value_match->match_data_idx();
-							const Form form = value_match->form();
+							const Domain domain = value_match->domain();
 
 							const std::size_t dst_index = dst_store.allocate_one();
-							dst_store.at(dst_index) = ValueMatchVariable(mtch_idx, match_data_idx, form);
-							return PnIdx(dst_index, PnNode::value_match);
+							dst_store.at(dst_index) = ValueMatchVariable(mtch_idx, match_data_idx, domain);
+							return PnIdx(dst_index, ValueMatch::owning);
 						}
 						else {
 							assert(side == Side::rhs);
 
 							const auto value_proxy = math_rep::IntermediateValueProxy::cast(src_ref.new_at(value_match->mtch_idx()));
 							assert(value_proxy);
-							return PnIdx(value_proxy->index(), PnNode::value_proxy);
+							return PnIdx(value_proxy->index(), ValueProxy{});
 						}
 					}
 					if (const auto value_proxy = math_rep::IntermediateValueProxy::cast(src_ref)) {
 						assert(side == Side::lhs);
-						return PnIdx(value_proxy->index(), PnNode::value_proxy);
+						return PnIdx(value_proxy->index(), ValueProxy{});
 					}
 				}
 			} [[fallthrough]]; //if NamedFn did not represent a match variable just keep it as is
@@ -885,6 +926,9 @@ namespace bmath::intern::pattern {
 				}
 			} [[fallthrough]];
 			default: {
+				if (fst.type.is<Proxy>()) {
+					return fst.index <=> snd.index;
+				}
 				assert(fst.type.is<Function>());
 				const PnIdxVector& fst_vec = *fst;
 				const PnIdxVector& snd_vec = *snd;
@@ -907,15 +951,11 @@ namespace bmath::intern::pattern {
 			case PnType(Literal::complex): {
 				return compare_complex(*fst, *snd);
 			} break;
-			case PnType(PnNode::tree_match): {
-				return fst->tree_match.match_data_idx <=> snd->tree_match.match_data_idx;
-			} break;
-			case PnType(PnNode::value_match): {
+			case PnType(ValueMatch::non_owning):
+				[[fallthrough]];
+			case PnType(ValueMatch::owning): {
 				return fst->value_match.match_data_idx <=> snd->value_match.match_data_idx;
 			} break;
-			case PnType(PnNode::value_proxy):
-			case PnType(MultiParams{}): 
-				return fst.index <=> snd.index;
 			}
 		} //compare
 
@@ -957,6 +997,15 @@ namespace bmath::intern::pattern {
 				}
 			} [[fallthrough]];
 			default: {
+				if (pn_ref.type.is<TreeMatchOwning>()) {
+					if (!meets_restriction(ref, pn_ref.type.to<TreeMatchOwning>())) {
+						return false;
+					}
+					auto& match_info = match_data.tree_info(pn_ref.index);
+					assert(!match_info.is_set());
+					match_info.match_idx = ref.typed_idx();
+					return true;
+				}
 				assert(pn_ref.type.is<Function>());
 				if (pn_ref.type.is<Comm>()) {
 					const bool params_at_back = pn_ref->parameters.back().get_type() == MultiParams{};
@@ -1022,29 +1071,19 @@ namespace bmath::intern::pattern {
 				const Complex& pn_complex = *pn_ref;
 				return compare_complex(complex, pn_complex) == std::strong_ordering::equal;
 			} break;
-			case PnType(PnNode::tree_match): {
-				const TreeMatchVariable& var = *pn_ref;
-				if (!meets_restriction(ref, var.restr)) {
-					return false;
-				}
-				auto& match_info = match_data.info(var);
-				if (match_info.is_set()) {
-					return tree::compare(ref, ref.new_at(match_info.match_idx)) == std::strong_ordering::equal;
-				}
-				else {
-					match_info.match_idx = ref.typed_idx();
-					match_info.responsible = pn_ref.typed_idx();
-					return true;
-				}
+			case PnType(TreeMatchNonOwning{}): {
+				auto& match_info = match_data.tree_info(pn_ref.index);
+				assert(match_info.is_set());
+				return tree::compare(ref, ref.new_at(match_info.match_idx)) == std::strong_ordering::equal;
 			} break;
-			case PnType(PnNode::value_match): {
+			case PnType(ValueMatch::owning): {
 				if (ref.type != Literal::complex) { //only this test allows us to pass *ref to evaluate this_value
 					return false;
 				}
 				const ValueMatchVariable& var = *pn_ref;
 				auto& match_info = match_data.info(var);
 				const OptionalComplex this_value = pn_tree::eval_value_match(pn_ref.new_at(var.mtch_idx), *ref);
-				if (!this_value || !has_form(*this_value, var.form)) {
+				if (!this_value || !in_domain(*this_value, var.domain)) {
 					return false;
 				}
 				else if (match_info.is_set()) {
@@ -1056,7 +1095,24 @@ namespace bmath::intern::pattern {
 					return true;
 				}
 			} break;
-			case PnType(PnNode::value_proxy): //may only be encountered in pn_tree::eval_value_match (as value_match does no permutation_equals call)
+			case PnType(ValueMatch::non_owning): {
+				if (ref.type != Literal::complex) { //only this test allows us to pass *ref to evaluate this_value
+					return false;
+				}
+				const ValueMatchVariable& var = *pn_ref;
+				auto& match_info = match_data.info(var);
+				assert(match_info.is_set());
+				const OptionalComplex this_value = pn_tree::eval_value_match(pn_ref.new_at(var.mtch_idx), *ref);
+				if (!this_value || !in_domain(*this_value, var.domain)) {
+					return false;
+				}
+				else {
+					match_info.value = *this_value;
+					match_info.responsible = pn_ref.typed_idx();
+					return true;
+				}
+			} break;
+			case PnType(ValueProxy{}): //may only be encountered in pn_tree::eval_value_match (as value_match does no permutation_equals call)
 				[[fallthrough]];
 			case PnType(MultiParams{}): //assumed to be handeled only as param of named_fn or ordered elements in Variadic 
 				assert(false);
@@ -1074,14 +1130,12 @@ namespace bmath::intern::pattern {
 						reset_own_matches(pn_ref.new_at(elem), match_data);
 					}
 				}
-				break;
-			case PnType(PnNode::tree_match): {
-				SharedTreeDatum& info = match_data.info(pn_ref->tree_match);
-				if (info.responsible == pn_ref.typed_idx()) {
+				else if (pn_ref.type.is<TreeMatchOwning>()) {
+					SharedTreeDatum& info = match_data.tree_info(pn_ref.index);
 					info = SharedTreeDatum();
 				}
-			} break;
-			case PnType(PnNode::value_match): {
+				break;
+			case PnType(ValueMatch::owning): {
 				SharedValueDatum& info = match_data.info(pn_ref->value_match);
 				if (info.responsible == pn_ref.typed_idx()) {
 					info = SharedValueDatum();
@@ -1151,13 +1205,12 @@ namespace bmath::intern::pattern {
 
 			while (pn_i < pn_params.size()) {
 				const PnType pn_i_type = pn_params[pn_i].get_type();
-				assert((!pn_i_type.is<MultiParams>() || pn_i_type == MultiParams{}) && "only MultiParams expected in lhs is params");
-				if (pn_i_type == MultiParams{}) [[unlikely]] { //also summands and factors are matched as params
+				if (pn_i_type.is<MultiParams>()) [[unlikely]] { //also summands and factors are matched as params
 					assert(pn_i + 1ull == pn_params.size() && "MultiParams is only valid as last element -> only one per variadic");
 					assert(&match_data.multi_info(pn_params[pn_i].get_index()) == &variadic_datum); //just out of paranoia
 					return true;
 				}
-				else if (pn_i_type.is<MathType>() || pn_i_type == PnNode::value_match) {
+				else if (pn_i_type.is<MathType>() || pn_i_type.is<ValueMatch>()) {
 					const pattern::UnsavePnRef pn_i_ref = pn_ref.new_at(pn_params[pn_i]);
 					const int pn_i_generality = generality(pn_i_type.to<MathType>());
 					for (; haystack_k < haystack_params.size(); haystack_k++) {
@@ -1175,9 +1228,9 @@ namespace bmath::intern::pattern {
 					}
 				}
 				else {
-					assert(pn_i_type == PnNode::tree_match); //other may not be encoountered in this function
+					assert(pn_i_type.is<TreeMatch>()); //other may not be encoountered in this function
 					const pattern::UnsavePnRef pn_i_ref = pn_ref.new_at(pn_params[pn_i]);
-					const auto& match_info = match_data.info(pn_i_ref->tree_match);
+					const auto& match_info = match_data.tree_info(pn_i_ref.index);
 
 					if (match_info.is_set()) { //binary search for needle over part of haystack allowed to search in
 						const UnsaveRef needle = haystack_ref.new_at(match_info.match_idx);
@@ -1261,6 +1314,11 @@ namespace bmath::intern::pattern {
 		{
 			switch (pn_ref.type) {
 			default: {
+				if (pn_ref.type.is<TreeMatchOwning>()) {
+					const SharedTreeDatum& info = match_data.tree_info(pn_ref.index);
+					assert(info.is_set());
+					return tree::copy(Ref(src_store, info.match_idx), dst_store); //call to different copy!
+				}
 				assert(pn_ref.type.is<Function>());
 				StupidBufferVector<MathIdx, 12> dst_parameters;
 				for (const PnIdx pn_param : fn::range(pn_ref)) {
@@ -1300,24 +1358,12 @@ namespace bmath::intern::pattern {
 				dst_store.at(dst_index) = pn_ref->complex; //bitwise copy
 				return MathIdx(dst_index, pn_ref.type.to<MathType>());
 			} break;
-			case PnType(PnNode::tree_match): {
-				const SharedTreeDatum& info = match_data.info(pn_ref->tree_match);
-				assert(info.is_set());
-				return tree::copy(Ref(src_store, info.match_idx), dst_store); //call to different copy!
-			} break; 
-			case PnType(PnNode::value_match):  //value_match is not expected in rhs, only value_proxy
-				assert(false);
-				return MathIdx();
-			case PnType(PnNode::value_proxy): {
+			case PnType(ValueProxy{}): {
 				const Complex& val = match_data.value_match_data[pn_ref.index].value;
 				const std::size_t dst_index = dst_store.allocate_one();
 				dst_store.at(dst_index) = val;
 				return MathIdx(dst_index, MathType(Literal::complex));
 			} break;
-			case PnType(MultiParams{}):  //already handeled in Function
-				assert(false);
-				BMATH_UNREACHABLE;
-				return MathIdx();
 			}
 		} //copy
 
@@ -1353,6 +1399,26 @@ namespace bmath::intern::pattern {
 			}
 			return std::make_pair(match_and_replace(in, out, ref), false);
 		} //recursive_match_and_replace
+
+		MathIdx apply_rule_range(const RewriteRule* const start, const RewriteRule* const stop, const MutRef ref)
+		{
+			MathIdx head = tree::establish_basic_order(ref);
+		try_all_rules:
+			for (auto rule = start; rule != stop; ++rule) {
+				const auto [head_match, deeper_match] =
+					recursive_match_and_replace(rule->lhs_ref(), rule->rhs_ref(), ref.new_at(head));
+				if (head_match) {
+					head = *head_match;
+				}
+				if (head_match || deeper_match) {
+					head = tree::establish_basic_order(ref.new_at(head));
+					//std::cout << " rule: " << rule->to_string() << "\n";
+					//std::cout << "  ->   " << print::to_pretty_string(ref.new_at(head)) << "\n\n\n";
+					goto try_all_rules;
+				}
+			}
+			return head;
+		}
 
 	} //namespace match
 
