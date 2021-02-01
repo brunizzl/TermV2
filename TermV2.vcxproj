@@ -120,6 +120,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="src\arithmeticTerm.cpp" />
+    <ClCompile Include="src\ioPattern.cpp" />
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\ioArithmetic.cpp" />
     <ClCompile Include="src\parseTerm.cpp" />
@@ -131,6 +132,7 @@
     <ClInclude Include="src\arithmeticTerm.hpp" />
     <ClInclude Include="src\fold.hpp" />
     <ClInclude Include="src\ioArithmetic.hpp" />
+    <ClInclude Include="src\ioPattern.hpp" />
     <ClInclude Include="src\parseTerm.hpp" />
     <ClInclude Include="src\pattern.hpp" />
     <ClInclude Include="src\reference.hpp" />

@@ -8,91 +8,6 @@
 
 namespace bmath::intern {
 
-	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	/////////////////////////////////////////////////////////////////////local definitions//////////////////////////////////////////////////////////////////////////////////
-	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-	namespace print {
-
-		//operator precedence (used to decide if parentheses are nessecary in out string)
-		constexpr int infixr(MathType type) 
-		{ 
-			constexpr auto infixr_table = std::to_array<std::pair<MathType, int>>({
-				{ Comm::sum          , 2 },
-				{ Comm::product      , 4 },	
-				{ Fn::pow            , 5 }, //not between other function types -> assumed to be printed with '^'  
-				{ Literal::variable  , 6 },
-				{ Literal::complex   , 6 }, //may be printed as sum/product itself, then (maybe) has to add parentheses on its own
-			});
-			static_assert(std::is_sorted(infixr_table.begin(), infixr_table.end(), [](auto a, auto b) { return a.second < b.second; }));
-
-			constexpr std::pair<MathType, int> default_infixr = std::make_pair(MathType(0u), 0);
-			return search(infixr_table, &std::pair<MathType, int>::first, type, default_infixr).second;
-		}
-
-		void append_complex(const std::complex<double> val, std::string& dest, int parent_infixr)
-		{
-			std::stringstream buffer;
-
-			enum class Flag { showpos, noshowpos };
-			const auto add_im_to_stream = [&buffer](const double im, Flag flag) {
-				if (im == -1.0) {
-					buffer << '-';
-				}
-				else if (im == 1.0) {
-					if (flag == Flag::showpos) {
-						buffer << '+';
-					}
-				}
-				else {
-					buffer << (flag == Flag::showpos ? std::showpos : std::noshowpos) << im;
-				}
-				buffer << 'i';
-			};
-
-			bool parentheses = false;
-
-			if (val.real() != 0.0 && val.imag() != 0.0) {
-				parentheses = parent_infixr > infixr(MathType(Comm::sum));
-				buffer << val.real();
-				add_im_to_stream(val.imag(), Flag::showpos);		
-			}
-			else if (val.real() != 0.0 && val.imag() == 0.0) {
-				parentheses = val.real() < 0.0 && parent_infixr >= infixr(MathType(Comm::sum));	//leading '-'
-				buffer << val.real();
-			}
-			else if (val.real() == 0.0 && val.imag() != 0.0) {
-				parentheses = val.imag() < 0.0 && parent_infixr >= infixr(MathType(Comm::sum));	//leading '-'	
-				parentheses |= parent_infixr > infixr(MathType(Comm::product));	//*i
-				add_im_to_stream(val.imag(), Flag::noshowpos);
-			}
-			else {
-				buffer << '0';
-			}
-
-			if (parentheses) {
-				dest.push_back('(');
-				dest.append(buffer.str());
-				dest.push_back(')');
-			}
-			else {
-				dest.append(buffer.str());
-			}
-		} //append_complex
-
-		void append_real(double val, std::string& dest)
-		{
-			std::stringstream buffer;
-			buffer << val;
-			dest.append(buffer.str());
-		}
-
-	} //namespace print
-
-	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	/////////////////////////////////////////////////////////////////////exported in header/////////////////////////////////////////////////////////////////////////////////
-	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 	namespace compute {
 
 		Result exactly_computable(const ParseView view) noexcept
@@ -297,7 +212,93 @@ namespace bmath::intern {
 		}
 	} //build
 
+
+
+
 	namespace print {
+
+		////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+		/////////////////////////////////////////////////////////////////////local (print) definitions//////////////////////////////////////////////////////////////////////////
+		////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+		//operator precedence (used to decide if parentheses are nessecary in out string)
+		constexpr int infixr(MathType type)
+		{
+			constexpr auto infixr_table = std::to_array<std::pair<MathType, int>>({
+				{ Comm::sum          , 2 },
+				{ Comm::product      , 4 },
+				{ Fn::pow            , 5 }, //not between other function types -> assumed to be printed with '^'  
+				{ Literal::variable  , 6 },
+				{ Literal::complex   , 6 }, //may be printed as sum/product itself, then (maybe) has to add parentheses on its own
+				});
+			static_assert(std::is_sorted(infixr_table.begin(), infixr_table.end(), [](auto a, auto b) { return a.second < b.second; }));
+
+			constexpr std::pair<MathType, int> default_infixr = std::make_pair(MathType(0u), 0);
+			return search(infixr_table, &std::pair<MathType, int>::first, type, default_infixr).second;
+		}
+
+		void append_real(double val, std::string& dest)
+		{
+			std::stringstream buffer;
+			buffer << val;
+			dest.append(buffer.str());
+		}
+
+
+		////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+		/////////////////////////////////////////////////////////////////////exported in header/////////////////////////////////////////////////////////////////////////////////
+		////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+		void append_complex(const std::complex<double> val, std::string& dest, int parent_infixr)
+		{
+			std::stringstream buffer;
+
+			enum class Flag { showpos, noshowpos };
+			const auto add_im_to_stream = [&buffer](const double im, Flag flag) {
+				if (im == -1.0) {
+					buffer << '-';
+				}
+				else if (im == 1.0) {
+					if (flag == Flag::showpos) {
+						buffer << '+';
+					}
+				}
+				else {
+					buffer << (flag == Flag::showpos ? std::showpos : std::noshowpos) << im;
+				}
+				buffer << 'i';
+			};
+
+			bool parentheses = false;
+
+			if (val.real() != 0.0 && val.imag() != 0.0) {
+				parentheses = parent_infixr > infixr(MathType(Comm::sum));
+				buffer << val.real();
+				add_im_to_stream(val.imag(), Flag::showpos);
+			}
+			else if (val.real() != 0.0 && val.imag() == 0.0) {
+				parentheses = val.real() < 0.0 && parent_infixr >= infixr(MathType(Comm::sum));	//leading '-'
+				buffer << val.real();
+			}
+			else if (val.real() == 0.0 && val.imag() != 0.0) {
+				parentheses = val.imag() < 0.0 && parent_infixr >= infixr(MathType(Comm::sum));	//leading '-'	
+				parentheses |= parent_infixr > infixr(MathType(Comm::product));	//*i
+				add_im_to_stream(val.imag(), Flag::noshowpos);
+			}
+			else {
+				buffer << '0';
+			}
+
+			if (parentheses) {
+				dest.push_back('(');
+				dest.append(buffer.str());
+				dest.push_back(')');
+			}
+			else {
+				dest.append(buffer.str());
+			}
+		} //append_complex
 
 		void append_to_string(const UnsaveRef ref, std::string& str, const int parent_infixr)
 		{
@@ -359,82 +360,6 @@ namespace bmath::intern {
 				str.push_back(')');
 			}
 		} //append_to_string (for math)
-
-		void append_to_string(const pattern::UnsavePnRef ref, std::string& str, const int depth)
-		{
-			using namespace pattern;
-
-			const char open_paren = std::array<char, 3>{ '(', '[', '{' } [depth % 3];
-			const char clse_paren = std::array<char, 3>{ ')', ']', '}' } [depth % 3];
-
-			switch (ref.type) {
-			default: {
-				if (ref.type.is<TreeMatchOwning>()) {
-					str.append("_T");
-					str.append(std::to_string(ref.index));
-					if (ref.type != Restriction::any) {
-						str.push_back(open_paren);
-						str.append(name_of(ref.type.to<TreeMatchOwning>()));
-						str.push_back(clse_paren);
-					}
-					break;
-				}
-				if (ref.type.is<NamedFn>()) {
-					const CharVector& name = fn::named_fn_name(ref);
-					str.append(name);
-				}
-				else if (ref.type.is<Fn>()) {
-					str.append(fn::name_of(ref.type.to<Fn>()));
-				}
-				else {
-					assert(ref.type.is<Variadic>());
-					str.append(fn::name_of(ref.type.to<Variadic>()));
-				}
-				str.push_back(open_paren);
-				const char* seperator = "";
-				for (const auto param : fn::range(ref)) {
-					str.append(std::exchange(seperator, ", "));
-					print::append_to_string(ref.new_at(param), str, depth + 1);
-				}
-				str.push_back(clse_paren);
-			} break;
-			case PnType(Literal::variable): {
-				str += ref->characters;
-			} break;
-			case PnType(Literal::complex): {
-				append_complex(ref->complex, str, 0);
-			} break;
-			case PnType(TreeMatchNonOwning{}): {
-				str.append("_T");
-				str.append(std::to_string(ref.index));
-				str.push_back('\'');
-			} break;
-			case PnType(ValueMatch::non_owning):
-				[[fallthrough]];
-			case PnType(ValueMatch::owning): {
-				const ValueMatchVariable& var = *ref;
-				str.append("_V");
-				str.append(std::to_string(var.match_data_idx));
-				if (ref.type == ValueMatch::non_owning) {
-					str.push_back('\'');
-				}
-				str.push_back(open_paren);
-				str.append(name_of(var.domain));
-				str.append(", ");
-				print::append_to_string(ref.new_at(var.mtch_idx), str, depth + 1);
-				str.push_back(clse_paren);
-			} break;
-			case PnType(ValueProxy{}): {
-				str.append("_VP");
-				str.append(std::to_string(ref.index));
-			} break;
-			case PnType(MultiParams{}): {
-				str.append("_P");
-				str.append(std::to_string(ref.index));
-				str.append("...");
-			} break;
-			}
-		} //append_to_string (for pattern)
 
 		std::string to_pretty_string(const UnsaveRef ref, const int parent_infixr)
 		{

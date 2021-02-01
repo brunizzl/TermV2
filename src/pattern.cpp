@@ -3,389 +3,13 @@
 #include <cfenv>
 
 #include "pattern.hpp"
+#include "ioPattern.hpp"
 #include "ioArithmetic.hpp"
 #include "fold.hpp"
 
 
 namespace bmath::intern::pattern {
 
-	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	/////////////////////////////////////////////////////////////////////local definitions//////////////////////////////////////////////////////////////////////////////////
-	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-	//all patterns are initially build using only MathType, thus the pattern specific nodes 
-	//  are modeled with ones avaliable in math (most prominently: NamedFn)
-	namespace math_rep {
-
-		//TreeMatchVariable is modeled as NamedFn holding:
-		//  .match_data_idx as complex in first parameter
-		//  .restr as variable (same name as calling name_of(.restr)) in second parameter
-		class IntermediateTreeMatch
-		{
-			UnsaveRef ref;
-
-			constexpr IntermediateTreeMatch(const UnsaveRef new_ref) noexcept :ref(new_ref) {}
-
-		public:
-			static constexpr std::string_view function_name = "_TM";
-
-			template<StoreLike S>
-			static constexpr MathIdx build(S& store, const std::uint32_t match_data_idx, const TreeMatchOwning restr)
-			{
-				const std::array<MathIdx, 2> parameters = {
-					build_value(store, Complex{ static_cast<double>(match_data_idx), 0.0 }),
-					MathIdx(CharVector::build(store, name_of(restr)), MathType(Literal::variable)),
-				};
-				return fn::build_named_fn<MathType>(store, function_name, parameters);
-			}
-
-			static constexpr std::optional<IntermediateTreeMatch> cast(const UnsaveRef new_ref)
-			{
-				if (new_ref.type == NamedFn{}) {
-					std::string_view ref_name = fn::named_fn_name(new_ref);
-					if (ref_name == function_name) {
-						const IndexVector& params = *new_ref;
-						assert(params.size() == 2);
-						assert(params[0].get_type() == Literal::complex);
-						assert(in_domain(*new_ref.new_at(params[0]), Domain::natural_0));
-						assert(params[1].get_type() == Literal::variable);
-						assert(type_of(new_ref.new_at(params[1])->characters).is<TreeMatchOwning>());
-						return IntermediateTreeMatch(new_ref);
-					}
-				}
-				return std::nullopt;
-			}
-
-			constexpr std::uint32_t match_data_idx() const noexcept
-			{
-				const IndexVector& params = *this->ref;
-				return this->ref.new_at(params[0])->complex.real();
-			}
-
-			constexpr TreeMatchOwning restr() const noexcept
-			{
-				const IndexVector& params = *this->ref;
-				return type_of(this->ref.new_at(params[1])->characters).to<Restriction>();
-			}
-		}; //class IntermediateTreeMatch
-
-		//(nonexisting) MultiMatchVariable is modeled as NamedFn holding:
-		//  .index() as complex in first parameter
-		//  .type() as variable (same name as calling name_of(.get_type())) in second parameter
-		class IntermediateMultiMatch
-		{
-			UnsaveRef ref;
-
-			constexpr IntermediateMultiMatch(const UnsaveRef new_ref) noexcept :ref(new_ref) {}
-
-		public:
-			static constexpr std::string_view function_name = "_MM";
-
-			template<StoreLike S>
-			static constexpr MathIdx build(S& store, const std::uint32_t idx, const Multi type)
-			{
-				const std::array<MathIdx, 2> parameters = {
-					build_value(store, Complex{ static_cast<double>(idx), 0.0 }),
-					MathIdx(CharVector::build(store, name_of(type)), MathType(Literal::variable)),
-				};
-				return fn::build_named_fn<MathType>(store, function_name, parameters);
-			}
-
-			static constexpr std::optional<IntermediateMultiMatch> cast(const UnsaveRef new_ref)
-			{
-				if (new_ref.type == NamedFn{}) {
-					std::string_view ref_name = fn::named_fn_name(new_ref);
-					if (ref_name == function_name) {
-						const IndexVector& params = *new_ref;
-						assert(params.size() == 2);
-						assert(params[0].get_type() == Literal::complex);
-						assert(in_domain(*new_ref.new_at(params[0]), Domain::natural_0));
-						assert(params[1].get_type() == Literal::variable);
-						assert(type_of(new_ref.new_at(params[1])->characters).is<Multi>());
-						return IntermediateMultiMatch(new_ref);
-					}
-				}
-				return std::nullopt;
-			}
-
-			constexpr std::uint32_t index() const noexcept
-			{
-				const IndexVector& params = *this->ref;
-				return this->ref.new_at(params[0])->complex.real();
-			}
-
-			constexpr Multi type() const noexcept
-			{
-				const IndexVector& params = *this->ref;
-				return type_of(this->ref.new_at(params[1])->characters).to<Multi>();
-			}
-		}; //class IntermediateMultiMatch
-
-
-		//(nonexisting) ValueProxy is modeled as NamedFn holding:
-		//  .index() as complex in first parameter
-		class IntermediateValueProxy
-		{
-			UnsaveRef ref;
-
-			constexpr IntermediateValueProxy(const UnsaveRef new_ref) noexcept :ref(new_ref) {}
-
-		public:
-			static constexpr std::string_view function_name = "_VP";
-
-			template<StoreLike S>
-			static constexpr MathIdx build(S& store, const std::uint32_t index)
-			{
-				const std::array<MathIdx, 1> parameters = {
-					build_value(store, Complex{ static_cast<double>(index), 0.0 }),
-				};
-				return fn::build_named_fn<MathType>(store, function_name, parameters);
-			}
-
-			static constexpr std::optional<IntermediateValueProxy> cast(const UnsaveRef new_ref)
-			{
-				if (new_ref.type == NamedFn{}) {
-					std::string_view ref_name = fn::named_fn_name(new_ref);
-					if (ref_name == function_name) {
-						const IndexVector& params = *new_ref;
-						assert(params.size() == 1);
-						assert(params[0].get_type() == Literal::complex);
-						assert(in_domain(*new_ref.new_at(params[0]), Domain::natural_0));
-						return IntermediateValueProxy(new_ref);
-					}
-				}
-				return std::nullopt;
-			}
-
-			constexpr std::uint32_t index() const noexcept
-			{
-				const IndexVector& params = *this->ref;
-				return this->ref.new_at(params[0])->complex.real();
-			}
-		}; //class IntermediateValueProxy
-
-		//ValueMatchVariable is modeled as NamedFn holding:
-		//  .mtch_idx in first parameter
-		//  .match_data_idx as complex in second parameter
-		//  .domain as variable (same name as calling name_of(.restr)) in third parameter
-		class IntermediateValueMatch
-		{
-			UnsaveRef ref;
-
-			constexpr IntermediateValueMatch(const UnsaveRef new_ref) noexcept :ref(new_ref) {}
-
-		public:
-			static constexpr std::string_view function_name = "_VM";
-
-			template<StoreLike S>
-			static constexpr MathIdx build(S& store, const std::uint32_t match_data_idx, const ValueDomain domain)
-			{
-				const std::array<MathIdx, 3> parameters = {
-					IntermediateValueProxy::build(store, match_data_idx),
-					build_value(store, Complex{ static_cast<double>(match_data_idx), 0.0 }),
-					MathIdx(CharVector::build(store, name_of(domain)), MathType(Literal::variable)),
-				};
-				return fn::build_named_fn<MathType>(store, function_name, parameters);
-			}
-
-			static constexpr std::optional<IntermediateValueMatch> cast(const UnsaveRef new_ref)
-			{
-				if (new_ref.type == NamedFn{}) {
-					std::string_view ref_name = fn::named_fn_name(new_ref);
-					if (ref_name == function_name) {
-						const IndexVector& params = *new_ref;
-						assert(params.size() == 3);
-						assert(params[1].get_type() == Literal::complex);
-						assert(in_domain(*new_ref.new_at(params[1]), Domain::natural_0));
-						assert(params[2].get_type() == Literal::variable);
-						assert(type_of(new_ref.new_at(params[2])->characters).is<ValueDomain>());
-						return IntermediateValueMatch(new_ref);
-					}
-				}
-				return std::nullopt;
-			}
-
-			constexpr MathIdx mtch_idx() const noexcept { return this->ref->parameters[0]; }
-
-			constexpr std::uint32_t match_data_idx() const noexcept
-			{
-				const IndexVector& params = *this->ref;
-				return this->ref.new_at(params[1])->complex.real();
-			}
-
-			constexpr ValueDomain domain() const noexcept
-			{
-				const IndexVector& params = *this->ref;
-				return type_of(this->ref.new_at(params[2])->characters).to<ValueDomain>();
-			}
-		}; //class IntermediateValueMatch
-	} //namespace math_rep
-
-	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	/////////////////////////////////////////////////////////////////////////  parsing  ////////////////////////////////////////////////////////////////////////////////////
-	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-	PatternParts::PatternParts(const ParseView input)
-	{
-		const std::size_t bar = find_first_of_skip_pars(input.tokens, token::bar);
-		if (bar != TokenView::npos) {
-			if (count_skip_pars(input.tokens, token::bar) > 1u) [[unlikely]] throw ParseFailure{ input.offset + bar, "expected only this '|', no further ones at top grouping level" };
-
-			const char illegal_tokens[] = { token::number, token::imag_unit, token::unary_minus, token::sum, token::product, token::hat, token::equals, '\0' };
-			const std::size_t illegal_pos = input.tokens.find_first_of(illegal_tokens);
-			if (illegal_pos < bar) [[unlikely]] throw ParseFailure{ input.offset + illegal_pos, "unexpected token in declaration" };
-		}
-
-		const std::size_t equals = find_first_of_skip_pars(input.tokens, token::equals);
-		if (count_skip_pars(input.tokens, token::equals) > 1u) [[unlikely]] throw ParseFailure{ input.offset + equals, "expected only this '=', no further ones at top grouping level" };
-		if (equals == TokenView::npos) [[unlikely]] throw ParseFailure{ input.size() - 1u, "expected '=' at top grouping level" };
-
-		if (bar != TokenView::npos) {
-			this->declarations = input.substr(0u, bar);
-			this->lhs = input.substr(bar + 1u, equals - bar - 1u);
-			this->rhs = input.substr(equals + 1u);
-		}
-		else {
-			this->declarations = input.substr(0u, 0u);
-			this->lhs = input.substr(0u, equals);
-			this->rhs = input.substr(equals + 1u);
-		}
-	} //PatternParts::PatternParts
-
-	NameLookupTable::NameLookupTable(ParseView declarations)
-	{
-		const auto parse_declaration = [this](ParseView var_view) {
-			const std::size_t colon = find_first_of_skip_pars(var_view.tokens, token::colon);
-			if (colon != TokenView::npos) {
-				const PnVariablesType type = type_of(var_view.to_string_view(colon + 1u));
-				if (type.is<UnknownPnVar>()) [[unlikely]] throw ParseFailure{ var_view.offset + colon + 1u, "unknown restriction" };
-
-				if (type.is<ValueDomain>()) {
-					this->value_table.emplace_back(var_view.to_string_view(0, colon), type.to<ValueDomain>());
-				}
-				else if (type.is<Multi>()) {
-					this->multi_table.emplace_back(var_view.to_string_view(0, colon), type.to<Multi>());
-				}
-				else {
-					assert(type.is<TreeMatchOwning>());
-					this->tree_table.emplace_back(var_view.to_string_view(0, colon), type.to<TreeMatchOwning>());
-				}
-			}
-			else {
-				this->tree_table.emplace_back(var_view.to_string_view(), Restriction::any);
-			}
-		};
-
-		if (declarations.size()) {
-			const std::size_t comma = find_first_of_skip_pars(declarations.tokens, token::comma);
-			parse_declaration(declarations.steal_prefix(comma));
-		}
-		while (declarations.size()) {
-			declarations.remove_prefix(1); //erase comma
-			const std::size_t comma = find_first_of_skip_pars(declarations.tokens, token::comma);
-			parse_declaration(declarations.steal_prefix(comma));
-		}
-	} //NameLookupTable::NameLookupTable
-
-	MathIdx NameLookupTable::insert_instance(MathStore& store, const ParseView input)
-	{
-		const auto name = input.to_string_view();
-		const auto search_name = [name](auto& vec) {
-			return std::find_if(vec.begin(), vec.end(), [name](const auto& x) { return x.name == name; });
-		};
-
-		if (const auto iter = search_name(this->tree_table); iter != this->tree_table.end()) {
-			const std::uint32_t match_data_idx = std::distance(this->tree_table.begin(), iter);
-			const MathIdx result_typedidx = math_rep::IntermediateTreeMatch::build(store, match_data_idx, iter->restr);
-			(this->build_lhs ? 
-				iter->lhs_instances : 
-				iter->rhs_instances).push_back(result_typedidx);
-			return result_typedidx;
-		}
-		else if (const auto iter = search_name(this->value_table); iter != this->value_table.end()) {
-			const std::uint32_t match_data_idx = std::distance(this->value_table.begin(), iter);
-			const MathIdx result_typedidx = math_rep::IntermediateValueMatch::build(store, match_data_idx, iter->domain);
-			(this->build_lhs ? 
-				iter->lhs_instances : 
-				iter->rhs_instances).push_back(result_typedidx);
-			return result_typedidx;
-		}
-		else if (const auto iter = search_name(this->multi_table); iter != this->multi_table.end()) {
-			const std::uint32_t match_data_idx = std::distance(this->multi_table.begin(), iter);
-			const MathIdx result_typedidx = math_rep::IntermediateMultiMatch::build(store, match_data_idx, iter->type);
-			this->build_lhs ? 
-				++(iter->lhs_count) : 
-				++(iter->rhs_count);
-			return result_typedidx;
-		}
-		throw ParseFailure{ input.offset, "match variable has not been declared" };
-	} //NameLookupTable::insert_instance
-
-	MathIdx PatternBuildFunction::operator()(MathStore& store, ParseView input)
-	{
-		if (input.size() == 0u) [[unlikely]] throw ParseFailure{ input.offset, "recieved empty substring" };
-		Head head = find_head_type(input);
-		while (head.type == Head::Type::group) {
-			input.remove_prefix(1u);
-			input.remove_suffix(1u);
-			head = find_head_type(input);
-		}
-		switch (head.type) {
-		case Head::Type::sum: {
-			return build_variadic<SumTraits>(store, input, head.where, build_negated<MathStore>, *this);
-		} break;
-		case Head::Type::negate: {
-			input.remove_prefix(1u);  //remove minus sign
-			const MathIdx to_negate = this->operator()(store, input);
-			return build_negated(store, to_negate);
-		} break;
-		case Head::Type::product: {
-			return build_variadic<ProductTraits>(store, input, head.where, build_inverted<MathStore>, *this);
-		} break;
-		case Head::Type::power: {
-			const auto base_view = input.steal_prefix(head.where);
-			input.remove_prefix(1u); //remove hat
-			const MathIdx base = this->operator()(store, base_view);
-			const MathIdx expo = this->operator()(store, input);
-			const std::size_t result_index = store.allocate_one();
-			store.at(result_index) = IndexVector{ base, expo };
-			return MathIdx(result_index, MathType(Fn::pow));
-		} break;
-		case Head::Type::complex_computable: {
-			return build_value(store, compute::eval_complex(input));
-		} break;
-		case Head::Type::natural_computable: {
-			return build_value(store, compute::eval_natural(input));
-		} break;
-		case Head::Type::real_value: {
-			return build_value(store, compute::parse_value(input));
-		} break;
-		case Head::Type::imag_value: {
-			input.remove_suffix(1u); //remove token::imag_unit
-			return build_value(store, Complex(0.0, compute::parse_value(input)));
-		} break;
-		case Head::Type::function: {
-			return build_function(store, input, head.where, *this);
-		} break;
-		case Head::Type::variable: {
-			if (input.chars[0u] == '\'') {
-				if (input.chars[input.size() - 1u] != '\'') [[unlikely]] throw ParseFailure{ input.offset + 1u, "found no matching \"'\"" };
-				return MathIdx(CharVector::build(store, input.to_string_view(1u, input.size() - 1u)), MathType(Literal::variable));
-			}
-			else {
-				return this->table.insert_instance(store, input);
-			}
-		} break;
-		default:
-			assert(false);
-			return MathIdx();
-		}
-	} //PatternBuildFunction::operator()
-
-
-	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	/////////////////////////////////////////////////////////////////////////  tree manipulation  //////////////////////////////////////////////////////////////////////////
-	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	bool in_domain(const Complex& nr, const Domain domain)
 	{
@@ -575,7 +199,7 @@ namespace bmath::intern::pattern {
 					{
 						if (ref.type.is<Variadic>()) { //these may contain MultiParams -> these have SharedVariadicDatum entry 
 							this->own_idx = this->old_multis->size(); //new last element 
-							variadic_meta_data(ref).match_data_idx = this->own_idx;
+							variadic_meta_data(ref).match_data_idx = this->own_idx; 
 							this->old_multis->emplace_back(PnIdx{}); //becomes only valid element if consume finds MultiParams
 						}
 					}
@@ -1082,16 +706,13 @@ namespace bmath::intern::pattern {
 				}
 				const ValueMatchVariable& var = *pn_ref;
 				auto& match_info = match_data.info(var);
+				assert(!match_info.is_set());
 				const OptionalComplex this_value = pn_tree::eval_value_match(pn_ref.new_at(var.mtch_idx), *ref);
 				if (!this_value || !in_domain(*this_value, var.domain)) {
 					return false;
 				}
-				else if (match_info.is_set()) {
-					return this_value.val == match_info.value;
-				}
 				else {
 					match_info.value = *this_value;
-					match_info.responsible = pn_ref.typed_idx();
 					return true;
 				}
 			} break;
@@ -1100,16 +721,14 @@ namespace bmath::intern::pattern {
 					return false;
 				}
 				const ValueMatchVariable& var = *pn_ref;
-				auto& match_info = match_data.info(var);
+				const auto& match_info = match_data.info(var);
 				assert(match_info.is_set());
 				const OptionalComplex this_value = pn_tree::eval_value_match(pn_ref.new_at(var.mtch_idx), *ref);
 				if (!this_value || !in_domain(*this_value, var.domain)) {
 					return false;
 				}
 				else {
-					match_info.value = *this_value;
-					match_info.responsible = pn_ref.typed_idx();
-					return true;
+					return *this_value == match_info.value;
 				}
 			} break;
 			case PnType(ValueProxy{}): //may only be encountered in pn_tree::eval_value_match (as value_match does no permutation_equals call)
@@ -1137,9 +756,7 @@ namespace bmath::intern::pattern {
 				break;
 			case PnType(ValueMatch::owning): {
 				SharedValueDatum& info = match_data.info(pn_ref->value_match);
-				if (info.responsible == pn_ref.typed_idx()) {
-					info = SharedValueDatum();
-				}
+				info = SharedValueDatum();
 			} break;
 			case PnType(MultiParams{}):
 				break;

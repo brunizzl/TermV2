@@ -166,155 +166,6 @@ namespace bmath::intern::pattern {
 
 
 	//////////////////////////////////////////////////////////////////////////////////////////
-	////////////////////////////////////////  parsing  ///////////////////////////////////////
-	//////////////////////////////////////////////////////////////////////////////////////////
-
-	struct UnknownPnVar :SingleSumEnumEntry {};
-
-	using Multi = OpaqueEnum<Variadic>;
-
-	//intermediary used in build process:
-	using PnVariablesType = SumEnum<TreeMatchOwning, ValueDomain, Multi, UnknownPnVar>;
-
-
-
-	struct [[nodiscard]] PatternParts
-	{
-		ParseView declarations;
-		ParseView lhs;
-		ParseView rhs;
-
-		//input is assumed to be of form "<declarations> | <lhs> = <rhs>"
-		//or, if no MatchVariables occur, of form "<lhs> = <rhs>"
-		PatternParts(const ParseView input);
-	};
-
-	//data belonging to one TreeMatchVariable relevant while constructing pattern
-	struct [[nodiscard]] TreeNameLookup
-	{
-		std::string_view name;
-		TreeMatchOwning restr;
-		StupidBufferVector<MathIdx, 4u> lhs_instances;
-		StupidBufferVector<MathIdx, 4u> rhs_instances;
-
-		TreeNameLookup(std::string_view new_name, TreeMatchOwning new_restr) noexcept
-			:name(new_name), restr(new_restr) {}
-	};
-
-	//data belonging to one ValueMatchVariable relevant while constructing pattern
-	struct [[nodiscard]] ValueNameLookup
-	{
-		std::string_view name;
-		ValueDomain domain;
-		StupidBufferVector<MathIdx, 4u> lhs_instances;
-		StupidBufferVector<MathIdx, 4u> rhs_instances;
-
-		ValueNameLookup(std::string_view new_name, Domain new_form) noexcept
-			:name(new_name), domain(new_form) {}
-	};
-
-	struct [[nodiscard]] MultiNameLookup
-	{
-		std::string_view name;
-		std::size_t lhs_count; //(only used to throw error if multiple instances exist in lhs)
-		std::size_t rhs_count; //(only used to throw error if multiple instances exist in rhs)
-		Multi type;
-
-		MultiNameLookup(std::string_view new_name, const Multi new_type) noexcept
-			:name(new_name), lhs_count(0u), rhs_count(0u), type(new_type) {}
-	};
-
-	//only exists during construction of pattern
-	struct NameLookupTable
-	{
-		std::vector<TreeNameLookup> tree_table;
-		std::vector<ValueNameLookup> value_table;
-		std::vector<MultiNameLookup> multi_table;
-		bool build_lhs = true; //false -> currently building rhs
-
-		//assumes to only get declarations part of pattern
-		NameLookupTable(ParseView declarations);
-
-		MathIdx insert_instance(MathStore& store, const ParseView input);
-	};
-
-	struct PatternBuildFunction
-	{
-		//the index of name in table is also match_data_idx of TreeMatchVariable
-		NameLookupTable& table;
-
-		//equivalent to build() for pattern
-		MathIdx operator()(MathStore& store, ParseView input);
-	};
-
-	struct TypeProps
-	{
-		PnVariablesType type = PnVariablesType(UnknownPnVar{});
-		std::string_view name = "";
-	};
-
-	constexpr auto type_table = std::to_array<TypeProps>({
-		{ Restriction::any                 , "any"           },
-		{ Restriction::nn1                 , "nn1"           },
-		{ Restriction::no_val              , "no_val"        },
-		{ Restriction::variable            , "variable"      },
-		{ Domain::complex                  , "value"         }, //not to be mistaken for ValueDomain(Domain::complex)
-		{ ValueDomain(Domain::natural     ), "nat"           },
-		{ ValueDomain(Domain::natural_0   ), "nat0"          },
-		{ ValueDomain(Domain::integer     ), "int"           },
-		{ ValueDomain(Domain::real        ), "real"          },
-		{ ValueDomain(Domain::complex     ), "complex"       }, //not to be mistaken for Domain::complex
-		{ ValueDomain(Domain::negative    ), "negative"      },
-		{ ValueDomain(Domain::not_negative), "not_negative"  },
-		{ ValueDomain(Domain::positive    ), "positive"      },
-		{ ValueDomain(Domain::not_positive), "not_positive"  },
-	});
-
-
-	constexpr auto make_multi_names = []() {
-		constexpr std::size_t variadic_name_max = std::max_element(fn::variadic_props_table.begin(), fn::variadic_props_table.end(),
-			[](const auto& fst, const auto& snd) { return fst.name.size() < snd.name.size(); })->name.size();
-
-		std::array<std::array<char, variadic_name_max + 4u>, (unsigned)Variadic::COUNT> multi_names = {};
-		for (std::size_t i = 0; i < multi_names.size(); i++) {
-			std::size_t j = 0;
-			const std::string_view src_name = fn::variadic_props_table.at(i).name;
-			for (; j < src_name.size(); j++) {
-				multi_names.at(i).at(j) = src_name.at(j);
-			}
-			//extend length by four for this end:
-			multi_names.at(i).at(j++) = '.';
-			multi_names.at(i).at(j++) = '.';
-			multi_names.at(i).at(j++) = '.';
-		}
-
-		return multi_names;
-	};
-	constexpr auto multi_names = make_multi_names();
-
-	constexpr std::string_view name_of(const PnVariablesType r) noexcept 
-	{ 
-		if (r.is<Multi>()) {
-			return multi_names[(unsigned)r.to<Multi>()].data();
-		}
-		return find(type_table, &TypeProps::type, r).name; 
-	}
-
-	constexpr PnVariablesType type_of(const std::string_view s) noexcept 
-	{ 
-		const auto multi = std::find_if(multi_names.begin(), multi_names.end(),
-			[s](const auto& arr) { return std::string_view(arr.data()) == s; });
-		if (multi != multi_names.end()) {
-			return Multi((unsigned)std::distance(multi_names.begin(), multi));
-		}
-		return search(type_table, &TypeProps::name, s).type; 
-	}
-
-
-
-
-
-	//////////////////////////////////////////////////////////////////////////////////////////
 	////////////////////////////////////////  tree manipulation  /////////////////////////////
 	//////////////////////////////////////////////////////////////////////////////////////////
 
@@ -401,13 +252,10 @@ namespace bmath::intern::pattern {
 		struct SharedValueDatum
 		{
 			Complex value = std::numeric_limits<double>::quiet_NaN();
-			//the instance of ValueMatchVariable that was setting value_match (thus is also responsible for resetting)
-			PnIdx responsible = PnIdx{};
 
-			constexpr bool is_set() const noexcept
+			bool is_set() const noexcept
 			{
-				assert(equivalent(!std::isnan(this->value.real()), this->responsible != PnIdx{}));
-				return  this->responsible != PnIdx{};
+				return !std::isnan(this->value.real());
 			}
 		};
 
@@ -443,7 +291,7 @@ namespace bmath::intern::pattern {
 			//maximal number of unrelated TreeMatchVariables allowed per pattern
 			static constexpr std::size_t max_tree_match_count = 8u;
 			//maximal number of variadics allowed per pattern
-			static constexpr std::size_t max_variadic_count = 4u;    //(max multi_match count is same)
+			static constexpr std::size_t max_variadic_count = 4u;    //(max MultiParams count is same)
 
 			std::array<SharedValueDatum, max_value_match_count> value_match_data = {};
 			std::array<SharedTreeDatum, max_tree_match_count> tree_match_data = {};
