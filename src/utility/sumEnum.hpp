@@ -284,6 +284,7 @@ namespace bmath::intern {
 		Enum value;
 		constexpr WrapEnum(const Enum e) noexcept :value(e) {}
 		constexpr operator Enum() const noexcept { return this->value; }
+		explicit constexpr WrapEnum(unsigned u) noexcept :value(static_cast<Enum>(u)) {}
 		explicit constexpr operator unsigned() const noexcept { return static_cast<unsigned>(this->value); }
 
 		//this is the only reason for WrapEnum to exist.
@@ -295,14 +296,14 @@ namespace bmath::intern {
 	template <detail_enum::Enumeratable Enum>
 	class [[nodiscard]] OpaqueEnum
 	{
-		enum class Value :unsigned {} value;
-
+		Enum value;
 	public:
-		constexpr OpaqueEnum(const Enum e) noexcept :value(static_cast<Value>(static_cast<unsigned>(e))) {}
-		constexpr operator Enum() const noexcept { return static_cast<unsigned>(this->value); }
+		constexpr OpaqueEnum(const Enum e) noexcept :value(e) {}
+		constexpr operator Enum() const noexcept { return this->value; }
+		explicit constexpr OpaqueEnum(unsigned u) noexcept :value(static_cast<Enum>(u)) {}
 		explicit constexpr operator unsigned() const noexcept { return static_cast<unsigned>(this->value); }
 
-		static constexpr Value COUNT = static_cast<Value>(static_cast<unsigned>(Enum::COUNT));
+		static constexpr auto COUNT = Enum::COUNT;
 	}; //struct OpaqueEnum
 
 

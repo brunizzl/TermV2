@@ -82,7 +82,7 @@ namespace bmath::intern::pattern {
 			static constexpr std::string_view function_name = "_MM";
 
 			template<StoreLike S>
-			static constexpr MathIdx build(S& store, const std::uint32_t idx, const MultiPn type)
+			static constexpr MathIdx build(S& store, const std::uint32_t idx, const Multi type)
 			{
 				const std::array<MathIdx, 2> parameters = {
 					build_value(store, Complex{ static_cast<double>(idx), 0.0 }),
@@ -101,7 +101,7 @@ namespace bmath::intern::pattern {
 						assert(params[0].get_type() == Literal::complex);
 						assert(has_form(*new_ref.new_at(params[0]), Form::natural_0));
 						assert(params[1].get_type() == Literal::variable);
-						assert(type_of(new_ref.new_at(params[1])->characters).is<MultiPn>());
+						assert(type_of(new_ref.new_at(params[1])->characters).is<Multi>());
 						return IntermediateMultiMatch(new_ref);
 					}
 				}
@@ -114,10 +114,10 @@ namespace bmath::intern::pattern {
 				return this->ref.new_at(params[0])->complex.real();
 			}
 
-			constexpr MultiPn type() const noexcept
+			constexpr Multi type() const noexcept
 			{
 				const IndexVector& params = *this->ref;
-				return type_of(this->ref.new_at(params[1])->characters).to<MultiPn>();
+				return type_of(this->ref.new_at(params[1])->characters).to<Multi>();
 			}
 		}; //class IntermediateMultiMatch
 
@@ -263,8 +263,8 @@ namespace bmath::intern::pattern {
 				if (type.is<Form>()) {
 					this->value_table.emplace_back(var_view.to_string_view(0, colon), type.to<Form>());
 				}
-				else if (type.is<MultiPn>()) {
-					this->multi_table.emplace_back(var_view.to_string_view(0, colon), type.to<MultiPn>());
+				else if (type.is<Multi>()) {
+					this->multi_table.emplace_back(var_view.to_string_view(0, colon), type.to<Multi>());
 				}
 				else {
 					assert(type.is<Restriction>());
@@ -479,7 +479,7 @@ namespace bmath::intern::pattern {
 		}
 
 		for (const auto& multi_match : match_variables_table.multi_table) {
-			throw_if(multi_match.lhs_count > 1u, "pattern only allows single use of each MultiPn in lhs.");
+			throw_if(multi_match.lhs_count > 1u, "pattern only allows single use of each MultiParams in lhs.");
 		}
 
 		//sorting and combining is done after rearanging value match to allow constructs 
@@ -487,14 +487,16 @@ namespace bmath::intern::pattern {
 		this->lhs_head = tree::establish_basic_order(this->lhs_mut_ref());
 		this->rhs_head = tree::establish_basic_order(this->rhs_mut_ref());
 
-		{ //add implicit MultiPn::summands / MultiPn::factors if outermost type of lhs is sum / product
-			if (this->lhs_head.get_type() == Comm::sum || this->lhs_head.get_type() == Comm::product) {
-				const MathType head_type = this->lhs_head.get_type();
+		{ //add implicit MultiParams{} if outermost type of lhs is associative and commutative
+			const MathType head_type = this->lhs_head.get_type();
+			if (head_type.is<Comm>() && fn::is_associative(head_type)) {
 				const IndexVector& head_variadic = this->store.at(this->lhs_head.get_index());
-				if (!math_rep::IntermediateMultiMatch::cast(Ref(this->store, head_variadic.back()))) {
+				const auto multi = std::find_if(head_variadic.begin(), head_variadic.end(),
+					[&](const MathIdx idx) { return math_rep::IntermediateMultiMatch::cast(Ref(this->store, idx)).has_value(); });
+				if (multi == head_variadic.end()) {
 					{ //adjust lhs
 						const MathIdx new_multi = math_rep::IntermediateMultiMatch::build(this->store, match_variables_table.multi_table.size(),
-							head_type == Comm::sum ? MultiPn::summands : MultiPn::factors);
+							Multi(head_type.to<Variadic>()));
 						const std::size_t new_lhs_head_idx = this->store.allocate_one();
 						this->store.at(new_lhs_head_idx) = IndexVector({ this->lhs_head, new_multi });
 						this->lhs_head = MathIdx(new_lhs_head_idx, head_type);
@@ -502,7 +504,7 @@ namespace bmath::intern::pattern {
 					}
 					{ //adjust rhs
 						const MathIdx new_multi = math_rep::IntermediateMultiMatch::build(this->store, match_variables_table.multi_table.size(),
-							head_type == Comm::sum ? MultiPn::summands : MultiPn::factors);
+							Multi(head_type.to<Variadic>()));
 						const std::size_t new_rhs_head_idx = this->store.allocate_one();
 						this->store.at(new_rhs_head_idx) = IndexVector({ this->rhs_head, new_multi });
 						this->rhs_head = MathIdx(new_rhs_head_idx, head_type);
@@ -542,19 +544,19 @@ namespace bmath::intern::pattern {
 	RewriteRule::RewriteRule(std::string name, Convert convert)
 	{
 		{
-			IntermediateRewriteRule intermediate = IntermediateRewriteRule(std::move(name), convert);
+			IntermediateRewriteRule intermediate = IntermediateRewriteRule(name, convert);
 			assert(tree::valid_storage(intermediate.store, { intermediate.lhs_head, intermediate.rhs_head }));
 
 			this->store.reserve(intermediate.store.nr_used_slots());
-			this->lhs_head = pn_tree::intermediate_to_pattern(intermediate.lhs_ref(), this->store, Side::lhs, convert);
-			this->rhs_head = pn_tree::intermediate_to_pattern(intermediate.rhs_ref(), this->store, Side::rhs, convert);
+			this->lhs_head = pn_tree::intermediate_to_pattern(intermediate.lhs_ref(), this->store, Side::lhs, convert, PnType::COUNT);
+			this->rhs_head = pn_tree::intermediate_to_pattern(intermediate.rhs_ref(), this->store, Side::rhs, convert, PnType::COUNT);
 			pn_tree::sort(this->lhs_mut_ref());
 			pn_tree::sort(this->rhs_mut_ref());
 		}
-		{ //adjusting MultiPn indices to SharedVariadicDatum index of each MulitPn on lhs (required to be done bevore changing MultiPn types!)
+		{ //adjusting MultiParams indices to SharedVariadicDatum index of each MulitPn on lhs
 
 			//has to be filled in same order as MatchData::variadic_data
-			//index of element in old_multis equals value of corrected MultiPn occurence (plus the type)
+			//index of element in old_multis equals value of corrected MultiParams occurence (plus the type)
 			std::vector<PnIdx> old_multis;
 			const auto catalog_lhs_occurences = [&old_multis](const MutPnRef head) {
 				struct Acc
@@ -565,17 +567,17 @@ namespace bmath::intern::pattern {
 					constexpr Acc(const MutPnRef ref, std::vector<PnIdx>* new_old_multis) noexcept
 						:old_multis(new_old_multis), own_idx(-1u)
 					{
-						if (ref.type.is<Variadic>()) { //these may contain MultiPn -> these have SharedVariadicDatum entry 
+						if (ref.type.is<Variadic>()) { //these may contain MultiParams -> these have SharedVariadicDatum entry 
 							this->own_idx = this->old_multis->size(); //new last element 
 							variadic_meta_data(ref).match_data_idx = this->own_idx;
-							this->old_multis->emplace_back(PnIdx{}); //becomes only valid element if consume finds MultiPn
+							this->old_multis->emplace_back(PnIdx{}); //becomes only valid element if consume finds MultiParams
 						}
 					}
 
 					void consume(const PnIdx child)
 					{
-						if (child.get_type().is<MultiPn>()) {
-							if (this->own_idx == -1) throw std::exception("found MultiPn in unexprected place");
+						if (child.get_type().is<MultiParams>()) {
+							if (this->own_idx == -1) throw std::exception("found MultiParams in unexprected place");
 							this->old_multis->at(this->own_idx) = child;
 						}
 					}
@@ -590,8 +592,8 @@ namespace bmath::intern::pattern {
 				const auto check_function_params = [&old_multis, test_lhs](const MutPnRef ref) -> fold::FindTrue {
 					if (ref.type.is<Function>()) {
 						for (auto& param : fn::unsave_range(ref)) {
-							if (param.get_type().is<MultiPn>()) {
-								if (!ref.type.is<Variadic>() && test_lhs) { //only Variadic may carry MultiPn in lhs
+							if (param.get_type().is<MultiParams>()) {
+								if (!ref.type.is<Variadic>() && test_lhs) { //only Variadic may carry MultiParams in lhs
 									return true;
 								}
 								const auto new_param_pos = std::find(old_multis.begin(), old_multis.end(), param); //relative to begin() to be precise
@@ -608,33 +610,9 @@ namespace bmath::intern::pattern {
 				};
 				return fold::simple_fold<fold::FindTrue>(head, check_function_params);
 			};
-			throw_if(replace_occurences(this->lhs_mut_ref(), true), "MultiPn in unexpected place in lhs");
-			throw_if(replace_occurences(this->rhs_mut_ref(), false), "MultiPn only referenced in rhs");
-		}
-		{
-			//if MultiPn::params occurs in sum / product, it is replaced by legal and matching MultiPn version.
-			const auto test_and_replace_multi_pn = [](const MutPnRef head, const bool test_lhs) -> bool {
-				const auto inspect_variadic = [test_lhs](const MutPnRef ref) -> fold::FindTrue {
-					if (ref.type == Comm::sum || ref.type == Comm::product) {
-						const PnType representing_type = ref.type == Comm::sum ? MultiPn::summands : MultiPn::factors;
-						for (PnIdx& elem : fn::unsave_range(ref)) {
-							const PnType elem_type = elem.get_type();
-							if (elem_type == representing_type) {
-								elem = PnIdx(elem.get_index(), MultiPn::params); //params also represent summands / factors
-							}
-							else if (test_lhs && elem_type.is<MultiPn>()) {
-								//in lhs a sum may never hold factors directly and vice versa
-								return true;
-							}
-						}
-					}
-					return false;
-				};
-				return fold::simple_fold<fold::FindTrue>(head, inspect_variadic);
-			};
-			throw_if(test_and_replace_multi_pn(this->lhs_mut_ref(), true), "wrong MultiPn in lhs");
-			test_and_replace_multi_pn(this->rhs_mut_ref(), false);
-		}
+			throw_if(replace_occurences(this->lhs_mut_ref(), true), "MultiParams in unexpected place in lhs");
+			throw_if(replace_occurences(this->rhs_mut_ref(), false), "MultiParams only referenced in rhs");
+		}		
 		{
 			const auto contains_illegal_value_match = [](const PnRef head) -> bool {
 				const auto inspect_variadic = [](const PnRef ref) -> fold::FindTrue {
@@ -657,7 +635,7 @@ namespace bmath::intern::pattern {
 					if (ref.type == Comm::sum || ref.type == Comm::product) {
 						std::size_t nr_multi_matches = 0u;
 						for (const PnIdx elem : fn::range(ref)) {
-							nr_multi_matches += elem.get_type().is<MultiPn>();
+							nr_multi_matches += elem.get_type().is<MultiParams>();
 						}
 						return nr_multi_matches > 1u;
 					}
@@ -671,7 +649,7 @@ namespace bmath::intern::pattern {
 			const auto contains_to_long_variadic = [](const PnRef head) -> bool {
 				const auto inspect_variadic = [](const PnRef ref) -> fold::FindTrue {
 					if (ref.type == Comm::sum || ref.type == Comm::product) {
-						const std::uint32_t multi_at_back = ref->parameters.back().get_type().is<MultiPn>();
+						const std::uint32_t multi_at_back = ref->parameters.back().get_type().is<MultiParams>();
 						return ref->parameters.size() - multi_at_back > match::SharedVariadicDatum::max_pn_variadic_params_count;
 					}
 					return false;
@@ -796,7 +774,7 @@ namespace bmath::intern::pattern {
 			}
 		} //eval_value_match
 
-		PnIdx intermediate_to_pattern(const UnsaveRef src_ref, PnStore& dst_store, const Side side, const Convert convert)
+		PnIdx intermediate_to_pattern(const UnsaveRef src_ref, PnStore& dst_store, const Side side, const Convert convert, const PnType parent_type)
 		{
 			switch (src_ref.type) {
 			case MathType(NamedFn{}): {
@@ -807,13 +785,22 @@ namespace bmath::intern::pattern {
 					return PnIdx(dst_index, PnNode::tree_match);
 				}
 				if (const auto multi_match = math_rep::IntermediateMultiMatch::cast(src_ref)) {
-					return PnIdx(multi_match->index(), multi_match->type());
+					const Variadic multi_parent = multi_match->type();
+					if (multi_parent == parent_type) {
+						return PnIdx(multi_match->index(), MultiParams{});
+					}
+					else {
+						assert(side == Side::rhs);
+						const std::size_t dst_index = dst_store.allocate_one();
+						dst_store.at(dst_index) = PnIdxVector{ PnIdx(multi_match->index(), MultiParams{}) };
+						return PnIdx(dst_index, multi_parent);
+					}
 				}
 
 				if (convert == Convert::all) {
 					if (const auto value_match = math_rep::IntermediateValueMatch::cast(src_ref)) {
 						if (side == Side::lhs) {
-							const PnIdx mtch_idx = intermediate_to_pattern(src_ref.new_at(value_match->mtch_idx()), dst_store, side, convert);
+							const PnIdx mtch_idx = intermediate_to_pattern(src_ref.new_at(value_match->mtch_idx()), dst_store, side, convert, PnNode::value_match);
 							const std::uint32_t match_data_idx = value_match->match_data_idx();
 							const Form form = value_match->form();
 
@@ -839,7 +826,7 @@ namespace bmath::intern::pattern {
 				assert(src_ref.type.is<Function>());
 				StupidBufferVector<PnIdx, 12> dst_parameters;
 				for (const MathIdx src_param : fn::range(src_ref)) {
-					const PnIdx dst_param = intermediate_to_pattern(src_ref.new_at(src_param), dst_store, side, convert);
+					const PnIdx dst_param = intermediate_to_pattern(src_ref.new_at(src_param), dst_store, side, convert, src_ref.type);
 					dst_parameters.push_back(dst_param);
 				}
 				if (src_ref.type.is<NamedFn>()) {
@@ -927,9 +914,7 @@ namespace bmath::intern::pattern {
 				return fst->value_match.match_data_idx <=> snd->value_match.match_data_idx;
 			} break;
 			case PnType(PnNode::value_proxy):
-			case PnType(MultiPn::summands): 
-			case PnType(MultiPn::factors): 
-			case PnType(MultiPn::params): 
+			case PnType(MultiParams{}): 
 				return fst.index <=> snd.index;
 			}
 		} //compare
@@ -974,7 +959,7 @@ namespace bmath::intern::pattern {
 			default: {
 				assert(pn_ref.type.is<Function>());
 				if (pn_ref.type.is<Comm>()) {
-					const bool params_at_back = pn_ref->parameters.back().get_type() == MultiPn::params;
+					const bool params_at_back = pn_ref->parameters.back().get_type() == MultiParams{};
 					if (pn_ref->parameters.size() - params_at_back > ref->parameters.size()) {  //params can also match nothing -> subtract 1 then
 						return false;
 					}
@@ -1003,7 +988,7 @@ namespace bmath::intern::pattern {
 					const auto pn_stop = pn_range.end();
 					const auto stop = range.end();
 					for (; pn_iter != pn_stop && iter != stop; ++pn_iter, ++iter) {
-						if (pn_iter->get_type().is<MultiPn>()) {
+						if (pn_iter->get_type().is<MultiParams>()) {
 							goto found_multi_pn;
 						}
 						else if (!match::permutation_equals(pn_ref.new_at(*pn_iter), ref.new_at(*iter), match_data)) {
@@ -1011,7 +996,7 @@ namespace bmath::intern::pattern {
 						}
 					}
 					if (iter == stop) {
-						if (pn_iter->get_type() == MultiPn::params) {
+						if (pn_iter->get_type() == MultiParams{}) {
 							goto found_multi_pn;
 						}
 						return pn_iter == pn_stop;
@@ -1073,11 +1058,7 @@ namespace bmath::intern::pattern {
 			} break;
 			case PnType(PnNode::value_proxy): //may only be encountered in pn_tree::eval_value_match (as value_match does no permutation_equals call)
 				[[fallthrough]];
-			case PnType(MultiPn::summands): //not expected in matching side of pattern, only in replacement side
-				[[fallthrough]];
-			case PnType(MultiPn::factors): //not expected in matching side of pattern, only in replacement side
-				[[fallthrough]];
-			case PnType(MultiPn::params): //assumed to be handeled only as param of named_fn or ordered elements in Variadic 
+			case PnType(MultiParams{}): //assumed to be handeled only as param of named_fn or ordered elements in Variadic 
 				assert(false);
 				BMATH_UNREACHABLE;
 				return false;
@@ -1106,11 +1087,7 @@ namespace bmath::intern::pattern {
 					info = SharedValueDatum();
 				}
 			} break;
-			case PnType(MultiPn::summands): //nothing to do for these (done by variadic)
-				break;
-			case PnType(MultiPn::factors):
-				break;
-			case PnType(MultiPn::params):
+			case PnType(MultiParams{}):
 				break;
 			}
 		} //reset_own_matches
@@ -1121,17 +1098,17 @@ namespace bmath::intern::pattern {
 				return false; //can not rematch at all
 			}
 			if (pn_ref.type.is<Comm>()) {
-				SharedVariadicDatum& variadic_datum = match_data.variadic_data.at(pn_ref.index);
+				SharedVariadicDatum& variadic_datum = match_data.variadic_data[variadic_meta_data(pn_ref).match_data_idx];
 				const PnIdxVector& pn_params = *pn_ref;
 				assert(variadic_datum.match_idx == ref.typed_idx()); //assert pn_ref is currently matched in ref
 				std::uint32_t pn_i = pn_params.size() - 1u;
-				if (pn_params[pn_i].get_type().is<MultiPn>()) {
+				if (pn_params[pn_i].get_type().is<MultiParams>()) {
 					if (pn_i == 0u) {
 						return false;
 					}
 					pn_i--;
 				}
-				assert(!pn_params[pn_i].get_type().is<MultiPn>()); //there may only be a single one in each variadic
+				assert(!pn_params[pn_i].get_type().is<MultiParams>()); //there may only be a single one in each variadic
 				reset_own_matches(pn_ref, match_data);
 				const std::uint32_t last_haystack_k = variadic_datum.match_positions[pn_i];
 				return find_matching_permutation(pn_ref, ref, match_data, pn_i, last_haystack_k + 1u);
@@ -1174,9 +1151,9 @@ namespace bmath::intern::pattern {
 
 			while (pn_i < pn_params.size()) {
 				const PnType pn_i_type = pn_params[pn_i].get_type();
-				assert((!pn_i_type.is<MultiPn>() || pn_i_type == MultiPn::params) && "only MultiPn expected in lhs is params");
-				if (pn_i_type == MultiPn::params) [[unlikely]] { //also summands and factors are matched as params
-					assert(pn_i + 1ull == pn_params.size() && "MultiPn is only valid as last element -> only one per variadic");
+				assert((!pn_i_type.is<MultiParams>() || pn_i_type == MultiParams{}) && "only MultiParams expected in lhs is params");
+				if (pn_i_type == MultiParams{}) [[unlikely]] { //also summands and factors are matched as params
+					assert(pn_i + 1ull == pn_params.size() && "MultiParams is only valid as last element -> only one per variadic");
 					assert(&match_data.multi_info(pn_params[pn_i].get_index()) == &variadic_datum); //just out of paranoia
 					return true;
 				}
@@ -1287,7 +1264,7 @@ namespace bmath::intern::pattern {
 				assert(pn_ref.type.is<Function>());
 				StupidBufferVector<MathIdx, 12> dst_parameters;
 				for (const PnIdx pn_param : fn::range(pn_ref)) {
-					if (pn_param.get_type() == MultiPn::params) { //summands and factors need stay their type (summands always to sum...)
+					if (pn_param.get_type() == MultiParams{}) { 
 						const SharedVariadicDatum& info = match_data.multi_info(pn_param.get_index());
 						const auto src_range = fn::save_range(Ref(src_store, info.match_idx));
 						const auto src_stop = end(src_range);
@@ -1337,26 +1314,9 @@ namespace bmath::intern::pattern {
 				dst_store.at(dst_index) = val;
 				return MathIdx(dst_index, MathType(Literal::complex));
 			} break;
-			case PnType(MultiPn::summands):
-				[[fallthrough]];
-			case PnType(MultiPn::factors): {
-				StupidBufferVector<MathIdx, 12> dst_parameters;
-				const SharedVariadicDatum& info = match_data.multi_info(pn_ref.index);
-				const auto src_range = fn::save_range(Ref(src_store, info.match_idx));
-				const auto src_stop = end(src_range);
-				for (auto src_iter = begin(src_range); src_iter != src_stop; ++src_iter) {
-
-					if (!info.index_matched(src_iter.array_idx)) {
-						const MathIdx dst_param = tree::copy(Ref(src_store, *src_iter), dst_store); //call normal copy!
-						dst_parameters.push_back(dst_param);
-					}
-				}
-
-				const std::uint32_t res_idx = IndexVector::build(dst_store, dst_parameters);
-				return MathIdx(res_idx, pn_ref.type == MultiPn::summands ? MathType(Comm::sum) : MathType(Comm::product));
-			} break;
-			case PnType(MultiPn::params):  //already handeled in named_fn
+			case PnType(MultiParams{}):  //already handeled in Function
 				assert(false);
+				BMATH_UNREACHABLE;
 				return MathIdx();
 			}
 		} //copy

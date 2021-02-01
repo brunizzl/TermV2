@@ -29,7 +29,7 @@ important:
 nice to have:
  - enable StupidBufferVector to handle non-trivial destructible types -> advance him to BufferVector
  - pattern::match::copy should copy in same store (again...)
- - avoid copying pattern::MultiPn entries (needs to know original storage location of each entry, to steal it from there)
+ - avoid copying pattern::MultiParams entries (needs to know original storage location of each entry, to steal it from there)
  - noexceptify everything
 
 idea status:

@@ -418,17 +418,7 @@ namespace bmath::intern {
 				str.append("_VP");
 				str.append(std::to_string(ref.index));
 			} break;
-			case PnType(MultiPn::summands): {
-				str.append("_S");
-				str.append(std::to_string(ref.index));
-				str.append("...");
-			} break;
-			case PnType(MultiPn::factors): {
-				str.append("_F");
-				str.append(std::to_string(ref.index));
-				str.append("...");
-			} break;
-			case PnType(MultiPn::params): {
+			case PnType(MultiParams{}): {
 				str.append("_P");
 				str.append(std::to_string(ref.index));
 				str.append("...");

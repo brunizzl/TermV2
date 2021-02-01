@@ -1,5 +1,7 @@
 #pragma once
 
+#include <iostream>
+
 #include "arithmeticTerm.hpp"
 
 namespace bmath::intern::pattern {
@@ -15,15 +17,10 @@ namespace bmath::intern::pattern {
 	//represent not actual nodes in pattern tree, as all match info is stored in VariadicMatchDatum in MatchData	
 	//thus all info required in the tree is given in the typed_idx, where the index is repurposed to point elsewhere
 	//(elsewhere means that VariadicMatchDatum array in MatchData)
-	enum class MultiPn
-	{
-		params, //only of MultiPn allowed in valid pattern on lhs (exchanged in RewriteRule's constructor)
-		summands, //only expected at rhs of valid pattern, to allow a sum (of all summands) as factor
-		factors,  //only expected at rhs of valid pattern, to allow a product (of all factors) as summand
-		COUNT
-	};
 
-	using MatchType = SumEnum<MultiPn, PnNode>;
+	struct MultiParams :SingleSumEnumEntry {};
+
+	using MatchType = SumEnum<MultiParams, PnNode>;
 
 	using PnType = SumEnum<MatchType, MathType>;
 	using PnIdx = BasicTypedIdx<PnType>;
@@ -106,7 +103,7 @@ namespace bmath::intern::pattern {
 	struct VariadicMetaData 
 	{
 		std::uint32_t match_data_idx = -1u; //indexes in MatchData::variadic_match_data
-		BitSet32 rematchable = -1u; //bit i dertermines wether parameter i is rematchable
+		BitSet32 rematchable = -1u; //bit i dertermines whether parameter i is rematchable
 	};
 
 	union PnUnion
@@ -173,6 +170,15 @@ namespace bmath::intern::pattern {
 	////////////////////////////////////////  parsing  ///////////////////////////////////////
 	//////////////////////////////////////////////////////////////////////////////////////////
 
+	struct UnknownPnVar :SingleSumEnumEntry {};
+
+	using Multi = OpaqueEnum<Variadic>;
+
+	//intermediary used in build process
+	using PnVariablesType = SumEnum<Restriction, Form, Multi, UnknownPnVar>;
+
+
+
 	struct [[nodiscard]] PatternParts
 	{
 		ParseView declarations;
@@ -213,9 +219,9 @@ namespace bmath::intern::pattern {
 		std::string_view name;
 		std::size_t lhs_count; //(only used to throw error if multiple instances exist in lhs)
 		std::size_t rhs_count; //(only used to throw error if multiple instances exist in rhs)
-		MultiPn type;
+		Multi type;
 
-		MultiNameLookup(std::string_view new_name, const MultiPn new_type) noexcept
+		MultiNameLookup(std::string_view new_name, const Multi new_type) noexcept
 			:name(new_name), lhs_count(0u), rhs_count(0u), type(new_type) {}
 	};
 
@@ -242,11 +248,6 @@ namespace bmath::intern::pattern {
 		MathIdx operator()(MathStore& store, ParseView input);
 	};
 
-	struct UnknownPnVar :SingleSumEnumEntry {};
-
-	//intermediary used in build process
-	using PnVariablesType = SumEnum<Restriction, Form, MultiPn, UnknownPnVar>;
-
 	struct TypeProps
 	{
 		PnVariablesType type = PnVariablesType(UnknownPnVar{});
@@ -271,13 +272,47 @@ namespace bmath::intern::pattern {
 		{ Restr::any          , "any"           },
 		{ Restr::nn1          , "nn1"           },
 		{ Restr::no_val       , "no_val"        },
-		{ MultiPn::summands   , "summands"      },
-		{ MultiPn::factors    , "factors"       },
-		{ MultiPn::params     , "params"        },
 		});
 
-	constexpr std::string_view name_of(const PnVariablesType r) noexcept { return find(type_table, &TypeProps::type, r).name; }
-	constexpr PnVariablesType type_of(const std::string_view s) noexcept { return search(type_table, &TypeProps::name, s).type; }
+
+	constexpr auto make_multi_names = []() {
+		constexpr std::size_t variadic_name_max = std::max_element(fn::variadic_props_table.begin(), fn::variadic_props_table.end(),
+			[](const auto& fst, const auto& snd) { return fst.name.size() < snd.name.size(); })->name.size();
+
+		std::array<std::array<char, variadic_name_max + 4u>, (unsigned)Variadic::COUNT> multi_names = {};
+		for (std::size_t i = 0; i < multi_names.size(); i++) {
+			std::size_t j = 0;
+			const std::string_view src_name = fn::variadic_props_table.at(i).name;
+			for (; j < src_name.size(); j++) {
+				multi_names.at(i).at(j) = src_name.at(j);
+			}
+			//extend length by four for this end:
+			multi_names.at(i).at(j++) = '.';
+			multi_names.at(i).at(j++) = '.';
+			multi_names.at(i).at(j++) = '.';
+		}
+
+		return multi_names;
+	};
+	constexpr auto multi_names = make_multi_names();
+
+	constexpr std::string_view name_of(const PnVariablesType r) noexcept 
+	{ 
+		if (r.is<Multi>()) {
+			return multi_names[(unsigned)r.to<Multi>()].data();
+		}
+		return find(type_table, &TypeProps::type, r).name; 
+	}
+
+	constexpr PnVariablesType type_of(const std::string_view s) noexcept 
+	{ 
+		const auto multi = std::find_if(multi_names.begin(), multi_names.end(),
+			[s](const auto& arr) { return std::string_view(arr.data()) == s; });
+		if (multi != multi_names.end()) {
+			return Multi((unsigned)std::distance(multi_names.begin(), multi));
+		}
+		return search(type_table, &TypeProps::name, s).type; 
+	}
 
 
 
@@ -324,7 +359,7 @@ namespace bmath::intern::pattern {
 		PnIdx rhs_head;
 		PnStore store; //acts as both store for rhs and lhs
 
-		//if convert == Convert::basic only TreeMatch and MultiPn are converted from their NamedFn form
+		//if convert == Convert::basic only TreeMatch and MultiParams are converted from their NamedFn form
 		//  (enables to use rewrite rules to help building value match patterns)
 		RewriteRule(std::string name, Convert convert = Convert::all);
 		std::string to_string() const;
@@ -344,7 +379,8 @@ namespace bmath::intern::pattern {
 
 		//copies math_ref into dst_store but changes math representations of pattern specific nodes 
 		//  to their final pattern versions
-		PnIdx intermediate_to_pattern(const UnsaveRef math_ref, PnStore& dst_store, const Side side, const Convert convert);
+		PnIdx intermediate_to_pattern(const UnsaveRef math_ref, PnStore& dst_store, 
+			const Side side, const Convert convert, const PnType parent_type);
 
 		std::strong_ordering compare(const UnsavePnRef fst, const UnsavePnRef snd);
 
@@ -388,7 +424,7 @@ namespace bmath::intern::pattern {
 
 			using MatchPos_T = decltype(IndexVector::Info::size);
 
-			//every element in pattern (except all MultiPn) has own entry which logs, 
+			//every element in pattern (except all MultiParams) has own entry which logs, 
 			//  with which element in term to match it currently is associated with.
 			std::array<MatchPos_T, max_pn_variadic_params_count> match_positions = {};
 
@@ -412,7 +448,7 @@ namespace bmath::intern::pattern {
 			static constexpr std::size_t max_value_match_count = 2u;
 			//maximal number of unrelated TreeMatchVariables allowed per pattern
 			static constexpr std::size_t max_tree_match_count = 8u;
-			//maximal number of sums and products allowed per pattern
+			//maximal number of variadics allowed per pattern
 			static constexpr std::size_t max_variadic_count = 4u;    //(max multi_match count is same)
 
 			std::array<SharedValueDatum, max_value_match_count> value_match_data = {};
@@ -469,7 +505,6 @@ namespace bmath::intern::pattern {
 		//  meaning ref is no longer valid and caller needs to replace ref with *return_value.first  
 		[[nodiscard]] std::pair<std::optional<MathIdx>, bool> recursive_match_and_replace(
 			const pattern::UnsavePnRef in, const pattern::UnsavePnRef out, const MutRef ref);
-
 
 		//all rules in [start, stop) are applied until no matching rule is found. in between tree::establish_basic_order is called
 		//the new head of ref is retuned
@@ -535,9 +570,7 @@ namespace bmath::intern {
 			{ PnNode::value_proxy, 1003 }, //dont care really where this sits, as it never ist used in matching anyway
 			//values 2xxx are not present, as that would require every item in Fn to be listed here (instead default_generality kicks in here)			
 			{ PnNode::tree_match , 3006 },
-			{ MultiPn::params    , 3007 }, //kinda special, as they always succeed in matching -> need to be matched last 
-			{ MultiPn::summands  , 3008 }, //kinda special, as they always succeed in matching -> need to be matched last 
-			{ MultiPn::factors   , 3009 }, //kinda special, as they always succeed in matching -> need to be matched last 
+			{ MultiParams{}    , 3007 }, //kinda special, as they always succeed in matching -> need to be matched last 
 		});
 		static_assert(std::is_sorted(type_generality_table.begin(), type_generality_table.end(),
 			[](auto a, auto b) { return a.second < b.second; }));

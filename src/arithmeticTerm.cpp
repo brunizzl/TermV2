@@ -309,7 +309,11 @@ namespace bmath::intern {
 							new_parameters.push_back(new_param);
 						}
 					}
-					if (const auto old_capacity = ref->parameters.capacity(); new_parameters.size() <= old_capacity) [[likely]] {
+					if (new_parameters.size() == 1u) { //operation on single element is same as that element
+						IndexVector::free(*ref.store, ref.index); //free old function, but not old parameters
+						return new_parameters.front();
+					}
+					else if (const auto old_capacity = ref->parameters.capacity(); new_parameters.size() <= old_capacity) [[likely]] {
 						IndexVector::emplace(*ref, new_parameters, old_capacity);
 					}
 					else {
