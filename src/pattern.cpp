@@ -83,7 +83,7 @@ namespace bmath::intern::pattern {
 			static_assert("_VM" == math_rep::IntermediateValueMatch::function_name);
 			static_assert("_VP" == math_rep::IntermediateValueProxy::function_name);
 			static const auto bubble_up_value_match = std::to_array<RewriteRule>({
-				//mtch_idx gets two versions, the second one keeps the original ValueProxy (_VP) with the right match_data_idx (i)
+				//mtch_idx gets two versions, the second one keeps the original ValueProxy (_VP) with the right match_data_idx (k)
 				{ "             k, f |      _VM(_VP(k), k, f)            = _TempVM(_VP(k), _VP(k) , k, f)", Convert::basic },
 
 				//computable computations surrounding ValueMatch are "sucked in" to second parameter of (_TempVM representation of) ValueMatch
@@ -222,7 +222,7 @@ namespace bmath::intern::pattern {
 			const auto replace_occurences = [&old_multis](const MutPnRef head, const bool test_lhs) -> bool {
 				const auto check_function_params = [&old_multis, test_lhs](const MutPnRef ref) -> fold::FindTrue {
 					if (ref.type.is<Function>()) {
-						for (auto& param : fn::unsave_range(ref)) {
+						for (auto& param : fn::range(ref)) {
 							if (param.get_type().is<MultiParams>()) {
 								if (!ref.type.is<Variadic>() && test_lhs) { //only Variadic may carry MultiParams in lhs
 									return true;
@@ -500,11 +500,8 @@ namespace bmath::intern::pattern {
 					return fn::build_named_fn<PnType>(dst_store, name_ref, dst_parameters);
 				}
 				else if (src_ref.type.is<Variadic>()) { //allocate one extra for metadata
-					const std::size_t alloc_capacity = PnIdxVector::smallest_fit_capacity(dst_parameters.size());
-					const std::size_t alloc_idx = dst_store.allocate_n(1u + PnIdxVector::_node_count(alloc_capacity)) + 1u; //1u for metadata
-					PnIdxVector::emplace(dst_store.at(alloc_idx), dst_parameters, alloc_capacity);
-					dst_store.at(alloc_idx - 1u) = VariadicMetaData{}; //still needs to be set to corrent values
-					return PnIdx(alloc_idx, src_ref.type);
+					return PnIdx(build_pattern_variadic(dst_store, dst_parameters,
+						VariadicMetaData{}), src_ref.type);
 				}
 				else {
 					return PnIdx(PnIdxVector::build(dst_store, dst_parameters), src_ref.type);
@@ -524,6 +521,55 @@ namespace bmath::intern::pattern {
 			assert(false);
 			return PnIdx();
 		} //intermediate_to_pattern
+
+		PnIdx copy(const PnRef src_ref, PnStore& dst_store)
+		{
+			switch (src_ref.type) {
+			default: {
+				if (src_ref.type.is<Proxy>()) {
+					return src_ref.typed_idx();
+				}
+				assert(src_ref.type.is<Function>());
+				StupidBufferVector<PnIdx, 12> dst_parameters;
+				for (const PnIdx src_param : fn::save_range(src_ref)) {
+					const PnIdx dst_param = pn_tree::copy(src_ref.new_at(src_param), dst_store);
+					dst_parameters.push_back(dst_param);
+				}
+				if (src_ref.type.is<Variadic>()) {
+					return PnIdx(build_pattern_variadic(dst_store, dst_parameters, 
+						variadic_meta_data(src_ref)), src_ref.type);
+				}
+				else if (src_ref.type.is<NamedFn>()) {
+					const CharVector& name_ref = fn::named_fn_name(src_ref);
+					std::string name = std::string(name_ref.begin(), name_ref.end());
+					return fn::build_named_fn<PnType>(dst_store, std::move(name), dst_parameters);
+				}
+				else {
+					return PnIdx(PnIdxVector::build(dst_store, dst_parameters), src_ref.type);
+				}
+			} break;
+			case PnType(Literal::variable): {
+				const CharVector& src_var = *src_ref;
+				const auto src_name = std::string(src_var.data(), src_var.size());
+				const std::size_t dst_index = CharVector::build(dst_store, src_name);
+				return PnIdx(dst_index, src_ref.type);
+			} break;
+			case PnType(Literal::complex): {
+				const std::size_t dst_index = dst_store.allocate_one();
+				dst_store.at(dst_index) = *src_ref; //bitwise copy of src
+				return PnIdx(dst_index, src_ref.type);
+			} break;
+			case PnType(ValueMatch::non_owning):
+				[[fallthrough]];
+			case PnType(ValueMatch::owning): {
+				const ValueMatchVariable src_var = *src_ref; //copy to avoid illegal access if match_idx creation caused store resize
+				const PnIdx dst_match_idx = pn_tree::copy(src_ref.new_at(src_var.mtch_idx), dst_store);
+				const std::size_t dst_index = dst_store.allocate_one();
+				dst_store.at(dst_index) = ValueMatchVariable(dst_match_idx, src_var.match_data_idx, src_var.domain);
+				return PnIdx(dst_index, src_ref.type);
+			} break;
+			}
+		} //copy
 
 		std::strong_ordering pn_tree::compare(const UnsavePnRef fst, const UnsavePnRef snd)
 		{
@@ -600,6 +646,23 @@ namespace bmath::intern::pattern {
 
 			fold::simple_fold<fold::Void>(ref, sort_variadic);
 		} //sort
+
+		auto determine_match_order(const UnsavePnRef ref) 
+		{
+			std::array<std::uint32_t, match::MatchData::max_tree_match_count> match_sequence_indices;
+			match_sequence_indices.fill(-1u);
+			std::uint32_t current_match_index = 0u;
+
+			const auto catalog_tree_match_variable = [&](const UnsavePnRef ref) {
+				if (ref.type.is<TreeMatch>()) {
+					auto& pos = match_sequence_indices[ref.index];
+					pos = std::min(pos, current_match_index++);
+				}
+				return fold::Void{};
+			};
+			fold::simple_fold<fold::Void>(ref, catalog_tree_match_variable);
+			return match_sequence_indices;
+		} //determine_match_order
 
 	} //namespace pn_tree
 

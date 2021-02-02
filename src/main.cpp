@@ -8,6 +8,7 @@
 TODO:
 
 important:
+ - make match and replace two distinct functions in RuleSet, allow caller to rematch
  - write pow for integer exponents
  - sort pattern with care for match variables
  - make pattern and usual term two distinct types (again...)
@@ -15,10 +16,6 @@ important:
 		- variadic commutative can have table with extra info of operands, allowing faster matches / fails, also index in match_data circumvents O(n) lookup
 		    info may contain: rematchable vs. not rematchable 
 			                  compare structure to predecessor: same structure vs. identical vs. unordered vs. always occurs after vs. always occurs bevore
- - change permutation_equals (currently returning bool) to permutation_compare returning one of {match, smaller, larger, unordered} -> binary search for math types?
-	   also requires find_matching_permutation to return same values.
- - write data structure one abstraction layer above RewriteRule (RuleSet) to group multiple pattens
-     - seperate match and replace into multiple functions there
 
 nice to have:
  - enable StupidBufferVector to handle non-trivial destructible types -> change name to BufferVector
@@ -36,6 +33,8 @@ idea status:
  - let each RewriteRule have a name in form of a constant c-string (not what pattern is constructed from, but name of rule, e.g. "differentiation: product rule" or something)
  - prettify pattern::Multivar sytax to require "..." after variable name 
  - always keep -1 at some known index in store and never allocate new -1 in build_negated and build_inverted (problem: identify bevore copy, solution: you know the index)
+ - change permutation_equals (currently returning bool) to permutation_compare returning one of {match, smaller, larger, unordered} -> binary search for math types?
+	   also requires find_matching_permutation to return same values.
 */
 
 

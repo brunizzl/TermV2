@@ -14,6 +14,7 @@
 #include "ioArithmetic.hpp"
 #include "termVector.hpp"
 #include "pattern.hpp"
+#include "transform.hpp"
 
 
 namespace bmath::intern::debug {
@@ -80,7 +81,7 @@ namespace bmath::intern::debug {
 
 	void test_rechner() 
 	{
-		static const auto rules = std::to_array<pattern::RewriteRule>({ 
+		static const RuleSet rules = std::to_array<std::string_view>({ 
 			{ "x :product... | 0 x = 0" },
 			{ "x             | 0^x = 0" },
 			{ "x             | x^0 = 1" },
@@ -174,9 +175,9 @@ namespace bmath::intern::debug {
 			{ "                          | intersection()                       = set()" },
 		});
 
-		for (const auto& rule : rules) {
-			std::cout << rule.to_string() << "\n\n";
-		}
+		//for (const auto& rule : rules) {
+		//	std::cout << rule.to_string() << "\n\n";
+		//}
 
 		while (true) {
 			std::string name;
@@ -185,7 +186,7 @@ namespace bmath::intern::debug {
 			try {
 				bmath::Term test(name); 
 				std::cout << "input:  " << test.to_pretty_string() << "\n";
-				test.head = pattern::match::apply_rule_range(rules.data(), rules.data() + rules.size(), test.mut_ref());
+				rules.apply_to(test);
 
 				std::cout << "    = " << test.to_pretty_string() << "\n";
 				//std::cout << test.to_memory_layout() << "\n";

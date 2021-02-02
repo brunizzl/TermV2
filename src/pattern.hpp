@@ -99,12 +99,12 @@ namespace bmath::intern::pattern {
 		std::uint32_t match_data_idx; //indexes in MatchData::value_match_data
 		ValueDomain domain;
 
-		constexpr ValueMatchVariable(PnIdx new_match, std::uint32_t new_match_data_idx, ValueDomain new_form) noexcept
-			:mtch_idx(new_match), match_data_idx(new_match_data_idx), domain(new_form)
+		constexpr ValueMatchVariable(PnIdx new_match, std::uint32_t new_match_data_idx, ValueDomain new_domain) noexcept
+			:mtch_idx(new_match), match_data_idx(new_match_data_idx), domain(new_domain)
 		{}
 	};
 
-	//in a pattern Variadic is actually preceeded by an element of this
+	//in a pattern every Variadic is preceeded by an element of this
 	struct VariadicMetaData 
 	{
 		std::uint32_t match_data_idx = -1u; //indexes in MatchData::variadic_match_data
@@ -157,12 +157,25 @@ namespace bmath::intern::pattern {
 
 
 
-	constexpr const VariadicMetaData& variadic_meta_data(const UnsavePnRef ref) noexcept {
+	constexpr const VariadicMetaData& variadic_meta_data(const UnsavePnRef ref) noexcept 
+	{
 		return *ref.raw_at(ref.index - 1u);
 	}
 
-	constexpr VariadicMetaData& variadic_meta_data(const MutPnRef ref) noexcept {
+	constexpr VariadicMetaData& variadic_meta_data(const MutPnRef ref) noexcept 
+	{
 		return ref.store->at(ref.index - 1u);
+	}
+
+	template<typename Parameters_T>
+	constexpr std::size_t build_pattern_variadic(PnStore& dst_store, const Parameters_T& dst_parameters,
+		const VariadicMetaData& new_meta_data)
+	{
+		const std::size_t alloc_capacity = PnIdxVector::smallest_fit_capacity(dst_parameters.size());
+		const std::size_t vec_idx = dst_store.allocate_n(1u + PnIdxVector::_node_count(alloc_capacity)) + 1u;
+		PnIdxVector::emplace(dst_store.at(vec_idx), dst_parameters, alloc_capacity);
+		dst_store.at(vec_idx - 1u) = new_meta_data;
+		return vec_idx;
 	}
 
 
@@ -227,9 +240,17 @@ namespace bmath::intern::pattern {
 		PnIdx intermediate_to_pattern(const UnsaveRef math_ref, PnStore& dst_store, 
 			const Side side, const Convert convert, const PnType parent_type);
 
+		//alternative name: pattern_to_pattern
+		PnIdx copy(const PnRef src_ref, PnStore& dst_store);
+
 		std::strong_ordering compare(const UnsavePnRef fst, const UnsavePnRef snd);
 
+		//sorts equivalent to tree::sort using pn_tree::compare
 		void sort(const MutPnRef ref);
+
+		//returns array with one element for each pattern variable.
+		//if (result array at index i == k) then TreeMatch i is the k-th TreeMatch instance to be matched
+		auto determine_match_order(const UnsavePnRef ref);
 
 	} //namespace pn_tree
 
@@ -311,8 +332,8 @@ namespace bmath::intern::pattern {
 		//pn_i is the index of the first element in pn_ref to be matched. 
 		//if pn_i is not zero, it is assumed, that all previous elements in pn_ref are already matched.
 		//the first haystack_k elements of haystack_ref will be skipped for the first match attemt.
-		//it is assumed, that pn_ref and haystack_ref are both the same parameters type (eighter both sum or both product)
-		//returns if search was successfull
+		//it is assumed, that pn_ref and haystack_ref are both the same Comm type
+		//returns true if a match was found
 		bool find_matching_permutation(const pattern::UnsavePnRef pn_ref, const UnsaveRef haystack_ref,
 			MatchData& match_data, std::uint32_t pn_i, std::uint32_t haystack_k);
 
@@ -349,11 +370,10 @@ namespace bmath::intern::pattern {
 
 namespace bmath::intern::fn {
 
-	constexpr auto&        range(const pattern::UnsavePnRef ref) noexcept { return ref->parameters; }
-	constexpr auto&        range(const pattern::PnRef ref      ) noexcept { return ref->parameters; }
-	constexpr auto    save_range(const pattern::PnRef ref      ) noexcept { return ref.cast<pattern::PnIdxVector>(); }
-	constexpr auto         range(const pattern::MutPnRef ref   ) noexcept { return ref.cast<pattern::PnIdxVector>(); }
-	constexpr auto& unsave_range(const pattern::MutPnRef ref   ) noexcept { return ref->parameters; }
+	constexpr auto&      range(const pattern::UnsavePnRef ref) noexcept { return ref->parameters; }
+	constexpr auto&      range(const pattern::PnRef ref      ) noexcept { return ref->parameters; }
+	constexpr auto  save_range(const pattern::PnRef ref      ) noexcept { return ref.cast<pattern::PnIdxVector>(); }
+	constexpr auto       range(const pattern::MutPnRef ref   ) noexcept { return ref.cast<pattern::PnIdxVector>(); }
 
 	constexpr const CharVector& named_fn_name(const pattern::UnsavePnRef named_fn) noexcept
 	{

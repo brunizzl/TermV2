@@ -451,9 +451,19 @@ namespace bmath::intern {
 			, memory(std::move(snd.memory))
 		{}
 
-		//not yet done
-		BasicMonotonicStore& operator=(const BasicMonotonicStore& snd) = delete;
-		BasicMonotonicStore& operator=(BasicMonotonicStore&& snd) = delete;
+		BasicMonotonicStore& operator=(const BasicMonotonicStore& snd)
+		{
+			this->~BasicMonotonicStore();
+			new (this) BasicMonotonicStore(snd);
+			return *this;
+		}
+
+		BasicMonotonicStore& operator=(BasicMonotonicStore&& snd)
+		{
+			this->~BasicMonotonicStore();
+			new (this) BasicMonotonicStore(std::move(snd));
+			return *this;
+		}
 
 
 		~BasicMonotonicStore() noexcept
