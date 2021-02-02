@@ -108,7 +108,13 @@ namespace bmath::intern::pattern {
 	struct VariadicMetaData 
 	{
 		std::uint32_t match_data_idx = -1u; //indexes in MatchData::variadic_match_data
-		BitSet32 rematchable = -1u; //bit i dertermines whether parameter i is rematchable
+
+		//bit i dertermines whether parameter i is rematchable
+		BitSet32 rematchable = -1u;
+		//bit i determines whether parameter i is only matched with term directly succeding match of parameter i-1
+		BitSet32 directly_after_prev = 0u;
+		//bit i determines whether parameter i is only matched with terms succeding match of parameter i-1
+		BitSet32 always_after_prev = 0u; 
 	};
 
 	union PnUnion

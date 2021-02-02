@@ -8,21 +8,17 @@
 TODO:
 
 important:
+ - add RuleRef type grouping two pattern refs
  - make match and replace two distinct functions in RuleSet, allow caller to rematch
  - write pow for integer exponents
- - sort pattern with care for match variables
- - make pattern and usual term two distinct types (again...)
-	enables: 
-		- variadic commutative can have table with extra info of operands, allowing faster matches / fails, also index in match_data circumvents O(n) lookup
-		    info may contain: rematchable vs. not rematchable 
-			                  compare structure to predecessor: same structure vs. identical vs. unordered vs. always occurs after vs. always occurs bevore
+ - write version of tree::combine only checking changed tree parts
 
 nice to have:
  - enable StupidBufferVector to handle non-trivial destructible types -> change name to BufferVector
  - pattern::match::copy should copy in same store (again...)
  - noexceptify everything
  - restructure everything to use modules (basically needed to constexprfy all the things)
- - allow to restrict a variables possibility space e.g. natural, integer, real, complex (split Literal::variable in own enum?)
+ - allow to restrict a variables domain (split Literal::variable in own enum?)
 
 idea status:
  - add type system: check only when pattern /usual term instanciates, not needed when copied
@@ -35,6 +31,7 @@ idea status:
  - always keep -1 at some known index in store and never allocate new -1 in build_negated and build_inverted (problem: identify bevore copy, solution: you know the index)
  - change permutation_equals (currently returning bool) to permutation_compare returning one of {match, smaller, larger, unordered} -> binary search for math types?
 	   also requires find_matching_permutation to return same values.
+ - sort pattern with care for match variables
 */
 
 

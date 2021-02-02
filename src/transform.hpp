@@ -3,6 +3,8 @@
 #include <vector>
 #include <array>
 #include <algorithm>
+#include <concepts>
+#include <string>
 
 #include "arithmeticTerm.hpp"
 #include "pattern.hpp"
@@ -11,13 +13,15 @@ namespace bmath {
 
 	template<std::size_t N>
 	class RuleSet {
-		intern::pattern::PnStore store = {};
+		intern::pattern::PnStore lhs_store = {};
+		intern::pattern::PnStore rhs_store = {};
 
 		std::array<intern::pattern::PnIdx, N> lhs_heads;
 		std::array<intern::pattern::PnIdx, N> rhs_heads;
 
 	public:
-		RuleSet(const std::array<std::string_view, N>& rule_names)
+		template<std::convertible_to<std::string> Name>
+		RuleSet(const std::array<Name, N>& rule_names)
 		{
 			using namespace intern::pattern;
 			std::vector<RewriteRule> rules;
@@ -32,10 +36,10 @@ namespace bmath {
 			);
 
 			for (std::size_t i = 0u; i < rules.size(); i++) {
-				this->lhs_heads[i] = pn_tree::copy(rules[i].lhs_ref(), this->store);
+				this->lhs_heads[i] = pn_tree::copy(rules[i].lhs_ref(), this->lhs_store);
 			}
 			for (std::size_t i = 0u; i < rules.size(); i++) {
-				this->rhs_heads[i] = pn_tree::copy(rules[i].rhs_ref(), this->store);
+				this->rhs_heads[i] = pn_tree::copy(rules[i].rhs_ref(), this->rhs_store);
 			}
 		}
 
@@ -50,8 +54,8 @@ namespace bmath {
 			for (std::size_t i = 0; i < N; i++) {
 				const auto [head_match, deeper_match] =
 					match::recursive_match_and_replace(
-						PnRef(this->store, this->lhs_heads[i]), 
-						PnRef(this->store, this->rhs_heads[i]), 
+						PnRef(this->lhs_store, this->lhs_heads[i]), 
+						PnRef(this->rhs_store, this->rhs_heads[i]), 
 						term.mut_ref()
 					);
 				if (head_match) {
@@ -67,8 +71,8 @@ namespace bmath {
 		}
 	};
 
-	template<std::size_t N>
-	RuleSet(const std::array<std::string_view, N>& rule_names) -> RuleSet<N>;
+	template<std::convertible_to<std::string> Name, std::size_t N>
+	RuleSet(const std::array<Name, N>& rule_names) -> RuleSet<N>;
 
 
 } //namespace bmath
