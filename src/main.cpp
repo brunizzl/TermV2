@@ -8,29 +8,24 @@
 TODO:
 
 important:
+ - write pow for integer exponents
  - sort pattern with care for match variables
- - distinguish between owning match variable and nonowning match variable
- - let type_table in ioArithmetic use names of fn
  - make pattern and usual term two distinct types (again...)
 	enables: 
 		- variadic commutative can have table with extra info of operands, allowing faster matches / fails, also index in match_data circumvents O(n) lookup
-		    info may contain: owns match variables (also rematchable vs. not rematchable) vs. has only unowned match variables vs. ordinary term
+		    info may contain: rematchable vs. not rematchable 
 			                  compare structure to predecessor: same structure vs. identical vs. unordered vs. always occurs after vs. always occurs bevore
-		- MathUnion only composed of Complex, String and Params -> easier to debug
- - change permutation_equals (returning bool) to permutation_compare returning one of {match, smaller, larger, unordered} -> binary search for math types?
-       if compares unordered, it should clean up after itself, not requiring caller calling reset_own_matches
+ - change permutation_equals (currently returning bool) to permutation_compare returning one of {match, smaller, larger, unordered} -> binary search for math types?
 	   also requires find_matching_permutation to return same values.
-	   also: is unordered possible?
  - write data structure one abstraction layer above RewriteRule (RuleSet) to group multiple pattens
      - seperate match and replace into multiple functions there
- - restructure everything to use modules (basically needed to constexprfy all the things)
- - allow to restrict a variables possibility space e.g. natural, integer, real, complex (split Literal::variable in own enum?)
 
 nice to have:
- - enable StupidBufferVector to handle non-trivial destructible types -> advance him to BufferVector
+ - enable StupidBufferVector to handle non-trivial destructible types -> change name to BufferVector
  - pattern::match::copy should copy in same store (again...)
- - avoid copying pattern::MultiParams entries (needs to know original storage location of each entry, to steal it from there)
  - noexceptify everything
+ - restructure everything to use modules (basically needed to constexprfy all the things)
+ - allow to restrict a variables possibility space e.g. natural, integer, real, complex (split Literal::variable in own enum?)
 
 idea status:
  - add type system: check only when pattern /usual term instanciates, not needed when copied
@@ -40,16 +35,17 @@ idea status:
  - const term_slc iterator dereferences to Ref, not typed_idx
  - let each RewriteRule have a name in form of a constant c-string (not what pattern is constructed from, but name of rule, e.g. "differentiation: product rule" or something)
  - prettify pattern::Multivar sytax to require "..." after variable name 
- - always keep -1 at some known index in store and never allocate new -1 in build_negated and build_inverted (problem: identify bevore copy)
+ - always keep -1 at some known index in store and never allocate new -1 in build_negated and build_inverted (problem: identify bevore copy, solution: you know the index)
 */
 
 
 using namespace bmath::intern;
+using namespace bmath::intern::pattern;
 
-//void f(Type t) {
-//	using Options = EnumSwitch<Type, 
-//		meta::List<Variadic, NamedFn, Fn, /*Literal,*/ MatchType>
-//		, std::to_array<Type>({ Type(Literal::complex), Type(Literal::variable) })
+//void f(PnType t) {
+//	using Options = EnumSwitch<PnType, 
+//		meta::List<Variadic, NamedFn, Fn, MatchType>
+//		, std::to_array<PnType>({ Literal::complex, Literal::variable })
 //	>;
 //
 //	std::cout << (unsigned)t << "\t";
@@ -64,9 +60,6 @@ using namespace bmath::intern;
 //	case Options::is_type<Fn>:
 //		std::cout << "Fn\n";
 //		break;
-//	//case Options::is_type<Literal>() :
-//	//	std::cout << "Literal\n";
-//	//	break;
 //	case Options::is_value<Literal::variable>:
 //		std::cout << "variable\n";
 //		break;

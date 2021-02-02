@@ -78,8 +78,9 @@ namespace bmath::intern {
 		diff,   //params[0] := function  params[1] := variable the derivation is done in respect to
 		COUNT
 	};
+	using FixedArity = SumEnum<NamedFn, Fn>;
 
-	using Function = SumEnum<Variadic, NamedFn, Fn>;
+	using Function = SumEnum<Variadic, FixedArity>;
 
 	//the only leaves in MathType
 	enum class Literal

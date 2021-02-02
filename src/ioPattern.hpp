@@ -7,7 +7,7 @@ namespace bmath::intern::pattern {
 
 	struct UnknownPnVar :SingleSumEnumEntry {};
 
-	using Multi = OpaqueEnum<Variadic>;
+	using Multi = OpaqueEnum<0, Variadic>;
 
 	//intermediary used in build process
 	using PnVariablesType = SumEnum<TreeMatchOwning, ValueDomain, Multi, UnknownPnVar>;
@@ -23,12 +23,12 @@ namespace bmath::intern::pattern {
 		{ Restriction::nn1                 , "nn1"           },
 		{ Restriction::no_val              , "no_val"        },
 		{ Restriction::variable            , "variable"      },
-		{ Domain::complex                  , "value"         }, //not to be mistaken for ValueDomain(Domain::complex)
+		{ TreeDomain(Domain::complex)      , "value"         }, //not to be mistaken for ValueDomain(Domain::complex)
 		{ ValueDomain(Domain::natural)     , "nat"           },
 		{ ValueDomain(Domain::natural_0)   , "nat0"          },
 		{ ValueDomain(Domain::integer)     , "int"           },
 		{ ValueDomain(Domain::real)        , "real"          },
-		{ ValueDomain(Domain::complex)     , "complex"       }, //not to be mistaken for Domain::complex
+		{ ValueDomain(Domain::complex)     , "complex"       }, //not to be mistaken for TreeDomain(Domain::complex)
 		{ ValueDomain(Domain::negative)    , "negative"      },
 		{ ValueDomain(Domain::not_negative), "not_negative"  },
 		{ ValueDomain(Domain::positive)    , "positive"      },

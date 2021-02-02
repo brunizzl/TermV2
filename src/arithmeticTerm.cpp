@@ -520,7 +520,6 @@ namespace bmath::intern {
 
 		bool contains_variables(const UnsaveRef ref)
 		{
-			using namespace pattern;
 			const auto test_for_variables = [](const UnsaveRef ref) -> fold::FindTrue {
 				return ref.type == Literal::variable;
 			};

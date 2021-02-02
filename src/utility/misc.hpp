@@ -56,8 +56,7 @@ namespace bmath::intern {
 		const std::array<Struct_T, Size>& data, const SearchMemberPtr_T ptr, const Search_T key) noexcept
 	{
 		const auto itr = std::find_if(begin(data), end(data), [key, ptr](const auto &v) { return v.*ptr == key; });
-		const bool valid = itr != end(data);
-		assert(valid);
+		assert(itr != end(data));
 		return *itr;
 	}
 
@@ -69,50 +68,6 @@ namespace bmath::intern {
 		const auto itr = std::find_if(begin(data), end(data), [key, ptr](const auto &v) { return v.*ptr == key; });
 		return itr != end(data) ? *itr : null_val;
 	}
-
-
-	template<typename Key_T, Key_T NullKey, typename Val_T, std::size_t Size>
-	struct StupidLinearMap
-	{
-		std::array<Key_T, Size> keys;
-		std::array<Val_T, Size> vals;
-
-		constexpr StupidLinearMap() noexcept :vals{} {
-			keys.fill(NullKey);
-		}
-
-		constexpr Val_T& at_or_insert(const Key_T& key) noexcept
-		{
-			assert(key != NullKey);
-			for (std::size_t i = 0; i < Size; i++) {
-				if (this->keys[i] == key) {
-					return this->vals[i];
-				}
-				if (this->keys[i] == NullKey) {
-					this->keys[i] = key;
-					return this->vals[i];
-				}
-			}
-			assert(false);
-			return this->vals[0];
-		}
-
-		constexpr Val_T& at(const Key_T& key) noexcept
-		{
-			assert(key != NullKey);
-			const auto key_iter = std::find(this->keys.begin(), this->keys.end(), key);
-			assert(key_iter != this->keys.end());
-			return this->vals[std::distance(this->keys.begin(), key_iter)];
-		}
-
-		constexpr const Val_T& at(const Key_T& key) const noexcept
-		{
-			assert(key != NullKey);
-			const auto key_iter = std::find(this->keys.begin(), this->keys.end(), key);
-			assert(key_iter != this->keys.end());
-			return this->vals[std::distance(this->keys.begin(), key_iter)];
-		}
-	}; //struct StupidLinearMap
 
 
 	//remove if c++20 libraries have catched up

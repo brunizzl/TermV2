@@ -29,7 +29,9 @@ namespace bmath::intern::pattern {
 		COUNT
 	};
 
-	using TreeMatchOwning = SumEnum<Domain, Restriction>;
+	using TreeDomain = OpaqueEnum<1, Domain>;
+
+	using TreeMatchOwning = SumEnum<TreeDomain, Restriction>;
 
 	struct TreeMatchNonOwning :SingleSumEnumEntry {};
 
@@ -79,7 +81,7 @@ namespace bmath::intern::pattern {
 	//Note: there may be only a single instance of a given MultiMatchVariable with given name per pattern per side.
 
 
-	using ValueDomain = OpaqueEnum<Domain>;
+	using ValueDomain = OpaqueEnum<2, Domain>;
 	//in a valid pattern, all ValueMatchVariables of same name (although that is thrown away after building) 
 	//share the same domain and the same MatchData index
 	//it is allowed to have multiple instances of the same ValueMatchVariable per side.
@@ -140,7 +142,7 @@ namespace bmath::intern::pattern {
 	};
 	static_assert(sizeof(PnUnion) == sizeof(Complex));
 
-	using PnStore = BasicStore<PnUnion>;
+	using PnStore = BasicMonotonicStore<PnUnion>;
 
 	static_assert(StoreLike<PnStore>);
 
@@ -164,10 +166,6 @@ namespace bmath::intern::pattern {
 	}
 
 
-
-	//////////////////////////////////////////////////////////////////////////////////////////
-	////////////////////////////////////////  tree manipulation  /////////////////////////////
-	//////////////////////////////////////////////////////////////////////////////////////////
 
 	bool meets_restriction(const UnsaveRef ref, const TreeMatchOwning restr);
 
@@ -297,14 +295,11 @@ namespace bmath::intern::pattern {
 			std::array<SharedTreeDatum, max_tree_match_count> tree_match_data = {};
 			std::array<SharedVariadicDatum, max_variadic_count> variadic_data = {};
 
-			constexpr auto& info(const ValueMatchVariable& var) noexcept { return this->value_match_data[var.match_data_idx]; }
-			constexpr auto& info(const ValueMatchVariable& var) const noexcept { return this->value_match_data[var.match_data_idx]; }
+			constexpr auto& value_info(const ValueMatchVariable& var) noexcept 
+				{ return this->value_match_data[var.match_data_idx]; }
 
-			constexpr auto& tree_info(const std::uint32_t idx) noexcept { return this->tree_match_data[idx]; }
-			constexpr auto& tree_info(const std::uint32_t idx) const noexcept { return this->tree_match_data[idx]; }
-
-			constexpr auto& multi_info(const std::uint32_t idx) noexcept { return this->variadic_data[idx]; }
-			constexpr auto& multi_info(const std::uint32_t idx) const noexcept { return this->variadic_data[idx]; }
+			constexpr auto& value_info(const ValueMatchVariable& var) const noexcept 
+				{ return this->value_match_data[var.match_data_idx]; }
 		};
 
 		//compares term starting at ref.index in ref.store with pattern starting at pn_ref.index in pn_ref.store

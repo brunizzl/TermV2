@@ -292,12 +292,11 @@ namespace bmath::intern {
 	}; //struct WrapEnum 
 
 
-
-	template <detail_enum::Enumeratable Enum>
-	class [[nodiscard]] OpaqueEnum
+	//the only use of Identifier is to allow multiple OpaqueEnum types covering the same underlying Enum type
+	template <int Identifier, detail_enum::Enumeratable Enum> 
+	struct [[nodiscard]] OpaqueEnum
 	{
 		Enum value;
-	public:
 		constexpr OpaqueEnum(const Enum e) noexcept :value(e) {}
 		constexpr operator Enum() const noexcept { return this->value; }
 		explicit constexpr OpaqueEnum(unsigned u) noexcept :value(static_cast<Enum>(u)) {}
@@ -383,7 +382,7 @@ namespace bmath::intern {
 				}
 				return res;
 			};
-			constexpr auto reached = compute_reached();
+			constexpr std::array reached = compute_reached();
 			static_assert(std::all_of(reached.begin(), reached.end(), [](auto x) { return x >= 1; }), 
 				"every case must be covered");
 			static_assert(std::all_of(reached.begin(), reached.end(), [](auto x) { return x <= 1; }), 
@@ -397,14 +396,11 @@ namespace bmath::intern {
 		static constexpr CaseIdentifier decide_subrange(const SumEnum_T e) noexcept
 		{
 			if constexpr (Options.size() > 1u) {
-				constexpr std::size_t mid = Options.size() / 2u;
+				constexpr unsigned mid = Options.size() / 2u;
 
-				if (static_cast<unsigned>(e) < Options[mid].begin_) {
-					return EnumSwitch::decide_subrange<arr::take<mid>(Options)>(e);
-				}
-				else {
-					return EnumSwitch::decide_subrange<arr::drop<mid>(Options)>(e);
-				}
+				return ((unsigned)e < Options[mid].begin_) ?
+					EnumSwitch::decide_subrange<arr::take<mid>(Options)>(e) :
+					EnumSwitch::decide_subrange<arr::drop<mid>(Options)>(e);
 			}
 			else {
 				return Options.front().identifier;

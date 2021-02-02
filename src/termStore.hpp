@@ -419,7 +419,7 @@ namespace bmath::intern {
 				this->memory.deallocate(this->memory.data_, this->capacity);
 			}
 
-			this->memory.combined_data = new_data;
+			this->memory.data_ = new_data;
 			this->capacity = new_capacity;
 		} //unsave_change_capacity()
 
@@ -471,13 +471,13 @@ namespace bmath::intern {
 		constexpr inline [[nodiscard]] Payload_T& at(const std::size_t idx) noexcept
 		{
 			assert(this->valid_idx(idx));
-			return this->data_[idx];
+			return this->memory.data_[idx];
 		}
 
 		constexpr inline [[nodiscard]] const Payload_T& at(const std::size_t idx) const noexcept
 		{
 			assert(this->valid_idx(idx));
-			return this->data_[idx];
+			return this->memory.data_[idx];
 		}
 
 		[[nodiscard]] std::size_t allocate_one() noexcept

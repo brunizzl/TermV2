@@ -22,59 +22,59 @@ namespace bmath::intern::debug {
 	{
 		using namespace pattern;
 		std::cout
-			<< "PnType(Fn::pow)                  = " << unsigned(PnType(Fn::pow))                  << "\n"
-			<< "PnType(Fn::log)                  = " << unsigned(PnType(Fn::log))                  << "\n"
-			<< "PnType(Fn::sqrt)                 = " << unsigned(PnType(Fn::sqrt))                 << "\n"
-			<< "PnType(Fn::exp)                  = " << unsigned(PnType(Fn::exp))                  << "\n"
-			<< "PnType(Fn::ln)                   = " << unsigned(PnType(Fn::ln))                   << "\n"
-			<< "PnType(Fn::sin)                  = " << unsigned(PnType(Fn::sin))                  << "\n"
-			<< "PnType(Fn::cos)                  = " << unsigned(PnType(Fn::cos))                  << "\n"
-			<< "PnType(Fn::tan)                  = " << unsigned(PnType(Fn::tan))                  << "\n"
-			<< "PnType(Fn::sinh)                 = " << unsigned(PnType(Fn::sinh))                 << "\n"
-			<< "PnType(Fn::cosh)                 = " << unsigned(PnType(Fn::cosh))                 << "\n"
-			<< "PnType(Fn::tanh)                 = " << unsigned(PnType(Fn::tanh))                 << "\n"
-			<< "PnType(Fn::asin)                 = " << unsigned(PnType(Fn::asin))                 << "\n"
-			<< "PnType(Fn::acos)                 = " << unsigned(PnType(Fn::acos))                 << "\n"
-			<< "PnType(Fn::atan)                 = " << unsigned(PnType(Fn::atan))                 << "\n"
-			<< "PnType(Fn::asinh)                = " << unsigned(PnType(Fn::asinh))                << "\n"
-			<< "PnType(Fn::acosh)                = " << unsigned(PnType(Fn::acosh))                << "\n"
-			<< "PnType(Fn::atanh)                = " << unsigned(PnType(Fn::atanh))                << "\n"
-			<< "PnType(Fn::abs)                  = " << unsigned(PnType(Fn::abs))                  << "\n"
-			<< "PnType(Fn::arg)                  = " << unsigned(PnType(Fn::arg))                  << "\n"
-			<< "PnType(Fn::re)                   = " << unsigned(PnType(Fn::re))                   << "\n"
-			<< "PnType(Fn::im)                   = " << unsigned(PnType(Fn::im))                   << "\n"
-			<< "PnType(Fn::force)                = " << unsigned(PnType(Fn::force))                << "\n"
-			<< "PnType(Fn::diff)                 = " << unsigned(PnType(Fn::diff))                 << "\n\n"
-			<< "PnType(NamedFn{})                = " << unsigned(PnType(NamedFn{}))                << "\n\n"
-			<< "PnType(NonComm::list)            = " << unsigned(PnType(NonComm::list))            << "\n"
-			<< "PnType(NonComm::ordered_sum)     = " << unsigned(PnType(NonComm::ordered_sum))     << "\n"
-			<< "PnType(NonComm::ordered_product) = " << unsigned(PnType(NonComm::ordered_product)) << "\n\n"
-			<< "PnType(Comm::sum)                = " << unsigned(PnType(Comm::sum))                << "\n"
-			<< "PnType(Comm::product)            = " << unsigned(PnType(Comm::product))            << "\n"
-			<< "PnType(Comm::multiset)           = " << unsigned(PnType(Comm::multiset))           << "\n"
-			<< "PnType(Comm::set)                = " << unsigned(PnType(Comm::set))                << "\n"
-			<< "PnType(Comm::union_)             = " << unsigned(PnType(Comm::union_))             << "\n"
-			<< "PnType(Comm::intersection)       = " << unsigned(PnType(Comm::intersection))       << "\n\n"
-			<< "PnType(Literal::variable)        = " << unsigned(PnType(Literal::variable))        << "\n"
-			<< "PnType(Literal::complex)         = " << unsigned(PnType(Literal::complex))         << "\n\n\n\n"
-			<< "PnType(TreeMatchNonOwning{})     = " << unsigned(PnType(TreeMatchNonOwning{}))     << "\n\n"
-			<< "PnType(Restriction::any)         = " << unsigned(PnType(Restriction::any))         << "\n"
-			<< "PnType(Restriction::nn1)         = " << unsigned(PnType(Restriction::nn1))         << "\n"
-			<< "PnType(Restriction::no_val)      = " << unsigned(PnType(Restriction::no_val))      << "\n"
-			<< "PnType(Restriction::variable)    = " << unsigned(PnType(Restriction::variable))    << "\n\n"
-			<< "PnType(Domain::natural)          = " << unsigned(PnType(Domain::natural))          << "\n"
-			<< "PnType(Domain::natural_0)        = " << unsigned(PnType(Domain::natural_0))        << "\n"
-			<< "PnType(Domain::integer)          = " << unsigned(PnType(Domain::integer))          << "\n"
-			<< "PnType(Domain::negative)         = " << unsigned(PnType(Domain::negative))         << "\n"
-			<< "PnType(Domain::positive)         = " << unsigned(PnType(Domain::positive))         << "\n"
-			<< "PnType(Domain::not_negative)     = " << unsigned(PnType(Domain::not_negative))     << "\n"
-			<< "PnType(Domain::not_positive)     = " << unsigned(PnType(Domain::not_positive))     << "\n"
-			<< "PnType(Domain::real)             = " << unsigned(PnType(Domain::real))             << "\n"
-			<< "PnType(Domain::complex)          = " << unsigned(PnType(Domain::complex))          << "\n\n"
-			<< "PnType(MultiParams{})            = " << unsigned(PnType(MultiParams{}))            << "\n\n"
-			<< "PnType(ValueProxy{})             = " << unsigned(PnType(ValueProxy{}))             << "\n"
-			<< "PnType(ValueMatch::owning)       = " << unsigned(PnType(ValueMatch::owning))       << "\n"
-			<< "PnType(ValueMatch::non_owning)   = " << unsigned(PnType(ValueMatch::non_owning))   << "\n\n\n"
+			<< "PnType(Fn::pow)                          = " << unsigned(PnType(Fn::pow))                          << "\n"
+			<< "PnType(Fn::log)                          = " << unsigned(PnType(Fn::log))                          << "\n"
+			<< "PnType(Fn::sqrt)                         = " << unsigned(PnType(Fn::sqrt))                         << "\n"
+			<< "PnType(Fn::exp)                          = " << unsigned(PnType(Fn::exp))                          << "\n"
+			<< "PnType(Fn::ln)                           = " << unsigned(PnType(Fn::ln))                           << "\n"
+			<< "PnType(Fn::sin)                          = " << unsigned(PnType(Fn::sin))                          << "\n"
+			<< "PnType(Fn::cos)                          = " << unsigned(PnType(Fn::cos))                          << "\n"
+			<< "PnType(Fn::tan)                          = " << unsigned(PnType(Fn::tan))                          << "\n"
+			<< "PnType(Fn::sinh)                         = " << unsigned(PnType(Fn::sinh))                         << "\n"
+			<< "PnType(Fn::cosh)                         = " << unsigned(PnType(Fn::cosh))                         << "\n"
+			<< "PnType(Fn::tanh)                         = " << unsigned(PnType(Fn::tanh))                         << "\n"
+			<< "PnType(Fn::asin)                         = " << unsigned(PnType(Fn::asin))                         << "\n"
+			<< "PnType(Fn::acos)                         = " << unsigned(PnType(Fn::acos))                         << "\n"
+			<< "PnType(Fn::atan)                         = " << unsigned(PnType(Fn::atan))                         << "\n"
+			<< "PnType(Fn::asinh)                        = " << unsigned(PnType(Fn::asinh))                        << "\n"
+			<< "PnType(Fn::acosh)                        = " << unsigned(PnType(Fn::acosh))                        << "\n"
+			<< "PnType(Fn::atanh)                        = " << unsigned(PnType(Fn::atanh))                        << "\n"
+			<< "PnType(Fn::abs)                          = " << unsigned(PnType(Fn::abs))                          << "\n"
+			<< "PnType(Fn::arg)                          = " << unsigned(PnType(Fn::arg))                          << "\n"
+			<< "PnType(Fn::re)                           = " << unsigned(PnType(Fn::re))                           << "\n"
+			<< "PnType(Fn::im)                           = " << unsigned(PnType(Fn::im))                           << "\n"
+			<< "PnType(Fn::force)                        = " << unsigned(PnType(Fn::force))                        << "\n"
+			<< "PnType(Fn::diff)                         = " << unsigned(PnType(Fn::diff))                         << "\n\n"
+			<< "PnType(NamedFn{})                        = " << unsigned(PnType(NamedFn{}))                        << "\n\n"
+			<< "PnType(NonComm::list)                    = " << unsigned(PnType(NonComm::list))                    << "\n"
+			<< "PnType(NonComm::ordered_sum)             = " << unsigned(PnType(NonComm::ordered_sum))             << "\n"
+			<< "PnType(NonComm::ordered_product)         = " << unsigned(PnType(NonComm::ordered_product))         << "\n\n"
+			<< "PnType(Comm::sum)                        = " << unsigned(PnType(Comm::sum))                        << "\n"
+			<< "PnType(Comm::product)                    = " << unsigned(PnType(Comm::product))                    << "\n"
+			<< "PnType(Comm::multiset)                   = " << unsigned(PnType(Comm::multiset))                   << "\n"
+			<< "PnType(Comm::set)                        = " << unsigned(PnType(Comm::set))                        << "\n"
+			<< "PnType(Comm::union_)                     = " << unsigned(PnType(Comm::union_))                     << "\n"
+			<< "PnType(Comm::intersection)               = " << unsigned(PnType(Comm::intersection))               << "\n\n"
+			<< "PnType(Literal::variable)                = " << unsigned(PnType(Literal::variable))                << "\n"
+			<< "PnType(Literal::complex)                 = " << unsigned(PnType(Literal::complex))                 << "\n\n\n\n"
+			<< "PnType(TreeMatchNonOwning{})             = " << unsigned(PnType(TreeMatchNonOwning{}))             << "\n\n"
+			<< "PnType(Restriction::any)                 = " << unsigned(PnType(Restriction::any))                 << "\n"
+			<< "PnType(Restriction::nn1)                 = " << unsigned(PnType(Restriction::nn1))                 << "\n"
+			<< "PnType(Restriction::no_val)              = " << unsigned(PnType(Restriction::no_val))              << "\n"
+			<< "PnType(Restriction::variable)            = " << unsigned(PnType(Restriction::variable))            << "\n\n"
+			<< "PnType(TreeDomain(Domain::natural))      = " << unsigned(PnType(TreeDomain(Domain::natural)))      << "\n"
+			<< "PnType(TreeDomain(Domain::natural_0))    = " << unsigned(PnType(TreeDomain(Domain::natural_0)))    << "\n"
+			<< "PnType(TreeDomain(Domain::integer))      = " << unsigned(PnType(TreeDomain(Domain::integer)))      << "\n"
+			<< "PnType(TreeDomain(Domain::negative))     = " << unsigned(PnType(TreeDomain(Domain::negative)))     << "\n"
+			<< "PnType(TreeDomain(Domain::positive))     = " << unsigned(PnType(TreeDomain(Domain::positive)))     << "\n"
+			<< "PnType(TreeDomain(Domain::not_negative)) = " << unsigned(PnType(TreeDomain(Domain::not_negative))) << "\n"
+			<< "PnType(TreeDomain(Domain::not_positive)) = " << unsigned(PnType(TreeDomain(Domain::not_positive))) << "\n"
+			<< "PnType(TreeDomain(Domain::real))         = " << unsigned(PnType(TreeDomain(Domain::real)))         << "\n"
+			<< "PnType(TreeDomain(Domain::complex))      = " << unsigned(PnType(TreeDomain(Domain::complex)))      << "\n\n"
+			<< "PnType(MultiParams{})                    = " << unsigned(PnType(MultiParams{}))                    << "\n\n"
+			<< "PnType(ValueProxy{})                     = " << unsigned(PnType(ValueProxy{}))                     << "\n"
+			<< "PnType(ValueMatch::owning)               = " << unsigned(PnType(ValueMatch::owning))               << "\n"
+			<< "PnType(ValueMatch::non_owning)           = " << unsigned(PnType(ValueMatch::non_owning))           << "\n\n\n"
 		;
 	} //enumerate_type
 
@@ -166,10 +166,12 @@ namespace bmath::intern::debug {
 			
 			{ "x, xs :set... | set(x, x, xs) = set(x, xs)" },
 			
-			{ "xs :set..., ys :set... | union(set(xs), set(ys)) = union(set(xs, ys))" }, 
+			{ "xs :set..., ys :set... | union(set(xs), set(ys)) = union(set(xs, ys))" },
+			{ "                       | union()                 = set()" },
 
 			{ "x, xs :set..., ys :set... | intersection(set(x, xs), set(x, ys)) = union(set(x), intersection(set(xs), set(ys)))" },
 			{ "xs, ys                    | intersection(xs, ys)                 = set()" },
+			{ "                          | intersection()                       = set()" },
 		});
 
 		for (const auto& rule : rules) {
@@ -371,54 +373,6 @@ namespace bmath::intern::test {
 		std::cout << "any:   " << set.any() << "\n";
 		std::cout << "none:  " << set.none() << "\n";
 		std::cout << std::noboolalpha;
-	}
-
-	void copy()
-	{
-		std::string term_name = "1+2-a(4+6)^2";
-		Term term_1(term_name);
-		std::cout << "term_1: " << term_1.to_string() << "\n";
-
-		Ref ref = static_cast<const Term&>(term_1).ref();
-		auto head_2 = tree::copy(ref, const_cast<MathStore&>(*ref.store));
-
-		std::string term_2_str;
-		print::append_to_string(ref, term_2_str);
-		std::cout << "term_2: " << term_2_str << "\n";
-		std::cout << print::to_memory_layout(*ref.store, { ref.typed_idx(), head_2 }) << "\n";
-	}
-
-	void match()
-	{
-		//{ "x, a    | x x^a   = x^(a + 1)" };
-		auto p = pattern::RewriteRule("x       | x x     = x^2");
-		std::string t_name = "a / 0";
-		auto t = Term(t_name);
-		t.establish_order();
-		auto m = pattern::match::MatchData{};
-		//std::cout << "match lhs of \"" << p.to_string() << "\" with \"" << t.to_string() << ": " << pattern::match::permutation_equals(p.lhs_ref(), t.ref(), m) << "\n";
-	}
-
-	void combine()
-	{
-		while (true) {
-			//difficult case: "5 ((3 a) + 0)"
-			std::string name; 
-			std::cout << "combine> ";
-			std::getline(std::cin, name);
-			try {
-				bmath::Term version_1(name); 
-				std::cout << "as parsed:\n" << version_1.to_tree() << "\n";
-				version_1.establish_order();
-				std::cout << "standardized:\n" << version_1.to_tree() << "\n";
-			}
-			catch (bmath::ParseFailure failure) {
-				std::cout << "parse failure: " << failure.what << '\n';
-				std::cout << name << '\n';
-				std::cout << std::string(failure.where, ' ') << "^\n\n";
-			}
-			std::cout << "--------------------------------------------------------------------------\n";
-		}
 	}
 
 
