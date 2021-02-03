@@ -20,7 +20,7 @@ namespace bmath {
 		std::array<intern::pattern::PnIdx, N> rhs_heads;
 
 	public:
-		template<std::convertible_to<std::string> Name>
+		template<typename Name>
 		RuleSet(const std::array<Name, N>& rule_names)
 		{
 			using namespace intern::pattern;
@@ -71,7 +71,7 @@ namespace bmath {
 		}
 	};
 
-	template<std::convertible_to<std::string> Name, std::size_t N>
+	template<typename Name, std::size_t N>
 	RuleSet(const std::array<Name, N>& rule_names) -> RuleSet<N>;
 
 

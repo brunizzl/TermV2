@@ -522,17 +522,6 @@ namespace bmath::intern {
 
 		void append_memory_row(const Ref ref, std::vector<std::string>& rows)
 		{
-			const auto show_typedidx_vec_nodes = [&ref, &rows](std::uint32_t idx, bool show_first) {
-				const IndexVector& vec = ref.store->at(idx).parameters;
-				const std::size_t end = idx + vec.node_count();
-				if (!show_first) {
-					idx++;
-				}
-				while (idx < end) {
-					rows[idx].append("(IndexVector)");
-					idx++;
-				}
-			};
 			const auto show_string_nodes = [&ref, &rows](std::uint32_t idx, bool show_first) {
 				const CharVector& var = ref.store->at(idx);
 				const std::size_t end = idx + var.node_count();
@@ -540,62 +529,60 @@ namespace bmath::intern {
 					idx++;
 				}
 				while (idx < end) {
-					rows[idx].append("(CharVector)");
-					idx++;
+					rows[idx++] += "(CharVector)";
 				}
 			};
 
 			std::string& current_str = rows[ref.index];
 			switch (ref.type) {
-			case MathType(Comm::sum): {
-				current_str.append("sum        : {");
-				const char* separator = "";
-				for (const auto elem : fn::range(ref)) {
-					current_str.append(std::exchange(separator, ", "));
-					current_str.append(std::to_string(elem.get_index()));
-					print::append_memory_row(ref.new_at(elem), rows);
-				}
-				current_str.push_back('}');
-				show_typedidx_vec_nodes(ref.index, false);
-			} break;
-			case MathType(Comm::product): {
-				current_str.append("product    : {");
-				const char* separator = "";
-				const IndexVector test = *ref;
-				for (const auto elem : fn::range(ref)) {
-					current_str.append(std::exchange(separator, ", "));
-					current_str.append(std::to_string(elem.get_index()));
-					print::append_memory_row(ref.new_at(elem), rows);
-				}
-				current_str.push_back('}');
-				show_typedidx_vec_nodes(ref.index, false);
-			} break;
 			default: {
+				//name:
 				if (ref.type.is<NamedFn>()) {
+					current_str += fn::named_fn_name(ref);
 					show_string_nodes(fn::named_fn_name_index(ref), true);
 				}
-				assert(ref.type.is<Function>());
-				current_str.append("function   : {");
-				const char* separator = "";
-				for (const auto param : fn::range(ref)) {
-					current_str.append(std::exchange(separator, ", "));
-					current_str.append(std::to_string(param.get_index()));
-					print::append_memory_row(ref.new_at(param), rows);
+				else if (ref.type.is<Variadic>()) {
+					current_str += fn::name_of(ref.type.to<Variadic>());
 				}
-				current_str.push_back('}');
-				show_typedidx_vec_nodes(ref.index, false);
+				else {
+					assert(ref.type.is<Fn>());
+					current_str += fn::name_of(ref.type.to<Fn>());
+				}
+
+				//parameters:
+				current_str.append(std::max(0, 11 - (int)current_str.size()), ' ');
+				current_str += ":      { ";
+				const char* separator = "";
+				const IndexVector& vec = *ref;				
+				std::string* current_line = &current_str;
+				for (std::size_t vec_idx = 0u; vec_idx < vec.size(); vec_idx++) {
+					*current_line += std::exchange(separator, ", ");
+					if ((vec_idx - IndexVector::min_capacity) % IndexVector::values_per_node == 0) {
+						*(++current_line) += "(Node)         ";
+					}
+					const std::size_t elem_idx = vec[vec_idx].get_index();
+					if (elem_idx < 10) {
+						*current_line += ' '; //pleeeaaasee std::format, where are you? :(
+					}
+					if (elem_idx < 100) {
+						*current_line += ' '; //pleeeaaasee std::format, where are you? :(
+					}
+					*current_line += std::to_string(elem_idx);
+					print::append_memory_row(ref.new_at(vec[vec_idx]), rows);
+				}
+				*current_line += " }";
 			} break;
 			case MathType(Literal::variable): {
-				current_str.append("variable   : ");
+				current_str += "variable   : ";
 				show_string_nodes(ref.index, false);
 			} break;
 			case MathType(Literal::complex): {
-				current_str.append("value      : ");
+				current_str += "value      : ";
 			} break;
 			}
 
 			//append name of subterm to line
-			current_str.append(std::max(0, 35 - (int)current_str.size()), ' ');
+			current_str.append(std::max(0, 38 - (int)current_str.size()), ' ');
 			print::append_to_string(ref, current_str, 0);
 		} //append_memory_row
 

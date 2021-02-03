@@ -22,9 +22,9 @@ namespace bmath::intern {
 	template<typename Value_T, std::size_t AllocNodeSize = sizeof(std::complex<double>)>
 	struct StoredVector
 	{
-	public:
 		static_assert(std::is_trivially_destructible_v<Value_T>);
 		static_assert(std::is_trivially_copyable_v<Value_T>);
+		static_assert(AllocNodeSize % sizeof(Value_T) == 0);
 
 		struct Info
 		{
@@ -35,7 +35,6 @@ namespace bmath::intern {
 		static constexpr std::size_t min_capacity = (AllocNodeSize - sizeof(Info)) / sizeof(Value_T);
 		static constexpr std::size_t values_per_node = AllocNodeSize / sizeof(Value_T);
 		static constexpr std::size_t values_per_info = values_per_node - min_capacity;
-		static_assert(values_per_node > 0u, "AllocNodeSize may at least be sizeof(Value_T)");
 
 	private:
 		//note: subsequent_data_part is never read directly, only as an offset of StoredVector::data pointing in there.
@@ -176,7 +175,7 @@ namespace bmath::intern {
 			constexpr SaveIterator operator+(Diff_T n) const noexcept { auto result = *this; result += n; return result; }
 
 			constexpr SaveIterator operator+(const SaveIterator& snd) const noexcept 
-			{ 
+			{	
 				assert(valid_interaction(*this, snd));
 				return SaveIterator{ this->store, this->store_idx, this->array_idx + snd.array_idx };
 			}
