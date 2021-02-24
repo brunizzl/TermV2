@@ -81,7 +81,7 @@ namespace bmath::intern::debug {
 
 	void test_rechner() 
 	{
-		static const RuleSet rules = std::to_array<std::string_view>({
+		static const RuleSet rules = std::to_array<pattern::RewriteRule>({
 			{ "x :product... | 0 x = 0" },
 			{ "x             | 0^x = 0" },
 			{ "x             | x^0 = 1" },
@@ -190,7 +190,7 @@ namespace bmath::intern::debug {
 				rules.apply_to(test);
 
 				std::cout << "    = " << test.to_pretty_string() << "\n";
-				std::cout << test.to_memory_layout() << "\n";
+				//std::cout << test.to_memory_layout() << "\n";
 				//std::cout << test.to_tree() << "\n";
 				std::cout << "\n";
 

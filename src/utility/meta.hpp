@@ -28,7 +28,7 @@ namespace bmath::intern {
 			{-a}    -> std::same_as<T>;
 			{a + a} -> std::same_as<T>;
 			{a - a} -> std::same_as<T>;
-			{a* a} -> std::same_as<T>;
+			{a * a} -> std::same_as<T>;
 			{a / a} -> std::same_as<T>;
 	};
 
@@ -67,6 +67,13 @@ namespace bmath::intern {
 			{*i} -> std::same_as<T&>;
 	};
 
+
+	/////////////////  Container
+
+	template<typename C, typename T>
+	concept ContainerOf = std::is_same_v<T, typename C::value_type>;
+
+	static_assert(ContainerOf<std::array<int, 3>, int>);
 } //namespace bmath::intern
 
 namespace bmath::intern::meta {
@@ -221,76 +228,129 @@ namespace bmath::intern::meta {
 
 	/////////////////   IndexOf
 
-	template<typename T, ListInstance L, std::size_t Offset>
-	struct DecideIndexOf;
-
-	template<typename T, std::size_t Offset>
-	struct DecideIndexOf<T, List<>, Offset> :I_c<-1>{};
-
-	template<typename T, typename... Ts, std::size_t Offset>
-	struct DecideIndexOf<T, List<T, Ts...>, Offset> :I_c<Offset> {};
-
-	template<typename T1, typename T2, typename... Ts, std::size_t Offset>
-	struct DecideIndexOf<T1, List<T2, Ts...>, Offset> :I_c<DecideIndexOf<T1, List<Ts...>, Offset + 1>::value> {};
+	template<typename T, ListInstance L>
+	struct IndexOf;
 
 	template<typename T, ListInstance L>
-	constexpr std::size_t index_of_v = DecideIndexOf<T, L, 0>::value;
+	constexpr std::size_t index_of_v = IndexOf<T, L>::value;
+
+	template<typename T>
+	struct IndexOf<T, List<>> :I_c<0>{};
+
+	template<typename T, typename... Ts>
+	struct IndexOf<T, List<T, Ts...>> :I_c<0> {};
+
+	template<typename T1, typename T2, typename... Ts>
+	struct IndexOf<T1, List<T2, Ts...>> :I_c<IndexOf<T1, List<Ts...>>::value + 1> {};
 
 	static_assert(index_of_v<I_c<-7>, List<I_c<2>, I_c<5>, I_c<-7>>> == 2);
+	static_assert(index_of_v<I_c<-8>, List<I_c<2>, I_c<5>, I_c<-7>>> == 3);
 
 
-	///////////////////   Sort (requires take and drop)
-	//namespace detail_sort {
-	//	template<ListInstance, ListInstance, template<typename, typename> class Compare>
-	//	struct Merge;
-	//
-	//	template<ListInstance L1, ListInstance L2, template<typename, typename> class Compare>
-	//	using Merge_t = typename Merge<L1, L2, Compare>::type;
-	//
-	//	template<typename... Ts, template<typename, typename> class Compare>
-	//	struct Merge<List<Ts...>, List<>, Compare> { using type = List<Ts...>; };
-	//
-	//	template<typename... Ts, template<typename, typename> class Compare>
-	//	struct Merge<List<>, List<Ts...>, Compare> { using type = List<Ts...>; };
-	//
-	//	template<typename L, typename... Ls, typename R, typename... Rs, template<typename, typename> class Compare>
-	//	struct Merge<List<L, Ls...>, List<R, Rs...>, Compare>
-	//	{
-	//		using type = std::conditional_t<
-	//			Compare<L, R>::value,
-	//			Cons_t<L, Merge_t<List<Ls...>, List<R, Rs...>, Compare>>,
-	//			Cons_t<R, Merge_t<List<L, Ls...>, List<Rs...>, Compare>>
-	//		>;
-	//	};
-	//} //namespace detail_sort
-	//
-	//template<ListInstance, template<typename, typename> class Compare>
-	//struct Sort;
-	//
-	//template<ListInstance L, template<typename, typename> class Compare>
-	//using Sort_t = typename Sort<L, Compare>::type;
-	//
-	//template<template<typename, typename> class Compare>
-	//struct Sort<List<>, Compare> { using type = List<>; };
-	//
-	//template<typename T, template<typename, typename> class Compare>
-	//struct Sort<List<T>, Compare> { using type = List<T>; };
-	//
-	//template<typename... Ts, template<typename, typename> class Compare>
-	//struct Sort<List<Ts...>, Compare>
-	//{
-	//private:
-	//	static constexpr auto n_halfs = I_c<sizeof...(Ts) / 2>{};
-	//	using Lhs = Sort_t<decltype(take(n_halfs, List<Ts...>{})), Compare>;
-	//	using Rhs = Sort_t<decltype(drop(n_halfs, List<Ts...>{})), Compare>;
-	//public:
-	//	using type = detail_sort::Merge_t<Lhs, Rhs, Compare>;
-	//};
-	//
-	//template<typename L, typename R>
-	//struct Less :std::bool_constant<(L::value < R::value)> {};
-	//
-	//static_assert(std::is_same_v<Sort_t<List<I_c<2>, I_c<5>, I_c<-7>>, Less>, List<I_c<-7>, I_c<2>, I_c<5>>>);
+	/////////////////   Drop
+
+	template<std::size_t N, ListInstance L>
+	struct Drop
+	{
+		using type = List<>;
+	};
+
+	template<std::size_t N, ListInstance L>
+	using Drop_t = typename Drop<N, L>::type;
+
+	template<std::size_t N, typename T, typename... Ts> requires (N <= sizeof...(Ts))
+	struct Drop<N, List<T, Ts...>> 
+	{
+		using type = Drop_t<N - 1, List<Ts...>>;
+	};
+
+	template<typename T, typename... Ts>
+	struct Drop<0, List<T, Ts...>>
+	{
+		using type = List<T, Ts...>;
+	};
+
+	static_assert(std::is_same_v<Drop_t<2, List<char, int, double>>, List<double>>);
+
+
+	/////////////////   Take
+
+	template<std::size_t N, ListInstance L>
+	struct Take
+	{
+		using type = L;
+	};
+
+	template<std::size_t N, ListInstance L>
+	using Take_t = typename Take<N, L>::type;
+
+	template<std::size_t N, typename T, typename... Ts> requires (N <= sizeof...(Ts))
+	struct Take<N, List<T, Ts...>>
+	{
+		using type = Cons_t<T, Take_t<N - 1, List<Ts...>>>;
+	};
+
+	template<typename T, typename... Ts>
+	struct Take<0, List<T, Ts...>>
+	{
+		using type = List<>;
+	};
+
+	static_assert(std::is_same_v<Take_t<2, List<char, int, double>>, List<char, int>>);
+
+
+	/////////////////   Sort
+	namespace detail_sort {
+		template<ListInstance, ListInstance, template<typename, typename> class Compare>
+		struct Merge;
+	
+		template<ListInstance L1, ListInstance L2, template<typename, typename> class Compare>
+		using Merge_t = typename Merge<L1, L2, Compare>::type;
+	
+		template<typename... Ts, template<typename, typename> class Compare>
+		struct Merge<List<Ts...>, List<>, Compare> { using type = List<Ts...>; };
+	
+		template<typename... Ts, template<typename, typename> class Compare>
+		struct Merge<List<>, List<Ts...>, Compare> { using type = List<Ts...>; };
+	
+		template<typename L, typename... Ls, typename R, typename... Rs, template<typename, typename> class Compare>
+		struct Merge<List<L, Ls...>, List<R, Rs...>, Compare>
+		{
+			using type = std::conditional_t<
+				Compare<L, R>::value,
+				Cons_t<L, Merge_t<List<Ls...>, List<R, Rs...>, Compare>>,
+				Cons_t<R, Merge_t<List<L, Ls...>, List<Rs...>, Compare>>
+			>;
+		};
+	} //namespace detail_sort
+	
+	template<ListInstance, template<typename, typename> class Compare>
+	struct Sort;
+	
+	template<ListInstance L, template<typename, typename> class Compare>
+	using Sort_t = typename Sort<L, Compare>::type;
+	
+	template<template<typename, typename> class Compare>
+	struct Sort<List<>, Compare> { using type = List<>; };
+	
+	template<typename T, template<typename, typename> class Compare>
+	struct Sort<List<T>, Compare> { using type = List<T>; };
+	
+	template<typename... Ts, template<typename, typename> class Compare>
+	struct Sort<List<Ts...>, Compare>
+	{
+	private:
+		static constexpr std::size_t n_halfs =sizeof...(Ts) / 2;
+		using Lhs = Sort_t<Take_t<n_halfs, List<Ts...>>, Compare>;
+		using Rhs = Sort_t<Drop_t<n_halfs, List<Ts...>>, Compare>;
+	public:
+		using type = detail_sort::Merge_t<Lhs, Rhs, Compare>;
+	};
+	
+	template<typename L, typename R>
+	struct Less :std::bool_constant<(L::value < R::value)> {};
+	
+	static_assert(std::is_same_v<Sort_t<List<I_c<2>, I_c<5>, I_c<-7>>, Less>, List<I_c<-7>, I_c<2>, I_c<5>>>);
 
 } //namespace bmath::intern::meta
 
@@ -303,15 +363,18 @@ namespace bmath::intern::ct {
 	template<long long Val>
 	using I_c = std::integral_constant<long long, Val>;
 
-
-	template<typename T, T...>
-	struct Seq;
+	//own type, because std::integer_sequence works exclusively for integer types as T
+	template<typename T, T... Vals>
+	struct Seq
+	{
+		using value_type = T;
+	};
 
 	template<int... ints>
 	using Ints = Seq<int, ints...>;
 
 
-	/////////////////   ListInstance
+	/////////////////   SeqInstance
 
 	template<typename>
 	struct DecideSeqInstance :std::false_type {};
@@ -323,17 +386,28 @@ namespace bmath::intern::ct {
 	concept SeqInstance = DecideSeqInstance<T>::value;
 
 
+	/////////////////   Comparison
+
+	template<SeqInstance A, SeqInstance B>
+	constexpr std::bool_constant<std::is_same_v<A, B>> operator==(A, B) { return {}; }
+
+	template<SeqInstance A, SeqInstance B>
+	constexpr std::bool_constant<!std::is_same_v<A, B>> operator!=(A, B) { return {}; }
+
+
 	/////////////////   Size
 
 	template<SeqInstance>
 	struct Size;
 
-	template<typename T, T... xs>
-	struct Size<Seq<T, xs...>> :I_c<sizeof...(xs)> {};
-
 	template<SeqInstance A>
 	constexpr std::size_t size_v = Size<A>::value;
 
+	template<SeqInstance S>
+	constexpr std::size_t size(S) { return size_v<S>; }
+
+	template<typename T, T... xs>
+	struct Size<Seq<T, xs...>> :I_c<sizeof...(xs)> {};
 
 	/////////////////   Cons
 
@@ -342,6 +416,9 @@ namespace bmath::intern::ct {
 
 	template<auto x, SeqInstance A>
 	using Cons_t = typename Cons<x, A>::type;
+
+	template<auto x, SeqInstance S>
+	constexpr Cons_t<x, S> cons(S) { return {}; }
 
 	template<typename T, T x, T... xs>
 	struct Cons<x, Seq<T, xs...>> { using type = Seq<T, x, xs...>; };
@@ -354,34 +431,77 @@ namespace bmath::intern::ct {
 	template<SeqInstance, SeqInstance>
 	struct Concat;
 
-	template<typename T, T... xs, T...ys>
-	struct Concat<Seq<T, xs...>, Seq<T, ys...>> { using type = Seq<T, xs..., ys...>; };
-
 	template<SeqInstance A1, SeqInstance A2>
 	using Concat_t = typename Concat<A1, A2>::type;
+
+	template<SeqInstance A1, SeqInstance A2>
+	constexpr Concat_t<A1, A2> concat(A1, A2) { return {}; }
+
+	template<typename T, T... xs, T...ys>
+	struct Concat<Seq<T, xs...>, Seq<T, ys...>> { using type = Seq<T, xs..., ys...>; };
 
 	static_assert(std::is_same_v<Concat_t<Ints<0, 1>, Ints<2, 3, 4>>, Ints<0, 1, 2, 3, 4>>);
 
 
 	/////////////////   IndexOf
 
-	template<auto x, SeqInstance A, std::size_t Offset>
-	struct DecideIndexOf;
-
-	template<typename T, T x, std::size_t Offset>
-	struct DecideIndexOf<x, Seq<T>, Offset> :I_c<-1> {};
-
-	template<typename T, T x, T... xs, std::size_t Offset>
-	struct DecideIndexOf<x, Seq<T, x, xs...>, Offset> :I_c<Offset> {};
-
-	template<typename T, T x, T y, T... ys, std::size_t Offset>
-	struct DecideIndexOf<x, Seq<T, y, ys...>, Offset> :I_c<DecideIndexOf<x, Seq<T, ys...>, Offset + 1>::value> {};
+	template<auto x, SeqInstance A>
+	struct IndexOf;
 
 	template<auto x, SeqInstance A>
-	constexpr std::size_t index_of_v = DecideIndexOf<x, A, 0>::value;
+	constexpr std::size_t index_of_v = IndexOf<x, A>::value;
+
+	template<auto x, SeqInstance A>
+	constexpr std::size_t index_of(A) { return index_of_v<x, A>; }
+
+	template<typename T, T x>
+	struct IndexOf<x, Seq<T>> :I_c<0> {};
+
+	template<typename T, T x, T... xs>
+	struct IndexOf<x, Seq<T, x, xs...>> :I_c<0> {};
+
+	template<typename T, T x, T y, T... ys>
+	struct IndexOf<x, Seq<T, y, ys...>> :I_c<IndexOf<x, Seq<T, ys...>>::value + 1> {};
 
 	static_assert(index_of_v<-7, Ints<2, 5, -7>> == 2);
+	static_assert(index_of_v<-8, Ints<2, 5, -7>> == 3);
 
 
+	/////////////////   Filter
+
+	template<template <auto> class P, SeqInstance S>
+	struct Filter;
+
+	template<template <auto> class P, SeqInstance S>
+	using Filter_t = typename Filter<P, S>::type;
+
+	template<template <auto> class P, typename T, T t, T... ts>
+	class Filter<P, Seq<T, t, ts...>>
+	{
+		using TailRes = Filter_t<P, Seq<T, ts...>>;
+	public:
+		using type = std::conditional_t<P<t>::value, Cons_t<t, TailRes>, TailRes>;
+	};
+
+	template<template <auto> class P, typename T>
+	struct Filter<P, Seq<T>> { using type = Seq<T>; };
+
+	template<auto i>
+	struct Smaller3 :std::bool_constant<(i < 3)> {};
+
+	static_assert(std::is_same_v<Filter_t<Smaller3, Ints<1, 2, 3, 4, 5, 6, 0>>, Ints<1, 2, 0>>);
+
+	template<typename T, CallableTo<bool, T> P>
+	constexpr Seq<T> filter(P, Seq<T>) { return {}; }
+
+	template<typename T, T t, T... ts, CallableTo<bool, T> P>
+	constexpr auto filter(P p, Seq<T, t, ts...>)
+	{
+		constexpr auto filtered_tail = filter(p, Seq<T, ts...>{});
+		if constexpr (p(t)) { return cons<t>(filtered_tail); }
+		else                { return filtered_tail; }
+	}
+
+	static_assert(filter([](int i) { return i < 3; }, Ints<1, 2, 3, 4, 5, 6, 0>{}) == Ints<1, 2, 0>{});
 
 } //namespace bmath::intern::ct

@@ -327,14 +327,16 @@ namespace bmath::intern {
 		template<typename E>
 		static constexpr CaseIdentifier type_identifier()
 		{
-			static_assert(meta::index_of_v<E, TypeCases> != -1, "only types passed in the template arguments are valid");
+			static_assert(meta::index_of_v<E, TypeCases> != meta::size_v<TypeCases>, 
+				"only types passed in the template arguments are valid");
 			return static_cast<CaseIdentifier>(meta::index_of_v<E, TypeCases>);
 		}
 
 		template<SumEnum_T e>
 		static constexpr CaseIdentifier value_identifier()
 		{
-			static_assert(arr::index_of(e, ValueCases) != -1, "only enum values passed in the template arguments are valid");
+			static_assert(arr::index_of(e, ValueCases) != ValueCases.size(), 
+				"only enum values passed in the template arguments are valid");
 			return static_cast<CaseIdentifier>(meta::size_v<TypeCases> + arr::index_of(e, ValueCases));
 		}
 

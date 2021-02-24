@@ -242,4 +242,77 @@ namespace bmath::intern::print {
 		}
 	} //append_to_string (for pattern)
 
+	void appent_to_simple_tree(const pattern::UnsavePnRef ref, std::string& str, const int depth)
+	{
+		using namespace pattern;
+
+		str.push_back('\n');
+		str.append(depth * 4ull, ' ');
+
+		switch (ref.type) {
+		default: {
+			if (ref.type.is<TreeMatchOwning>()) {
+				str.append("_T");
+				str.append(std::to_string(ref.index));
+				if (ref.type != Restriction::any) {
+					str.push_back('(');
+					str.append(name_of(ref.type.to<TreeMatchOwning>()));
+					str.push_back(')');
+				}
+				break;
+			}
+			if (ref.type.is<NamedFn>()) {
+				const CharVector& name = fn::named_fn_name(ref);
+				str.append(name);
+			}
+			else if (ref.type.is<Fn>()) {
+				str.append(fn::name_of(ref.type.to<Fn>()));
+			}
+			else {
+				assert(ref.type.is<Variadic>());
+				str.append(fn::name_of(ref.type.to<Variadic>()));
+			}
+			str.push_back(':');
+			for (const auto param : fn::range(ref)) {
+				print::appent_to_simple_tree(ref.new_at(param), str, depth + 1);
+			}
+		} break;
+		case PnType(Literal::variable): {
+			str += ref->characters;
+		} break;
+		case PnType(Literal::complex): {
+			append_complex(ref->complex, str, 0);
+		} break;
+		case PnType(TreeMatchNonOwning{}): {
+			str.append("_T");
+			str.append(std::to_string(ref.index));
+			str.push_back('\'');
+		} break;
+		case PnType(ValueMatch::non_owning):
+			[[fallthrough]];
+		case PnType(ValueMatch::owning): {
+			const ValueMatchVariable& var = *ref;
+			str.append("_V");
+			str.append(std::to_string(var.match_data_idx));
+			if (ref.type == ValueMatch::non_owning) {
+				str.push_back('\'');
+			}
+			str.push_back('(');
+			str.append(name_of(var.domain));
+			str.append(", ");
+			print::append_to_string(ref.new_at(var.mtch_idx), str, depth + 1);
+			str.push_back(')');
+		} break;
+		case PnType(ValueProxy{}): {
+			str.append("_VP");
+			str.append(std::to_string(ref.index));
+		} break;
+		case PnType(MultiParams{}): {
+			str.append("_P");
+			str.append(std::to_string(ref.index));
+			str.append("...");
+		} break;
+		}
+	} //append_to_string (for pattern)
+
 } //namespace bmath::intern::print

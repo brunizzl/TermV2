@@ -173,6 +173,17 @@ namespace bmath::intern::pattern {
 
 
 
+
+	std::string RewriteRuleRef::to_string() const
+	{
+		std::string str;
+		print::append_to_string(this->lhs_ref(), str);
+		str.append(" = ");
+		print::append_to_string(this->rhs_ref(), str);
+		return str;
+	} //RewriteRuleRef::to_string
+
+
 	RewriteRule::RewriteRule(std::string name, Convert convert)
 	{
 		{
@@ -263,7 +274,7 @@ namespace bmath::intern::pattern {
 		{
 			const auto contains_illegal_multi_match = [](const PnRef head) -> bool {
 				const auto inspect_variadic = [](const PnRef ref) -> fold::FindTrue {
-					if (ref.type == Comm::sum || ref.type == Comm::product) {
+					if (ref.type.is<Variadic>()) {
 						std::size_t nr_multi_matches = 0u;
 						for (const PnIdx elem : fn::range(ref)) {
 							nr_multi_matches += elem.get_type().is<MultiParams>();
@@ -279,7 +290,7 @@ namespace bmath::intern::pattern {
 		{
 			const auto contains_to_long_variadic = [](const PnRef head) -> bool {
 				const auto inspect_variadic = [](const PnRef ref) -> fold::FindTrue {
-					if (ref.type == Comm::sum || ref.type == Comm::product) {
+					if (ref.type.is<Variadic>()) {
 						const std::uint32_t multi_at_back = ref->parameters.back().get_type().is<MultiParams>();
 						return ref->parameters.size() - multi_at_back > match::SharedVariadicDatum::max_pn_variadic_params_count;
 					}
@@ -287,7 +298,7 @@ namespace bmath::intern::pattern {
 				};
 				return fold::simple_fold<fold::FindTrue>(head, inspect_variadic);
 			};
-			throw_if(contains_to_long_variadic(this->lhs_ref()), "a sum / product in lhs contains to many operands.");
+			throw_if(contains_to_long_variadic(this->lhs_ref()), "a variadic in lhs contains to many operands.");
 		}
 		{
 			const auto contains_to_many_variadics = [](const PnRef head) -> bool {
@@ -347,15 +358,6 @@ namespace bmath::intern::pattern {
 			disappropriate_value_match_variables(this->lhs_mut_ref());
 		}
 	} //RewriteRule::RewriteRule
-
-	std::string RewriteRule::to_string() const
-	{
-		std::string str;
-		print::append_to_string(this->lhs_ref(), str);
-		str.append(" = ");
-		print::append_to_string(this->rhs_ref(), str);
-		return str;
-	} //RewriteRule::to_string
 
 	namespace pn_tree {
 

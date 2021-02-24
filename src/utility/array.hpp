@@ -141,13 +141,10 @@ namespace bmath::intern::arr {
 	/////////////////   index_of
 
 	template<typename T, std::size_t N>
-	constexpr long long index_of(const T& t, const std::array<T, N>& arr)
+	constexpr std::size_t index_of(const T& t, const std::array<T, N>& arr)
 	{
 		const auto iter = std::find(arr.begin(), arr.end(), t);
-		if (iter != arr.end()) {
-			return std::distance(arr.begin(), iter);
-		}
-		return -1ll;
+		return std::distance(arr.begin(), iter);
 	}
 
 	//static_assert(index_of(4, std::array{ 1, 2, 4, 5, 6, 7 }) == 2);

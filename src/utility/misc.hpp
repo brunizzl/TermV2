@@ -9,6 +9,8 @@
 #include <compare>
 #include <bit>
 
+#include "array.hpp"
+
 #if defined(_MSC_VER)
 
 #define BMATH_UNREACHABLE __assume(false)
@@ -68,6 +70,55 @@ namespace bmath::intern {
 		const auto itr = std::find_if(begin(data), end(data), [key, ptr](const auto &v) { return v.*ptr == key; });
 		return itr != end(data) ? *itr : null_val;
 	}
+
+
+	constexpr double int_pow(double base, const unsigned long long expo) noexcept 
+	{
+		double res = 1.0;
+		for (std::size_t power = 1; power <= expo; power *= 2) {
+			if ((expo & power)) {
+				res *= base;
+			}
+			base *= base;
+		}
+		return res;
+	}
+
+	static_assert(int_pow(3.0, 9) == 19683);
+	static_assert(int_pow(10.0, 9) == 1000000000);
+
+	template<std::size_t N>
+	constexpr unsigned long long parse_ull(const std::array<char, N>& digits) {
+		unsigned long long res = 0;
+		for (const unsigned long long digit : digits) {
+			assert(digit >= '0' && digit <= '9');
+			res *= 10;
+			res += (digit - '0');
+		}
+		return res;
+	}
+
+	template<char... Cs>
+	constexpr double parse_double() {
+		constexpr std::array name = std::array{ Cs... };
+		constexpr std::size_t dot_pos = arr::index_of('.', name);
+
+		constexpr double integer_part = parse_ull(arr::take<dot_pos>(name));
+		constexpr double decimal_part = [&]() {
+			if constexpr (dot_pos == name.size()) {
+				return 0.0;
+			}
+			else {
+				const std::array decimal_places = arr::drop<dot_pos + 1>(name);
+				return parse_ull(decimal_places) / intern::int_pow(10.0, decimal_places.size());
+			}
+		}();
+		return integer_part + decimal_part;
+	}
+
+	static_assert(parse_double<'5', '2', '.', '2', '5'>() == 52.25);
+	static_assert(parse_double<'.', '5'>() == .5);
+	static_assert(parse_double<'1', '2', '3', '4'>() == 1234.0);
 
 
 	//remove if c++20 libraries have catched up

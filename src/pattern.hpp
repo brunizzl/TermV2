@@ -215,6 +215,18 @@ namespace bmath::intern::pattern {
 		std::string rhs_tree(const std::size_t offset = 0u) const;
 	};
 
+	//nonowning version of const RewriteRule
+	struct RewriteRuleRef
+	{
+		PnIdx lhs_head;
+		PnIdx rhs_head;
+		const PnStore* store; 
+
+		std::string to_string() const;
+		PnRef lhs_ref() const noexcept { return PnRef(*this->store, this->lhs_head); }
+		PnRef rhs_ref() const noexcept { return PnRef(*this->store, this->rhs_head); }
+	};
+
 	//this is the form needed for a rule to be applied, however once it is in this form, 
 	//  it can not be manipulated further by other rules
 	struct RewriteRule
@@ -226,12 +238,12 @@ namespace bmath::intern::pattern {
 		//if convert == Convert::basic only TreeMatch and MultiParams are converted from their NamedFn form
 		//  (enables to use rewrite rules to help building value match patterns)
 		RewriteRule(std::string name, Convert convert = Convert::all);
-		std::string to_string() const;
 
 		MutPnRef lhs_mut_ref() noexcept { return MutPnRef(this->store, this->lhs_head); }
 		MutPnRef rhs_mut_ref() noexcept { return MutPnRef(this->store, this->rhs_head); }
 		PnRef lhs_ref() const noexcept { return PnRef(this->store, this->lhs_head); }
 		PnRef rhs_ref() const noexcept { return PnRef(this->store, this->rhs_head); }
+		RewriteRuleRef ref() const noexcept { return RewriteRuleRef{ this->lhs_head, this->rhs_head, &this->store }; }
 	};
 
 	//algorithms specific to patterns

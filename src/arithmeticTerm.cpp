@@ -468,7 +468,7 @@ namespace bmath::intern {
 			);
 		} //contains
 
-		MathIdx establish_basic_order(MutRef ref)
+		MathIdx establish_basic_order(const MutRef ref)
 		{
 			const MathIdx combine_result = tree::combine(ref, true);
 			tree::sort(ref.new_at(combine_result));

@@ -11,35 +11,29 @@
 
 namespace bmath {
 
-	template<std::size_t N>
 	class RuleSet {
-		intern::pattern::PnStore lhs_store = {};
-		intern::pattern::PnStore rhs_store = {};
+		intern::pattern::PnStore store = {};
 
-		std::array<intern::pattern::PnIdx, N> lhs_heads;
-		std::array<intern::pattern::PnIdx, N> rhs_heads;
+		struct RuleHead { intern::pattern::PnIdx lhs, rhs; };
+		std::vector<RuleHead> heads;
 
 	public:
-		template<typename Name>
-		RuleSet(const std::array<Name, N>& rule_names)
+		template<intern::ContainerOf<intern::pattern::RewriteRule> Rules>
+		RuleSet(Rules&& intermediary_rules)
 		{
 			using namespace intern::pattern;
-			std::vector<RewriteRule> rules;
-			rules.reserve(rule_names.size());
-			for (const std::string_view rule_name : rule_names) {
-				rules.emplace_back(std::string(rule_name));
-			}
-
-			std::stable_sort(rules.begin(), rules.end(),
+			std::stable_sort(intermediary_rules.begin(), intermediary_rules.end(),
 				[](const RewriteRule& fst, const RewriteRule& snd)
 					{ return fst.lhs_head.get_type() < snd.lhs_head.get_type(); }
 			);
 
-			for (std::size_t i = 0u; i < rules.size(); i++) {
-				this->lhs_heads[i] = pn_tree::copy(rules[i].lhs_ref(), this->lhs_store);
+			//first insert all match sides -> direct succession of those
+			for (std::size_t i = 0u; i < intermediary_rules.size(); i++) {
+				const PnIdx lhs_head = pn_tree::copy(intermediary_rules[i].lhs_ref(), this->store);
+				this->heads.push_back({ lhs_head, PnIdx() });
 			}
-			for (std::size_t i = 0u; i < rules.size(); i++) {
-				this->rhs_heads[i] = pn_tree::copy(rules[i].rhs_ref(), this->rhs_store);
+			for (std::size_t i = 0u; i < intermediary_rules.size(); i++) {
+				this->heads[i].rhs = pn_tree::copy(intermediary_rules[i].rhs_ref(), this->store);
 			}
 		}
 
@@ -51,11 +45,11 @@ namespace bmath {
 
 			term.establish_order();
 		try_all_rules:
-			for (std::size_t i = 0; i < N; i++) {
+			for (std::size_t i = 0; i < this->heads.size(); i++) {
 				const auto [head_match, deeper_match] =
 					match::recursive_match_and_replace(
-						PnRef(this->lhs_store, this->lhs_heads[i]), 
-						PnRef(this->rhs_store, this->rhs_heads[i]), 
+						PnRef(this->store, this->heads[i].lhs), 
+						PnRef(this->store, this->heads[i].rhs), 
 						term.mut_ref()
 					);
 				if (head_match) {
@@ -70,9 +64,6 @@ namespace bmath {
 			}
 		}
 	};
-
-	template<typename Name, std::size_t N>
-	RuleSet(const std::array<Name, N>& rule_names) -> RuleSet<N>;
 
 
 } //namespace bmath

@@ -314,7 +314,7 @@ namespace bmath::intern {
 		MathIdx search_variable(const UnsaveRef ref, const std::string_view name);
 
 		//calls first tree::combine, then tree::sort
-		[[nodiscard]] MathIdx establish_basic_order(MutRef ref);
+		[[nodiscard]] MathIdx establish_basic_order(const MutRef ref);
 
 		//(true -> every position in store eighter free or used by (children of) heads exactly once)
 		bool valid_storage(const MathStore& store, const std::initializer_list<MathIdx> heads);

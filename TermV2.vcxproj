@@ -133,6 +133,7 @@
     <ClInclude Include="src\fold.hpp" />
     <ClInclude Include="src\ioArithmetic.hpp" />
     <ClInclude Include="src\ioPattern.hpp" />
+    <ClInclude Include="src\metaMatch.hpp" />
     <ClInclude Include="src\parseTerm.hpp" />
     <ClInclude Include="src\pattern.hpp" />
     <ClInclude Include="src\reference.hpp" />

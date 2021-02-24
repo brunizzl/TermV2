@@ -4,6 +4,8 @@
 #include "stupidTests.hpp"
 #include "utility/typeDebug.hpp"
 
+#include "metaMatch.hpp"
+
 /*
 TODO:
 
@@ -12,6 +14,7 @@ important:
  - make match and replace two distinct functions in RuleSet, allow caller to rematch
  - write pow for integer exponents
  - write version of tree::combine only checking changed tree parts
+ - change ct::Seq to allow values of different type in one sequence (T -> auto)
 
 nice to have:
  - enable StupidBufferVector to handle non-trivial destructible types -> change name to BufferVector
@@ -67,6 +70,7 @@ using namespace bmath::intern::pattern;
 //		break;
 //	}
 //}
+
 
 int main()
 {

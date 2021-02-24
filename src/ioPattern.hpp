@@ -362,4 +362,6 @@ namespace bmath::intern::print {
 
 	void append_to_string(const pattern::UnsavePnRef ref, std::string& str, const int depth = 0);
 
+	void appent_to_simple_tree(const pattern::UnsavePnRef ref, std::string& str, const int depth = 0);
+
 } //namespace bmath::intern::print
