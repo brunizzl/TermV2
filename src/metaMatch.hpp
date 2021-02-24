@@ -40,7 +40,7 @@ namespace bmath::intern::meta_pn {
 	//----------------------------------------------------------------------------------------------------------------------
 	//----------------------------------------------------------------------------------------------------------------------
 
-	/////////// recursive
+	/////////// recursive pattern components
 
 	template<typename Category, Category Type, Pattern... Operands>
 	struct FunctionPn :PatternMarker
@@ -62,7 +62,7 @@ namespace bmath::intern::meta_pn {
 	using FnPn = FunctionPn<Fn, Type, Operands...>;
 
 
-	/////////// non-recursive
+	/////////// non-recursive pattern components
 
 	template<std::size_t MatchDataIndex, bool Owning = false>
 	struct TreeMatchVariable :PatternMarker {};
@@ -171,7 +171,10 @@ template<Pattern... Ops> constexpr FunctionPn<type, type::name, Ops...> name(Ops
 	struct Plus { using type = Sum<Lhs, Rhs>; };
 
 	template<double Re1, double Im1, double Re2, double Im2>
-	struct Plus<ComplexPn<Re1, Im1>, ComplexPn<Re2, Im2>> { using type = ComplexPn<Re1 + Re2, Im1 + Im2>; };
+	struct Plus<ComplexPn<Re1, Im1>, ComplexPn<Re2, Im2>> 
+	{ 
+		using type = ComplexPn<Re1 + Re2, Im1 + Im2>; 
+	};
 
 	template<Pattern Lhs, Pattern Rhs>
 	using Plus_t = typename Plus<Lhs, Rhs>::type;
