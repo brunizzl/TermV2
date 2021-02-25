@@ -72,7 +72,7 @@ namespace bmath::intern::meta_pn {
 	struct IsTreeMatchVariable<TreeMatchVariable<MatchDataIndex, Owning>> :std::true_type {};
 
 	template<char... Cs>
-	constexpr auto operator "" _TM() 
+	constexpr auto operator "" _tree() 
 	{
 		constexpr auto name = std::array{ Cs... };
 		constexpr std::size_t match_data_index = parse_ull(name.begin(), name.end()).first;
@@ -84,7 +84,7 @@ namespace bmath::intern::meta_pn {
 	struct MultiMatchVariable :PatternMarker {};
 
 	template<char... Cs>
-	constexpr auto operator "" _MM()
+	constexpr auto operator "" _multi()
 	{
 		constexpr auto name = std::array{ Cs... };
 		constexpr std::size_t match_data_index = parse_ull(name.begin(), name.end()).first;
@@ -423,18 +423,18 @@ template<Pattern Lhs, Pattern Rhs> constexpr InRelation<name, Lhs, Rhs> operator
 	//----------------------------------------------------------------------------------------------------------------------
 
 	//"a, b | a^2 + 2 a b + b^2 = (a + b)^2" 
-	constexpr auto a = 0_TM;
-	constexpr auto b = 1_TM;
+	constexpr auto a = 0_tree;
+	constexpr auto b = 1_tree;
 	constexpr auto rule_1 = make_rule((a^2_) + 2_*a*b + (b^2_) = (a + b)^2_);
 
 	//"x :variable, a :any, as :sum... | diff(a + as, x) = diff(a, x) + diff(as, x)"
-	constexpr auto x = 0_TM;
-	constexpr auto u = 1_TM;
-	constexpr auto vs = 0_MM;
+	constexpr auto x = 0_tree;
+	constexpr auto u = 1_tree;
+	constexpr auto vs = 0_multi;
 	constexpr auto rule_2 = make_rule(diff(u + vs, x) = diff(u, x) + diff(vs, x), is_variable(x));
 
 	//"k :int | sin((2 k + 0.5) 'pi') =  1" 
-	constexpr auto k = 0_TM;
+	constexpr auto k = 0_tree;
 	constexpr auto pi = VariablePn<'p', 'i'>{};
 	constexpr auto rule_3 = make_rule(sin(k * pi) = 1_, is_int((k - 1_) / 2_), 3_ > 2_);
 
