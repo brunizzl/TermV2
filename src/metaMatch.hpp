@@ -72,20 +72,22 @@ namespace bmath::intern::meta_pn {
 	struct IsTreeMatchVariable<TreeMatchVariable<MatchDataIndex, Owning>> :std::true_type {};
 
 	template<char... Cs>
-	constexpr TreeMatchVariable<parse_ull(std::to_array({ Cs... }))> operator "" _tree()
+	constexpr auto operator "" _tree()
 	{
-		static_assert(parse_ull(std::to_array({ Cs... })) < pattern::match::MatchData::max_tree_match_count);
-		return {};
+		constexpr unsigned long long match_data_idx = parse_ull(std::to_array({ Cs... }));
+		static_assert(match_data_idx < pattern::match::MatchData::max_tree_match_count);
+		return TreeMatchVariable<match_data_idx, false>{};
 	}
 
 	template<std::size_t MatchDataIndex, auto MatchedInType = nullptr>
 	struct MultiMatchVariable :PatternMarker {};
 
 	template<char... Cs>
-	constexpr MultiMatchVariable<parse_ull(std::to_array({ Cs... }))> operator "" _multi()
+	constexpr auto operator "" _multi()
 	{
-		static_assert(parse_ull(std::to_array({ Cs... })) < pattern::match::MatchData::max_variadic_count);
-		return {};
+		constexpr unsigned long long match_data_idx = parse_ull(std::to_array({ Cs... }));
+		static_assert(match_data_idx < pattern::match::MatchData::max_variadic_count);
+		return MultiMatchVariable<match_data_idx, nullptr>{};
 	}
 
 
@@ -103,7 +105,7 @@ namespace bmath::intern::meta_pn {
 	constexpr ComplexPn<parse_double(std::to_array({ Cs... })), 0.0> operator "" _() { return {}; }
 
 	template<char... Cs>
-	constexpr ComplexPn<0.0 , parse_double(std::to_array({ Cs... }))> operator "" _i() { return {}; }
+	constexpr ComplexPn<0.0, parse_double(std::to_array({ Cs... }))> operator "" _i() { return {}; }
 
 
 
@@ -212,7 +214,7 @@ template<Pattern... Ops> constexpr FunctionPn<type, type::name, meta::List<Ops..
 	constexpr Minus_t<P> operator-(P) { return {}; }
 
 	template<Pattern Lhs, Pattern Rhs> 
-	constexpr decltype(Lhs{} + Minus_t<Rhs>{}) operator-(Lhs, Rhs) { return {}; }
+	constexpr Plus_t<Lhs, Minus_t<Rhs>> operator-(Lhs, Rhs) { return {}; }
 
 
 	/////////// operator*
@@ -264,7 +266,7 @@ template<Pattern... Ops> constexpr FunctionPn<type, type::name, meta::List<Ops..
 	using Divide_t = typename Divide<P>::type;
 
 	template<Pattern Lhs, Pattern Rhs> 
-	constexpr decltype(Lhs{} * Divide_t<Rhs>{}) operator/(Lhs, Rhs) { return {}; }
+	constexpr Times_t<Lhs, Divide_t<Rhs>> operator/(Lhs, Rhs) { return {}; }
 
 
 	/////////// operator^
