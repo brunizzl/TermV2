@@ -168,6 +168,18 @@ namespace bmath::intern::meta {
 	constexpr std::size_t size_v = Size<L>::value;
 
 
+	/////////////////   Element Access
+
+	template<ListInstance L>
+	struct Head;
+
+	template<ListInstance L>
+	using Head_t = typename Head<L>::type;
+
+	template<typename T, typename... Ts>
+	struct Head<List<T, Ts...>> { using type = T; };
+
+
 	/////////////////   Cons
 
 	template<typename, ListInstance>
@@ -279,23 +291,39 @@ namespace bmath::intern::meta {
 
 	static_assert(std::is_same_v<Filter_t<std::is_integral, List<int, bool, double, long, float>>, List<int, bool, long>>);
 
+	/////////////////   Map
+
+	template<template<typename> class F, ListInstance L>
+	struct Map;
+
+	template<template<typename> class F, ListInstance L>
+	using Map_t = typename Map<F, L>::type;
+
+	template<template<typename> class F, typename T, typename... Ts>
+	struct Map<F, List<T, Ts...>>
+	{
+		using type = Cons_t<typename F<T>::type, Map_t<F, List<Ts...>>>;
+	};
+
+	template<template<typename> class F>
+	struct Map<F, List<>> { using type = List<>; };
 
 	/////////////////   IndexOf
 
 	template<typename T, ListInstance L>
-	struct ListIndexOf;
+	struct IndexOf;
 
 	template<typename T, ListInstance L>
-	constexpr std::size_t index_of_v = ListIndexOf<T, L>::value;
+	constexpr std::size_t index_of_v = IndexOf<T, L>::value;
 
 	template<typename T>
-	struct ListIndexOf<T, List<>> :IndexConstant<0>{};
+	struct IndexOf<T, List<>> :IndexConstant<0>{};
 
 	template<typename T, typename... Ts>
-	struct ListIndexOf<T, List<T, Ts...>> :IndexConstant<0> {};
+	struct IndexOf<T, List<T, Ts...>> :IndexConstant<0> {};
 
 	template<typename T1, typename T2, typename... Ts>
-	struct ListIndexOf<T1, List<T2, Ts...>> :IndexConstant<ListIndexOf<T1, List<Ts...>>::value + 1> {};
+	struct IndexOf<T1, List<T2, Ts...>> :IndexConstant<IndexOf<T1, List<Ts...>>::value + 1> {};
 
 	static_assert(index_of_v<IndexConstant<7>, List<IndexConstant<2>, IndexConstant<5>, IndexConstant<7>>> == 2);
 	static_assert(index_of_v<IndexConstant<8>, List<IndexConstant<2>, IndexConstant<5>, IndexConstant<7>>> == 3);
@@ -388,16 +416,13 @@ namespace bmath::intern::meta {
 	
 	static_assert(std::is_same_v<Sort_t<List<IndexConstant<2>, IndexConstant<5>, IndexConstant<1>>, Less>, List<IndexConstant<1>, IndexConstant<2>, IndexConstant<5>>>);
 
-} //namespace bmath::intern::meta
 
-namespace bmath::intern::ct {
+
+
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	//////////////////////////////////////////   Operations on Sequences of values   //////////////////////////////////////
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-	template<unsigned long long Val>
-	using IndexConstant = std::integral_constant<unsigned long long, Val>;
 
 	template<auto... Vals>
 	struct Seq {};
@@ -427,98 +452,117 @@ namespace bmath::intern::ct {
 	/////////////////   Size
 
 	template<SeqInstance>
-	struct Size;
+	struct SSize;
 
 	template<SeqInstance A>
-	constexpr std::size_t size_v = Size<A>::value;
+	constexpr std::size_t ssize_v = SSize<A>::value;
 
 	template<SeqInstance S>
 	constexpr std::size_t size(S) { return size_v<S>; }
 
 	template<auto... xs>
-	struct Size<Seq<xs...>> :IndexConstant<sizeof...(xs)> {};
+	struct SSize<Seq<xs...>> :IndexConstant<sizeof...(xs)> {};
 
-	/////////////////   Cons
+
+	/////////////////   SeqToList
+
+	template<template <auto> class F, SeqInstance S>
+	struct SeqToList;
+
+	template<template <auto> class F, SeqInstance S>
+	using SeqToList_t = typename SeqToList<F, S>::type;
+
+	template<template <auto> class F, auto x, auto... xs>
+	struct SeqToList<F, Seq<x, xs...>>
+	{
+		using type = Cons_t<typename F<x>::type, SeqToList_t<F, Seq<xs...>>>;
+	};
+
+	template<template <auto> class F>
+	struct SeqToList<F, Seq<>> { using type = List<>; };
+
+
+	/////////////////   SCons
 
 	template<auto, SeqInstance>
-	struct Cons;
+	struct SCons;
 
 	template<auto x, SeqInstance A>
-	using Cons_t = typename Cons<x, A>::type;
+	using SCons_t = typename SCons<x, A>::type;
 
 	template<auto x, SeqInstance S>
-	constexpr Cons_t<x, S> cons(S) { return {}; }
+	constexpr SCons_t<x, S> cons(S) { return {}; }
 
 	template<auto x, auto... xs>
-	struct Cons<x, Seq<xs...>> { using type = Seq<x, xs...>; };
+	struct SCons<x, Seq<xs...>> { using type = Seq<x, xs...>; };
 
-	static_assert(std::is_same_v<Cons_t<1, Seq<2, 3, 4>>, Seq<1, 2, 3, 4>>);
+	static_assert(std::is_same_v<SCons_t<1, Seq<2, 3, 4>>, Seq<1, 2, 3, 4>>);
 
 
-	/////////////////   Concat
+	/////////////////   SConcat
 
 	template<SeqInstance, SeqInstance>
-	struct Concat;
+	struct SConcat;
 
 	template<SeqInstance A1, SeqInstance A2>
-	using Concat_t = typename Concat<A1, A2>::type;
+	using SConcat_t = typename SConcat<A1, A2>::type;
 
 	template<SeqInstance A1, SeqInstance A2>
-	constexpr Concat_t<A1, A2> concat(A1, A2) { return {}; }
+	constexpr SConcat_t<A1, A2> concat(A1, A2) { return {}; }
 
 	template<auto... xs, auto... ys>
-	struct Concat<Seq<xs...>, Seq<ys...>> { using type = Seq<xs..., ys...>; };
+	struct SConcat<Seq<xs...>, Seq<ys...>> { using type = Seq<xs..., ys...>; };
 
-	static_assert(std::is_same_v<Concat_t<Seq<0, 1>, Seq<2, 3, 4>>, Seq<0, 1, 2, 3, 4>>);
+	static_assert(std::is_same_v<SConcat_t<Seq<0, 1>, Seq<2, 3, 4>>, Seq<0, 1, 2, 3, 4>>);
 
 
 	/////////////////   IndexOf
 
 	template<auto x, SeqInstance A>
-	struct IndexOf;
+	struct SIndexOf;
 
 	template<auto x, SeqInstance A>
-	constexpr std::size_t index_of_v = IndexOf<x, A>::value;
+	constexpr std::size_t sindex_of_v = SIndexOf<x, A>::value;
 
 	template<auto x, SeqInstance A>
 	constexpr std::size_t index_of(A) { return index_of_v<x, A>; }
 
 	template<auto x>
-	struct IndexOf<x, Seq<>> :IndexConstant<0> {};
+	struct SIndexOf<x, Seq<>> :IndexConstant<0> {};
 
 	template<auto x, auto... xs>
-	struct IndexOf<x, Seq<x, xs...>> :IndexConstant<0> {};
+	struct SIndexOf<x, Seq<x, xs...>> :IndexConstant<0> {};
 
 	template<auto x, auto y, auto... ys>
-	struct IndexOf<x, Seq<y, ys...>> :IndexConstant<IndexOf<x, Seq<ys...>>::value + 1> {};
+	struct SIndexOf<x, Seq<y, ys...>> :IndexConstant<SIndexOf<x, Seq<ys...>>::value + 1> {};
 
-	static_assert(index_of_v<-7, Seq<2, 5, -7>> == 2);
-	static_assert(index_of_v<-8, Seq<2, 5, -7>> == 3);
+	static_assert(sindex_of_v<-7, Seq<2, 5, -7>> == 2);
+	static_assert(sindex_of_v<-8, Seq<2, 5, -7>> == 3);
 
 
 	/////////////////   Filter
 
 	template<template <auto> class P, SeqInstance S>
-	struct Filter;
+	struct SFilter;
 
 	template<template <auto> class P, SeqInstance S>
-	using Filter_t = typename Filter<P, S>::type;
+	using SFilter_t = typename SFilter<P, S>::type;
 
 	template<template <auto> class P, auto x, auto... xs>
-	class Filter<P, Seq<x, xs...>>
+	class SFilter<P, Seq<x, xs...>>
 	{
-		using TailRes = Filter_t<P, Seq<xs...>>;
+		using TailRes = SFilter_t<P, Seq<xs...>>;
 	public:
-		using type = std::conditional_t<P<x>::value, Cons_t<x, TailRes>, TailRes>;
+		using type = std::conditional_t<P<x>::value, SCons_t<x, TailRes>, TailRes>;
 	};
 
 	template<template <auto> class P>
-	struct Filter<P, Seq<>> { using type = Seq<>; };
+	struct SFilter<P, Seq<>> { using type = Seq<>; };
 
 	template<auto i>
 	struct Smaller3 :std::bool_constant<(i < 3)> {};
 
-	static_assert(std::is_same_v<Filter_t<Smaller3, Seq<1, 2, 3, 4, 5, 6, 0>>, Seq<1, 2, 0>>);
+	static_assert(std::is_same_v<SFilter_t<Smaller3, Seq<1, 2, 3, 4, 5, 6, 0>>, Seq<1, 2, 0>>);
 
 	template<typename Predicate>
 	constexpr Seq<> filter(Predicate, Seq<>) { return {}; }
@@ -533,4 +577,4 @@ namespace bmath::intern::ct {
 
 	static_assert(filter([](int i) { return i < 3; }, Seq<1, 2, 3, 4, 5, 6, 0>{}) == Seq<1, 2, 0>{});
 
-} //namespace bmath::intern::ct
+} //namespace bmath::intern::meta

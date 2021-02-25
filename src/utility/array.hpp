@@ -128,14 +128,14 @@ namespace bmath::intern::arr {
 
 	/////////////////   FromSeq
 
-	template<ct::SeqInstance A>
+	template<meta::SeqInstance A>
 	struct FromSeq;
 
-	template<ct::SeqInstance A>
+	template<meta::SeqInstance A>
 	constexpr auto from_seq_v = FromSeq<A>::value;
 
 	template<auto... xs>
-	struct FromSeq<ct::Seq<xs...>> { static constexpr auto value = std::array{ xs... }; };
+	struct FromSeq<meta::Seq<xs...>> { static constexpr auto value = std::array{ xs... }; };
 
 
 	/////////////////   index_of

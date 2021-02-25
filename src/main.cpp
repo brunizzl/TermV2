@@ -41,38 +41,42 @@ idea status:
 using namespace bmath::intern;
 using namespace bmath::intern::pattern;
 
-//void f(PnType t) {
-//	using Options = EnumSwitch<PnType, 
-//		meta::List<Variadic, NamedFn, Fn, MatchType>
-//		, std::to_array<PnType>({ Literal::complex, Literal::variable })
-//	>;
-//
-//	std::cout << (unsigned)t << "\t";
-//	
-//	switch (Options::decide(t)) {
-//	case Options::is_type<Variadic>:
-//		std::cout << "Variadic\n";
-//		break;
-//	case Options::is_type<NamedFn>:
-//		std::cout << "NamedFn\n";
-//		break;
-//	case Options::is_type<Fn>:
-//		std::cout << "Fn\n";
-//		break;
-//	case Options::is_value<Literal::variable>:
-//		std::cout << "variable\n";
-//		break;
-//	case Options::is_value<Literal::complex>:
-//		std::cout << "complex\n";
-//		break;
-//	case Options::is_type<MatchType>:
-//		std::cout << "MatchType\n";
-//		break;
-//	}
-//}
+void test_f(PnType t) {
+	using Options = EnumSwitch<PnType, 
+		meta::List<Variadic, NamedFn, Fn, MatchType>,
+		meta::Seq<Literal::complex, Literal::variable>
+	>;
+
+	std::cout << (unsigned)t << "\t=   ";
+	
+	switch (Options::decide(t)) {
+	case Options::is_type<Variadic>:
+		std::cout << "type Variadic\n";
+		break;
+	case Options::is_type<NamedFn>:
+		std::cout << "type NamedFn\n";
+		break;
+	case Options::is_type<Fn>:
+		std::cout << "type Fn\n";
+		break;
+	case Options::is_value<Literal::variable>:
+		std::cout << "value variable\n";
+		break;
+	case Options::is_value<Literal::complex>:
+		std::cout << "value complex\n";
+		break;
+	case Options::is_type<MatchType>:
+		std::cout << "type MatchType\n";
+		break;
+	}
+}
 
 int main()
 {
+	for (int i = 0; i < (unsigned)PnType::COUNT; i++) {
+		test_f((PnType)i);
+	}
+	std::cout << "\n";
 	debug::enumerate_type();
 	debug::test_rechner();
 	//test::pattern_term();
