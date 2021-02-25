@@ -6,7 +6,6 @@
 
 #include "utility/meta.hpp"
 #include "utility/array.hpp"
-#include "utility/misc.hpp"
 
 #include "arithmeticTerm.hpp"
 #include "pattern.hpp"
@@ -104,10 +103,18 @@ namespace bmath::intern::meta_pn {
 	struct ComplexPn :PatternMarker {};
 
 	template<char... Cs>
-	constexpr auto operator "" _() noexcept { return ComplexPn<parse_double<Cs...>(), 0.0>{}; }
+	constexpr auto operator "" _() noexcept 
+	{ 
+		constexpr auto name = std::array{ Cs... };
+		return ComplexPn<parse_double(name.begin(), name.end()), 0.0>{}; 
+	}
 
 	template<char... Cs>
-	constexpr auto operator "" _i() noexcept { return ComplexPn <0.0, parse_double<Cs...>()>{}; }
+	constexpr auto operator "" _i() noexcept
+	{
+		constexpr auto name = std::array{ Cs... };
+		return ComplexPn<0.0, parse_double(name.begin(), name.end())>{};
+	}
 
 
 

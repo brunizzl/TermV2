@@ -4,6 +4,9 @@
 #include <concepts>
 #include <compare>
 #include <iterator>
+#include <algorithm>
+#include <cassert>
+#include <utility>
 
 //general concepts
 namespace bmath::intern {
@@ -63,17 +66,68 @@ namespace bmath::intern {
 
 	template<typename I, typename T>
 	concept IterOver = std::random_access_iterator<I> &&
-		requires (I i) {
-			{*i} -> std::same_as<T&>;
-	};
+		(requires (I i) { {*i} -> std::same_as<T&>;       } || 
+		 requires (I i) { {*i} -> std::same_as<const T&>; })
+	;
 
 
 	/////////////////  Container
 
 	template<typename C, typename T>
-	concept ContainerOf = std::is_same_v<T, typename C::value_type>;
+	concept ContainerOf = std::is_same_v<T, typename C::value_type> &&
+		requires (C c) { {c.begin()} -> IterOver<T>;
+			             {c.end()  } -> IterOver<T>;
+	};
 
 	static_assert(ContainerOf<std::array<int, 3>, int>);
+	static_assert(ContainerOf<std::string_view, char>);
+
+
+
+
+	/////////////////  number parsing
+
+	//expects iterator pair of first char to parse and first char to not parse
+	//returns parsed number as .first and smallest power of 10 larger than parsed number as .second
+	template<IterOver<char> Iter>
+	constexpr std::pair<unsigned long long, unsigned long long> parse_ull(const Iter begin_, Iter iter) {
+		auto res = std::pair{ 0ull, 1ull };
+		while (iter > begin_) {
+			const unsigned char digit = *(--iter) - '0';
+			assert(digit < 10);
+			res.first += digit * res.second;
+			res.second *= 10;
+		}
+		return res;
+	}
+
+	template<ContainerOf<char> C>
+	constexpr unsigned long long parse_ull(C&& name) { return parse_ull(name.begin(), name.end()).first; }
+
+	static_assert(parse_ull(std::string_view("1234")) == 1234);
+
+	template<IterOver<char> Iter>
+	constexpr double parse_double(const Iter start, const Iter stop) {
+		const Iter dot_pos = std::find(start, stop, '.');
+		const double integer_part = intern::parse_ull(start, dot_pos).first;
+
+		if (dot_pos < stop) {
+			const Iter decimal_start = dot_pos + 1;
+			const auto [upscaled_decimals, upscale_factor] = intern::parse_ull(decimal_start, stop);
+			return integer_part + upscaled_decimals / (double)upscale_factor;
+		}
+		return integer_part;
+	}
+
+	template<ContainerOf<char> C>
+	constexpr double parse_double(C&& name) { return parse_double(name.begin(), name.end()); }
+
+	//static_assert(parse_double(std::string_view("52.25")) == 52.25);
+	//static_assert(parse_double(std::string_view(".5")) == .5);
+	//static_assert(parse_double(std::string_view("1234")) == 1234.0);
+	//static_assert(parse_double(std::string_view("1234.")) == 1234.0);
+
+
 } //namespace bmath::intern
 
 namespace bmath::intern::meta {
@@ -83,8 +137,8 @@ namespace bmath::intern::meta {
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-	template<long long Val>
-	using I_c = std::integral_constant<long long, Val>;
+	template<unsigned long long Val>
+	using IndexConstant = std::integral_constant<unsigned long long, Val>;
 
 	template<typename... Ts>
 	struct List;
@@ -108,7 +162,7 @@ namespace bmath::intern::meta {
 	struct Size;
 
 	template<typename... Ts>
-	struct Size<List<Ts...>> :I_c<sizeof...(Ts)> {};
+	struct Size<List<Ts...>> :IndexConstant<sizeof...(Ts)> {};
 
 	template<ListInstance L>
 	constexpr std::size_t size_v = Size<L>::value;
@@ -229,46 +283,37 @@ namespace bmath::intern::meta {
 	/////////////////   IndexOf
 
 	template<typename T, ListInstance L>
-	struct IndexOf;
+	struct ListIndexOf;
 
 	template<typename T, ListInstance L>
-	constexpr std::size_t index_of_v = IndexOf<T, L>::value;
+	constexpr std::size_t index_of_v = ListIndexOf<T, L>::value;
 
 	template<typename T>
-	struct IndexOf<T, List<>> :I_c<0>{};
+	struct ListIndexOf<T, List<>> :IndexConstant<0>{};
 
 	template<typename T, typename... Ts>
-	struct IndexOf<T, List<T, Ts...>> :I_c<0> {};
+	struct ListIndexOf<T, List<T, Ts...>> :IndexConstant<0> {};
 
 	template<typename T1, typename T2, typename... Ts>
-	struct IndexOf<T1, List<T2, Ts...>> :I_c<IndexOf<T1, List<Ts...>>::value + 1> {};
+	struct ListIndexOf<T1, List<T2, Ts...>> :IndexConstant<ListIndexOf<T1, List<Ts...>>::value + 1> {};
 
-	static_assert(index_of_v<I_c<-7>, List<I_c<2>, I_c<5>, I_c<-7>>> == 2);
-	static_assert(index_of_v<I_c<-8>, List<I_c<2>, I_c<5>, I_c<-7>>> == 3);
+	static_assert(index_of_v<IndexConstant<7>, List<IndexConstant<2>, IndexConstant<5>, IndexConstant<7>>> == 2);
+	static_assert(index_of_v<IndexConstant<8>, List<IndexConstant<2>, IndexConstant<5>, IndexConstant<7>>> == 3);
 
 
 	/////////////////   Drop
 
 	template<std::size_t N, ListInstance L>
-	struct Drop
-	{
-		using type = List<>;
-	};
+	struct Drop { using type = List<>; };
 
 	template<std::size_t N, ListInstance L>
 	using Drop_t = typename Drop<N, L>::type;
 
 	template<std::size_t N, typename T, typename... Ts> requires (N <= sizeof...(Ts))
-	struct Drop<N, List<T, Ts...>> 
-	{
-		using type = Drop_t<N - 1, List<Ts...>>;
-	};
+	struct Drop<N, List<T, Ts...>> { using type = Drop_t<N - 1, List<Ts...>>; };
 
 	template<typename T, typename... Ts>
-	struct Drop<0, List<T, Ts...>>
-	{
-		using type = List<T, Ts...>;
-	};
+	struct Drop<0, List<T, Ts...>> { using type = List<T, Ts...>; };
 
 	static_assert(std::is_same_v<Drop_t<2, List<char, int, double>>, List<double>>);
 
@@ -276,25 +321,16 @@ namespace bmath::intern::meta {
 	/////////////////   Take
 
 	template<std::size_t N, ListInstance L>
-	struct Take
-	{
-		using type = L;
-	};
+	struct Take { using type = L; };
 
 	template<std::size_t N, ListInstance L>
 	using Take_t = typename Take<N, L>::type;
 
 	template<std::size_t N, typename T, typename... Ts> requires (N <= sizeof...(Ts))
-	struct Take<N, List<T, Ts...>>
-	{
-		using type = Cons_t<T, Take_t<N - 1, List<Ts...>>>;
-	};
+	struct Take<N, List<T, Ts...>> { using type = Cons_t<T, Take_t<N - 1, List<Ts...>>>; };
 
 	template<typename T, typename... Ts>
-	struct Take<0, List<T, Ts...>>
-	{
-		using type = List<>;
-	};
+	struct Take<0, List<T, Ts...>> { using type = List<>; };
 
 	static_assert(std::is_same_v<Take_t<2, List<char, int, double>>, List<char, int>>);
 
@@ -350,7 +386,7 @@ namespace bmath::intern::meta {
 	template<typename L, typename R>
 	struct Less :std::bool_constant<(L::value < R::value)> {};
 	
-	static_assert(std::is_same_v<Sort_t<List<I_c<2>, I_c<5>, I_c<-7>>, Less>, List<I_c<-7>, I_c<2>, I_c<5>>>);
+	static_assert(std::is_same_v<Sort_t<List<IndexConstant<2>, IndexConstant<5>, IndexConstant<1>>, Less>, List<IndexConstant<1>, IndexConstant<2>, IndexConstant<5>>>);
 
 } //namespace bmath::intern::meta
 
@@ -360,18 +396,11 @@ namespace bmath::intern::ct {
 	//////////////////////////////////////////   Operations on Sequences of values   //////////////////////////////////////
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	template<long long Val>
-	using I_c = std::integral_constant<long long, Val>;
+	template<unsigned long long Val>
+	using IndexConstant = std::integral_constant<unsigned long long, Val>;
 
-	//own type, because std::integer_sequence works exclusively for integer types as T
-	template<typename T, T... Vals>
-	struct Seq
-	{
-		using value_type = T;
-	};
-
-	template<int... ints>
-	using Ints = Seq<int, ints...>;
+	template<auto... Vals>
+	struct Seq {};
 
 
 	/////////////////   SeqInstance
@@ -379,8 +408,8 @@ namespace bmath::intern::ct {
 	template<typename>
 	struct DecideSeqInstance :std::false_type {};
 
-	template<typename T, T... xs>
-	struct DecideSeqInstance<Seq<T, xs...>> :std::true_type {};
+	template<auto... xs>
+	struct DecideSeqInstance<Seq<xs...>> :std::true_type {};
 
 	template<typename T>
 	concept SeqInstance = DecideSeqInstance<T>::value;
@@ -406,8 +435,8 @@ namespace bmath::intern::ct {
 	template<SeqInstance S>
 	constexpr std::size_t size(S) { return size_v<S>; }
 
-	template<typename T, T... xs>
-	struct Size<Seq<T, xs...>> :I_c<sizeof...(xs)> {};
+	template<auto... xs>
+	struct Size<Seq<xs...>> :IndexConstant<sizeof...(xs)> {};
 
 	/////////////////   Cons
 
@@ -420,10 +449,10 @@ namespace bmath::intern::ct {
 	template<auto x, SeqInstance S>
 	constexpr Cons_t<x, S> cons(S) { return {}; }
 
-	template<typename T, T x, T... xs>
-	struct Cons<x, Seq<T, xs...>> { using type = Seq<T, x, xs...>; };
+	template<auto x, auto... xs>
+	struct Cons<x, Seq<xs...>> { using type = Seq<x, xs...>; };
 
-	static_assert(std::is_same_v<Cons_t<1, Ints<2, 3, 4>>, Ints<1, 2, 3, 4>>);
+	static_assert(std::is_same_v<Cons_t<1, Seq<2, 3, 4>>, Seq<1, 2, 3, 4>>);
 
 
 	/////////////////   Concat
@@ -437,10 +466,10 @@ namespace bmath::intern::ct {
 	template<SeqInstance A1, SeqInstance A2>
 	constexpr Concat_t<A1, A2> concat(A1, A2) { return {}; }
 
-	template<typename T, T... xs, T...ys>
-	struct Concat<Seq<T, xs...>, Seq<T, ys...>> { using type = Seq<T, xs..., ys...>; };
+	template<auto... xs, auto... ys>
+	struct Concat<Seq<xs...>, Seq<ys...>> { using type = Seq<xs..., ys...>; };
 
-	static_assert(std::is_same_v<Concat_t<Ints<0, 1>, Ints<2, 3, 4>>, Ints<0, 1, 2, 3, 4>>);
+	static_assert(std::is_same_v<Concat_t<Seq<0, 1>, Seq<2, 3, 4>>, Seq<0, 1, 2, 3, 4>>);
 
 
 	/////////////////   IndexOf
@@ -454,17 +483,17 @@ namespace bmath::intern::ct {
 	template<auto x, SeqInstance A>
 	constexpr std::size_t index_of(A) { return index_of_v<x, A>; }
 
-	template<typename T, T x>
-	struct IndexOf<x, Seq<T>> :I_c<0> {};
+	template<auto x>
+	struct IndexOf<x, Seq<>> :IndexConstant<0> {};
 
-	template<typename T, T x, T... xs>
-	struct IndexOf<x, Seq<T, x, xs...>> :I_c<0> {};
+	template<auto x, auto... xs>
+	struct IndexOf<x, Seq<x, xs...>> :IndexConstant<0> {};
 
-	template<typename T, T x, T y, T... ys>
-	struct IndexOf<x, Seq<T, y, ys...>> :I_c<IndexOf<x, Seq<T, ys...>>::value + 1> {};
+	template<auto x, auto y, auto... ys>
+	struct IndexOf<x, Seq<y, ys...>> :IndexConstant<IndexOf<x, Seq<ys...>>::value + 1> {};
 
-	static_assert(index_of_v<-7, Ints<2, 5, -7>> == 2);
-	static_assert(index_of_v<-8, Ints<2, 5, -7>> == 3);
+	static_assert(index_of_v<-7, Seq<2, 5, -7>> == 2);
+	static_assert(index_of_v<-8, Seq<2, 5, -7>> == 3);
 
 
 	/////////////////   Filter
@@ -475,33 +504,33 @@ namespace bmath::intern::ct {
 	template<template <auto> class P, SeqInstance S>
 	using Filter_t = typename Filter<P, S>::type;
 
-	template<template <auto> class P, typename T, T t, T... ts>
-	class Filter<P, Seq<T, t, ts...>>
+	template<template <auto> class P, auto x, auto... xs>
+	class Filter<P, Seq<x, xs...>>
 	{
-		using TailRes = Filter_t<P, Seq<T, ts...>>;
+		using TailRes = Filter_t<P, Seq<xs...>>;
 	public:
-		using type = std::conditional_t<P<t>::value, Cons_t<t, TailRes>, TailRes>;
+		using type = std::conditional_t<P<x>::value, Cons_t<x, TailRes>, TailRes>;
 	};
 
-	template<template <auto> class P, typename T>
-	struct Filter<P, Seq<T>> { using type = Seq<T>; };
+	template<template <auto> class P>
+	struct Filter<P, Seq<>> { using type = Seq<>; };
 
 	template<auto i>
 	struct Smaller3 :std::bool_constant<(i < 3)> {};
 
-	static_assert(std::is_same_v<Filter_t<Smaller3, Ints<1, 2, 3, 4, 5, 6, 0>>, Ints<1, 2, 0>>);
+	static_assert(std::is_same_v<Filter_t<Smaller3, Seq<1, 2, 3, 4, 5, 6, 0>>, Seq<1, 2, 0>>);
 
-	template<typename T, CallableTo<bool, T> P>
-	constexpr Seq<T> filter(P, Seq<T>) { return {}; }
+	template<typename Predicate>
+	constexpr Seq<> filter(Predicate, Seq<>) { return {}; }
 
-	template<typename T, T t, T... ts, CallableTo<bool, T> P>
-	constexpr auto filter(P p, Seq<T, t, ts...>)
+	template<typename T, T x, auto... xs, CallableTo<bool, T> P>
+	constexpr auto filter(P p, Seq<x, xs...>)
 	{
-		constexpr auto filtered_tail = filter(p, Seq<T, ts...>{});
-		if constexpr (p(t)) { return cons<t>(filtered_tail); }
+		constexpr auto filtered_tail = filter(p, Seq<xs...>{});
+		if constexpr (p(x)) { return cons<x>(filtered_tail); }
 		else                { return filtered_tail; }
 	}
 
-	static_assert(filter([](int i) { return i < 3; }, Ints<1, 2, 3, 4, 5, 6, 0>{}) == Ints<1, 2, 0>{});
+	static_assert(filter([](int i) { return i < 3; }, Seq<1, 2, 3, 4, 5, 6, 0>{}) == Seq<1, 2, 0>{});
 
 } //namespace bmath::intern::ct

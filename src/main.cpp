@@ -71,7 +71,6 @@ using namespace bmath::intern::pattern;
 //	}
 //}
 
-
 int main()
 {
 	debug::enumerate_type();

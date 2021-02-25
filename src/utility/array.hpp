@@ -51,7 +51,7 @@ namespace bmath::intern::arr {
 		template <std::size_t N_out, typename T, std::size_t... I>
 		constexpr std::array<T, N_out> impl(const T* arr_, std::index_sequence<I...>)
 		{
-			return { arr_[I]... };
+			return std::array{ arr_[I]... };
 		}
 	} //namespace detail_subrange
 
@@ -134,8 +134,8 @@ namespace bmath::intern::arr {
 	template<ct::SeqInstance A>
 	constexpr auto from_seq_v = FromSeq<A>::value;
 
-	template<typename T, T... xs>
-	struct FromSeq<ct::Seq<T, xs...>> { static constexpr auto value = std::array<T, sizeof...(xs)>{ xs... }; };
+	template<auto... xs>
+	struct FromSeq<ct::Seq<xs...>> { static constexpr auto value = std::array{ xs... }; };
 
 
 	/////////////////   index_of
