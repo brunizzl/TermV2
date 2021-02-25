@@ -72,24 +72,20 @@ namespace bmath::intern::meta_pn {
 	struct IsTreeMatchVariable<TreeMatchVariable<MatchDataIndex, Owning>> :std::true_type {};
 
 	template<char... Cs>
-	constexpr auto operator "" _tree() 
+	constexpr TreeMatchVariable<parse_ull(std::to_array({ Cs... }))> operator "" _tree()
 	{
-		constexpr auto name = std::array{ Cs... };
-		constexpr std::size_t match_data_index = parse_ull(name.begin(), name.end()).first;
-		static_assert(match_data_index < pattern::match::MatchData::max_tree_match_count);
-		return TreeMatchVariable<match_data_index>{};
+		static_assert(parse_ull(std::to_array({ Cs... })) < pattern::match::MatchData::max_tree_match_count);
+		return {};
 	}
 
 	template<std::size_t MatchDataIndex, auto MatchedInType = nullptr>
 	struct MultiMatchVariable :PatternMarker {};
 
 	template<char... Cs>
-	constexpr auto operator "" _multi()
+	constexpr MultiMatchVariable<parse_ull(std::to_array({ Cs... }))> operator "" _multi()
 	{
-		constexpr auto name = std::array{ Cs... };
-		constexpr std::size_t match_data_index = parse_ull(name.begin(), name.end()).first;
-		static_assert(match_data_index < pattern::match::MatchData::max_variadic_count);
-		return MultiMatchVariable<match_data_index>{};
+		static_assert(parse_ull(std::to_array({ Cs... })) < pattern::match::MatchData::max_variadic_count);
+		return {};
 	}
 
 
@@ -104,20 +100,10 @@ namespace bmath::intern::meta_pn {
 	struct ComplexPn :PatternMarker {};
 
 	template<char... Cs>
-	constexpr auto operator "" _() noexcept 
-	{ 
-		constexpr auto name = std::array<char, sizeof...(Cs)>{ Cs... };
-		constexpr double real = parse_double(name.begin(), name.end());
-		return ComplexPn<real, 0.0>{}; 
-	}
+	constexpr ComplexPn<parse_double(std::to_array({ Cs... })), 0.0> operator "" _() { return {}; }
 
 	template<char... Cs>
-	constexpr auto operator "" _i() noexcept
-	{
-		constexpr auto name = std::array<char, sizeof...(Cs)>{ Cs... };
-		constexpr double imag = parse_double(name.begin(), name.end());
-		return ComplexPn<0.0, imag>{};
-	}
+	constexpr ComplexPn<0.0 , parse_double(std::to_array({ Cs... }))> operator "" _i() { return {}; }
 
 
 
@@ -342,13 +328,19 @@ template<Pattern... Ops> constexpr FunctionPn<type, type::name, meta::List<Ops..
 	template<meta::ListInstance Operands>
 	using SortEachOperand_t = meta::Map_t<SortPattern, Operands>;
 
-	template<typename Category, Category Type, meta::ListInstance Operands>
-	class SortPattern<FunctionPn<Category, Type, Operands>>
+	template<Comm Type, meta::ListInstance Operands>
+	class SortPattern<FunctionPn<Comm, Type, Operands>>
 	{
 		using IndividuallySortedOperands = SortEachOperand_t<Operands>;
 		using SortedOperands = meta::Sort_t<IndividuallySortedOperands, ComparePatterns>;
 	public:
-		using type = FunctionPn<Category, Type, SortedOperands>;
+		using type = FunctionPn<Comm, Type, SortedOperands>;
+	};
+
+	template<typename Category, Category Type, meta::ListInstance Operands>
+	struct SortPattern<FunctionPn<Category, Type, Operands>>
+	{
+		using type = FunctionPn<Category, Type, SortEachOperand_t<Operands>>;
 	};
 
 	/////////// construct pattern
@@ -418,29 +410,10 @@ template<Pattern Lhs, Pattern Rhs> constexpr InRelation<name, Lhs, Rhs> operator
 
 
 
-	/////////////////////////////Test
+	/////////////////////////////Test Facilities
 	//----------------------------------------------------------------------------------------------------------------------
 	//----------------------------------------------------------------------------------------------------------------------
-
-	//"a, b | a^2 + 2 a b + b^2 = (a + b)^2" 
-	constexpr auto a = 0_tree;
-	constexpr auto b = 1_tree;
-	constexpr auto rule_1 = make_rule((a^2_) + 2_*a*b + (b^2_) = (a + b)^2_);
-
-	//"x :variable, a :any, as :sum... | diff(a + as, x) = diff(a, x) + diff(as, x)"
-	constexpr auto x = 0_tree;
-	constexpr auto u = 1_tree;
-	constexpr auto vs = 0_multi;
-	constexpr auto rule_2 = make_rule(diff(u + vs, x) = diff(u, x) + diff(vs, x), is_variable(x));
-
-	//"k :int | sin((2 k + 0.5) 'pi') =  1" 
-	constexpr auto k = 0_tree;
-	constexpr auto pi = VariablePn<'p', 'i'>{};
-	constexpr auto rule_3 = make_rule(sin(k * pi) = 1_, is_int((k - 1_) / 2_), 3_ > 2_);
-
-	constexpr auto rule_4 = make_rule((a + b) + 1_ + (2_ + 3_i) + (1_ + a + b) = 0.5_);
-	constexpr auto rule_5 = make_rule((a * b) * 1_ * (2_ * 3_i) * (1_ * a * b) = 0.5_);
-
+	
 	namespace detail_to_string {
 		template<typename>
 		struct ToString;
@@ -455,7 +428,7 @@ template<Pattern Lhs, Pattern Rhs> constexpr InRelation<name, Lhs, Rhs> operator
 		std::string separate(const char* const first, const char* const separator) { return first + ToString<T>::call(); }
 
 		template<typename... Ts> requires (sizeof...(Ts) == 0)
-		std::string separate(const char* const first, const char* const separator) { return first; }
+		std::string separate(const char* const first, const char* const separator) { return ""; }
 
 
 		template<Pattern Lhs, Pattern Rhs, Predicate... Conds>

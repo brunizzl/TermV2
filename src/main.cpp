@@ -4,8 +4,6 @@
 #include "stupidTests.hpp"
 #include "utility/typeDebug.hpp"
 
-#include "metaMatch.hpp"
-
 /*
 TODO:
 
@@ -40,7 +38,6 @@ idea status:
 
 using namespace bmath::intern;
 using namespace bmath::intern::pattern;
-using namespace bmath::intern::meta_pn;
 
 //void test_f(PnType t) {
 //	using Options = EnumSwitch<PnType, 
@@ -79,14 +76,10 @@ int main()
 	//}
 	//std::cout << "\n";
 
-	std::cout << to_string(rule_1) << "\n";
-	std::cout << to_string(rule_2) << "\n";
-	std::cout << to_string(rule_3) << "\n";
-	std::cout << to_string(rule_4) << "\n";
-	std::cout << to_string(rule_5) << "\n";
 
 	//debug::enumerate_type();
 	//debug::test_rechner();
+	test::meta_pattern();
 	//test::pattern_term();
 	//test::arithmetic_term();
 	//test::copy();

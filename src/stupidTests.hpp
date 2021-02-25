@@ -15,6 +15,7 @@
 #include "termVector.hpp"
 #include "pattern.hpp"
 #include "transform.hpp"
+#include "metaMatch.hpp"
 
 
 namespace bmath::intern::debug {
@@ -512,6 +513,37 @@ namespace bmath::intern::test {
 			std::cout << " ";
 		}
 		std::cout << "\n";
+	}
+
+	void meta_pattern()
+	{
+		using namespace bmath::intern::meta_pn;
+
+		//"a, b | a^2 + 2 a b + b^2 = (a + b)^2" 
+		auto a = 0_tree;
+		auto b = 1_tree;
+		auto rule_1 = make_rule((a ^ 2_) + 2_ * a * b + (b ^ 2_) = (a + b) ^ 2_);
+
+		//"x :variable, a :any, as :sum... | diff(a + as, x) = diff(a, x) + diff(as, x)"
+		auto x = 0_tree;
+		auto u = 1_tree;
+		auto vs = 0_multi;
+		auto rule_2 = make_rule(diff(u + vs, x) = diff(u, x) + diff(vs, x), is_variable(x));
+		
+		//"k :int | sin((2 k + 0.5) 'pi') =  1" 
+		auto k = 0_tree;
+		auto pi = VariablePn<'p', 'i'>{};
+		auto rule_3 = make_rule(sin(k * pi) = 1_, is_int((k - 1_) / 2_), 3_ > 2_);
+		
+
+		auto rule_4 = make_rule((a + b) + 1_ + (2_ + 3_i) + (1_ + 1_ + a) = a);
+		auto rule_5 = make_rule((3_ * 222_) * 0.5_i * (2_ * 3_i) * (5_i * 1_ * b) = 45_);
+		
+		std::cout << to_string(rule_1) << "\n";
+		std::cout << to_string(rule_2) << "\n";
+		std::cout << to_string(rule_3) << "\n";
+		std::cout << to_string(rule_4) << "\n";
+		std::cout << to_string(rule_5) << "\n";
 	}
 
 

@@ -90,7 +90,8 @@ namespace bmath::intern {
 	//expects iterator pair of first char to parse and first char to not parse
 	//returns parsed number as .first and smallest power of 10 larger than parsed number as .second
 	template<IterOver<char> Iter>
-	constexpr std::pair<unsigned long long, unsigned long long> parse_ull(const Iter begin_, Iter iter) {
+	constexpr std::pair<unsigned long long, unsigned long long> parse_ull(const Iter begin_, Iter iter)
+	{
 		auto res = std::pair{ 0ull, 1ull };
 		while (iter > begin_) {
 			const unsigned char digit = *(--iter) - '0';
@@ -101,11 +102,15 @@ namespace bmath::intern {
 		return res;
 	}
 
+	template<typename T>
+	constexpr unsigned long long parse_ull(const T& chars) { return parse_ull(chars.begin(), chars.end()).first; }
+
 	constexpr auto _1234_sv = std::string_view("1234");
-	static_assert(parse_ull(_1234_sv.begin(), _1234_sv.end()).first == 1234);
+	static_assert(parse_ull(std::string_view("1234")) == 1234);
 
 	template<IterOver<char> Iter>
-	constexpr double parse_double(const Iter start, const Iter stop) {
+	constexpr double parse_double(const Iter start, const Iter stop) 
+	{
 		const Iter dot_pos = std::find(start, stop, '.');
 		const double integer_part = intern::parse_ull(start, dot_pos).first;
 
@@ -117,7 +122,10 @@ namespace bmath::intern {
 		return integer_part;
 	}
 
-	static_assert(parse_double(_1234_sv.begin(), _1234_sv.end()) == 1234.0);
+	template<typename T>
+	constexpr double parse_double(const T& chars) { return parse_double(chars.begin(), chars.end()); }
+
+	static_assert(parse_double(std::string_view("1234")) == 1234.0);
 
 } //namespace bmath::intern
 
