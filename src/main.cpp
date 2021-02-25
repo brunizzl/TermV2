@@ -40,45 +40,53 @@ idea status:
 
 using namespace bmath::intern;
 using namespace bmath::intern::pattern;
+using namespace bmath::intern::meta_pn;
 
-void test_f(PnType t) {
-	using Options = EnumSwitch<PnType, 
-		meta::List<Variadic, NamedFn, Fn, MatchType>,
-		meta::Seq<Literal::complex, Literal::variable>
-	>;
-
-	std::cout << (unsigned)t << "\t=   ";
-	
-	switch (Options::decide(t)) {
-	case Options::is_type<Variadic>:
-		std::cout << "type Variadic\n";
-		break;
-	case Options::is_type<NamedFn>:
-		std::cout << "type NamedFn\n";
-		break;
-	case Options::is_type<Fn>:
-		std::cout << "type Fn\n";
-		break;
-	case Options::is_value<Literal::variable>:
-		std::cout << "value variable\n";
-		break;
-	case Options::is_value<Literal::complex>:
-		std::cout << "value complex\n";
-		break;
-	case Options::is_type<MatchType>:
-		std::cout << "type MatchType\n";
-		break;
-	}
-}
+//void test_f(PnType t) {
+//	using Options = EnumSwitch<PnType, 
+//		meta::List<Variadic, NamedFn, Fn, MatchType>,
+//		meta::Seq<Literal::complex, Literal::variable>
+//	>;
+//
+//	std::cout << (unsigned)t << "\t=   ";
+//	
+//	switch (Options::decide(t)) {
+//	case Options::is_type<Variadic>:
+//		std::cout << "type Variadic\n";
+//		break;
+//	case Options::is_type<NamedFn>:
+//		std::cout << "type NamedFn\n";
+//		break;
+//	case Options::is_type<Fn>:
+//		std::cout << "type Fn\n";
+//		break;
+//	case Options::is_value<Literal::variable>:
+//		std::cout << "value variable\n";
+//		break;
+//	case Options::is_value<Literal::complex>:
+//		std::cout << "value complex\n";
+//		break;
+//	case Options::is_type<MatchType>:
+//		std::cout << "type MatchType\n";
+//		break;
+//	}
+//}
 
 int main()
 {
-	for (int i = 0; i < (unsigned)PnType::COUNT; i++) {
-		test_f((PnType)i);
-	}
-	std::cout << "\n";
-	debug::enumerate_type();
-	debug::test_rechner();
+	//for (int i = 0; i < (unsigned)PnType::COUNT; i++) {
+	//	test_f((PnType)i);
+	//}
+	//std::cout << "\n";
+
+	std::cout << to_string(rule_1) << "\n";
+	std::cout << to_string(rule_2) << "\n";
+	std::cout << to_string(rule_3) << "\n";
+	std::cout << to_string(rule_4) << "\n";
+	std::cout << to_string(rule_5) << "\n";
+
+	//debug::enumerate_type();
+	//debug::test_rechner();
 	//test::pattern_term();
 	//test::arithmetic_term();
 	//test::copy();
