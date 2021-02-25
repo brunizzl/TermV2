@@ -31,9 +31,6 @@ namespace bmath::intern::meta_pn {
 	template<Pattern MatchPattern, Pattern ReplacePattern, Predicate... Conditions>
 	struct Rule {};
 
-	template<Pattern MP, Pattern RP, Predicate... Cs, Predicate C>
-	constexpr Rule<MP, RP, Cs..., C> operator,(Rule<MP, RP, Cs...>, C) { return {}; }
-
 
 
 
@@ -77,7 +74,8 @@ namespace bmath::intern::meta_pn {
 	template<char... Cs>
 	constexpr auto operator "" _TM() 
 	{
-		constexpr std::size_t match_data_index = parse_ull(std::array{ Cs... });
+		constexpr auto name = std::array{ Cs... };
+		constexpr std::size_t match_data_index = parse_ull(name.begin(), name.end()).first;
 		static_assert(match_data_index < pattern::match::MatchData::max_tree_match_count);
 		return TreeMatchVariable<match_data_index>{};
 	}
@@ -88,7 +86,8 @@ namespace bmath::intern::meta_pn {
 	template<char... Cs>
 	constexpr auto operator "" _MM()
 	{
-		constexpr std::size_t match_data_index = parse_ull(std::array{ Cs... });
+		constexpr auto name = std::array{ Cs... };
+		constexpr std::size_t match_data_index = parse_ull(name.begin(), name.end()).first;
 		static_assert(match_data_index < pattern::match::MatchData::max_variadic_count);
 		return MultiMatchVariable<match_data_index>{};
 	}
@@ -107,15 +106,17 @@ namespace bmath::intern::meta_pn {
 	template<char... Cs>
 	constexpr auto operator "" _() noexcept 
 	{ 
-		constexpr auto name = std::array{ Cs... };
-		return ComplexPn<parse_double(name.begin(), name.end()), 0.0>{}; 
+		constexpr auto name = std::array<char, sizeof...(Cs)>{ Cs... };
+		constexpr double real = parse_double(name.begin(), name.end());
+		return ComplexPn<real, 0.0>{}; 
 	}
 
 	template<char... Cs>
 	constexpr auto operator "" _i() noexcept
 	{
-		constexpr auto name = std::array{ Cs... };
-		return ComplexPn<0.0, parse_double(name.begin(), name.end())>{};
+		constexpr auto name = std::array<char, sizeof...(Cs)>{ Cs... };
+		constexpr double imag = parse_double(name.begin(), name.end());
+		return ComplexPn<0.0, imag>{};
 	}
 
 
@@ -210,7 +211,13 @@ template<Pattern... Ops> constexpr FunctionPn<type, type::name, meta::List<Ops..
 	struct Minus { using type = Product<P, MinusOne>; };
 
 	template<double Re, double Im>
-	struct Minus<ComplexPn<Re, Im>> { using type = ComplexPn<-Re, -Im>; };
+	class Minus<ComplexPn<Re, Im>> 
+	{
+		static constexpr double new_re = -Re;
+		static constexpr double new_im = -Im;
+	public:
+		using type = ComplexPn<new_re, new_im>;
+	};
 
 	template<Pattern P>
 	using Minus_t = typename Minus<P>::type;
@@ -282,6 +289,75 @@ template<Pattern... Ops> constexpr FunctionPn<type, type::name, meta::List<Ops..
 
 
 
+	/////////////////////////////Sorting Pattern
+	//----------------------------------------------------------------------------------------------------------------------
+	//----------------------------------------------------------------------------------------------------------------------
+
+
+	/////////// generality
+
+	template<Pattern>
+	struct Generality;
+
+	template<typename Category, Category Type, meta::ListInstance Operands>
+	struct Generality<FunctionPn<Category, Type, Operands>> :meta::Constant<bmath::intern::generality(Type)> {};
+
+	template<std::size_t MatchDataIndex, bool Owning>
+	struct Generality<TreeMatchVariable<MatchDataIndex, Owning>> :meta::Constant<3001> {};
+
+	template<std::size_t MatchDataIndex, auto MatchedInType>
+	struct Generality<MultiMatchVariable<MatchDataIndex, MatchedInType>> :meta::Constant<3999> {};
+
+	template<double Re, double Im>
+	struct Generality<ComplexPn<Re, Im>> :meta::Constant<1000> {};
+
+	template<char... Cs>
+	struct Generality<VariablePn<Cs...>> :meta::Constant<1001> {};
+
+	template<Pattern P> 
+	constexpr int generality_v = Generality<P>::value;
+
+
+	/////////// compare
+
+	template<Pattern P1, Pattern P2>
+	struct ComparePatterns :std::bool_constant<(generality_v<P1> < generality_v<P2>)> {};
+	
+	template<typename Category, Category Type, Pattern... LOps, Pattern... ROps>
+	struct ComparePatterns<
+		FunctionPn<Category, Type, meta::List<LOps...>>, 
+		FunctionPn<Category, Type, meta::List<ROps...>>
+	> :std::bool_constant<(sizeof...(LOps) < sizeof...(ROps))> {}; //TODO: compare recursively
+
+
+	/////////// sort
+
+	template<Pattern P>
+	struct SortPattern :std::type_identity<P> {};
+
+	template<Pattern P>
+	using SortPattern_t = typename SortPattern<P>::type;
+
+	//indirection necessairy, as otherwise local argument is implicitly inserted to SortPattern template
+	template<meta::ListInstance Operands>
+	using SortEachOperand_t = meta::Map_t<SortPattern, Operands>;
+
+	template<typename Category, Category Type, meta::ListInstance Operands>
+	class SortPattern<FunctionPn<Category, Type, Operands>>
+	{
+		using IndividuallySortedOperands = SortEachOperand_t<Operands>;
+		using SortedOperands = meta::Sort_t<IndividuallySortedOperands, ComparePatterns>;
+	public:
+		using type = FunctionPn<Category, Type, SortedOperands>;
+	};
+
+	/////////// construct pattern
+
+	template<Pattern MP, Pattern RP, Predicate... Cs>
+	constexpr Rule<SortPattern_t<MP>, SortPattern_t<RP>, Cs...> make_rule(Rule<MP, RP>, Cs...) { return {}; }
+
+
+
 	/////////////////////////////Definitions of Predicates
 	//----------------------------------------------------------------------------------------------------------------------
 	//----------------------------------------------------------------------------------------------------------------------
@@ -349,21 +425,21 @@ template<Pattern Lhs, Pattern Rhs> constexpr InRelation<name, Lhs, Rhs> operator
 	//"a, b | a^2 + 2 a b + b^2 = (a + b)^2" 
 	constexpr auto a = 0_TM;
 	constexpr auto b = 1_TM;
-	constexpr auto rule_1 = (a^2_) + 2_*a*b + (b^2_) = (a + b)^2_;
+	constexpr auto rule_1 = make_rule((a^2_) + 2_*a*b + (b^2_) = (a + b)^2_);
 
 	//"x :variable, a :any, as :sum... | diff(a + as, x) = diff(a, x) + diff(as, x)"
 	constexpr auto x = 0_TM;
 	constexpr auto u = 1_TM;
 	constexpr auto vs = 0_MM;
-	constexpr auto rule_2 = (diff(u + vs, x) = diff(u, x) + diff(vs, x), is_variable(x));
+	constexpr auto rule_2 = make_rule(diff(u + vs, x) = diff(u, x) + diff(vs, x), is_variable(x));
 
 	//"k :int | sin((2 k + 0.5) 'pi') =  1" 
 	constexpr auto k = 0_TM;
 	constexpr auto pi = VariablePn<'p', 'i'>{};
-	constexpr auto rule_3 = (sin(k * pi) = 1_, is_int((k - 1_) / 2_), 3_ > 2_);
+	constexpr auto rule_3 = make_rule(sin(k * pi) = 1_, is_int((k - 1_) / 2_), 3_ > 2_);
 
-	constexpr auto rule_4 = (a + b) + 1_ + (2_ + 3_i) + (1_ + a + b);
-	constexpr auto rule_5 = (a * b) * 1_ * (2_ * 3_i) * (1_ * a * b);
+	constexpr auto rule_4 = make_rule((a + b) + 1_ + (2_ + 3_i) + (1_ + a + b) = 0.5_);
+	constexpr auto rule_5 = make_rule((a * b) * 1_ * (2_ * 3_i) * (1_ * a * b) = 0.5_);
 
 	namespace detail_to_string {
 		template<typename>

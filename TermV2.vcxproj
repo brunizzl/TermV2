@@ -106,6 +106,8 @@
     <ClCompile>
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <FloatingPointModel>Strict</FloatingPointModel>
+      <PreprocessToFile>true</PreprocessToFile>
+      <UseStandardPreprocessor>true</UseStandardPreprocessor>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -116,6 +118,8 @@
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <FloatingPointModel>Strict</FloatingPointModel>
       <PreprocessorDefinitions>NDEBUG</PreprocessorDefinitions>
+      <PreprocessToFile>true</PreprocessToFile>
+      <UseStandardPreprocessor>true</UseStandardPreprocessor>
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemGroup>

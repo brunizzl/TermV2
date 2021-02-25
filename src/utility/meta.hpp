@@ -101,10 +101,8 @@ namespace bmath::intern {
 		return res;
 	}
 
-	template<ContainerOf<char> C>
-	constexpr unsigned long long parse_ull(C&& name) { return parse_ull(name.begin(), name.end()).first; }
-
-	static_assert(parse_ull(std::string_view("1234")) == 1234);
+	constexpr auto _1234_sv = std::string_view("1234");
+	static_assert(parse_ull(_1234_sv.begin(), _1234_sv.end()).first == 1234);
 
 	template<IterOver<char> Iter>
 	constexpr double parse_double(const Iter start, const Iter stop) {
@@ -119,18 +117,20 @@ namespace bmath::intern {
 		return integer_part;
 	}
 
-	template<ContainerOf<char> C>
-	constexpr double parse_double(C&& name) { return parse_double(name.begin(), name.end()); }
-
-	//static_assert(parse_double(std::string_view("52.25")) == 52.25);
-	//static_assert(parse_double(std::string_view(".5")) == .5);
-	//static_assert(parse_double(std::string_view("1234")) == 1234.0);
-	//static_assert(parse_double(std::string_view("1234.")) == 1234.0);
-
+	static_assert(parse_double(_1234_sv.begin(), _1234_sv.end()) == 1234.0);
 
 } //namespace bmath::intern
 
 namespace bmath::intern::meta {
+
+	template<auto Val>
+	struct Constant
+	{
+		using value_type = decltype(Val);
+		using type = Constant<Val>;
+		static constexpr auto value = Val;
+	};
+
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	//////////////////////////////////////////   Operations on Lists of types   ///////////////////////////////////////////
@@ -291,6 +291,7 @@ namespace bmath::intern::meta {
 
 	static_assert(std::is_same_v<Filter_t<std::is_integral, List<int, bool, double, long, float>>, List<int, bool, long>>);
 
+
 	/////////////////   Map
 
 	template<template<typename> class F, ListInstance L>
@@ -307,6 +308,7 @@ namespace bmath::intern::meta {
 
 	template<template<typename> class F>
 	struct Map<F, List<>> { using type = List<>; };
+
 
 	/////////////////   IndexOf
 
