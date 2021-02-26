@@ -518,28 +518,140 @@ namespace bmath::intern::test {
 	void meta_pattern()
 	{
 		using namespace bmath::intern::meta_pn;
-		auto a = 0_tree;
-		auto b = 1_tree;
-		auto rule_1 = make_rule((a ^ 2_) + 2_ * a * b + (b ^ 2_) = (a + b) ^ 2_);
-		std::cout << to_string(rule_1) << "\n";
+		{
+			auto [x] = make_tree_matches<1>;
+			auto rule_1 = make_rule(0_ * x = 0_);
+			auto rule_2 = make_rule(0_ ^ x = 0_);
+			auto rule_3 = make_rule(x ^ 0_ = 1_);
+			auto rule_4 = make_rule(x ^ 1_ = x );
 
-		auto x = 0_tree;
-		auto u = 1_tree;
-		auto vs = 0_multi;//MultiMatchVariable<0>{};
-		auto rule_2 = make_rule(diff(u + vs, x) = diff(u, x) + diff(vs, x), is_variable(x));
-		std::cout << to_string(rule_2) << "\n";
-		
-		auto k = 0_tree;
-		auto pi = VariablePn<'p', 'i'>{};
-		auto rule_3 = make_rule(sin(k * pi) = 1_, is_int((k - 1_) / 2_), 3_ > 2_);
-		
-		
-		auto rule_4 = make_rule((a + b) + 1_ + (2_ + 3_i) + (1_ + 1_ + a) = a);
-		auto rule_5 = make_rule((a * 222_) * 0.5_i * (2_ * 3_i) * (5_i * 1_ * b) = 45_);
-		
-		std::cout << to_string(rule_3) << "\n";
-		std::cout << to_string(rule_4) << "\n";
-		std::cout << to_string(rule_5) << "\n";
+			std::cout << to_string(rule_1) << "\n";
+			std::cout << to_string(rule_2) << "\n";
+			std::cout << to_string(rule_3) << "\n";
+			std::cout << to_string(rule_4) << "\n";
+			std::cout << "\n";
+		}
+		{
+			auto [x, a, b] = make_tree_matches<3>;
+			auto [xs] = make_multi_matches<1>;
+			auto rule_1 = make_rule((x^a)^b         = x^(a * b));
+			auto rule_2 = make_rule(    x *     x   = x ^ 2_);
+			auto rule_3 = make_rule(    x * (x^a)   = x^(a + 1_));
+			auto rule_4 = make_rule((x^a) * (x^b)   = x^(a + b ));
+			auto rule_5 = make_rule(exp(ln(x) * xs) = x^xs);
+
+			std::cout << to_string(rule_1) << "\n";
+			std::cout << to_string(rule_2) << "\n";
+			std::cout << to_string(rule_3) << "\n";
+			std::cout << to_string(rule_4) << "\n";
+			std::cout << to_string(rule_5) << "\n";
+			std::cout << "\n";
+		}
+		{
+			auto [a, b] = make_tree_matches<2>;
+			auto rule_1 = make_rule((a^2_) + 2_*a*b + (b^2_) = (a + b)^2_);
+			auto rule_2 = make_rule((a^2_) - 2_*a*b + (b^2_) = (a - b)^2_);
+
+			auto [a_square, two_a, b_] = make_tree_matches<3>;
+			auto rule_3 = make_rule(a_square + two_a*b_ + (b_^2_) = (two_a / 2_ + b_)^2_, sqrt(a_square) == two_a / 2_);
+
+			std::cout << to_string(rule_1) << "\n";
+			std::cout << to_string(rule_2) << "\n";
+			std::cout << to_string(rule_3) << "\n";
+			std::cout << "\n";
+		}
+		{
+			auto [a, b] = make_tree_matches<2>;
+			auto [bs, cs] = make_multi_matches<2>;
+			auto rule_1 = make_rule(a * bs + a * cs = a * (bs + cs), !is_value(a));
+			auto rule_2 = make_rule(a * bs + a      = a * (bs + 1_), !is_value(a));
+			auto rule_3 = make_rule(a      + a      = 2_ * a       , !is_value(a));
+			auto rule_4 = make_rule(a * (b + cs)    = a * b + a * cs);
+
+			auto rule_5 = make_rule(-(a + bs)       = -a - bs);
+			auto rule_6 = make_rule( (a * bs)^(-1_) = (a^(-1_)) * (bs^(-1_)));
+
+			std::cout << to_string(rule_1) << "\n";
+			std::cout << to_string(rule_2) << "\n";
+			std::cout << to_string(rule_3) << "\n";
+			std::cout << to_string(rule_4) << "\n";
+			std::cout << to_string(rule_5) << "\n";
+			std::cout << to_string(rule_6) << "\n";
+			std::cout << "\n";
+		}
+		{
+			auto pi = VariablePn<'p', 'i'>{};
+			auto [x] = make_tree_matches<1>;
+			auto rule_1 = make_rule((sin(x)^2_) + (cos(x)^2_) = 1_);
+
+			auto rule_2 = make_rule(cos(    pi) = -1_);
+			auto rule_3 = make_rule(cos(x * pi) =  0_, is_int(x - 0.5_));
+			auto rule_4 = make_rule(cos(x * pi) =  1_, is_int(x / 2_));
+			auto rule_5 = make_rule(cos(x * pi) = -1_, is_int((x - 1_) / 2_));
+
+			auto rule_6 = make_rule(sin(    pi) =  0_);
+			auto rule_7 = make_rule(sin(x * pi) =  0_, is_int(x));
+			auto rule_8 = make_rule(sin(x * pi) =  1_, is_int((x - 0.5_) / 2_));
+			auto rule_9 = make_rule(sin(x * pi) = -1_, is_int((x - 1.5_) / 2_));
+
+			std::cout << to_string(rule_1) << "\n";
+			std::cout << to_string(rule_2) << "\n";
+			std::cout << to_string(rule_3) << "\n";
+			std::cout << to_string(rule_4) << "\n";
+			std::cout << to_string(rule_5) << "\n";
+			std::cout << to_string(rule_6) << "\n";
+			std::cout << to_string(rule_7) << "\n";
+			std::cout << to_string(rule_8) << "\n";
+			std::cout << to_string(rule_9) << "\n";
+			std::cout << "\n";
+		}
+		{
+			auto [x, a, f, g, h] = make_tree_matches<5>;
+			auto [as] = make_multi_matches<1>;
+			auto rule_1 = make_rule(diff(x, x)      = 1_                                               , is_variable(x));
+			auto rule_2 = make_rule(diff(a, x)      = 0_                                               , is_variable(x), is_variable(a) || is_value(a));
+			auto rule_3 = make_rule(diff(f^a, x)    = diff(f, x) * a * (f^(a - 1_))                    , is_variable(x), is_value(a));
+			auto rule_4 = make_rule(diff(a^f, x)    = diff(f, x) * ln(a) * (a^f)                       , is_variable(x), is_value(a));
+			auto rule_5 = make_rule(diff(g^h, x)    = (diff(h, x) * ln(g) + h * diff(g, x) / g) * (g^h), is_variable(x));
+			auto rule_6 = make_rule(diff(a + as, x) = diff(a, x) + diff(as, x)                         , is_variable(x));
+			auto rule_7 = make_rule(diff(a * as, x) = diff(a, x) * as + a * diff(as, x)                , is_variable(x));
+			auto rule_8 = make_rule(diff(sin(f), x) = diff(f, x) * cos(f)                              , is_variable(x));
+			auto rule_9 = make_rule(diff(cos(f), x) = diff(f, x) * -sin(f)                             , is_variable(x));
+			auto rule10 = make_rule(diff(exp(f), x) = diff(f, x) * exp(f)                              , is_variable(x));
+			auto rule11 = make_rule(diff(ln(f), x)  = diff(f, x) / f                                   , is_variable(x));
+
+			std::cout << to_string(rule_1) << "\n";
+			std::cout << to_string(rule_2) << "\n";
+			std::cout << to_string(rule_3) << "\n";
+			std::cout << to_string(rule_4) << "\n";
+			std::cout << to_string(rule_5) << "\n";
+			std::cout << to_string(rule_6) << "\n";
+			std::cout << to_string(rule_7) << "\n";
+			std::cout << to_string(rule_8) << "\n";
+			std::cout << to_string(rule_9) << "\n";
+			std::cout << to_string(rule10) << "\n";
+			std::cout << to_string(rule11) << "\n";
+			std::cout << "\n";
+		}
+		{
+			auto [x] = make_tree_matches<1>;
+			auto [xs, ys] = make_multi_matches<2>;
+			auto rule_1 = make_rule(set(x, x, xs) = set(x, xs));
+
+			auto rule_2 = make_rule(union_(set(xs), set(ys)) = set(xs, ys));
+			auto rule_3 = make_rule(union_()                 = set());
+			auto rule_4 = make_rule(intersection(set(x, xs), set(x, ys)) = union_(set(x), intersection(set(xs), set(ys))));
+			auto rule_5 = make_rule(intersection(set(xs), set(ys))       = set());
+			auto rule_6 = make_rule(intersection()                       = set());
+
+			std::cout << to_string(rule_1) << "\n";
+			std::cout << to_string(rule_2) << "\n";
+			std::cout << to_string(rule_3) << "\n";
+			std::cout << to_string(rule_4) << "\n";
+			std::cout << to_string(rule_5) << "\n";
+			std::cout << to_string(rule_6) << "\n";
+			std::cout << "\n";
+		}
 	}
 
 

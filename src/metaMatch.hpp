@@ -4,6 +4,7 @@
 #include <type_traits>
 #include <array>
 #include <string>
+#include <tuple>
 
 #include "utility/meta.hpp"
 
@@ -89,6 +90,31 @@ namespace bmath::intern::meta_pn {
 		static_assert(match_data_idx < pattern::match::MatchData::max_variadic_count);
 		return MultiMatchVariable<match_data_idx, nullptr>{};
 	}
+
+	enum class Match { one, many };
+
+	namespace detail_variables {
+		template<std::size_t... Is>
+		constexpr auto make_trees(std::index_sequence<Is...>)
+		{
+			static_assert(sizeof...(Is) <= pattern::match::MatchData::max_tree_match_count);
+			return std::make_tuple(TreeMatchVariable<Is, false>{} ...);
+		}
+
+		template<std::size_t... Is>
+		constexpr auto make_multis(std::index_sequence<Is...>)
+		{
+			static_assert(sizeof...(Is) <= pattern::match::MatchData::max_variadic_count);
+			return std::make_tuple(MultiMatchVariable<Is, nullptr>{} ...);
+		}
+	} //namespace detail_variables
+
+	template<std::size_t N>
+	constexpr auto make_tree_matches = detail_variables::make_trees(std::make_index_sequence<N>{});
+
+	template<std::size_t N>
+	constexpr auto make_multi_matches = detail_variables::make_multis(std::make_index_sequence<N>{});
+
 
 
 	template<char... Name>
@@ -418,7 +444,7 @@ template<Pattern Lhs, Pattern Rhs> constexpr InRelation<name, Lhs, Rhs> operator
 	
 	namespace detail_to_string {
 		template<typename>
-		struct ToString;
+		struct ToString { static std::string call() { return "error"; } };
 
 		template<typename T>
 		std::string concat(const char* const first) { return first + ToString<T>::call(); }
