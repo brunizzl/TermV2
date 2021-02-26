@@ -149,7 +149,7 @@ namespace bmath::intern::meta {
 	using IndexConstant = std::integral_constant<unsigned long long, Val>;
 
 	template<typename... Ts>
-	struct List;
+	struct List {};
 
 
 	/////////////////   ListInstance

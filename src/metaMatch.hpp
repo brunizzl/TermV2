@@ -7,6 +7,7 @@
 #include <tuple>
 
 #include "utility/meta.hpp"
+#include "utility/stringLiteral.hpp"
 
 #include "arithmeticTerm.hpp"
 #include "pattern.hpp"
@@ -444,70 +445,83 @@ template<Pattern Lhs, Pattern Rhs> constexpr InRelation<name, Lhs, Rhs> operator
 	
 	namespace detail_to_string {
 		template<typename>
-		struct ToString { static std::string call() { return "error"; } };
+		struct ToString 
+		{ 
+			static std::string call() { return "error"; } 
+			static constexpr StringLiteral name = "error";
+		};
 
-		template<typename T>
-		std::string concat(const char* const first) { return first + ToString<T>::call(); }
+		namespace detail_separate {
+			template<typename T, std::size_t N>
+			constexpr auto concat(const char(&first)[N]) { return first + ToString<T>::name; }
 
-		template<typename T, typename... Ts> requires (sizeof...(Ts) > 0)
-		std::string separate(const char* const first, const char* const separator) { return first + ToString<T>::call() + (concat<Ts>(separator) + ...); }
+			template<std::size_t N1, std::size_t N2, typename T, typename... Ts> requires (sizeof...(Ts) > 0)
+			constexpr auto separate(const char(&first)[N1], const char(&separator)[N2]) { return first + ToString<T>::name + (concat<Ts>(separator) + ...); }
 
-		template<typename T>
-		std::string separate(const char* const first, const char* const separator) { return first + ToString<T>::call(); }
+			template<std::size_t N1, std::size_t N2, typename T>
+			constexpr auto separate(const char(&first)[N1], const char(&separator)[N2]) { return first + ToString<T>::name; }
 
-		template<typename... Ts> requires (sizeof...(Ts) == 0)
-		std::string separate(const char* const first, const char* const separator) { return ""; }
+			template<std::size_t N1, std::size_t N2, typename... Ts> requires (sizeof...(Ts) == 0)
+			constexpr auto separate(const char(&first)[N1], const char(&separator)[N2]) { return StringLiteral(""); }
+		} //namespace detail_separate
+
+		template<std::size_t N1, std::size_t N2, typename... Ts>
+		constexpr auto separate(const char(&first)[N1], const char(&separator)[N2], meta::List<Ts...>) 
+		{ 
+			return detail_separate::separate<N1, N2, Ts...>(first, separator); 
+		}
 
 
 		template<Pattern Lhs, Pattern Rhs, Predicate... Conds>
 		struct ToString<Rule<Lhs, Rhs, Conds...>>
 		{
-			static std::string call() 
-			{
-				return ToString<Lhs>::call() + " = " + ToString<Rhs>::call() + separate<Conds...>(", ", ", ");
-			}
+			static constexpr auto name = ToString<Lhs>::name + " = " + ToString<Rhs>::name + separate(", ", ", ", meta::List<Conds...>{});
 		};
 
 		template<auto Type, Pattern... Ops>
 		struct ToString<FunctionPn<decltype(Type), Type, meta::List<Ops...>>>
 		{
-			static std::string call() { return std::string(fn::name_of(Type)) + "(" + separate<Ops...>("", ", ") + ")"; }
+			static constexpr auto name = StringLiteral<fn::name_of(Type).size()>(fn::name_of(Type).data()) + "(" + separate("", ", ", meta::List<Ops...>{}) + ")";
 		};
 
 		template<double Re, double Im>
 		struct ToString<ComplexPn<Re, Im>>
 		{
-			static std::string call()
-			{
-				std::string res;
-				print::append_complex(Complex{ Re, Im }, res, 0);
-				return res;
-			}
+			static constexpr auto name = StringLiteral("nr");
 		};
 
 		template<char... Cs>
-		struct ToString<VariablePn<Cs...>> { static std::string call() { return std::string{ Cs... }; } };
+		struct ToString<VariablePn<Cs...>> 
+		{ 
+			static constexpr auto name = StringLiteral(std::array{ Cs... });
+		};
 
 		template<std::size_t I, bool O>
-		struct ToString<TreeMatchVariable<I, O>> { static std::string call() { return "T" + std::to_string(I); } };
+		struct ToString<TreeMatchVariable<I, O>> 
+		{ 
+			static constexpr auto name = StringLiteral(std::array<char, 2>{ 'T', I + '0' });
+		};
 
 		template<std::size_t I, auto T>
-		struct ToString<MultiMatchVariable<I, T>> { static std::string call() { return "M" + std::to_string(I) + "..."; } };
+		struct ToString<MultiMatchVariable<I, T>> 
+		{ 
+			static constexpr auto name = StringLiteral(std::array<char, 5>{ 'M', I + '0', '.', '.', '.' });
+		};
 
 		template<template<typename> class InDomain, Pattern T> requires (Predicate<InDomain<T>>)
 			struct ToString<InDomain<T>>
 		{
-			static std::string call() { return "in_domain(" + ToString<T>::call() + ")"; }
+			static constexpr auto name = "in_domain(" + ToString<T>::name + ")";
 		};
 
 		template<Relation R, Pattern T1, Pattern T2>
 		struct ToString<InRelation<R, T1, T2>>
 		{
-			static std::string call() { return "in_relation(" + ToString<T1>::call() + ", " + ToString<T2>::call() + ")"; }
+			static constexpr auto name = "in_relation(" + ToString<T1>::name + ", " + ToString<T2>::name + ")";
 		};
 	} //namespace detail_to_string
 
 	template<typename T>
-	std::string to_string(T) { return detail_to_string::ToString<std::remove_cv_t<T>>::call(); }
+	std::string to_string(T) { return std::string(detail_to_string::ToString<std::remove_cv_t<T>>::name.to_view()); }
 
 } //namespace bmath::intern::meta_pn
