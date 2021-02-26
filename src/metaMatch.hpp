@@ -401,22 +401,27 @@ template<Pattern P> constexpr upper<P> lower(P) { return {}; }
 
 	enum class Relation 
 	{
-		equal, unequal, //no preconditions
-		smaller, larger, smaller_equal, larger_equal //these imply is_real for both arguments (else evaluate to false)
+		//no preconditions
+		equal, unequal, contains, 
+
+		//these imply is_real for both arguments (else evaluate to false)
+		smaller, larger, smaller_equal, larger_equal, divides
 	};
 
 	template<Relation relation, Pattern Lhs, Pattern Rhs>
 	struct InRelation :PredicateMarker {};
 
-#define BMATH_DEFINE_RELATION(name, op) \
-template<Pattern Lhs, Pattern Rhs> constexpr InRelation<name, Lhs, Rhs> operator op(Lhs, Rhs) { return {}; }
+#define BMATH_DEFINE_RELATION_OPERATOR(name, op) \
+template<Pattern Lhs, Pattern Rhs> constexpr InRelation<name, Lhs, Rhs> op(Lhs, Rhs) { return {}; }
 
-	BMATH_DEFINE_RELATION(Relation::equal, ==)
-	BMATH_DEFINE_RELATION(Relation::unequal, !=)
-	BMATH_DEFINE_RELATION(Relation::smaller, <)
-	BMATH_DEFINE_RELATION(Relation::larger, >)
-	BMATH_DEFINE_RELATION(Relation::smaller_equal, <=)
-	BMATH_DEFINE_RELATION(Relation::larger_equal, >=)
+	BMATH_DEFINE_RELATION_OPERATOR(Relation::equal, operator==)
+	BMATH_DEFINE_RELATION_OPERATOR(Relation::unequal, operator!=)
+	BMATH_DEFINE_RELATION_OPERATOR(Relation::contains, contains)
+	BMATH_DEFINE_RELATION_OPERATOR(Relation::smaller, operator<)
+	BMATH_DEFINE_RELATION_OPERATOR(Relation::larger, operator>)
+	BMATH_DEFINE_RELATION_OPERATOR(Relation::smaller_equal, operator<=)
+	BMATH_DEFINE_RELATION_OPERATOR(Relation::larger_equal, operator>=)
+	BMATH_DEFINE_RELATION_OPERATOR(Relation::divides, operator|)
 
 	template<Predicate Lhs, Predicate Rhs>
 	struct Or :PredicateMarker {};
@@ -487,7 +492,7 @@ template<Pattern Lhs, Pattern Rhs> constexpr InRelation<name, Lhs, Rhs> operator
 		template<double Re, double Im>
 		struct ToString<ComplexPn<Re, Im>>
 		{
-			static constexpr auto name = StringLiteral("nr");
+			static constexpr auto name = complex_to_string_literal<Re, Im>();
 		};
 
 		template<char... Cs>
@@ -499,13 +504,13 @@ template<Pattern Lhs, Pattern Rhs> constexpr InRelation<name, Lhs, Rhs> operator
 		template<std::size_t I, bool O>
 		struct ToString<TreeMatchVariable<I, O>> 
 		{ 
-			static constexpr auto name = StringLiteral(std::array<char, 2>{ 'T', I + '0' });
+			static constexpr auto name = "T" + ull_to_string_literal<I>();
 		};
 
 		template<std::size_t I, auto T>
 		struct ToString<MultiMatchVariable<I, T>> 
 		{ 
-			static constexpr auto name = StringLiteral(std::array<char, 5>{ 'M', I + '0', '.', '.', '.' });
+			static constexpr auto name = "M" + ull_to_string_literal<I>() + "...";
 		};
 
 		template<template<typename> class InDomain, Pattern T> requires (Predicate<InDomain<T>>)

@@ -68,4 +68,109 @@ namespace bmath::intern {
 	static_assert("so freunde " + StringLiteral("herzlich willkommen") + " zur linearen algebra" == 
 		StringLiteral("so freunde herzlich willkommen zur linearen algebra"));
     
+
+
+
+	///////////////////////conversion functions
+
+	
+
+	template<unsigned long long Val>
+	constexpr auto ull_to_string_literal()
+	{
+		constexpr auto digit_count = [](unsigned long long val) {
+			unsigned long long count = 1;
+			while (val > 9) {
+				val /= 10;
+				count++;
+			}
+			return count;
+		};
+		StringLiteral<digit_count(Val)> result;
+		unsigned long long val = Val;
+		std::size_t i = result.size() - 1;
+		do {
+			result[i--] = (val % 10) + '0';
+			val /= 10;
+		}while (val);
+		return result;
+	}
+
+	static_assert(ull_to_string_literal<3>() == StringLiteral("3"));
+	static_assert(ull_to_string_literal<0>() == StringLiteral("0"));
+	static_assert(ull_to_string_literal<1000>() == StringLiteral("1000"));
+	static_assert(ull_to_string_literal<656472>() == StringLiteral("656472"));
+
+	namespace detail_to_string {
+		template<double SmallVal>
+		constexpr auto decimal_places()
+		{
+			static_assert(SmallVal < 1.0 && SmallVal >= 0.0);
+			if constexpr (SmallVal == 0.0) {
+				return StringLiteral("");
+			}
+			else {
+				constexpr auto digits = [](double val) {
+					unsigned count = 0;
+					while (val != 0.0 && count < 5) {
+						val *= 10;
+						val -= (int)val;
+						count++;
+					}
+					return count;
+				}(SmallVal);
+				StringLiteral<digits + 1> result;
+				result.front() = '.';
+				double val = SmallVal;
+				for (std::size_t i = 1; i <= digits; i++) {
+					val *= 10;
+					result[i] = ((int)val % 10) + '0';
+				}
+				return result;
+			}
+		}
+
+		static_assert(decimal_places<0.25>() == StringLiteral(".25"));
+		static_assert(decimal_places<0.125>() == StringLiteral(".125"));
+		static_assert(decimal_places<0.123425>() == StringLiteral(".12342"));
+	} //namespace detail_to_string
+
+	template<double Val, bool showpos = false>
+	constexpr auto double_to_string_literal()
+	{
+		constexpr double abs_val = (Val < 0) ? -Val : Val;
+		constexpr unsigned long long int_part = abs_val;
+		constexpr double small_part = abs_val - int_part;
+		constexpr auto positive_string = 
+			ull_to_string_literal<int_part>() + 
+			detail_to_string::decimal_places<small_part>();
+
+		     if constexpr (Val < 0) { return "-" + positive_string; }
+		else if constexpr (showpos) { return "+" + positive_string; }
+		else                        { return positive_string; }
+	}
+
+	static_assert(double_to_string_literal<0.125>() == StringLiteral("0.125"));
+	static_assert(double_to_string_literal<-201.125>() == StringLiteral("-201.125"));
+	static_assert(double_to_string_literal<70.0>() == StringLiteral("70"));
+	static_assert(double_to_string_literal<-70.0>() == StringLiteral("-70"));
+
+	template<double Re, double Im>
+	constexpr auto complex_to_string_literal()
+	{
+		if constexpr (Im == 0.0) {
+			return double_to_string_literal<Re>();
+		}
+		else if constexpr (Re == 0.0) { 
+			return double_to_string_literal<Im>() + "i"; 
+		}
+		else if (Re == 0.0 && Im == 0.0) {
+			return StringLiteral("0");
+		}
+		else {
+			return double_to_string_literal<Re>() + 
+				double_to_string_literal<Im, true>() + "i";
+		}
+	}
+
 } //namespace bmath::intern

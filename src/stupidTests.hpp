@@ -549,8 +549,8 @@ namespace bmath::intern::test {
 		}
 		{
 			auto [a, b] = make_tree_matches<2>;
-			auto rule_1 = make_rule((a^2_) + 2_*a*b + (b^2_) = (a + b)^2_);
-			auto rule_2 = make_rule((a^2_) - 2_*a*b + (b^2_) = (a - b)^2_);
+			auto rule_1 = make_rule((a^2_) +   2_ *a*b + (b^2_) = (a + b)^2_);
+			auto rule_2 = make_rule((a^2_) + (-2_)*a*b + (b^2_) = (a - b)^2_);
 
 			auto [a_square, two_a, b_] = make_tree_matches<3>;
 			auto rule_3 = make_rule(a_square + two_a*b_ + (b_^2_) = (two_a / 2_ + b_)^2_, sqrt(a_square) == two_a / 2_);
