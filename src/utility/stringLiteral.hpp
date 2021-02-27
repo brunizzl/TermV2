@@ -11,11 +11,11 @@ namespace bmath::intern {
 	struct StringLiteral :std::array<char, N>
 	{
 		//perhaps change to array reference of length N + 1? (+ 1 because '\0')
-		constexpr StringLiteral(const char* init) { std::copy_n(init, N, this->data()); }
+		constexpr StringLiteral(const char* init) noexcept { std::copy_n(init, N, this->data()); }
 
-		constexpr StringLiteral(const std::array<char, N>& init) :std::array<char, N>(init) {}
+		constexpr StringLiteral(const std::array<char, N>& init) noexcept :std::array<char, N>(init) {}
 
-		constexpr StringLiteral() { this->fill('\0'); }
+		constexpr StringLiteral() noexcept { this->fill('\0'); }
 
 		template<std::size_t Start, std::size_t Length>
 		constexpr StringLiteral<Length> substr() const noexcept 
@@ -51,7 +51,7 @@ namespace bmath::intern {
 	};
 
 	template<std::size_t N1, std::size_t N2>
-	constexpr StringLiteral<N1 - 1 + N2> operator+(const char(&fst)[N1], const StringLiteral<N2>& snd)
+	constexpr StringLiteral<N1 - 1 + N2> operator+(const char(&fst)[N1], const StringLiteral<N2>& snd) noexcept
 	{
 		StringLiteral<N1 - 1 + N2> res;
 		const auto end = std::copy_n(fst, N1 - 1, res.data());

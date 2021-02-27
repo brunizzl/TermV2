@@ -149,7 +149,7 @@ namespace bmath::intern::meta {
 	using IndexConstant = std::integral_constant<unsigned long long, Val>;
 
 	template<typename... Ts>
-	struct List {};
+	struct List;
 
 
 	/////////////////   ListInstance
@@ -298,6 +298,24 @@ namespace bmath::intern::meta {
 	struct Filter<P, List<>> { using type = List<>; };
 
 	static_assert(std::is_same_v<Filter_t<std::is_integral, List<int, bool, double, long, float>>, List<int, bool, long>>);
+
+
+	/////////////////   Find
+	struct FoundNothing {};
+
+	template<template <typename> class P, ListInstance L>
+	struct Find { using type = FoundNothing; };
+
+	template<template <typename> class P, ListInstance L>
+	using Find_t = typename Find<P, L>::type;
+
+	template<template <typename> class P, typename T, typename... Ts>
+		requires (P<T>::value)
+	struct Find<P, List<T, Ts...>> { using type = T; };
+
+	template<template <typename> class P, typename T, typename... Ts>
+		requires (!P<T>::value)
+	struct Find<P, List<T, Ts...>> { using type = Find_t<P, List<Ts...>>; };
 
 
 	/////////////////   Map

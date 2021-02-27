@@ -42,11 +42,9 @@ namespace bmath::intern::meta_pn {
 
 	/////////// recursive pattern components
 
-	template<typename Category, Category Type, std::size_t MatchDataIndex, meta::ListInstance Ops> //MatchDataIdx only relevant for variadic
+	template<typename Category, Category Type, std::size_t MatchDataIndex, meta::ListInstance Operands> //MatchDataIdx only relevant for variadic
 	struct FunctionPn :PatternMarker
 	{
-		using Operands = Ops;
-
 		static_assert(std::is_enum_v<Category>);
 		static_assert(!std::is_same_v<Category, Fn> || fn::arity(Type) == meta::size_v<Operands>);
 
@@ -67,34 +65,37 @@ namespace bmath::intern::meta_pn {
 
 	/////////// non-recursive pattern components
 
-	template<std::size_t MatchDataIndex, bool Owning = false>
+	template<std::size_t MatchDataIndex>
 	struct TreeMatchVariable :PatternMarker {};
 
 	template<typename T>
 	struct IsTreeMatchVariable :std::false_type {};
 
-	template<std::size_t MatchDataIndex, bool Owning>
-	struct IsTreeMatchVariable<TreeMatchVariable<MatchDataIndex, Owning>> :std::true_type {};
+	template<std::size_t MatchDataIndex>
+	struct IsTreeMatchVariable<TreeMatchVariable<MatchDataIndex>> :std::true_type {};
 
 	template<char... Cs>
 	constexpr auto operator "" _tree()
 	{
 		constexpr unsigned long long match_data_idx = parse_ull(std::to_array({ Cs... }));
 		static_assert(match_data_idx < pattern::match::MatchData::max_tree_match_count);
-		return TreeMatchVariable<match_data_idx, false>{};
+		return TreeMatchVariable<match_data_idx>{};
 	}
 
 
 
-	template<std::size_t MatchDataIndex, auto MatchedInType = nullptr>
+	template<std::size_t MatchDataIndex>
 	struct MultiMatchVariable :PatternMarker {};
+
+	template<std::size_t ID>
+	struct MultiMatchTemp :PatternMarker {};
 
 	template<char... Cs>
 	constexpr auto operator "" _multi()
 	{
 		constexpr unsigned long long match_data_idx = parse_ull(std::to_array({ Cs... }));
 		static_assert(match_data_idx < pattern::match::MatchData::max_variadic_count);
-		return MultiMatchVariable<match_data_idx, nullptr>{};
+		return MultiMatchTemp<match_data_idx>{};
 	}
 
 	namespace detail_variables {
@@ -102,14 +103,14 @@ namespace bmath::intern::meta_pn {
 		constexpr auto make_trees(std::index_sequence<Is...>)
 		{
 			static_assert(sizeof...(Is) <= pattern::match::MatchData::max_tree_match_count);
-			return std::make_tuple(TreeMatchVariable<Is, false>{} ...);
+			return std::make_tuple(TreeMatchVariable<Is>{} ...);
 		}
 
 		template<std::size_t... Is>
 		constexpr auto make_multis(std::index_sequence<Is...>)
 		{
 			static_assert(sizeof...(Is) <= pattern::match::MatchData::max_variadic_count);
-			return std::make_tuple(MultiMatchVariable<Is, nullptr>{} ...);
+			return std::make_tuple(MultiMatchTemp<Is>{} ...);
 		}
 	} //namespace detail_variables
 
@@ -339,13 +340,10 @@ template<Pattern... Ops> constexpr FunctionPn<type, type::name, 0, meta::List<Op
 	struct Generality<FunctionPn<Category, Type, MatchDataIndex, Operands>> :meta::Constant<generality((MathType)Type)> {};
 
 	template<std::size_t MatchDataIndex>
-	struct Generality<TreeMatchVariable<MatchDataIndex, false>> :meta::Constant<generality(pattern::TreeMatchNonOwning{})> {};
+	struct Generality<TreeMatchVariable<MatchDataIndex>> :meta::Constant<generality(pattern::TreeMatchNonOwning{})> {};
 
-	template<std::size_t MatchDataIndex>
-	struct Generality<TreeMatchVariable<MatchDataIndex, true>> :meta::Constant<generality(pattern::Restriction::any)> {};
-
-	template<std::size_t MatchDataIndex, auto MatchedInType>
-	struct Generality<MultiMatchVariable<MatchDataIndex, MatchedInType>> :meta::Constant<generality(pattern::MultiParams{})> {};
+	template<std::size_t ID>
+	struct Generality<MultiMatchTemp<ID>> :meta::Constant<generality(pattern::MultiParams{})> {};
 
 	template<double Re, double Im>
 	struct Generality<ComplexPn<Re, Im>> :meta::Constant<generality(Literal::complex)> {};
@@ -371,13 +369,11 @@ template<Pattern... Ops> constexpr FunctionPn<type, type::name, 0, meta::List<Op
 		FunctionPn<Category, Type, RIdx, ROps>
 	> :std::bool_constant<meta::smaller_v<LOps, ROps, ComparePatternsIndirection>> {};
 
-	template<std::size_t Idx1, bool Owns1, std::size_t Idx2, bool Owns2>
-	struct ComparePatterns<TreeMatchVariable<Idx1, Owns1>, TreeMatchVariable<Idx2, Owns2>> 
-		:std::bool_constant<(Idx1 < Idx2 || Owns1 < Owns2)> {};
+	template<std::size_t Idx1, std::size_t Idx2>
+	struct ComparePatterns<TreeMatchVariable<Idx1>, TreeMatchVariable<Idx2>> :std::bool_constant<(Idx1 < Idx2)> {};
 
-	template<std::size_t Idx1, auto MatchedInType1, std::size_t Idx2, auto MatchedInType2>
-	struct ComparePatterns<MultiMatchVariable<Idx1, MatchedInType1>, MultiMatchVariable<Idx2, MatchedInType2>>
-		:std::bool_constant<(Idx1 < Idx2)> {};
+	template<std::size_t ID1, std::size_t ID2>
+	struct ComparePatterns<MultiMatchTemp<ID1>, MultiMatchTemp<ID2>> :std::bool_constant<(ID1 < ID2)> {};
 
 	template<double Re1, double Im1, double Re2, double Im2>
 	struct ComparePatterns<ComplexPn<Re1, Im1>, ComplexPn<Re2, Im2>>
@@ -385,10 +381,10 @@ template<Pattern... Ops> constexpr FunctionPn<type, type::name, 0, meta::List<Op
 
 
 
-	/////////// sort
+	/////////// sort and combine operands
 
 	template<Pattern P>
-	struct OrderPattern :std::type_identity<P> {};
+	struct OrderPattern { using type = P; };
 
 	template<Pattern P>
 	using OrderPattern_t = typename OrderPattern<P>::type;
@@ -433,10 +429,179 @@ template<Pattern... Ops> constexpr FunctionPn<type, type::name, 0, meta::List<Op
 		using type = FunctionPn<Category, Type, 0, OrderEachOperand_t<Operands>>;
 	};
 
+	/////////// set MatchDataIndex in multimatch and variadic to correct value and surround multimatch in rhs with correct variadic
+	namespace detail_arm_variadic {
+
+		template<auto EnclosingType, std::size_t ID, std::size_t MatchDataIdx>
+		struct MultiMatchBuidingDatum 
+		{
+			static constexpr auto enclosing_type = EnclosingType;
+			static constexpr std::size_t id = ID;
+			static constexpr std::size_t index = MatchDataIdx;
+		};
+
+
+
+		/////////// arm left hand side of rule
+
+		template<Pattern P, meta::ListInstance MultiMatchBuildingData, std::size_t NxtIdx>
+		struct ArmMatchSideResult 
+		{
+			using ResultPattern = P;
+			using BuildingData = MultiMatchBuildingData;
+			static constexpr std::size_t index = NxtIdx;
+		};
+
+		template<Pattern P, meta::ListInstance MultiMatchBuildingData, std::size_t NxtIdx>
+		struct ArmMatchSide { using type = ArmMatchSideResult<P, MultiMatchBuildingData, NxtIdx>; };
+
+		template<Pattern P, meta::ListInstance MultiMatchBuildingData, std::size_t NxtIdx>
+		using ArmMatchSide_t = typename ArmMatchSide<P, MultiMatchBuildingData, NxtIdx>::type;
+
+		template<meta::ListInstance ArmedOperands, meta::ListInstance MultiMatchBuildingData, std::size_t NxtIdx>
+		struct ArmOperandAccumulator
+		{
+			using Operands = ArmedOperands;
+			using BuildingData = MultiMatchBuildingData;
+			static constexpr std::size_t index = NxtIdx;
+		};
+
+		template<auto EnclosingVariadicType, std::size_t EnclosingVariadicIndex>
+		struct ArmOperand
+		{
+			template<typename LastResult, Pattern Operand>
+			struct Call;
+
+			template<meta::ListInstance ArmedOperands, meta::ListInstance MultiMatchBuildingData, std::size_t NxtIdx, Pattern Operand>
+			class Call<ArmOperandAccumulator<ArmedOperands, MultiMatchBuildingData, NxtIdx>, Operand>
+			{
+				using ArmedOperandData = ArmMatchSide_t<Operand, MultiMatchBuildingData, NxtIdx>;
+			public:
+				using type = ArmOperandAccumulator<
+					meta::Concat_t<ArmedOperands, meta::List<typename ArmedOperandData::ResultPattern>>,
+					typename ArmedOperandData::BuildingData,
+					ArmedOperandData::index
+				>;
+			};
+
+			template<meta::ListInstance ArmedOperands, meta::ListInstance MultiMatchBuildingData, std::size_t NxtIdx, std::size_t ID>
+			struct Call<ArmOperandAccumulator<ArmedOperands, MultiMatchBuildingData, NxtIdx>, MultiMatchTemp<ID>>
+			{
+				static_assert(Function(EnclosingVariadicType).is<Variadic>(), 
+					"only variadic operations may contain multi-match-variables");
+				using type = ArmOperandAccumulator<
+					meta::Concat_t<ArmedOperands, meta::List<MultiMatchVariable<EnclosingVariadicIndex>>>,
+					meta::Cons_t<MultiMatchBuidingDatum<EnclosingVariadicType, ID, EnclosingVariadicIndex>, MultiMatchBuildingData>,
+					NxtIdx
+				>;
+			};
+		};
+
+		template<typename Category, Category Type, meta::ListInstance Operands, meta::ListInstance MultiMatchBuildingData, std::size_t NxtIdx>
+		class ArmMatchSide<FunctionPn<Category, Type, 0, Operands>, MultiMatchBuildingData, NxtIdx>
+		{
+			static constexpr bool arming_variadic   = Function(Type).is<Variadic>();
+			static constexpr std::size_t this_index = arming_variadic ? NxtIdx : 0;
+			static constexpr std::size_t next_index = arming_variadic ? this_index + 1 : NxtIdx;
+
+			using OperandsResult = meta::Foldl_t<
+				typename ArmOperand<Type, this_index>::Call,
+				ArmOperandAccumulator<meta::List<>, MultiMatchBuildingData, next_index>,
+				Operands
+			>;
+		public:
+			using type = ArmMatchSideResult<
+				FunctionPn<Category, Type, this_index, typename OperandsResult::Operands>,
+				typename OperandsResult::BuildingData,
+				OperandsResult::index
+			>;
+		};
+
+		static_assert(std::is_same_v<
+			ArmMatchSide_t<FunctionPn<Comm, Comm::sum, 0, meta::List<>>, meta::List<>, 3>,
+			ArmMatchSideResult<FunctionPn<Comm, Comm::sum, 3, meta::List<>>, meta::List<>, 4>
+		>);
+
+		static_assert(std::is_same_v<
+			ArmMatchSide_t<
+				FunctionPn<Comm, Comm::sum, 0, meta::List<decltype(-2_), MultiMatchTemp<8>>>, 
+				meta::List<>, 
+				3>,
+			ArmMatchSideResult<
+				FunctionPn<Comm, Comm::sum, 3, meta::List<decltype(-2_), MultiMatchVariable<3>>>,
+				meta::List<MultiMatchBuidingDatum<Comm::sum, 8, 3>>, 
+				4>
+		>);
+
+
+
+
+		/////////// arm right hand side of rule
+
+		template<Pattern P, auto ParentType, meta::ListInstance MultiMatchBuildingData>
+		struct ArmReplaceSide { using type = P; };
+
+		template<Pattern P, auto ParentType, meta::ListInstance MultiMatchBuildingData>
+		using ArmReplaceSide_t = typename ArmReplaceSide<P, ParentType, MultiMatchBuildingData>::type;
+
+		template<std::size_t ID, auto ParentType, meta::ListInstance MultiMatchBuildingData>
+		class ArmReplaceSide<MultiMatchTemp<ID>, ParentType, MultiMatchBuildingData>
+		{
+			template<typename BuildingDatum>
+			struct IsThisBuildingDatum :std::bool_constant<BuildingDatum::id == ID> {};
+
+			using ThisBuildingDatum = meta::Find_t<IsThisBuildingDatum, MultiMatchBuildingData>;
+			static_assert(!std::is_same_v<ThisBuildingDatum, meta::FoundNothing>, 
+				"only multi-match-variables present in match side may occur in replacement side.");
+
+			using UnwrappedResult = MultiMatchVariable<ThisBuildingDatum::index>;
+			using WrappedResult = FunctionPn<
+				std::remove_cv_t<decltype(ThisBuildingDatum::enclosing_type)>,
+				ThisBuildingDatum::enclosing_type,
+				0,
+				meta::List<UnwrappedResult>>;
+			static constexpr bool parent_is_enclosing_type = MathType(ThisBuildingDatum::enclosing_type) == MathType(ParentType);
+		public:
+			using type = std::conditional_t<parent_is_enclosing_type, UnwrappedResult, WrappedResult>;
+		};
+
+		template<typename Category, Category Type, meta::ListInstance Operands, auto ParentType, meta::ListInstance MultiMatchBuildingData>
+		class ArmReplaceSide<FunctionPn<Category, Type, 0, Operands>, ParentType, MultiMatchBuildingData>
+		{
+			template<Pattern P>
+			using ArmOperand = ArmReplaceSide<P, Type, MultiMatchBuildingData>;
+
+			using ArmedOperands = meta::Map_t<ArmOperand, Operands>;
+		public:
+			using type = FunctionPn<Category, Type, 0, ArmedOperands>;
+		};
+
+
+
+		template<Pattern MatchSide, Pattern ReplaceSide, Predicate... Condts>
+		class ArmVaridic
+		{
+			using MatchResult = ArmMatchSide_t<MatchSide, meta::List<>, 0>;
+			static_assert(MatchResult::index <= pattern::match::MatchData::max_variadic_count, 
+				"maximum count of variadic operations in match side may not exceed pattern::match::MatchData::max_variadic_count");
+			using ArmedMatchSide = typename MatchResult::ResultPattern;
+			using MultiMatchBuidingData = typename MatchResult::BuildingData;
+
+			using ArmedReplaceSide = ArmReplaceSide_t<ReplaceSide, Literal::complex, MultiMatchBuidingData>;
+		public:
+			using type = Rule<ArmedMatchSide, ArmedReplaceSide, Condts...>;
+		};
+
+	} //namespace detail_arm_variadic
+
+	template<Pattern MatchSide, Pattern ReplaceSide, Predicate... Condts>
+	using ArmVariadic_t = typename detail_arm_variadic::ArmVaridic<MatchSide, ReplaceSide, Condts...>::type;
+
+
 	/////////// construct pattern
 
 	template<Pattern MP, Pattern RP, Predicate... Cs>
-	constexpr Rule<OrderPattern_t<MP>, OrderPattern_t<RP>, Cs...> make_rule(Rule<MP, RP>, Cs...) { return {}; }
+	constexpr ArmVariadic_t<OrderPattern_t<MP>, OrderPattern_t<RP>, Cs...> make_rule(Rule<MP, RP>, Cs...) { return {}; }
 
 
 
@@ -523,33 +688,33 @@ template<Pattern Lhs, Pattern Rhs> constexpr InRelation<name, Lhs, Rhs> op(Lhs, 
 			constexpr auto concat(const char(&first)[N]) { return first + name_v<T>; }
 
 			template<std::size_t N1, std::size_t N2, typename T, typename... Ts> requires (sizeof...(Ts) > 0)
-			constexpr auto separate(const char(&first)[N1], const char(&separator)[N2]) { return first + name_v<T> + (concat<Ts>(separator) + ...); }
+			constexpr auto impl(const char(&first)[N1], const char(&separator)[N2]) { return first + name_v<T> + (concat<Ts>(separator) + ...); }
 
 			template<std::size_t N1, std::size_t N2, typename T>
-			constexpr auto separate(const char(&first)[N1], const char(&separator)[N2]) { return first + name_v<T>; }
+			constexpr auto impl(const char(&first)[N1], const char(&separator)[N2]) { return first + name_v<T>; }
 
-			template<std::size_t N1, std::size_t N2, typename... Ts> requires (sizeof...(Ts) == 0)
-			constexpr auto separate(const char(&first)[N1], const char(&separator)[N2]) { return StringLiteral(""); }
+			template<std::size_t N1, std::size_t N2>
+			constexpr auto impl(const char(&first)[N1], const char(&separator)[N2]) { return StringLiteral(""); }
 		} //namespace detail_separate
 
 		template<std::size_t N1, std::size_t N2, typename... Ts>
-		constexpr auto separate(const char(&first)[N1], const char(&separator)[N2], meta::List<Ts...>) 
+		constexpr auto separate(const char(&first)[N1], const char(&separator)[N2], Ts...) 
 		{ 
-			return detail_separate::separate<N1, N2, Ts...>(first, separator); 
+			return detail_separate::impl<N1, N2, Ts...>(first, separator);
 		}
 
 
 		template<Pattern Lhs, Pattern Rhs, Predicate... Conds>
 		struct Name<Rule<Lhs, Rhs, Conds...>>
 		{
-			static constexpr auto value = name_v<Lhs> + " = " + name_v<Rhs> + separate(", ", ", ", meta::List<Conds...>{});
+			static constexpr auto value = name_v<Lhs> + " = " + name_v<Rhs> + separate(", ", ", ", Conds{}...);
 		};
 
-		template<auto Type, std::size_t Idx, Pattern... Ops>
-		struct Name<FunctionPn<decltype(Type), Type, Idx, meta::List<Ops...>>>
+		template<typename Category, Category Type, std::size_t Idx, Pattern... Ops>
+		struct Name<FunctionPn<Category, Type, Idx, meta::List<Ops...>>>
 		{
-			static constexpr auto value = StringLiteral<fn::name_of(Type).size()>(fn::name_of(Type).data()) + ":" +
-				ull_to_string_literal<Idx>() + "(" + separate("", ", ", meta::List<Ops...>{}) + ")";
+			static constexpr auto value = StringLiteral<fn::name_of(Type).size()>(fn::name_of(Type).data()) + 
+				":" + ull_to_string_literal<Idx>() + "(" + separate("", ", ", Ops{}...) + ")";
 		};
 
 		template<double Re, double Im>
@@ -564,20 +729,26 @@ template<Pattern Lhs, Pattern Rhs> constexpr InRelation<name, Lhs, Rhs> op(Lhs, 
 			static constexpr auto value = StringLiteral(std::array{ Cs... });
 		};
 
-		template<std::size_t I, bool O>
-		struct Name<TreeMatchVariable<I, O>> 
+		template<std::size_t I>
+		struct Name<TreeMatchVariable<I>> 
 		{ 
 			static constexpr auto value = "T" + ull_to_string_literal<I>();
 		};
 
-		template<std::size_t I, auto T>
-		struct Name<MultiMatchVariable<I, T>> 
+		template<std::size_t ID>
+		struct Name<MultiMatchTemp<ID>>
 		{ 
+			static constexpr auto value = "M" + ull_to_string_literal<ID>() + "'...";
+		};
+
+		template<std::size_t I>
+		struct Name<MultiMatchVariable<I>>
+		{
 			static constexpr auto value = "M" + ull_to_string_literal<I>() + "...";
 		};
 
 		template<template<typename> class InDomain, Pattern T> requires (Predicate<InDomain<T>>)
-			struct Name<InDomain<T>>
+		struct Name<InDomain<T>>
 		{
 			static constexpr auto value = "in_domain(" + name_v<T> + ")";
 		};
