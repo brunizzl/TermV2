@@ -47,7 +47,7 @@ namespace bmath::intern {
 		template<std::size_t N2> requires (N != N2)
 		constexpr bool operator==(const StringLiteral<N2>&) const noexcept { return false; }
 
-		constexpr std::string_view to_view() const noexcept { return std::string_view(this->data(), N); }
+		constexpr operator std::string_view() const noexcept { return std::string_view(this->data(), N); }
 	};
 
 	template<std::size_t N1, std::size_t N2>

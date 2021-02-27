@@ -42,9 +42,11 @@ namespace bmath::intern::meta_pn {
 
 	/////////// recursive pattern components
 
-	template<typename Category, Category Type, meta::ListInstance Operands>
+	template<typename Category, Category Type, std::size_t MatchDataIndex, meta::ListInstance Ops> //MatchDataIdx only relevant for variadic
 	struct FunctionPn :PatternMarker
 	{
+		using Operands = Ops;
+
 		static_assert(std::is_enum_v<Category>);
 		static_assert(!std::is_same_v<Category, Fn> || fn::arity(Type) == meta::size_v<Operands>);
 
@@ -52,14 +54,15 @@ namespace bmath::intern::meta_pn {
 		constexpr Rule<FunctionPn, Rhs> operator=(Rhs) { return {}; }
 	};
 
-	template<Comm Type, Pattern... Operands>
-	using CommutativePn = FunctionPn<Comm, Type, meta::List<Operands...>>;
+	template<Comm Type, std::size_t MatchDataIdx, Pattern... Operands>
+	using CommutativePn = FunctionPn<Comm, Type, MatchDataIdx, meta::List<Operands...>>;
 
-	template<NonComm Type, Pattern... Operands>
-	using NonCommutativePn = FunctionPn<NonComm, Type, meta::List<Operands...>>;
+	template<NonComm Type, std::size_t MatchDataIdx, Pattern... Operands>
+	using NonCommutativePn = FunctionPn<NonComm, Type, MatchDataIdx, meta::List<Operands...>>;
 
 	template<Fn Type, Pattern... Operands>
-	using FnPn = FunctionPn<Fn, Type, meta::List<Operands...>>;
+	using FnPn = FunctionPn<Fn, Type, 0, meta::List<Operands...>>;
+
 
 
 	/////////// non-recursive pattern components
@@ -81,6 +84,8 @@ namespace bmath::intern::meta_pn {
 		return TreeMatchVariable<match_data_idx, false>{};
 	}
 
+
+
 	template<std::size_t MatchDataIndex, auto MatchedInType = nullptr>
 	struct MultiMatchVariable :PatternMarker {};
 
@@ -91,8 +96,6 @@ namespace bmath::intern::meta_pn {
 		static_assert(match_data_idx < pattern::match::MatchData::max_variadic_count);
 		return MultiMatchVariable<match_data_idx, nullptr>{};
 	}
-
-	enum class Match { one, many };
 
 	namespace detail_variables {
 		template<std::size_t... Is>
@@ -119,14 +122,32 @@ namespace bmath::intern::meta_pn {
 
 
 	template<char... Name>
-	struct VariablePn :PatternMarker 
-	{
-		static_assert(sizeof...(Name) > 0);
-	};
+	struct VariablePn :PatternMarker { static_assert(sizeof...(Name) > 0); };
 
 
 	template<double Re, double Im>
 	struct ComplexPn :PatternMarker {};
+
+
+	//this behavior makes the MakeComplex_t function necessairy
+	static_assert(!std::is_same_v<ComplexPn<-0.0, 0.0>, ComplexPn<0.0, 0.0>>);
+
+	template<double Re, double Im>
+	struct MakeComplex { using type = ComplexPn<Re, Im>; };
+
+	template<double Re, double Im>
+	using MakeComplex_t = typename MakeComplex<Re, Im>::type;
+
+	template<double Re>
+	struct MakeComplex<Re, -0.0> { using type = ComplexPn<Re, 0.0>; };
+
+	template<double Im>
+	struct MakeComplex<-0.0, Im> { using type = ComplexPn<0.0, Im>; };
+
+	template<>
+	struct MakeComplex<-0.0, -0.0> { using type = ComplexPn<0.0, 0.0>; };
+
+
 
 	template<char... Cs>
 	constexpr ComplexPn<parse_double(std::to_array({ Cs... })), 0.0> operator "" _() { return {}; }
@@ -142,7 +163,7 @@ namespace bmath::intern::meta_pn {
 	//----------------------------------------------------------------------------------------------------------------------
 
 #define BMATH_DEFINE_FUNCTION(type, name) \
-template<Pattern... Ops> constexpr FunctionPn<type, type::name, meta::List<Ops...>> name(Ops...) { return {}; }
+template<Pattern... Ops> constexpr FunctionPn<type, type::name, 0, meta::List<Ops...>> name(Ops...) { return {}; }
 
 	BMATH_DEFINE_FUNCTION(Comm, set)
 	BMATH_DEFINE_FUNCTION(Comm, multiset)
@@ -181,10 +202,10 @@ template<Pattern... Ops> constexpr FunctionPn<type, type::name, meta::List<Ops..
 	using MinusOne = ComplexPn<-1.0, 0.0>;
 
 	template<Pattern... Operands>
-	using Sum = CommutativePn<Comm::sum, Operands...>;
+	using Sum = CommutativePn<Comm::sum, 0, Operands...>;
 
 	template<Pattern... Operands>
-	using Product = CommutativePn<Comm::product, Operands...>;
+	using Product = CommutativePn<Comm::product, 0, Operands...>;
 
 	template<Pattern Base, Pattern Expo>
 	using Pow = FnPn<Fn::pow, Base, Expo>;
@@ -210,7 +231,7 @@ template<Pattern... Ops> constexpr FunctionPn<type, type::name, meta::List<Ops..
 		static constexpr double new_re = Re1 + Re2;
 		static constexpr double new_im = Im1 + Im2;
 	public:
-		using type = ComplexPn<new_re, new_im>; 
+		using type = MakeComplex_t<new_re, new_im>; 
 	};
 
 	template<Pattern Lhs, Pattern Rhs>
@@ -218,30 +239,6 @@ template<Pattern... Ops> constexpr FunctionPn<type, type::name, meta::List<Ops..
 
 	template<Pattern Lhs, Pattern Rhs> 
 	constexpr Plus_t<Lhs, Rhs> operator+(Lhs, Rhs) { return {}; }
-
-
-	/////////// operator-
-
-	template<Pattern P>
-	struct Minus { using type = Product<P, MinusOne>; };
-
-	template<double Re, double Im>
-	class Minus<ComplexPn<Re, Im>> 
-	{
-		static constexpr double new_re = -Re;
-		static constexpr double new_im = -Im;
-	public:
-		using type = ComplexPn<new_re, new_im>;
-	};
-
-	template<Pattern P>
-	using Minus_t = typename Minus<P>::type;
-
-	template<Pattern P> 
-	constexpr Minus_t<P> operator-(P) { return {}; }
-
-	template<Pattern Lhs, Pattern Rhs> 
-	constexpr Plus_t<Lhs, Minus_t<Rhs>> operator-(Lhs, Rhs) { return {}; }
 
 
 	/////////// operator*
@@ -264,7 +261,7 @@ template<Pattern... Ops> constexpr FunctionPn<type, type::name, meta::List<Ops..
 		static constexpr double new_re = Re1 * Re2 - Im1 * Im2;
 		static constexpr double new_im = Re1 * Im2 + Im1 * Re2;
 	public:
-		using type = ComplexPn<new_re, new_im>; 
+		using type = MakeComplex_t<new_re, new_im>;
 	};
 
 	template<Pattern Lhs, Pattern Rhs>
@@ -272,6 +269,30 @@ template<Pattern... Ops> constexpr FunctionPn<type, type::name, meta::List<Ops..
 
 	template<Pattern Lhs, Pattern Rhs>
 	constexpr Times_t<Lhs, Rhs> operator*(Lhs, Rhs) { return {}; }
+
+
+	/////////// operator-
+
+	template<Pattern P>
+	struct Minus { using type = Times_t<P, MinusOne>; };
+
+	template<double Re, double Im>
+	class Minus<ComplexPn<Re, Im>>
+	{
+		static constexpr double new_re = -Re;
+		static constexpr double new_im = -Im;
+	public:
+		using type = MakeComplex_t<new_re, new_im>;
+	};
+
+	template<Pattern P>
+	using Minus_t = typename Minus<P>::type;
+
+	template<Pattern P>
+	constexpr Minus_t<P> operator-(P) { return {}; }
+
+	template<Pattern Lhs, Pattern Rhs>
+	constexpr Plus_t<Lhs, Minus_t<Rhs>> operator-(Lhs, Rhs) { return {}; }
 
 
 	/////////// operator/
@@ -286,7 +307,7 @@ template<Pattern... Ops> constexpr FunctionPn<type, type::name, meta::List<Ops..
 		static constexpr double inv_re = Re / abs_squared;
 		static constexpr double inv_im = -Im / abs_squared;
 	public:
-		using type = ComplexPn<inv_re, inv_im>;
+		using type = MakeComplex_t<inv_re, inv_im>;
 	};
 
 	template<Pattern P>
@@ -314,20 +335,23 @@ template<Pattern... Ops> constexpr FunctionPn<type, type::name, meta::List<Ops..
 	template<Pattern>
 	struct Generality;
 
-	template<typename Category, Category Type, meta::ListInstance Operands>
-	struct Generality<FunctionPn<Category, Type, Operands>> :meta::Constant<bmath::intern::generality(Type)> {};
+	template<typename Category, Category Type, std::size_t MatchDataIndex, meta::ListInstance Operands>
+	struct Generality<FunctionPn<Category, Type, MatchDataIndex, Operands>> :meta::Constant<generality((MathType)Type)> {};
 
-	template<std::size_t MatchDataIndex, bool Owning>
-	struct Generality<TreeMatchVariable<MatchDataIndex, Owning>> :meta::Constant<3001> {};
+	template<std::size_t MatchDataIndex>
+	struct Generality<TreeMatchVariable<MatchDataIndex, false>> :meta::Constant<generality(pattern::TreeMatchNonOwning{})> {};
+
+	template<std::size_t MatchDataIndex>
+	struct Generality<TreeMatchVariable<MatchDataIndex, true>> :meta::Constant<generality(pattern::Restriction::any)> {};
 
 	template<std::size_t MatchDataIndex, auto MatchedInType>
-	struct Generality<MultiMatchVariable<MatchDataIndex, MatchedInType>> :meta::Constant<3999> {};
+	struct Generality<MultiMatchVariable<MatchDataIndex, MatchedInType>> :meta::Constant<generality(pattern::MultiParams{})> {};
 
 	template<double Re, double Im>
-	struct Generality<ComplexPn<Re, Im>> :meta::Constant<1000> {};
+	struct Generality<ComplexPn<Re, Im>> :meta::Constant<generality(Literal::complex)> {};
 
 	template<char... Cs>
-	struct Generality<VariablePn<Cs...>> :meta::Constant<1001> {};
+	struct Generality<VariablePn<Cs...>> :meta::Constant<generality(Literal::variable)> {};
 
 	template<Pattern P> 
 	constexpr int generality_v = Generality<P>::value;
@@ -337,45 +361,84 @@ template<Pattern... Ops> constexpr FunctionPn<type, type::name, meta::List<Ops..
 
 	template<Pattern P1, Pattern P2>
 	struct ComparePatterns :std::bool_constant<(generality_v<P1> < generality_v<P2>)> {};
+
+	template<Pattern P1, Pattern P2>
+	using ComparePatternsIndirection = ComparePatterns<P1, P2>;
 	
-	template<typename Category, Category Type, Pattern... LOps, Pattern... ROps>
+	template<typename Category, Category Type, std::size_t LIdx, std::size_t RIdx, meta::ListInstance LOps, meta::ListInstance ROps>
 	struct ComparePatterns<
-		FunctionPn<Category, Type, meta::List<LOps...>>, 
-		FunctionPn<Category, Type, meta::List<ROps...>>
-	> :std::bool_constant<(sizeof...(LOps) < sizeof...(ROps))> {}; //TODO: compare recursively
+		FunctionPn<Category, Type, LIdx, LOps>, 
+		FunctionPn<Category, Type, RIdx, ROps>
+	> :std::bool_constant<meta::smaller_v<LOps, ROps, ComparePatternsIndirection>> {};
+
+	template<std::size_t Idx1, bool Owns1, std::size_t Idx2, bool Owns2>
+	struct ComparePatterns<TreeMatchVariable<Idx1, Owns1>, TreeMatchVariable<Idx2, Owns2>> 
+		:std::bool_constant<(Idx1 < Idx2 || Owns1 < Owns2)> {};
+
+	template<std::size_t Idx1, auto MatchedInType1, std::size_t Idx2, auto MatchedInType2>
+	struct ComparePatterns<MultiMatchVariable<Idx1, MatchedInType1>, MultiMatchVariable<Idx2, MatchedInType2>>
+		:std::bool_constant<(Idx1 < Idx2)> {};
+
+	template<double Re1, double Im1, double Re2, double Im2>
+	struct ComparePatterns<ComplexPn<Re1, Im1>, ComplexPn<Re2, Im2>>
+		:std::bool_constant<(compare_complex(Complex{ Re1, Im1 }, Complex{ Re2, Im2 }) == std::strong_ordering::less)> {};
+
 
 
 	/////////// sort
 
 	template<Pattern P>
-	struct SortPattern :std::type_identity<P> {};
+	struct OrderPattern :std::type_identity<P> {};
 
 	template<Pattern P>
-	using SortPattern_t = typename SortPattern<P>::type;
+	using OrderPattern_t = typename OrderPattern<P>::type;
 
-	//indirection necessairy, as otherwise local argument is implicitly inserted to SortPattern template
+	//indirection necessairy, as otherwise local argument is implicitly inserted to OrderPattern template
+	// in recursion call of OrderPattern
 	template<meta::ListInstance Operands>
-	using SortEachOperand_t = meta::Map_t<SortPattern, Operands>;
+	using OrderEachOperand_t = meta::Map_t<OrderPattern, Operands>;
+
 
 	template<Comm Type, meta::ListInstance Operands>
-	class SortPattern<FunctionPn<Comm, Type, Operands>>
+	struct OperandsToOperation { using type = FunctionPn<Comm, Type, 0, Operands>; };
+
+	template<Comm Type, meta::ListInstance Operands>
+	using OperandsToOperation_t = typename OperandsToOperation<Type, Operands>::type;
+
+	template<typename Op1, typename... Ops>
+	struct OperandsToOperation<Comm::sum, meta::List<Op1, Ops...>> 
+	{ 
+		using type = meta::Foldl_t<Plus, Op1, meta::List<Ops...>>; 
+	};
+
+	template<typename Op1, typename... Ops>
+	struct OperandsToOperation<Comm::product, meta::List<Op1, Ops...>> 
+	{ 
+		using type = meta::Foldl_t<Times, Op1, meta::List<Ops...>>; 
+	};
+
+
+	template<Comm Type, meta::ListInstance Operands>
+	class OrderPattern<FunctionPn<Comm, Type, 0, Operands>>
 	{
-		using IndividuallySortedOperands = SortEachOperand_t<Operands>;
-		using SortedOperands = meta::Sort_t<IndividuallySortedOperands, ComparePatterns>;
+		using IndividuallyOrderedOperands = OrderEachOperand_t<Operands>;
+		using SortedOperands              = meta::Sort_t<IndividuallyOrderedOperands, ComparePatterns>;
 	public:
-		using type = FunctionPn<Comm, Type, SortedOperands>;
+		using type = OperandsToOperation_t<Type, SortedOperands>;
 	};
 
 	template<typename Category, Category Type, meta::ListInstance Operands>
-	struct SortPattern<FunctionPn<Category, Type, Operands>>
+	struct OrderPattern<FunctionPn<Category, Type, 0, Operands>>
 	{
-		using type = FunctionPn<Category, Type, SortEachOperand_t<Operands>>;
+		using type = FunctionPn<Category, Type, 0, OrderEachOperand_t<Operands>>;
 	};
 
 	/////////// construct pattern
 
 	template<Pattern MP, Pattern RP, Predicate... Cs>
-	constexpr Rule<SortPattern_t<MP>, SortPattern_t<RP>, Cs...> make_rule(Rule<MP, RP>, Cs...) { return {}; }
+	constexpr Rule<OrderPattern_t<MP>, OrderPattern_t<RP>, Cs...> make_rule(Rule<MP, RP>, Cs...) { return {}; }
+
+
 
 
 
@@ -448,23 +511,22 @@ template<Pattern Lhs, Pattern Rhs> constexpr InRelation<name, Lhs, Rhs> op(Lhs, 
 	//----------------------------------------------------------------------------------------------------------------------
 	//----------------------------------------------------------------------------------------------------------------------
 	
-	namespace detail_to_string {
+	namespace detail_name {
 		template<typename>
-		struct ToString 
-		{ 
-			static std::string call() { return "error"; } 
-			static constexpr StringLiteral name = "error";
-		};
+		struct Name { static constexpr StringLiteral value = "error"; };
+
+		template<typename T>
+		constexpr auto name_v = Name<T>::value;
 
 		namespace detail_separate {
 			template<typename T, std::size_t N>
-			constexpr auto concat(const char(&first)[N]) { return first + ToString<T>::name; }
+			constexpr auto concat(const char(&first)[N]) { return first + name_v<T>; }
 
 			template<std::size_t N1, std::size_t N2, typename T, typename... Ts> requires (sizeof...(Ts) > 0)
-			constexpr auto separate(const char(&first)[N1], const char(&separator)[N2]) { return first + ToString<T>::name + (concat<Ts>(separator) + ...); }
+			constexpr auto separate(const char(&first)[N1], const char(&separator)[N2]) { return first + name_v<T> + (concat<Ts>(separator) + ...); }
 
 			template<std::size_t N1, std::size_t N2, typename T>
-			constexpr auto separate(const char(&first)[N1], const char(&separator)[N2]) { return first + ToString<T>::name; }
+			constexpr auto separate(const char(&first)[N1], const char(&separator)[N2]) { return first + name_v<T>; }
 
 			template<std::size_t N1, std::size_t N2, typename... Ts> requires (sizeof...(Ts) == 0)
 			constexpr auto separate(const char(&first)[N1], const char(&separator)[N2]) { return StringLiteral(""); }
@@ -478,55 +540,56 @@ template<Pattern Lhs, Pattern Rhs> constexpr InRelation<name, Lhs, Rhs> op(Lhs, 
 
 
 		template<Pattern Lhs, Pattern Rhs, Predicate... Conds>
-		struct ToString<Rule<Lhs, Rhs, Conds...>>
+		struct Name<Rule<Lhs, Rhs, Conds...>>
 		{
-			static constexpr auto name = ToString<Lhs>::name + " = " + ToString<Rhs>::name + separate(", ", ", ", meta::List<Conds...>{});
+			static constexpr auto value = name_v<Lhs> + " = " + name_v<Rhs> + separate(", ", ", ", meta::List<Conds...>{});
 		};
 
-		template<auto Type, Pattern... Ops>
-		struct ToString<FunctionPn<decltype(Type), Type, meta::List<Ops...>>>
+		template<auto Type, std::size_t Idx, Pattern... Ops>
+		struct Name<FunctionPn<decltype(Type), Type, Idx, meta::List<Ops...>>>
 		{
-			static constexpr auto name = StringLiteral<fn::name_of(Type).size()>(fn::name_of(Type).data()) + "(" + separate("", ", ", meta::List<Ops...>{}) + ")";
+			static constexpr auto value = StringLiteral<fn::name_of(Type).size()>(fn::name_of(Type).data()) + ":" +
+				ull_to_string_literal<Idx>() + "(" + separate("", ", ", meta::List<Ops...>{}) + ")";
 		};
 
 		template<double Re, double Im>
-		struct ToString<ComplexPn<Re, Im>>
+		struct Name<ComplexPn<Re, Im>>
 		{
-			static constexpr auto name = complex_to_string_literal<Re, Im>();
+			static constexpr auto value = complex_to_string_literal<Re, Im>();
 		};
 
 		template<char... Cs>
-		struct ToString<VariablePn<Cs...>> 
+		struct Name<VariablePn<Cs...>> 
 		{ 
-			static constexpr auto name = StringLiteral(std::array{ Cs... });
+			static constexpr auto value = StringLiteral(std::array{ Cs... });
 		};
 
 		template<std::size_t I, bool O>
-		struct ToString<TreeMatchVariable<I, O>> 
+		struct Name<TreeMatchVariable<I, O>> 
 		{ 
-			static constexpr auto name = "T" + ull_to_string_literal<I>();
+			static constexpr auto value = "T" + ull_to_string_literal<I>();
 		};
 
 		template<std::size_t I, auto T>
-		struct ToString<MultiMatchVariable<I, T>> 
+		struct Name<MultiMatchVariable<I, T>> 
 		{ 
-			static constexpr auto name = "M" + ull_to_string_literal<I>() + "...";
+			static constexpr auto value = "M" + ull_to_string_literal<I>() + "...";
 		};
 
 		template<template<typename> class InDomain, Pattern T> requires (Predicate<InDomain<T>>)
-			struct ToString<InDomain<T>>
+			struct Name<InDomain<T>>
 		{
-			static constexpr auto name = "in_domain(" + ToString<T>::name + ")";
+			static constexpr auto value = "in_domain(" + name_v<T> + ")";
 		};
 
 		template<Relation R, Pattern T1, Pattern T2>
-		struct ToString<InRelation<R, T1, T2>>
+		struct Name<InRelation<R, T1, T2>>
 		{
-			static constexpr auto name = "in_relation(" + ToString<T1>::name + ", " + ToString<T2>::name + ")";
+			static constexpr auto value = "in_relation(" + name_v<T1> + ", " + name_v<T2> + ")";
 		};
-	} //namespace detail_to_string
+	} //namespace detail_name
 
 	template<typename T>
-	std::string to_string(T) { return std::string(detail_to_string::ToString<std::remove_cv_t<T>>::name.to_view()); }
+	constexpr std::string_view name(T) { return detail_name::name_v<std::remove_cv_t<T>>; }
 
 } //namespace bmath::intern::meta_pn

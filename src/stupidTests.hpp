@@ -525,10 +525,10 @@ namespace bmath::intern::test {
 			auto rule_3 = make_rule(x ^ 0_ = 1_);
 			auto rule_4 = make_rule(x ^ 1_ = x );
 
-			std::cout << to_string(rule_1) << "\n";
-			std::cout << to_string(rule_2) << "\n";
-			std::cout << to_string(rule_3) << "\n";
-			std::cout << to_string(rule_4) << "\n";
+			std::cout << name(rule_1) << "\n";
+			std::cout << name(rule_2) << "\n";
+			std::cout << name(rule_3) << "\n";
+			std::cout << name(rule_4) << "\n";
 			std::cout << "\n";
 		}
 		{
@@ -540,24 +540,24 @@ namespace bmath::intern::test {
 			auto rule_4 = make_rule((x^a) * (x^b)   = x^(a + b ));
 			auto rule_5 = make_rule(exp(ln(x) * xs) = x^xs);
 
-			std::cout << to_string(rule_1) << "\n";
-			std::cout << to_string(rule_2) << "\n";
-			std::cout << to_string(rule_3) << "\n";
-			std::cout << to_string(rule_4) << "\n";
-			std::cout << to_string(rule_5) << "\n";
+			std::cout << name(rule_1) << "\n";
+			std::cout << name(rule_2) << "\n";
+			std::cout << name(rule_3) << "\n";
+			std::cout << name(rule_4) << "\n";
+			std::cout << name(rule_5) << "\n";
 			std::cout << "\n";
 		}
 		{
 			auto [a, b] = make_tree_matches<2>;
-			auto rule_1 = make_rule((a^2_) +   2_ *a*b + (b^2_) = (a + b)^2_);
-			auto rule_2 = make_rule((a^2_) + (-2_)*a*b + (b^2_) = (a - b)^2_);
+			auto rule_1 = make_rule((a^2_) + 2_*a*b + (b^2_) = (a + b)^2_);
+			auto rule_2 = make_rule((a^2_) - 2_*a*b + (b^2_) = (a - b)^2_);
 
 			auto [a_square, two_a, b_] = make_tree_matches<3>;
 			auto rule_3 = make_rule(a_square + two_a*b_ + (b_^2_) = (two_a / 2_ + b_)^2_, sqrt(a_square) == two_a / 2_);
 
-			std::cout << to_string(rule_1) << "\n";
-			std::cout << to_string(rule_2) << "\n";
-			std::cout << to_string(rule_3) << "\n";
+			std::cout << name(rule_1) << "\n";
+			std::cout << name(rule_2) << "\n";
+			std::cout << name(rule_3) << "\n";
 			std::cout << "\n";
 		}
 		{
@@ -571,12 +571,12 @@ namespace bmath::intern::test {
 			auto rule_5 = make_rule(-(a + bs)       = -a - bs);
 			auto rule_6 = make_rule( (a * bs)^(-1_) = (a^(-1_)) * (bs^(-1_)));
 
-			std::cout << to_string(rule_1) << "\n";
-			std::cout << to_string(rule_2) << "\n";
-			std::cout << to_string(rule_3) << "\n";
-			std::cout << to_string(rule_4) << "\n";
-			std::cout << to_string(rule_5) << "\n";
-			std::cout << to_string(rule_6) << "\n";
+			std::cout << name(rule_1) << "\n";
+			std::cout << name(rule_2) << "\n";
+			std::cout << name(rule_3) << "\n";
+			std::cout << name(rule_4) << "\n";
+			std::cout << name(rule_5) << "\n";
+			std::cout << name(rule_6) << "\n";
 			std::cout << "\n";
 		}
 		{
@@ -594,15 +594,15 @@ namespace bmath::intern::test {
 			auto rule_8 = make_rule(sin(x * pi) =  1_, is_int((x - 0.5_) / 2_));
 			auto rule_9 = make_rule(sin(x * pi) = -1_, is_int((x - 1.5_) / 2_));
 
-			std::cout << to_string(rule_1) << "\n";
-			std::cout << to_string(rule_2) << "\n";
-			std::cout << to_string(rule_3) << "\n";
-			std::cout << to_string(rule_4) << "\n";
-			std::cout << to_string(rule_5) << "\n";
-			std::cout << to_string(rule_6) << "\n";
-			std::cout << to_string(rule_7) << "\n";
-			std::cout << to_string(rule_8) << "\n";
-			std::cout << to_string(rule_9) << "\n";
+			std::cout << name(rule_1) << "\n";
+			std::cout << name(rule_2) << "\n";
+			std::cout << name(rule_3) << "\n";
+			std::cout << name(rule_4) << "\n";
+			std::cout << name(rule_5) << "\n";
+			std::cout << name(rule_6) << "\n";
+			std::cout << name(rule_7) << "\n";
+			std::cout << name(rule_8) << "\n";
+			std::cout << name(rule_9) << "\n";
 			std::cout << "\n";
 		}
 		{
@@ -620,17 +620,17 @@ namespace bmath::intern::test {
 			auto rule10 = make_rule(diff(exp(f), x) = diff(f, x) * exp(f)                              , is_variable(x));
 			auto rule11 = make_rule(diff(ln(f), x)  = diff(f, x) / f                                   , is_variable(x));
 
-			std::cout << to_string(rule_1) << "\n";
-			std::cout << to_string(rule_2) << "\n";
-			std::cout << to_string(rule_3) << "\n";
-			std::cout << to_string(rule_4) << "\n";
-			std::cout << to_string(rule_5) << "\n";
-			std::cout << to_string(rule_6) << "\n";
-			std::cout << to_string(rule_7) << "\n";
-			std::cout << to_string(rule_8) << "\n";
-			std::cout << to_string(rule_9) << "\n";
-			std::cout << to_string(rule10) << "\n";
-			std::cout << to_string(rule11) << "\n";
+			std::cout << name(rule_1) << "\n";
+			std::cout << name(rule_2) << "\n";
+			std::cout << name(rule_3) << "\n";
+			std::cout << name(rule_4) << "\n";
+			std::cout << name(rule_5) << "\n";
+			std::cout << name(rule_6) << "\n";
+			std::cout << name(rule_7) << "\n";
+			std::cout << name(rule_8) << "\n";
+			std::cout << name(rule_9) << "\n";
+			std::cout << name(rule10) << "\n";
+			std::cout << name(rule11) << "\n";
 			std::cout << "\n";
 		}
 		{
@@ -644,12 +644,12 @@ namespace bmath::intern::test {
 			auto rule_5 = make_rule(intersection(set(xs), set(ys))       = set());
 			auto rule_6 = make_rule(intersection()                       = set());
 
-			std::cout << to_string(rule_1) << "\n";
-			std::cout << to_string(rule_2) << "\n";
-			std::cout << to_string(rule_3) << "\n";
-			std::cout << to_string(rule_4) << "\n";
-			std::cout << to_string(rule_5) << "\n";
-			std::cout << to_string(rule_6) << "\n";
+			std::cout << name(rule_1) << "\n";
+			std::cout << name(rule_2) << "\n";
+			std::cout << name(rule_3) << "\n";
+			std::cout << name(rule_4) << "\n";
+			std::cout << name(rule_5) << "\n";
+			std::cout << name(rule_6) << "\n";
 			std::cout << "\n";
 		}
 	}

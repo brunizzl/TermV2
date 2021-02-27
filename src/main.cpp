@@ -10,7 +10,6 @@ TODO:
 important:
  - add RuleRef type grouping two pattern refs
  - make match and replace two distinct functions in RuleSet, allow caller to rematch
- - write pow for integer exponents
  - write version of tree::combine only checking changed tree parts
 
 nice to have:

@@ -318,6 +318,21 @@ namespace bmath::intern::meta {
 	struct Map<F, List<>> { using type = List<>; };
 
 
+	/////////////////   Foldl
+
+	template<template<typename, typename> class F, typename Init, ListInstance L>
+	struct Foldl { using type = Init; };
+
+	template<template<typename, typename> class F, typename Init, ListInstance L>
+	using Foldl_t = typename Foldl<F, Init, L>::type;
+
+	template<template<typename, typename> class F, typename Init, typename T, typename... Ts>
+	struct Foldl<F, Init, List<T, Ts...>>
+	{
+		using type = typename Foldl<F, typename F<Init, T>::type, List<Ts...>>::type;
+	};
+
+
 	/////////////////   IndexOf
 
 	template<typename T, ListInstance L>
@@ -427,7 +442,32 @@ namespace bmath::intern::meta {
 	static_assert(std::is_same_v<Sort_t<List<IndexConstant<2>, IndexConstant<5>, IndexConstant<1>>, Less>, List<IndexConstant<1>, IndexConstant<2>, IndexConstant<5>>>);
 
 
+	/////////////////   compare lists lexicografically
 
+	template<ListInstance L1, ListInstance L2, template<typename, typename> class ElemSmaller>
+	struct Smaller;
+
+	template<ListInstance L1, ListInstance L2, template<typename, typename> class ElemSmaller>
+	constexpr bool smaller_v = Smaller<L1, L2, ElemSmaller>::value;
+
+	template<template<typename, typename> class ElemSmaller>
+	struct Smaller<List<>, List<>, ElemSmaller> :std::false_type {};
+
+	template<template<typename, typename> class ElemSmaller, typename... Ts>
+	struct Smaller<List<Ts...>, List<>, ElemSmaller> :std::false_type {};
+
+	template<template<typename, typename> class ElemSmaller, typename... Ts>
+	struct Smaller<List<>, List<Ts...>, ElemSmaller> :std::true_type {};
+
+	template<template<typename, typename> class ElemSmaller, typename T, typename... Ts, typename U, typename... Us>
+	struct Smaller<List<T, Ts...>, List<U, Us...>, ElemSmaller>
+		:std::bool_constant<ElemSmaller<T, U>::value || smaller_v<List<Ts...>, List<Us...>, ElemSmaller>> {};
+
+	template<typename T1, typename T2> 
+	struct IntSmallerBool :std::bool_constant<std::is_same_v<int, T1> && std::is_same_v<bool, T2>> {};
+	static_assert(smaller_v<List<int, bool, bool>, List<bool>, IntSmallerBool>);
+	static_assert(!smaller_v<List<bool, int, bool>, List<bool, int>, IntSmallerBool>);
+	static_assert(!smaller_v<List<bool, int, bool>, List<bool, int, bool>, IntSmallerBool>);
 
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
