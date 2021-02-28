@@ -45,12 +45,13 @@ namespace bmath::intern::meta_pn {
 	template<typename Category, Category Type, std::size_t MatchDataIndex, meta::ListInstance Operands> //MatchDataIdx only relevant for variadic
 	struct FunctionPn :PatternMarker
 	{
-		static_assert(std::is_enum_v<Category>);
+		static_assert(std::is_convertible_v<Category, Function>);
 		static_assert(!std::is_same_v<Category, Fn> || fn::arity(Type) == meta::size_v<Operands>);
 
 		template<Pattern Rhs> 
 		constexpr Rule<FunctionPn, Rhs> operator=(Rhs) { return {}; }
 	};
+
 
 	template<Comm Type, std::size_t MatchDataIdx, Pattern... Operands>
 	using CommutativePn = FunctionPn<Comm, Type, MatchDataIdx, meta::List<Operands...>>;

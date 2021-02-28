@@ -572,7 +572,7 @@ namespace bmath::intern::test {
 			auto rule_5 = make_rule(-(a + bs)       = -a - bs);
 			auto rule_6 = make_rule( (a * bs)^(-1_) = (a^(-1_)) * (bs^(-1_)));
 
-			std::cout << name(rule_1) << "\n" << compact_type_name(typeid(rule_1).name()) << "\n\n";
+			std::cout << name(rule_1) << "\n";
 			std::cout << name(rule_2) << "\n";
 			std::cout << name(rule_3) << "\n";
 			std::cout << name(rule_4) << "\n";

@@ -7,7 +7,7 @@
 
 namespace bmath::intern {
 
-	std::string compact_type_name(std::string_view type_name);
+	std::string compact_type_name(std::string_view type_name, bool multiline = false);
 
 } //namespace bmath::intern
 

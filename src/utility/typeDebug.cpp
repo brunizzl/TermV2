@@ -2,7 +2,7 @@
 
 namespace bmath::intern {
 
-	std::string compact_type_name(std::string_view type_name) 
+	std::string compact_type_name(std::string_view type_name, bool multiline) 
 	{
 		auto result = std::string(type_name);
 		{
@@ -24,11 +24,29 @@ namespace bmath::intern {
 		strip_keyword("struct ");
 		strip_keyword("class ");
 		strip_keyword("enum ");
-		strip_keyword(" "); //not really a keyword, but you get the idea.
+		//strip_keyword(" "); //not really a keyword, but you get the idea.
 
-		{
+		if (multiline) {
+			std::size_t nesting_level = 0;
+			std::size_t next_split = result.find_first_of("<>,");
+			while (next_split != std::string::npos) {
+				switch (result[next_split]) {
+				case '>':
+					nesting_level--;
+					break;	
+				case '<':
+					nesting_level++;
+					[[fallthrough]];
+				case ',':
+					result.insert(next_split + 1, '\n' + std::string(nesting_level * 4, ' '));
+					break;
+				}
+				next_split = result.find_first_of("<>,", next_split + 1);
+			}
+		}
+		else {
 			std::size_t after_comma = result.find_first_of(',') + 1u;
-			while (after_comma != (std::string::npos + 1u)) { 
+			while (after_comma != (std::string::npos + 1u)) {
 				result.insert(after_comma, 1u, ' ');
 				after_comma = result.find_first_of(',', after_comma) + 1u;
 			}
