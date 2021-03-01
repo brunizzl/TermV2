@@ -173,4 +173,6 @@ namespace bmath::intern {
 		}
 	}
 
+#define BMATH_SV_TO_LITERAL(sv) StringLiteral<sv.size()>(sv.data())
+
 } //namespace bmath::intern

@@ -42,25 +42,60 @@ namespace bmath::intern::meta_pn {
 
 	/////////// recursive pattern components
 
-	template<typename Category, Category Type, std::size_t MatchDataIndex, meta::ListInstance Operands> //MatchDataIdx only relevant for variadic
+	template<typename T>
+	concept FunctionProps = requires { T::function_type; };
+
+	template<auto Type, std::size_t MatchDataIndex> 
+	struct VariadicProps
+	{ 
+		static_assert(std::is_same_v<decltype(Type), Comm> || std::is_same_v<decltype(Type), NonComm>);
+		static constexpr auto function_type = Type;
+	}; 
+	
+	template<Fn Type>
+	struct FnProps { static constexpr auto function_type = Type; };
+
+	template<StringLiteral Name>
+	struct NamedFnProps { static constexpr auto function_type = NamedFn{}; };
+
+
+	template<FunctionProps Props, Pattern... Operands>
 	struct FunctionPn :PatternMarker
 	{
-		static_assert(std::is_convertible_v<Category, Function>);
-		static_assert(!std::is_same_v<Category, Fn> || fn::arity(Type) == meta::size_v<Operands>);
-
 		template<Pattern Rhs> 
+		constexpr Rule<FunctionPn, Rhs> operator=(Rhs) { return {}; }
+	}; 
+
+	template<Fn Type, Pattern... Operands>
+	struct FunctionPn<FnProps<Type>, Operands...> :PatternMarker
+	{
+		static_assert(fn::arity(Type) == sizeof...(Operands));
+
+		template<Pattern Rhs>
 		constexpr Rule<FunctionPn, Rhs> operator=(Rhs) { return {}; }
 	};
 
+	template<FunctionProps Props, meta::ListInstance Operands>
+	struct MakeFunctionPn;
+
+	template<FunctionProps Props, meta::ListInstance Operands>
+	using MakeFunctionPn_t = typename MakeFunctionPn<Props, Operands>::type;
+
+	template<FunctionProps Props, Pattern... Operands>
+	struct MakeFunctionPn<Props, meta::List<Operands...>> { using type = FunctionPn<Props, Operands...>; };
+
 
 	template<Comm Type, std::size_t MatchDataIdx, Pattern... Operands>
-	using CommutativePn = FunctionPn<Comm, Type, MatchDataIdx, meta::List<Operands...>>;
+	using CommutativePn = FunctionPn<VariadicProps<Type, MatchDataIdx>, Operands...>;
 
 	template<NonComm Type, std::size_t MatchDataIdx, Pattern... Operands>
-	using NonCommutativePn = FunctionPn<NonComm, Type, MatchDataIdx, meta::List<Operands...>>;
+	using NonCommutativePn = FunctionPn<VariadicProps<Type, MatchDataIdx>, Operands...>;
 
 	template<Fn Type, Pattern... Operands>
-	using FnPn = FunctionPn<Fn, Type, 0, meta::List<Operands...>>;
+	using FnPn = FunctionPn<FnProps<Type>, Operands...>;
+
+	template<StringLiteral Name, Pattern... Operands>
+	using NamedFnPn = FunctionPn<NamedFnProps<Name>, Operands...>;
 
 
 
@@ -164,41 +199,44 @@ namespace bmath::intern::meta_pn {
 	//----------------------------------------------------------------------------------------------------------------------
 	//----------------------------------------------------------------------------------------------------------------------
 
-#define BMATH_DEFINE_FUNCTION(type, name) \
-template<Pattern... Ops> constexpr FunctionPn<type, type::name, 0, meta::List<Ops...>> name(Ops...) { return {}; }
+#define BMATH_DEFINE_VARIADIC(type, name) \
+template<Pattern... Ops> constexpr FunctionPn<VariadicProps<type::name, 0>, Ops...> name(Ops...) { return {}; }
 
-	BMATH_DEFINE_FUNCTION(Comm, set)
-	BMATH_DEFINE_FUNCTION(Comm, multiset)
-	BMATH_DEFINE_FUNCTION(Comm, union_)
-	BMATH_DEFINE_FUNCTION(Comm, intersection)
+#define BMATH_DEFINE_FN(type, name) \
+template<Pattern... Ops> constexpr FunctionPn<FnProps<type::name>, Ops...> name(Ops...) { return {}; }
 
-	BMATH_DEFINE_FUNCTION(NonComm, list)
-	BMATH_DEFINE_FUNCTION(NonComm, ordered_sum)
-	BMATH_DEFINE_FUNCTION(NonComm, ordered_product)
+	BMATH_DEFINE_VARIADIC(Comm, set)
+	BMATH_DEFINE_VARIADIC(Comm, multiset)
+	BMATH_DEFINE_VARIADIC(Comm, union_)
+	BMATH_DEFINE_VARIADIC(Comm, intersection)
 
-	BMATH_DEFINE_FUNCTION(Fn, pow)
-	BMATH_DEFINE_FUNCTION(Fn, log)
-	BMATH_DEFINE_FUNCTION(Fn, sqrt)
-	BMATH_DEFINE_FUNCTION(Fn, exp)
-	BMATH_DEFINE_FUNCTION(Fn, ln)
-	BMATH_DEFINE_FUNCTION(Fn, sin)
-	BMATH_DEFINE_FUNCTION(Fn, cos)
-	BMATH_DEFINE_FUNCTION(Fn, tan)
-	BMATH_DEFINE_FUNCTION(Fn, sinh)
-	BMATH_DEFINE_FUNCTION(Fn, cosh)
-	BMATH_DEFINE_FUNCTION(Fn, tanh)
-	BMATH_DEFINE_FUNCTION(Fn, asin)
-	BMATH_DEFINE_FUNCTION(Fn, acos)
-	BMATH_DEFINE_FUNCTION(Fn, atan)
-	BMATH_DEFINE_FUNCTION(Fn, asinh)
-	BMATH_DEFINE_FUNCTION(Fn, acosh)
-	BMATH_DEFINE_FUNCTION(Fn, atanh)
-	BMATH_DEFINE_FUNCTION(Fn, abs)
-	BMATH_DEFINE_FUNCTION(Fn, arg)
-	BMATH_DEFINE_FUNCTION(Fn, re)
-	BMATH_DEFINE_FUNCTION(Fn, im)
-	BMATH_DEFINE_FUNCTION(Fn, force)
-	BMATH_DEFINE_FUNCTION(Fn, diff)
+	BMATH_DEFINE_VARIADIC(NonComm, list)
+	BMATH_DEFINE_VARIADIC(NonComm, ordered_sum)
+	BMATH_DEFINE_VARIADIC(NonComm, ordered_product)
+
+	BMATH_DEFINE_FN(Fn, pow)
+	BMATH_DEFINE_FN(Fn, log)
+	BMATH_DEFINE_FN(Fn, sqrt)
+	BMATH_DEFINE_FN(Fn, exp)
+	BMATH_DEFINE_FN(Fn, ln)
+	BMATH_DEFINE_FN(Fn, sin)
+	BMATH_DEFINE_FN(Fn, cos)
+	BMATH_DEFINE_FN(Fn, tan)
+	BMATH_DEFINE_FN(Fn, sinh)
+	BMATH_DEFINE_FN(Fn, cosh)
+	BMATH_DEFINE_FN(Fn, tanh)
+	BMATH_DEFINE_FN(Fn, asin)
+	BMATH_DEFINE_FN(Fn, acos)
+	BMATH_DEFINE_FN(Fn, atan)
+	BMATH_DEFINE_FN(Fn, asinh)
+	BMATH_DEFINE_FN(Fn, acosh)
+	BMATH_DEFINE_FN(Fn, atanh)
+	BMATH_DEFINE_FN(Fn, abs)
+	BMATH_DEFINE_FN(Fn, arg)
+	BMATH_DEFINE_FN(Fn, re)
+	BMATH_DEFINE_FN(Fn, im)
+	BMATH_DEFINE_FN(Fn, force)
+	BMATH_DEFINE_FN(Fn, diff)
 
 
 	using MinusOne = ComplexPn<-1.0, 0.0>;
@@ -337,8 +375,8 @@ template<Pattern... Ops> constexpr FunctionPn<type, type::name, 0, meta::List<Op
 	template<Pattern>
 	struct Generality;
 
-	template<typename Category, Category Type, std::size_t MatchDataIndex, meta::ListInstance Operands>
-	struct Generality<FunctionPn<Category, Type, MatchDataIndex, Operands>> :meta::Constant<generality((MathType)Type)> {};
+	template<FunctionProps Props, Pattern... Operands>
+	struct Generality<FunctionPn<Props, Operands...>> :meta::Constant<generality((MathType)Props::function_type)> {};
 
 	template<std::size_t MatchDataIndex>
 	struct Generality<TreeMatchVariable<MatchDataIndex>> :meta::Constant<generality(pattern::TreeMatchNonOwning{})> {};
@@ -364,11 +402,23 @@ template<Pattern... Ops> constexpr FunctionPn<type, type::name, 0, meta::List<Op
 	template<Pattern P1, Pattern P2>
 	using ComparePatternsIndirection = ComparePatterns<P1, P2>;
 	
-	template<typename Category, Category Type, std::size_t LIdx, std::size_t RIdx, meta::ListInstance LOps, meta::ListInstance ROps>
+	template<auto Type, std::size_t LIdx, std::size_t RIdx, Pattern... LOps, Pattern... ROps>
 	struct ComparePatterns<
-		FunctionPn<Category, Type, LIdx, LOps>, 
-		FunctionPn<Category, Type, RIdx, ROps>
-	> :std::bool_constant<meta::smaller_v<LOps, ROps, ComparePatternsIndirection>> {};
+		FunctionPn<VariadicProps<Type, LIdx>, LOps...>, 
+		FunctionPn<VariadicProps<Type, RIdx>, ROps...>
+	> :std::bool_constant<meta::smaller_v<meta::List<LOps...>, meta::List<ROps...>, ComparePatternsIndirection>> {};
+
+	template<Fn Type, Pattern... LOps, Pattern... ROps>
+	struct ComparePatterns<
+		FunctionPn<FnProps<Type>, LOps...>,
+		FunctionPn<FnProps<Type>, ROps...>
+	> :std::bool_constant<meta::smaller_v<meta::List<LOps...>, meta::List<ROps...>, ComparePatternsIndirection>> {};
+
+	template<StringLiteral Name, Pattern... LOps, Pattern... ROps>
+	struct ComparePatterns<
+		FunctionPn<NamedFnProps<Name>, LOps...>,
+		FunctionPn<NamedFnProps<Name>, ROps...>
+	> :std::bool_constant<meta::smaller_v<meta::List<LOps...>, meta::List<ROps...>, ComparePatternsIndirection>> {};
 
 	template<std::size_t Idx1, std::size_t Idx2>
 	struct ComparePatterns<TreeMatchVariable<Idx1>, TreeMatchVariable<Idx2>> :std::bool_constant<(Idx1 < Idx2)> {};
@@ -392,12 +442,12 @@ template<Pattern... Ops> constexpr FunctionPn<type, type::name, 0, meta::List<Op
 
 	//indirection necessairy, as otherwise local argument is implicitly inserted to OrderPattern template
 	// in recursion call of OrderPattern
-	template<meta::ListInstance Operands>
-	using OrderEachOperand_t = meta::Map_t<OrderPattern, Operands>;
+	template<Pattern... Operands>
+	using OrderEachOperand_t = meta::Map_t<OrderPattern, meta::List<Operands...>>;
 
 
 	template<Comm Type, meta::ListInstance Operands>
-	struct OperandsToOperation { using type = FunctionPn<Comm, Type, 0, Operands>; };
+	struct OperandsToOperation { using type = MakeFunctionPn_t<VariadicProps<Type, 0>, Operands>; };
 
 	template<Comm Type, meta::ListInstance Operands>
 	using OperandsToOperation_t = typename OperandsToOperation<Type, Operands>::type;
@@ -415,22 +465,22 @@ template<Pattern... Ops> constexpr FunctionPn<type, type::name, 0, meta::List<Op
 	};
 
 
-	template<Comm Type, meta::ListInstance Operands>
-	class OrderPattern<FunctionPn<Comm, Type, 0, Operands>>
+	template<Comm Type, Pattern... Operands>
+	class OrderPattern<FunctionPn<VariadicProps<Type, 0>, Operands...>>
 	{
-		using IndividuallyOrderedOperands = OrderEachOperand_t<Operands>;
+		using IndividuallyOrderedOperands = OrderEachOperand_t<Operands...>;
 		using SortedOperands              = meta::Sort_t<IndividuallyOrderedOperands, ComparePatterns>;
 	public:
 		using type = OperandsToOperation_t<Type, SortedOperands>;
 	};
 
-	template<typename Category, Category Type, meta::ListInstance Operands>
-	struct OrderPattern<FunctionPn<Category, Type, 0, Operands>>
+	template<FunctionProps Props, Pattern... Operands>
+	struct OrderPattern<FunctionPn<Props, Operands...>>
 	{
-		using type = FunctionPn<Category, Type, 0, OrderEachOperand_t<Operands>>;
+		using type = MakeFunctionPn_t<Props, OrderEachOperand_t<Operands...>>;
 	};
 
-	/////////// set MatchDataIndex in multimatch and variadic to correct value and surround multimatch in rhs with correct variadic
+	/////////// set MatchDataIndex in multimatch and variadic to correct value, surround multimatch in rhs with correct variadic, add outhermost multimatch
 	namespace detail_arm_variadic {
 
 		template<auto EnclosingType, std::size_t ID, std::size_t MatchDataIdx>
@@ -498,38 +548,50 @@ template<Pattern... Ops> constexpr FunctionPn<type, type::name, 0, meta::List<Op
 			};
 		};
 
-		template<typename Category, Category Type, meta::ListInstance Operands, meta::ListInstance MultiMatchBuildingData, std::size_t NxtIdx>
-		class ArmMatchSide<FunctionPn<Category, Type, 0, Operands>, MultiMatchBuildingData, NxtIdx>
+		template<auto Type, Pattern... Operands, meta::ListInstance MultiMatchBuildingData, std::size_t ThisIdx>
+		class ArmMatchSide<FunctionPn<VariadicProps<Type, 0>, Operands...>, MultiMatchBuildingData, ThisIdx>
 		{
-			static constexpr bool arming_variadic   = Function(Type).is<Variadic>();
-			static constexpr std::size_t this_index = arming_variadic ? NxtIdx : 0;
-			static constexpr std::size_t next_index = arming_variadic ? this_index + 1 : NxtIdx;
-
 			using OperandsResult = meta::Foldl_t<
-				typename ArmOperand<Type, this_index>::Call,
-				ArmOperandAccumulator<meta::List<>, MultiMatchBuildingData, next_index>,
-				Operands
+				typename ArmOperand<Type, ThisIdx>::Call,
+				ArmOperandAccumulator<meta::List<>, MultiMatchBuildingData, ThisIdx + 1>,
+				meta::List<Operands...>
 			>;
 		public:
 			using type = ArmMatchSideResult<
-				FunctionPn<Category, Type, this_index, typename OperandsResult::Operands>,
+				MakeFunctionPn_t<VariadicProps<Type, ThisIdx>, typename OperandsResult::Operands>,
+				typename OperandsResult::BuildingData,
+				OperandsResult::index
+			>;
+		}; 
+		
+		template<FunctionProps Props, Pattern... Operands, meta::ListInstance MultiMatchBuildingData, std::size_t NxtIdx>
+		class ArmMatchSide<FunctionPn<Props, Operands...>, MultiMatchBuildingData, NxtIdx>
+		{
+			using OperandsResult = meta::Foldl_t<
+				typename ArmOperand<Props::function_type, NxtIdx>::Call,
+				ArmOperandAccumulator<meta::List<>, MultiMatchBuildingData, NxtIdx>,
+				meta::List<Operands...>
+			>;
+		public:
+			using type = ArmMatchSideResult<
+				MakeFunctionPn_t<Props, typename OperandsResult::Operands>,
 				typename OperandsResult::BuildingData,
 				OperandsResult::index
 			>;
 		};
 
 		static_assert(std::is_same_v<
-			ArmMatchSide_t<FunctionPn<Comm, Comm::sum, 0, meta::List<>>, meta::List<>, 3>,
-			ArmMatchSideResult<FunctionPn<Comm, Comm::sum, 3, meta::List<>>, meta::List<>, 4>
+			ArmMatchSide_t<FunctionPn<VariadicProps<Comm::sum, 0>>, meta::List<>, 3>,
+			ArmMatchSideResult<FunctionPn<VariadicProps<Comm::sum, 3>>, meta::List<>, 4>
 		>);
 
 		static_assert(std::is_same_v<
 			ArmMatchSide_t<
-				FunctionPn<Comm, Comm::sum, 0, meta::List<decltype(-2_), MultiMatchTemp<8>>>, 
+				FunctionPn<VariadicProps<Comm::sum, 0>, decltype(-2_), MultiMatchTemp<8>>,
 				meta::List<>, 
 				3>,
 			ArmMatchSideResult<
-				FunctionPn<Comm, Comm::sum, 3, meta::List<decltype(-2_), MultiMatchVariable<3>>>,
+				FunctionPn<VariadicProps<Comm::sum, 3>, decltype(-2_), MultiMatchVariable<3>>,
 				meta::List<MultiMatchBuidingDatum<Comm::sum, 8, 3>>, 
 				4>
 		>);
@@ -556,28 +618,106 @@ template<Pattern... Ops> constexpr FunctionPn<type, type::name, 0, meta::List<Op
 				"only multi-match-variables present in match side may occur in replacement side.");
 
 			using UnwrappedResult = MultiMatchVariable<ThisBuildingDatum::index>;
-			using WrappedResult = FunctionPn<
-				std::remove_cv_t<decltype(ThisBuildingDatum::enclosing_type)>,
-				ThisBuildingDatum::enclosing_type,
-				0,
-				meta::List<UnwrappedResult>>;
+			using WrappedResult = FunctionPn<VariadicProps<ThisBuildingDatum::enclosing_type, 0>, UnwrappedResult>;
 			static constexpr bool parent_is_enclosing_type = MathType(ThisBuildingDatum::enclosing_type) == MathType(ParentType);
 		public:
 			using type = std::conditional_t<parent_is_enclosing_type, UnwrappedResult, WrappedResult>;
 		};
 
-		template<typename Category, Category Type, meta::ListInstance Operands, auto ParentType, meta::ListInstance MultiMatchBuildingData>
-		class ArmReplaceSide<FunctionPn<Category, Type, 0, Operands>, ParentType, MultiMatchBuildingData>
+		template<FunctionProps Props, Pattern... Operands, auto ParentType, meta::ListInstance MultiMatchBuildingData>
+		class ArmReplaceSide<FunctionPn<Props, Operands...>, ParentType, MultiMatchBuildingData>
 		{
 			template<Pattern P>
-			using ArmOperand = ArmReplaceSide<P, Type, MultiMatchBuildingData>;
+			using ArmOperand = ArmReplaceSide<P, Props::function_type, MultiMatchBuildingData>;
 
-			using ArmedOperands = meta::Map_t<ArmOperand, Operands>;
+			using ArmedOperands = meta::Map_t<ArmOperand, meta::List<Operands...>>;
 		public:
-			using type = FunctionPn<Category, Type, 0, ArmedOperands>;
+			using type = MakeFunctionPn_t<Props, ArmedOperands>;
 		};
 
 
+
+		/////////// add outermost multimatch (if outermost operation is variadic and multimatch is not already present)
+		//note: outermost operation always matched first -> MatchDataIndex always 0
+
+		//needed to adjust replace side depending on changes to match side
+		template<auto Type, bool AddedHeadMulti, bool AddedLastMulti>
+		struct Changelog
+		{
+			static constexpr NonComm function_type = Type;
+			static constexpr bool added_head_multi = AddedHeadMulti;
+			static constexpr bool added_last_multi = AddedLastMulti;
+		};
+
+		template<Pattern P>
+		struct AddOutermostMulti { using type = meta::Pair<P, Changelog<nullptr, false, false>>; };
+
+		template<Pattern P>
+		using AddOutermostMulti_t = typename AddOutermostMulti<P>::type;
+
+		template<Comm Type, Pattern... Operands> 
+		requires (!std::is_same_v<meta::Last_t<meta::List<Operands...>>, MultiMatchVariable<0>> &&
+			fn::is_associative(Variadic(Type)))
+		struct AddOutermostMulti<FunctionPn<VariadicProps<Type, 0>, Operands...>> 
+		{
+			using type = meta::Pair<
+				FunctionPn<VariadicProps<Type, 0>, Operands..., MultiMatchVariable<0>>,
+				Changelog<Type, false, true>
+			>;
+		}; 
+
+		static_assert(std::is_same_v<
+			AddOutermostMulti_t<Sum<decltype(1337_)>>,
+			meta::Pair<Sum<decltype(1337_), MultiMatchVariable<0>>, Changelog<Comm::sum, false, true>>
+		>);
+		static_assert(std::is_same_v<
+			AddOutermostMulti_t<Sum<decltype(1337_), MultiMatchVariable<0>>>, 
+			meta::Pair<Sum<decltype(1337_), MultiMatchVariable<0>>, Changelog<nullptr, false, false>>
+		>); 
+		static_assert(std::is_same_v<
+			AddOutermostMulti_t<CommutativePn<Comm::set, 0, decltype(1337_)>>,
+			meta::Pair<CommutativePn<Comm::set, 0, decltype(1337_)>, Changelog<nullptr, false, false>>
+		>);
+
+
+		template<NonComm Type, Pattern... Operands>
+		requires (!std::is_same_v<meta::Head_t<meta::List<Operands...>>, MultiMatchVariable<0>> && 
+		          !std::is_same_v<meta::Last_t<meta::List<Operands...>>, MultiMatchVariable<0>> &&
+			fn::is_associative(Variadic(Type)))
+		struct AddOutermostMulti<FunctionPn<VariadicProps<Type, 0>, Operands...>>
+		{
+			using type = meta::Pair <
+				FunctionPn<VariadicProps<Type, 0>, MultiMatchVariable<0>, Operands..., MultiMatchVariable<0>>,
+				Changelog<Type, true, true>
+			>;
+		};
+
+		template<NonComm Type, Pattern... Operands>
+		requires ( std::is_same_v<meta::Head_t<meta::List<Operands...>>, MultiMatchVariable<0>> &&
+		          !std::is_same_v<meta::Last_t<meta::List<Operands...>>, MultiMatchVariable<0>> &&
+			fn::is_associative(Variadic(Type)))
+		struct AddOutermostMulti<FunctionPn<VariadicProps<Type, 0>, Operands...>>
+		{
+			using type = meta::Pair<
+				FunctionPn<VariadicProps<Type, 0>, Operands..., MultiMatchVariable<0>>,
+				Changelog<Type, false, true>
+			>;
+		};
+
+		template<NonComm Type, Pattern... Operands>
+		requires (!std::is_same_v<meta::Head_t<meta::List<Operands...>>, MultiMatchVariable<0>> &&
+		           std::is_same_v<meta::Last_t<meta::List<Operands...>>, MultiMatchVariable<0>> &&
+			fn::is_associative(Variadic(Type)))
+		struct AddOutermostMulti<FunctionPn<VariadicProps<Type, 0>, Operands...>>
+		{
+			using type = meta::Pair<
+				FunctionPn<VariadicProps<Type, 0>, MultiMatchVariable<0>, Operands...>,
+				Changelog<Type, true, false>
+			>;
+		};
+
+
+		/////////// combine all actions
 
 		template<Pattern MatchSide, Pattern ReplaceSide, Predicate... Condts>
 		class ArmVaridic
@@ -602,7 +742,13 @@ template<Pattern... Ops> constexpr FunctionPn<type, type::name, 0, meta::List<Op
 	/////////// construct pattern
 
 	template<Pattern MP, Pattern RP, Predicate... Cs>
-	constexpr ArmVariadic_t<OrderPattern_t<MP>, OrderPattern_t<RP>, Cs...> make_rule(Rule<MP, RP>, Cs...) { return {}; }
+	constexpr auto make_rule(Rule<MP, RP>, Cs...) 
+	{ 
+		using OrderedMatchSide = OrderPattern_t<MP>;
+		using OrderedReplaceSide = OrderPattern_t<RP>;
+		using ResultRule = ArmVariadic_t<OrderedMatchSide, OrderedReplaceSide, Cs...>;
+		return ResultRule{};
+	}
 
 
 
@@ -711,11 +857,24 @@ template<Pattern Lhs, Pattern Rhs> constexpr InRelation<name, Lhs, Rhs> op(Lhs, 
 			static constexpr auto value = name_v<Lhs> + " = " + name_v<Rhs> + separate(", ", ", ", Conds{}...);
 		};
 
-		template<typename Category, Category Type, std::size_t Idx, Pattern... Ops>
-		struct Name<FunctionPn<Category, Type, Idx, meta::List<Ops...>>>
+		template<auto Type, std::size_t I, Pattern... Ops>
+		struct Name<FunctionPn<VariadicProps<Type, I>, Ops...>>
 		{
-			static constexpr auto value = StringLiteral<fn::name_of(Type).size()>(fn::name_of(Type).data()) + 
-				":" + ull_to_string_literal<Idx>() + "(" + separate("", ", ", Ops{}...) + ")";
+			static constexpr auto value = BMATH_SV_TO_LITERAL(fn::name_of((Variadic)Type)) +
+				":" + ull_to_string_literal<I>() + "(" + separate("", ", ", Ops{}...) + ")";
+		};
+		
+		template<Fn Type, Pattern... Ops>
+		struct Name<FunctionPn<FnProps<Type>, Ops...>>
+		{
+			static constexpr auto value = BMATH_SV_TO_LITERAL(fn::name_of(Type)) +
+				"(" + separate("", ", ", Ops{}...) + ")";
+		};
+
+		template<StringLiteral FnName, Pattern... Ops>
+		struct Name<FunctionPn<NamedFnProps<FnName>, Ops...>>
+		{
+			static constexpr auto value = FnName + "(" + separate("", ", ", Ops{}...) + ")";
 		};
 
 		template<double Re, double Im>

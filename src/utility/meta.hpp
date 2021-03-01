@@ -140,6 +140,32 @@ namespace bmath::intern::meta {
 	};
 
 
+
+	template<typename T1, typename T2>
+	struct Pair;
+
+
+	template<InstanceOf<Pair> P>
+	struct Fst;
+
+	template<InstanceOf<Pair> P>
+	using Fst_t = typename Fst<P>::type;
+
+	template<typename T1, typename T2>
+	struct Fst<Pair<T1, T2>> { using type = T1; };
+
+
+	template<InstanceOf<Pair> P>
+	struct Snd;
+
+	template<InstanceOf<Pair> P>
+	using Snd_t = typename Snd<P>::type;
+
+	template<typename T1, typename T2>
+	struct Snd<Pair<T1, T2>> { using type = T2; };
+
+
+
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	//////////////////////////////////////////   Operations on Lists of types   ///////////////////////////////////////////
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -186,6 +212,21 @@ namespace bmath::intern::meta {
 
 	template<typename T, typename... Ts>
 	struct Head<List<T, Ts...>> { using type = T; };
+
+
+	template<ListInstance L>
+	struct Last;
+
+	template<ListInstance L>
+	using Last_t = typename Last<L>::type;
+
+	template<typename T>
+	struct Last<List<T>> { using type = T; };
+
+	template<typename T, typename... Ts>
+	struct Last<List<T, Ts...>> { using type = Last_t<List<Ts...>>; };
+
+	static_assert(std::is_same_v<int, Last_t<List<bool, double, float, int>>>);
 
 
 	/////////////////   Cons
