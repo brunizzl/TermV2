@@ -170,12 +170,8 @@ namespace bmath::intern::meta {
 	//////////////////////////////////////////   Operations on Lists of types   ///////////////////////////////////////////
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-	template<unsigned long long Val>
-	using IndexConstant = std::integral_constant<unsigned long long, Val>;
-
 	template<typename... Ts>
-	struct List;
+	struct List {};
 
 
 	/////////////////   ListInstance
@@ -196,13 +192,16 @@ namespace bmath::intern::meta {
 	struct Size;
 
 	template<typename... Ts>
-	struct Size<List<Ts...>> :IndexConstant<sizeof...(Ts)> {};
+	struct Size<List<Ts...>> :Constant<sizeof...(Ts)> {};
 
 	template<ListInstance L>
 	constexpr std::size_t size_v = Size<L>::value;
 
 
 	/////////////////   Element Access
+
+	template<typename T, typename...>
+	using DirectHead_t = T;
 
 	template<ListInstance L>
 	struct Head;
@@ -361,34 +360,40 @@ namespace bmath::intern::meta {
 
 	/////////////////   Map
 
+	template<template<typename...> class Container, template<typename> class F, typename... Ts>
+	using DirectMap_t = Container<typename F<Ts>::type...>;
+
 	template<template<typename> class F, ListInstance L>
 	struct Map;
 
 	template<template<typename> class F, ListInstance L>
 	using Map_t = typename Map<F, L>::type;
 
-	template<template<typename> class F, typename T, typename... Ts>
-	struct Map<F, List<T, Ts...>>
-	{
-		using type = Cons_t<typename F<T>::type, Map_t<F, List<Ts...>>>;
-	};
-
-	template<template<typename> class F>
-	struct Map<F, List<>> { using type = List<>; };
+	template<template<typename> class F, typename... Ts>
+	struct Map<F, List<Ts...>> { using type = List<typename F<Ts>::type...>; };
 
 
 	/////////////////   Foldl
 
+	template<template<typename, typename> class F, typename Init, typename... Ts>
+	struct DirectFoldl { using type = Init; };
+
+	template<template<typename, typename> class F, typename Init, typename... Ts>
+	using DirectFoldl_t = typename DirectFoldl<F, Init, Ts...>::type;
+
+	template<template<typename, typename> class F, typename Init, typename T, typename... Ts>
+	struct DirectFoldl<F, Init, T, Ts...> { using type = DirectFoldl_t<F, typename F<Init, T>::type, Ts...>; };
+
 	template<template<typename, typename> class F, typename Init, ListInstance L>
-	struct Foldl { using type = Init; };
+	struct Foldl;
 
 	template<template<typename, typename> class F, typename Init, ListInstance L>
 	using Foldl_t = typename Foldl<F, Init, L>::type;
 
-	template<template<typename, typename> class F, typename Init, typename T, typename... Ts>
-	struct Foldl<F, Init, List<T, Ts...>>
+	template<template<typename, typename> class F, typename Init, typename... Ts>
+	struct Foldl<F, Init, List<Ts...>>
 	{
-		using type = typename Foldl<F, typename F<Init, T>::type, List<Ts...>>::type;
+		using type = DirectFoldl_t<F, Init, Ts...>;
 	};
 
 
@@ -401,16 +406,16 @@ namespace bmath::intern::meta {
 	constexpr std::size_t index_of_v = IndexOf<T, L>::value;
 
 	template<typename T>
-	struct IndexOf<T, List<>> :IndexConstant<0>{};
+	struct IndexOf<T, List<>> :Constant<0>{};
 
 	template<typename T, typename... Ts>
-	struct IndexOf<T, List<T, Ts...>> :IndexConstant<0> {};
+	struct IndexOf<T, List<T, Ts...>> :Constant<0> {};
 
 	template<typename T1, typename T2, typename... Ts>
-	struct IndexOf<T1, List<T2, Ts...>> :IndexConstant<IndexOf<T1, List<Ts...>>::value + 1> {};
+	struct IndexOf<T1, List<T2, Ts...>> :Constant<IndexOf<T1, List<Ts...>>::value + 1> {};
 
-	static_assert(index_of_v<IndexConstant<7>, List<IndexConstant<2>, IndexConstant<5>, IndexConstant<7>>> == 2);
-	static_assert(index_of_v<IndexConstant<8>, List<IndexConstant<2>, IndexConstant<5>, IndexConstant<7>>> == 3);
+	static_assert(index_of_v<Constant<7>, List<Constant<2>, Constant<5>, Constant<7>>> == 2);
+	static_assert(index_of_v<Constant<8>, List<Constant<2>, Constant<5>, Constant<7>>> == 3);
 
 
 	/////////////////   Drop
@@ -498,7 +503,7 @@ namespace bmath::intern::meta {
 	template<typename L, typename R>
 	struct Less :std::bool_constant<(L::value < R::value)> {};
 	
-	static_assert(std::is_same_v<Sort_t<List<IndexConstant<2>, IndexConstant<5>, IndexConstant<1>>, Less>, List<IndexConstant<1>, IndexConstant<2>, IndexConstant<5>>>);
+	static_assert(std::is_same_v<Sort_t<List<Constant<2>, Constant<5>, Constant<1>>, Less>, List<Constant<1>, Constant<2>, Constant<5>>>);
 
 
 	/////////////////   compare lists lexicografically
@@ -570,7 +575,7 @@ namespace bmath::intern::meta {
 	constexpr std::size_t size(S) { return size_v<S>; }
 
 	template<auto... xs>
-	struct SSize<Seq<xs...>> :IndexConstant<sizeof...(xs)> {};
+	struct SSize<Seq<xs...>> :Constant<sizeof...(xs)> {};
 
 
 	/////////////////   SeqToList
@@ -581,14 +586,13 @@ namespace bmath::intern::meta {
 	template<template <auto> class F, SeqInstance S>
 	using SeqToList_t = typename SeqToList<F, S>::type;
 
-	template<template <auto> class F, auto x, auto... xs>
-	struct SeqToList<F, Seq<x, xs...>>
+	template<template <auto> class F, auto... xs>
+	struct SeqToList<F, Seq<xs...>>
 	{
-		using type = Cons_t<typename F<x>::type, SeqToList_t<F, Seq<xs...>>>;
+		using type = List<typename F<xs>::type...>;
 	};
 
-	template<template <auto> class F>
-	struct SeqToList<F, Seq<>> { using type = List<>; };
+	static_assert(std::is_same_v<List<Constant<1>, Constant<2>, Constant<3>>, SeqToList_t<Constant, Seq<1, 2, 3>>>);
 
 
 	/////////////////   SCons
@@ -637,13 +641,13 @@ namespace bmath::intern::meta {
 	constexpr std::size_t index_of(A) { return index_of_v<x, A>; }
 
 	template<auto x>
-	struct SIndexOf<x, Seq<>> :IndexConstant<0> {};
+	struct SIndexOf<x, Seq<>> :Constant<0> {};
 
 	template<auto x, auto... xs>
-	struct SIndexOf<x, Seq<x, xs...>> :IndexConstant<0> {};
+	struct SIndexOf<x, Seq<x, xs...>> :Constant<0> {};
 
 	template<auto x, auto y, auto... ys>
-	struct SIndexOf<x, Seq<y, ys...>> :IndexConstant<SIndexOf<x, Seq<ys...>>::value + 1> {};
+	struct SIndexOf<x, Seq<y, ys...>> :Constant<SIndexOf<x, Seq<ys...>>::value + 1> {};
 
 	static_assert(sindex_of_v<-7, Seq<2, 5, -7>> == 2);
 	static_assert(sindex_of_v<-8, Seq<2, 5, -7>> == 3);

@@ -570,7 +570,7 @@ namespace bmath::intern::test {
 			auto rule_4 = make_rule(a * (b + cs)    = a * b + a * cs);
 
 			auto rule_5 = make_rule(-(a + bs)       = -a - bs);
-			auto rule_6 = make_rule( (a * bs)^(-1_) = (a^(-1_)) * (bs^(-1_)));
+			auto rule_6 = make_rule((a * bs) ^ (-1_) = (a ^ (-1_)) * (bs ^ (-1_)));
 
 			std::cout << name(rule_1) << "\n";
 			std::cout << name(rule_2) << "\n";
@@ -652,6 +652,24 @@ namespace bmath::intern::test {
 			std::cout << name(rule_5) << "\n";
 			std::cout << name(rule_6) << "\n";
 			std::cout << "\n";
+		}
+	}
+
+	//BMATH_DEFINE_NAMEDFN(fib)
+
+	void meta_pattern_2() 
+	{
+		using namespace bmath::intern::meta_pn;
+		{
+			//auto [n] = make_tree_matches<1>;
+			//auto rule_1 = make_rule(fib(0_) = 0_);
+			//auto rule_2 = make_rule(fib(1_) = 1_);
+			//auto rule_3 = make_rule(fib(n) = fib(n - 1_) + fib(n - 2_));
+			//
+			//std::cout << name(rule_1) << "\n";
+			//std::cout << name(rule_2) << "\n";
+			//std::cout << name(rule_3) << "\n";
+			//std::cout << "\n";
 		}
 	}
 

@@ -55,7 +55,7 @@ namespace bmath::intern::meta_pn {
 	template<Fn Type>
 	struct FnProps { static constexpr auto function_type = Type; };
 
-	template<StringLiteral Name>
+	template<char... Cs>
 	struct NamedFnProps { static constexpr auto function_type = NamedFn{}; };
 
 
@@ -73,6 +73,13 @@ namespace bmath::intern::meta_pn {
 
 		template<Pattern Rhs>
 		constexpr meta::Pair<FunctionPn, Rhs> operator=(Rhs) { return {}; }
+	};
+
+	template<FunctionProps Props>
+	struct CurriedFunctionPn 
+	{  
+		template<Pattern... Operands>
+		using type = FunctionPn<Props, Operands...>;
 	};
 
 	template<FunctionProps Props, meta::ListInstance Operands>
@@ -202,8 +209,8 @@ namespace bmath::intern::meta_pn {
 #define BMATH_DEFINE_VARIADIC(type, name) \
 template<Pattern... Ops> constexpr FunctionPn<VariadicProps<type::name, 0>, Ops...> name(Ops...) { return {}; }
 
-#define BMATH_DEFINE_FN(type, name) \
-template<Pattern... Ops> constexpr FunctionPn<FnProps<type::name>, Ops...> name(Ops...) { return {}; }
+#define BMATH_DEFINE_FN(name) \
+template<Pattern... Ops> constexpr FunctionPn<FnProps<Fn::name>, Ops...> name(Ops...) { return {}; }
 
 	BMATH_DEFINE_VARIADIC(Comm, set)
 	BMATH_DEFINE_VARIADIC(Comm, multiset)
@@ -214,29 +221,33 @@ template<Pattern... Ops> constexpr FunctionPn<FnProps<type::name>, Ops...> name(
 	BMATH_DEFINE_VARIADIC(NonComm, ordered_sum)
 	BMATH_DEFINE_VARIADIC(NonComm, ordered_product)
 
-	BMATH_DEFINE_FN(Fn, pow)
-	BMATH_DEFINE_FN(Fn, log)
-	BMATH_DEFINE_FN(Fn, sqrt)
-	BMATH_DEFINE_FN(Fn, exp)
-	BMATH_DEFINE_FN(Fn, ln)
-	BMATH_DEFINE_FN(Fn, sin)
-	BMATH_DEFINE_FN(Fn, cos)
-	BMATH_DEFINE_FN(Fn, tan)
-	BMATH_DEFINE_FN(Fn, sinh)
-	BMATH_DEFINE_FN(Fn, cosh)
-	BMATH_DEFINE_FN(Fn, tanh)
-	BMATH_DEFINE_FN(Fn, asin)
-	BMATH_DEFINE_FN(Fn, acos)
-	BMATH_DEFINE_FN(Fn, atan)
-	BMATH_DEFINE_FN(Fn, asinh)
-	BMATH_DEFINE_FN(Fn, acosh)
-	BMATH_DEFINE_FN(Fn, atanh)
-	BMATH_DEFINE_FN(Fn, abs)
-	BMATH_DEFINE_FN(Fn, arg)
-	BMATH_DEFINE_FN(Fn, re)
-	BMATH_DEFINE_FN(Fn, im)
-	BMATH_DEFINE_FN(Fn, force)
-	BMATH_DEFINE_FN(Fn, diff)
+	BMATH_DEFINE_FN(pow)
+	BMATH_DEFINE_FN(log)
+	BMATH_DEFINE_FN(sqrt)
+	BMATH_DEFINE_FN(exp)
+	BMATH_DEFINE_FN(ln)
+	BMATH_DEFINE_FN(sin)
+	BMATH_DEFINE_FN(cos)
+	BMATH_DEFINE_FN(tan)
+	BMATH_DEFINE_FN(sinh)
+	BMATH_DEFINE_FN(cosh)
+	BMATH_DEFINE_FN(tanh)
+	BMATH_DEFINE_FN(asin)
+	BMATH_DEFINE_FN(acos)
+	BMATH_DEFINE_FN(atan)
+	BMATH_DEFINE_FN(asinh)
+	BMATH_DEFINE_FN(acosh)
+	BMATH_DEFINE_FN(atanh)
+	BMATH_DEFINE_FN(abs)
+	BMATH_DEFINE_FN(arg)
+	BMATH_DEFINE_FN(re)
+	BMATH_DEFINE_FN(im)
+	BMATH_DEFINE_FN(force)
+	BMATH_DEFINE_FN(diff)
+
+#define BMATH_DEFINE_NAMEDFN(name) \
+template<bmath::intern::meta_pn::Pattern... Ops> \
+constexpr bmath::intern::meta_pn::FunctionPn<bmath::intern::ToCharSeq_t<bmath::intern::meta_pn::NamedFnProps, bmath::intern::StringLiteral(#name)>, Ops...> name(Ops...) { return {}; }
 
 
 	using MinusOne = ComplexPn<-1.0, 0.0>;
@@ -446,8 +457,7 @@ template<Pattern... Ops> constexpr FunctionPn<FnProps<type::name>, Ops...> name(
 	//indirection necessairy, as otherwise local argument is implicitly inserted to OrderPattern template
 	// in recursion call of OrderPattern
 	template<Pattern... Operands>
-	using OrderEachOperand_t = meta::Map_t<OrderPattern, meta::List<Operands...>>;
-
+	using OrderEachOperand_t = meta::DirectMap_t<meta::List, OrderPattern, Operands...>;
 
 	template<Comm Type, meta::ListInstance Operands>
 	struct OperandsToOperation { using type = MakeFunctionPn_t<VariadicProps<Type, 0>, Operands>; };
@@ -455,16 +465,16 @@ template<Pattern... Ops> constexpr FunctionPn<FnProps<type::name>, Ops...> name(
 	template<Comm Type, meta::ListInstance Operands>
 	using OperandsToOperation_t = typename OperandsToOperation<Type, Operands>::type;
 
-	template<typename Op1, typename... Ops>
-	struct OperandsToOperation<Comm::sum, meta::List<Op1, Ops...>> 
+	template<typename Op, typename... Ops>
+	struct OperandsToOperation<Comm::sum, meta::List<Op, Ops...>> 
 	{ 
-		using type = meta::Foldl_t<Plus, Op1, meta::List<Ops...>>; 
+		using type = meta::DirectFoldl_t<Plus, Op, Ops...>; 
 	};
 
-	template<typename Op1, typename... Ops>
-	struct OperandsToOperation<Comm::product, meta::List<Op1, Ops...>> 
+	template<typename Op, typename... Ops>
+	struct OperandsToOperation<Comm::product, meta::List<Op, Ops...>> 
 	{ 
-		using type = meta::Foldl_t<Times, Op1, meta::List<Ops...>>; 
+		using type = meta::DirectFoldl_t<Times, Op, Ops...>; 
 	};
 
 
@@ -512,10 +522,10 @@ template<Pattern... Ops> constexpr FunctionPn<FnProps<type::name>, Ops...> name(
 		template<Pattern P, meta::ListInstance MultiMatchBuildingData, std::size_t NxtIdx>
 		using SetMatchSideIndices_t = typename SetMatchSideIndices<P, MultiMatchBuildingData, NxtIdx>::type;
 
-		template<meta::ListInstance ArmedOperands, meta::ListInstance MultiMatchBuildingData, std::size_t NxtIdx>
+		template<meta::ListInstance OperandsCorrectIndices, meta::ListInstance MultiMatchBuildingData, std::size_t NxtIdx>
 		struct SetOperandIndicesAccumulator
 		{
-			using Operands = ArmedOperands;
+			using Operands = OperandsCorrectIndices;
 			using BuildingData = MultiMatchBuildingData;
 			static constexpr std::size_t index = NxtIdx;
 		};
@@ -524,27 +534,34 @@ template<Pattern... Ops> constexpr FunctionPn<FnProps<type::name>, Ops...> name(
 		struct SetOperandIndices
 		{
 			template<typename LastResult, Pattern Operand>
-			struct Call;
+			struct apply;
 
-			template<meta::ListInstance ArmedOperands, meta::ListInstance MultiMatchBuildingData, std::size_t NxtIdx, Pattern Operand>
-			class Call<SetOperandIndicesAccumulator<ArmedOperands, MultiMatchBuildingData, NxtIdx>, Operand>
+			template<meta::ListInstance OperandsCorrectIndices, meta::ListInstance MultiMatchBuildingData, std::size_t NxtIdx, Pattern Operand>
+			class apply<SetOperandIndicesAccumulator<OperandsCorrectIndices, MultiMatchBuildingData, NxtIdx>, Operand>
 			{
 				using ArmedOperandData = SetMatchSideIndices_t<Operand, MultiMatchBuildingData, NxtIdx>;
 			public:
 				using type = SetOperandIndicesAccumulator<
-					meta::Concat_t<ArmedOperands, meta::List<typename ArmedOperandData::ResultPattern>>,
+					meta::Concat_t<OperandsCorrectIndices, meta::List<typename ArmedOperandData::ResultPattern>>,
 					typename ArmedOperandData::BuildingData,
 					ArmedOperandData::index
 				>;
 			};
 
-			template<meta::ListInstance ArmedOperands, meta::ListInstance MultiMatchBuildingData, std::size_t NxtIdx, std::size_t ID>
-			struct Call<SetOperandIndicesAccumulator<ArmedOperands, MultiMatchBuildingData, NxtIdx>, MultiMatchTemp<ID>>
+			template<meta::ListInstance OperandsCorrectIndices, meta::ListInstance MultiMatchBuildingData, std::size_t NxtIdx, std::size_t ID>
+			class apply<SetOperandIndicesAccumulator<OperandsCorrectIndices, MultiMatchBuildingData, NxtIdx>, MultiMatchTemp<ID>>
 			{
 				static_assert(Function(EnclosingVariadicType).is<Variadic>(), 
 					"only variadic operations may contain multi-match-variables");
+
+				template<typename BuildingDatum>
+				struct IsInSameFunction { static constexpr bool value = BuildingDatum::index == EnclosingVariadicIndex; };
+				static_assert(!std::is_same_v<decltype(EnclosingVariadicType), Comm> || 
+					std::is_same_v<meta::Find_t<IsInSameFunction, MultiMatchBuildingData>, meta::FoundNothing>, 
+					"commutative functions may only contain up to one multi match variable each");
+			public:
 				using type = SetOperandIndicesAccumulator<
-					meta::Concat_t<ArmedOperands, meta::List<MultiMatchVariable<EnclosingVariadicIndex>>>,
+					meta::Concat_t<OperandsCorrectIndices, meta::List<MultiMatchVariable<EnclosingVariadicIndex>>>,
 					meta::Cons_t<MultiMatchBuidingDatum<EnclosingVariadicType, ID, EnclosingVariadicIndex>, MultiMatchBuildingData>,
 					NxtIdx
 				>;
@@ -555,7 +572,7 @@ template<Pattern... Ops> constexpr FunctionPn<FnProps<type::name>, Ops...> name(
 		class SetMatchSideIndices<FunctionPn<VariadicProps<Type, 0>, Operands...>, MultiMatchBuildingData, ThisIdx>
 		{
 			using OperandsResult = meta::Foldl_t<
-				typename SetOperandIndices<Type, ThisIdx>::Call,
+				typename SetOperandIndices<Type, ThisIdx>::apply,
 				SetOperandIndicesAccumulator<meta::List<>, MultiMatchBuildingData, ThisIdx + 1>,
 				meta::List<Operands...>
 			>;
@@ -571,7 +588,7 @@ template<Pattern... Ops> constexpr FunctionPn<FnProps<type::name>, Ops...> name(
 		class SetMatchSideIndices<FunctionPn<Props, Operands...>, MultiMatchBuildingData, NxtIdx>
 		{
 			using OperandsResult = meta::Foldl_t<
-				typename SetOperandIndices<Props::function_type, NxtIdx>::Call,
+				typename SetOperandIndices<Props::function_type, NxtIdx>::apply,
 				SetOperandIndicesAccumulator<meta::List<>, MultiMatchBuildingData, NxtIdx>,
 				meta::List<Operands...>
 			>;
@@ -631,11 +648,11 @@ template<Pattern... Ops> constexpr FunctionPn<FnProps<type::name>, Ops...> name(
 		class SetReplaceSideIndices<FunctionPn<Props, Operands...>, ParentType, MultiMatchBuildingData>
 		{
 			template<Pattern P>
-			using ArmOperand = SetReplaceSideIndices<P, Props::function_type, MultiMatchBuildingData>;
+			using SetOperand = SetReplaceSideIndices<P, Props::function_type, MultiMatchBuildingData>;
 
-			using ArmedOperands = meta::Map_t<ArmOperand, meta::List<Operands...>>;
+			using OperandsCorrectIndices = meta::Map_t<SetOperand, meta::List<Operands...>>;
 		public:
-			using type = MakeFunctionPn_t<Props, ArmedOperands>;
+			using type = MakeFunctionPn_t<Props, OperandsCorrectIndices>;
 		};
 
 
@@ -869,10 +886,10 @@ template<Pattern Lhs, Pattern Rhs> constexpr InRelation<name, Lhs, Rhs> op(Lhs, 
 				"(" + separate("", ", ", Ops{}...) + ")";
 		};
 
-		template<StringLiteral FnName, Pattern... Ops>
-		struct Name<FunctionPn<NamedFnProps<FnName>, Ops...>>
+		template<char... Cs, Pattern... Ops>
+		struct Name<FunctionPn<NamedFnProps<Cs...>, Ops...>>
 		{
-			static constexpr auto value = FnName + "(" + separate("", ", ", Ops{}...) + ")";
+			static constexpr auto value = StringLiteral(std::array{ Cs... }) + "(" + separate("", ", ", Ops{}...) + ")";
 		};
 
 		template<double Re, double Im>

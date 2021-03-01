@@ -175,4 +175,21 @@ namespace bmath::intern {
 
 #define BMATH_SV_TO_LITERAL(sv) StringLiteral<sv.size()>(sv.data())
 
+	namespace detail_to_char_seq {
+		template<template<auto...> class Res_T, StringLiteral S, std::size_t... Is>
+		constexpr auto impl(std::index_sequence<Is...>)
+		{
+			return Res_T<S[Is]...>{};
+		}
+	} //namespace detail_to_char_seq
+
+	template<template<auto...> class Res_T, StringLiteral S>
+	struct ToCharSeq 
+	{
+		using type = decltype(detail_to_char_seq::impl<Res_T, S>(std::make_index_sequence<S.size()>{}));
+	};
+
+	template<template<auto...> class Res_T, StringLiteral S>
+	using ToCharSeq_t = typename ToCharSeq<Res_T, S>::type;
+
 } //namespace bmath::intern
