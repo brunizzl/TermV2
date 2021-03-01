@@ -63,7 +63,7 @@ namespace bmath::intern::meta_pn {
 	struct FunctionPn :PatternMarker
 	{
 		template<Pattern Rhs> 
-		constexpr Rule<FunctionPn, Rhs> operator=(Rhs) { return {}; }
+		constexpr meta::Pair<FunctionPn, Rhs> operator=(Rhs) { return {}; }
 	}; 
 
 	template<Fn Type, Pattern... Operands>
@@ -72,7 +72,7 @@ namespace bmath::intern::meta_pn {
 		static_assert(fn::arity(Type) == sizeof...(Operands));
 
 		template<Pattern Rhs>
-		constexpr Rule<FunctionPn, Rhs> operator=(Rhs) { return {}; }
+		constexpr meta::Pair<FunctionPn, Rhs> operator=(Rhs) { return {}; }
 	};
 
 	template<FunctionProps Props, meta::ListInstance Operands>
@@ -384,6 +384,9 @@ template<Pattern... Ops> constexpr FunctionPn<FnProps<type::name>, Ops...> name(
 	template<std::size_t ID>
 	struct Generality<MultiMatchTemp<ID>> :meta::Constant<generality(pattern::MultiParams{})> {};
 
+	template<std::size_t Idx>
+	struct Generality<MultiMatchVariable<Idx>> :meta::Constant < generality(pattern::MultiParams{}) > {};
+
 	template<double Re, double Im>
 	struct Generality<ComplexPn<Re, Im>> :meta::Constant<generality(Literal::complex)> {};
 
@@ -481,7 +484,7 @@ template<Pattern... Ops> constexpr FunctionPn<FnProps<type::name>, Ops...> name(
 	};
 
 	/////////// set MatchDataIndex in multimatch and variadic to correct value, surround multimatch in rhs with correct variadic, add outhermost multimatch
-	namespace detail_arm_variadic {
+	namespace detail_arm_rule {
 
 		template<auto EnclosingType, std::size_t ID, std::size_t MatchDataIdx>
 		struct MultiMatchBuidingDatum 
@@ -496,7 +499,7 @@ template<Pattern... Ops> constexpr FunctionPn<FnProps<type::name>, Ops...> name(
 		/////////// arm left hand side of rule
 
 		template<Pattern P, meta::ListInstance MultiMatchBuildingData, std::size_t NxtIdx>
-		struct ArmMatchSideResult 
+		struct SetMatchSideIndicesResult 
 		{
 			using ResultPattern = P;
 			using BuildingData = MultiMatchBuildingData;
@@ -504,13 +507,13 @@ template<Pattern... Ops> constexpr FunctionPn<FnProps<type::name>, Ops...> name(
 		};
 
 		template<Pattern P, meta::ListInstance MultiMatchBuildingData, std::size_t NxtIdx>
-		struct ArmMatchSide { using type = ArmMatchSideResult<P, MultiMatchBuildingData, NxtIdx>; };
+		struct SetMatchSideIndices { using type = SetMatchSideIndicesResult<P, MultiMatchBuildingData, NxtIdx>; };
 
 		template<Pattern P, meta::ListInstance MultiMatchBuildingData, std::size_t NxtIdx>
-		using ArmMatchSide_t = typename ArmMatchSide<P, MultiMatchBuildingData, NxtIdx>::type;
+		using SetMatchSideIndices_t = typename SetMatchSideIndices<P, MultiMatchBuildingData, NxtIdx>::type;
 
 		template<meta::ListInstance ArmedOperands, meta::ListInstance MultiMatchBuildingData, std::size_t NxtIdx>
-		struct ArmOperandAccumulator
+		struct SetOperandIndicesAccumulator
 		{
 			using Operands = ArmedOperands;
 			using BuildingData = MultiMatchBuildingData;
@@ -518,17 +521,17 @@ template<Pattern... Ops> constexpr FunctionPn<FnProps<type::name>, Ops...> name(
 		};
 
 		template<auto EnclosingVariadicType, std::size_t EnclosingVariadicIndex>
-		struct ArmOperand
+		struct SetOperandIndices
 		{
 			template<typename LastResult, Pattern Operand>
 			struct Call;
 
 			template<meta::ListInstance ArmedOperands, meta::ListInstance MultiMatchBuildingData, std::size_t NxtIdx, Pattern Operand>
-			class Call<ArmOperandAccumulator<ArmedOperands, MultiMatchBuildingData, NxtIdx>, Operand>
+			class Call<SetOperandIndicesAccumulator<ArmedOperands, MultiMatchBuildingData, NxtIdx>, Operand>
 			{
-				using ArmedOperandData = ArmMatchSide_t<Operand, MultiMatchBuildingData, NxtIdx>;
+				using ArmedOperandData = SetMatchSideIndices_t<Operand, MultiMatchBuildingData, NxtIdx>;
 			public:
-				using type = ArmOperandAccumulator<
+				using type = SetOperandIndicesAccumulator<
 					meta::Concat_t<ArmedOperands, meta::List<typename ArmedOperandData::ResultPattern>>,
 					typename ArmedOperandData::BuildingData,
 					ArmedOperandData::index
@@ -536,11 +539,11 @@ template<Pattern... Ops> constexpr FunctionPn<FnProps<type::name>, Ops...> name(
 			};
 
 			template<meta::ListInstance ArmedOperands, meta::ListInstance MultiMatchBuildingData, std::size_t NxtIdx, std::size_t ID>
-			struct Call<ArmOperandAccumulator<ArmedOperands, MultiMatchBuildingData, NxtIdx>, MultiMatchTemp<ID>>
+			struct Call<SetOperandIndicesAccumulator<ArmedOperands, MultiMatchBuildingData, NxtIdx>, MultiMatchTemp<ID>>
 			{
 				static_assert(Function(EnclosingVariadicType).is<Variadic>(), 
 					"only variadic operations may contain multi-match-variables");
-				using type = ArmOperandAccumulator<
+				using type = SetOperandIndicesAccumulator<
 					meta::Concat_t<ArmedOperands, meta::List<MultiMatchVariable<EnclosingVariadicIndex>>>,
 					meta::Cons_t<MultiMatchBuidingDatum<EnclosingVariadicType, ID, EnclosingVariadicIndex>, MultiMatchBuildingData>,
 					NxtIdx
@@ -549,15 +552,15 @@ template<Pattern... Ops> constexpr FunctionPn<FnProps<type::name>, Ops...> name(
 		};
 
 		template<auto Type, Pattern... Operands, meta::ListInstance MultiMatchBuildingData, std::size_t ThisIdx>
-		class ArmMatchSide<FunctionPn<VariadicProps<Type, 0>, Operands...>, MultiMatchBuildingData, ThisIdx>
+		class SetMatchSideIndices<FunctionPn<VariadicProps<Type, 0>, Operands...>, MultiMatchBuildingData, ThisIdx>
 		{
 			using OperandsResult = meta::Foldl_t<
-				typename ArmOperand<Type, ThisIdx>::Call,
-				ArmOperandAccumulator<meta::List<>, MultiMatchBuildingData, ThisIdx + 1>,
+				typename SetOperandIndices<Type, ThisIdx>::Call,
+				SetOperandIndicesAccumulator<meta::List<>, MultiMatchBuildingData, ThisIdx + 1>,
 				meta::List<Operands...>
 			>;
 		public:
-			using type = ArmMatchSideResult<
+			using type = SetMatchSideIndicesResult<
 				MakeFunctionPn_t<VariadicProps<Type, ThisIdx>, typename OperandsResult::Operands>,
 				typename OperandsResult::BuildingData,
 				OperandsResult::index
@@ -565,15 +568,15 @@ template<Pattern... Ops> constexpr FunctionPn<FnProps<type::name>, Ops...> name(
 		}; 
 		
 		template<FunctionProps Props, Pattern... Operands, meta::ListInstance MultiMatchBuildingData, std::size_t NxtIdx>
-		class ArmMatchSide<FunctionPn<Props, Operands...>, MultiMatchBuildingData, NxtIdx>
+		class SetMatchSideIndices<FunctionPn<Props, Operands...>, MultiMatchBuildingData, NxtIdx>
 		{
 			using OperandsResult = meta::Foldl_t<
-				typename ArmOperand<Props::function_type, NxtIdx>::Call,
-				ArmOperandAccumulator<meta::List<>, MultiMatchBuildingData, NxtIdx>,
+				typename SetOperandIndices<Props::function_type, NxtIdx>::Call,
+				SetOperandIndicesAccumulator<meta::List<>, MultiMatchBuildingData, NxtIdx>,
 				meta::List<Operands...>
 			>;
 		public:
-			using type = ArmMatchSideResult<
+			using type = SetMatchSideIndicesResult<
 				MakeFunctionPn_t<Props, typename OperandsResult::Operands>,
 				typename OperandsResult::BuildingData,
 				OperandsResult::index
@@ -581,16 +584,16 @@ template<Pattern... Ops> constexpr FunctionPn<FnProps<type::name>, Ops...> name(
 		};
 
 		static_assert(std::is_same_v<
-			ArmMatchSide_t<FunctionPn<VariadicProps<Comm::sum, 0>>, meta::List<>, 3>,
-			ArmMatchSideResult<FunctionPn<VariadicProps<Comm::sum, 3>>, meta::List<>, 4>
+			SetMatchSideIndices_t<FunctionPn<VariadicProps<Comm::sum, 0>>, meta::List<>, 3>,
+			SetMatchSideIndicesResult<FunctionPn<VariadicProps<Comm::sum, 3>>, meta::List<>, 4>
 		>);
 
 		static_assert(std::is_same_v<
-			ArmMatchSide_t<
+			SetMatchSideIndices_t<
 				FunctionPn<VariadicProps<Comm::sum, 0>, decltype(-2_), MultiMatchTemp<8>>,
 				meta::List<>, 
 				3>,
-			ArmMatchSideResult<
+			SetMatchSideIndicesResult<
 				FunctionPn<VariadicProps<Comm::sum, 3>, decltype(-2_), MultiMatchVariable<3>>,
 				meta::List<MultiMatchBuidingDatum<Comm::sum, 8, 3>>, 
 				4>
@@ -602,13 +605,13 @@ template<Pattern... Ops> constexpr FunctionPn<FnProps<type::name>, Ops...> name(
 		/////////// arm right hand side of rule
 
 		template<Pattern P, auto ParentType, meta::ListInstance MultiMatchBuildingData>
-		struct ArmReplaceSide { using type = P; };
+		struct SetReplaceSideIndices { using type = P; };
 
 		template<Pattern P, auto ParentType, meta::ListInstance MultiMatchBuildingData>
-		using ArmReplaceSide_t = typename ArmReplaceSide<P, ParentType, MultiMatchBuildingData>::type;
+		using SetReplaceSideIndices_t = typename SetReplaceSideIndices<P, ParentType, MultiMatchBuildingData>::type;
 
 		template<std::size_t ID, auto ParentType, meta::ListInstance MultiMatchBuildingData>
-		class ArmReplaceSide<MultiMatchTemp<ID>, ParentType, MultiMatchBuildingData>
+		class SetReplaceSideIndices<MultiMatchTemp<ID>, ParentType, MultiMatchBuildingData>
 		{
 			template<typename BuildingDatum>
 			struct IsThisBuildingDatum :std::bool_constant<BuildingDatum::id == ID> {};
@@ -625,10 +628,10 @@ template<Pattern... Ops> constexpr FunctionPn<FnProps<type::name>, Ops...> name(
 		};
 
 		template<FunctionProps Props, Pattern... Operands, auto ParentType, meta::ListInstance MultiMatchBuildingData>
-		class ArmReplaceSide<FunctionPn<Props, Operands...>, ParentType, MultiMatchBuildingData>
+		class SetReplaceSideIndices<FunctionPn<Props, Operands...>, ParentType, MultiMatchBuildingData>
 		{
 			template<Pattern P>
-			using ArmOperand = ArmReplaceSide<P, Props::function_type, MultiMatchBuildingData>;
+			using ArmOperand = SetReplaceSideIndices<P, Props::function_type, MultiMatchBuildingData>;
 
 			using ArmedOperands = meta::Map_t<ArmOperand, meta::List<Operands...>>;
 		public:
@@ -640,113 +643,108 @@ template<Pattern... Ops> constexpr FunctionPn<FnProps<type::name>, Ops...> name(
 		/////////// add outermost multimatch (if outermost operation is variadic and multimatch is not already present)
 		//note: outermost operation always matched first -> MatchDataIndex always 0
 
-		//needed to adjust replace side depending on changes to match side
-		template<auto Type, bool AddedHeadMulti, bool AddedLastMulti>
-		struct Changelog
-		{
-			static constexpr NonComm function_type = Type;
-			static constexpr bool added_head_multi = AddedHeadMulti;
-			static constexpr bool added_last_multi = AddedLastMulti;
-		};
+		template<Pattern MatchSide, Pattern ReplaceSide>
+		struct AddOutermostMulti { using type = meta::Pair<MatchSide, ReplaceSide>; };
 
-		template<Pattern P>
-		struct AddOutermostMulti { using type = meta::Pair<P, Changelog<nullptr, false, false>>; };
+		template<Pattern MatchSide, Pattern ReplaceSide>
+		using AddOutermostMulti_t = typename AddOutermostMulti<MatchSide, ReplaceSide>::type;
 
-		template<Pattern P>
-		using AddOutermostMulti_t = typename AddOutermostMulti<P>::type;
-
-		template<Comm Type, Pattern... Operands> 
+		template<Comm Type, Pattern... Operands, Pattern ReplaceSide> 
 		requires (!std::is_same_v<meta::Last_t<meta::List<Operands...>>, MultiMatchVariable<0>> &&
-			fn::is_associative(Variadic(Type)))
-		struct AddOutermostMulti<FunctionPn<VariadicProps<Type, 0>, Operands...>> 
+			fn::is_associative(Variadic(Type)) && std::is_same_v<Comm, decltype(Type)>)
+		struct AddOutermostMulti<FunctionPn<VariadicProps<Type, 0>, Operands...>, ReplaceSide> 
 		{
 			using type = meta::Pair<
 				FunctionPn<VariadicProps<Type, 0>, Operands..., MultiMatchVariable<0>>,
-				Changelog<Type, false, true>
+				FunctionPn<VariadicProps<Type, 0>, ReplaceSide, MultiMatchVariable<0>>
 			>;
 		}; 
 
 		static_assert(std::is_same_v<
-			AddOutermostMulti_t<Sum<decltype(1337_)>>,
-			meta::Pair<Sum<decltype(1337_), MultiMatchVariable<0>>, Changelog<Comm::sum, false, true>>
+			AddOutermostMulti_t<Sum<decltype(1337_)>, decltype(-1.25_)>,
+			meta::Pair<Sum<decltype(1337_), MultiMatchVariable<0>>, Sum<decltype(-1.25_), MultiMatchVariable<0>>>
 		>);
 		static_assert(std::is_same_v<
-			AddOutermostMulti_t<Sum<decltype(1337_), MultiMatchVariable<0>>>, 
-			meta::Pair<Sum<decltype(1337_), MultiMatchVariable<0>>, Changelog<nullptr, false, false>>
-		>); 
+			AddOutermostMulti_t<Sum<decltype(1337_), MultiMatchVariable<0>>, decltype(-1.25_)>,
+			meta::Pair<Sum<decltype(1337_), MultiMatchVariable<0>>, decltype(-1.25_)>
+		>);
 		static_assert(std::is_same_v<
-			AddOutermostMulti_t<CommutativePn<Comm::set, 0, decltype(1337_)>>,
-			meta::Pair<CommutativePn<Comm::set, 0, decltype(1337_)>, Changelog<nullptr, false, false>>
+			AddOutermostMulti_t<CommutativePn<Comm::set, 0, decltype(1337_)>, decltype(-1.25_)>,
+			meta::Pair<CommutativePn<Comm::set, 0, decltype(1337_)>, decltype(-1.25_)>
 		>);
 
 
-		template<NonComm Type, Pattern... Operands>
+		template<NonComm Type, Pattern... Operands, Pattern ReplaceSide>
 		requires (!std::is_same_v<meta::Head_t<meta::List<Operands...>>, MultiMatchVariable<0>> && 
 		          !std::is_same_v<meta::Last_t<meta::List<Operands...>>, MultiMatchVariable<0>> &&
-			fn::is_associative(Variadic(Type)))
-		struct AddOutermostMulti<FunctionPn<VariadicProps<Type, 0>, Operands...>>
+			fn::is_associative(Variadic(Type)) && std::is_same_v<NonComm, decltype(Type)>)
+		struct AddOutermostMulti<FunctionPn<VariadicProps<Type, 0>, Operands...>, ReplaceSide>
 		{
 			using type = meta::Pair <
 				FunctionPn<VariadicProps<Type, 0>, MultiMatchVariable<0>, Operands..., MultiMatchVariable<0>>,
-				Changelog<Type, true, true>
+				FunctionPn<VariadicProps<Type, 0>, MultiMatchVariable<0>, ReplaceSide, MultiMatchVariable<0>>
 			>;
 		};
 
-		template<NonComm Type, Pattern... Operands>
+		template<NonComm Type, Pattern... Operands, Pattern ReplaceSide>
 		requires ( std::is_same_v<meta::Head_t<meta::List<Operands...>>, MultiMatchVariable<0>> &&
 		          !std::is_same_v<meta::Last_t<meta::List<Operands...>>, MultiMatchVariable<0>> &&
-			fn::is_associative(Variadic(Type)))
-		struct AddOutermostMulti<FunctionPn<VariadicProps<Type, 0>, Operands...>>
+			fn::is_associative(Variadic(Type)) && std::is_same_v<NonComm, decltype(Type)>)
+		struct AddOutermostMulti<FunctionPn<VariadicProps<Type, 0>, Operands...>, ReplaceSide>
 		{
 			using type = meta::Pair<
 				FunctionPn<VariadicProps<Type, 0>, Operands..., MultiMatchVariable<0>>,
-				Changelog<Type, false, true>
+				FunctionPn<VariadicProps<Type, 0>, ReplaceSide, MultiMatchVariable<0>>
 			>;
 		};
 
-		template<NonComm Type, Pattern... Operands>
+		template<NonComm Type, Pattern... Operands, Pattern ReplaceSide>
 		requires (!std::is_same_v<meta::Head_t<meta::List<Operands...>>, MultiMatchVariable<0>> &&
 		           std::is_same_v<meta::Last_t<meta::List<Operands...>>, MultiMatchVariable<0>> &&
-			fn::is_associative(Variadic(Type)))
-		struct AddOutermostMulti<FunctionPn<VariadicProps<Type, 0>, Operands...>>
+			fn::is_associative(Variadic(Type)) && std::is_same_v<NonComm, decltype(Type)>)
+		struct AddOutermostMulti<FunctionPn<VariadicProps<Type, 0>, Operands...>, ReplaceSide>
 		{
 			using type = meta::Pair<
 				FunctionPn<VariadicProps<Type, 0>, MultiMatchVariable<0>, Operands...>,
-				Changelog<Type, true, false>
+				FunctionPn<VariadicProps<Type, 0>, MultiMatchVariable<0>, ReplaceSide>
 			>;
 		};
-
 
 		/////////// combine all actions
 
 		template<Pattern MatchSide, Pattern ReplaceSide, Predicate... Condts>
-		class ArmVaridic
+		class ArmRule
 		{
-			using MatchResult = ArmMatchSide_t<MatchSide, meta::List<>, 0>;
-			static_assert(MatchResult::index <= pattern::match::MatchData::max_variadic_count, 
+			//set indices
+			using SetMatchIndicesResult = SetMatchSideIndices_t<OrderPattern_t<MatchSide>, meta::List<>, 0>;
+			static_assert(SetMatchIndicesResult::index <= pattern::match::MatchData::max_variadic_count,
 				"maximum count of variadic operations in match side may not exceed pattern::match::MatchData::max_variadic_count");
-			using ArmedMatchSide = typename MatchResult::ResultPattern;
-			using MultiMatchBuidingData = typename MatchResult::BuildingData;
+			using MatchSideCorrectIndices = typename SetMatchIndicesResult::ResultPattern;
+			using MultiMatchBuidingData = typename SetMatchIndicesResult::BuildingData;
 
-			using ArmedReplaceSide = ArmReplaceSide_t<ReplaceSide, Literal::complex, MultiMatchBuidingData>;
+			using ReplaceSideCorrectIndices = SetReplaceSideIndices_t<ReplaceSide, Literal::complex, MultiMatchBuidingData>;
+
+			//add outermost multi match 
+			using MultiMatchAddedPair = AddOutermostMulti_t<MatchSideCorrectIndices, ReplaceSideCorrectIndices>;
+
+			using FinalMatchSide = meta::Fst_t<MultiMatchAddedPair>;
+			using FinalReplaceSide = OrderPattern_t < meta::Snd_t<MultiMatchAddedPair>>;
 		public:
-			using type = Rule<ArmedMatchSide, ArmedReplaceSide, Condts...>;
+			using type = Rule<FinalMatchSide, FinalReplaceSide, Condts...>;
 		};
 
-	} //namespace detail_arm_variadic
+	} //namespace detail_arm_rule
 
 	template<Pattern MatchSide, Pattern ReplaceSide, Predicate... Condts>
-	using ArmVariadic_t = typename detail_arm_variadic::ArmVaridic<MatchSide, ReplaceSide, Condts...>::type;
+	using ArmRule_t = typename detail_arm_rule::ArmRule<MatchSide, ReplaceSide, Condts...>::type;
 
 
 	/////////// construct pattern
 
 	template<Pattern MP, Pattern RP, Predicate... Cs>
-	constexpr auto make_rule(Rule<MP, RP>, Cs...) 
+	constexpr auto make_rule(meta::Pair<MP, RP>, Cs...) 
 	{ 
-		using OrderedMatchSide = OrderPattern_t<MP>;
-		using OrderedReplaceSide = OrderPattern_t<RP>;
-		using ResultRule = ArmVariadic_t<OrderedMatchSide, OrderedReplaceSide, Cs...>;
+		using ResultRule = ArmRule_t<MP, RP, Cs...>;
 		return ResultRule{};
 	}
 
