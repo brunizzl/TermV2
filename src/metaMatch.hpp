@@ -42,45 +42,44 @@ namespace bmath::intern::meta_pn {
 
 	/////////// recursive pattern components
 
+	constexpr std::size_t variadic = -1ull;
+
 	template<typename T>
-	concept FunctionProps = requires { T::function_type; };
+	concept FunctionProps = requires { T::function_type; T::arity; };
 
 	template<auto Type, std::size_t MatchDataIndex> 
 	struct VariadicProps
 	{ 
 		static_assert(std::is_same_v<decltype(Type), Comm> || std::is_same_v<decltype(Type), NonComm>);
 		static constexpr auto function_type = Type;
+		static constexpr std::size_t arity = variadic;
 	}; 
 	
 	template<Fn Type>
-	struct FnProps { static constexpr auto function_type = Type; };
+	struct FnProps 
+	{ 
+		static constexpr auto function_type = Type;
+		static constexpr std::size_t arity = fn::arity(Type);
+	};
 
-	template<char... Cs>
-	struct NamedFnProps { static constexpr auto function_type = NamedFn{}; };
+	template<StringLiteral Name, std::size_t Arity>
+	struct NamedFnProps 
+	{ 
+		static_assert(Arity != variadic);
+		static_assert(Name.size() > 0);
+		static constexpr auto function_type = NamedFn{};
+		static constexpr std::size_t arity = Arity;
+	};
 
 
 	template<FunctionProps Props, Pattern... Operands>
 	struct FunctionPn :PatternMarker
 	{
+		static_assert(Props::arity == variadic || Props::arity == sizeof...(Operands));
+
 		template<Pattern Rhs> 
 		constexpr meta::Pair<FunctionPn, Rhs> operator=(Rhs) { return {}; }
 	}; 
-
-	template<Fn Type, Pattern... Operands>
-	struct FunctionPn<FnProps<Type>, Operands...> :PatternMarker
-	{
-		static_assert(fn::arity(Type) == sizeof...(Operands));
-
-		template<Pattern Rhs>
-		constexpr meta::Pair<FunctionPn, Rhs> operator=(Rhs) { return {}; }
-	};
-
-	template<FunctionProps Props>
-	struct CurriedFunctionPn 
-	{  
-		template<Pattern... Operands>
-		using type = FunctionPn<Props, Operands...>;
-	};
 
 	template<FunctionProps Props, meta::ListInstance Operands>
 	struct MakeFunctionPn;
@@ -92,17 +91,25 @@ namespace bmath::intern::meta_pn {
 	struct MakeFunctionPn<Props, meta::List<Operands...>> { using type = FunctionPn<Props, Operands...>; };
 
 
-	template<Comm Type, std::size_t MatchDataIdx, Pattern... Operands>
-	using CommutativePn = FunctionPn<VariadicProps<Type, MatchDataIdx>, Operands...>;
 
-	template<NonComm Type, std::size_t MatchDataIdx, Pattern... Operands>
-	using NonCommutativePn = FunctionPn<VariadicProps<Type, MatchDataIdx>, Operands...>;
+	template<FunctionProps Props>
+	struct CurriedFunctionPn
+	{
+		template<Pattern... Operands>
+		using apply = FunctionPn<Props, Operands...>;
 
-	template<Fn Type, Pattern... Operands>
-	using FnPn = FunctionPn<FnProps<Type>, Operands...>;
+		template<Pattern... Operands>
+		constexpr FunctionPn<Props, Operands...> operator()(Operands...) { return {}; }
+	};
 
-	template<StringLiteral Name, Pattern... Operands>
-	using NamedFnPn = FunctionPn<NamedFnProps<Name>, Operands...>;
+	template<auto Type>
+	using VariadicPn = CurriedFunctionPn<VariadicProps<Type, 0>>;
+
+	template<Fn Type>
+	using FnPn = CurriedFunctionPn<FnProps<Type>>;
+
+	template<StringLiteral Name, std::size_t Arity>
+	using NamedFnPn = CurriedFunctionPn<NamedFnProps<Name, Arity>>;
 
 
 
@@ -165,8 +172,8 @@ namespace bmath::intern::meta_pn {
 
 
 
-	template<char... Name>
-	struct VariablePn :PatternMarker { static_assert(sizeof...(Name) > 0); };
+	template<StringLiteral Name>
+	struct VariablePn :PatternMarker { static_assert(Name.size() > 0); };
 
 
 	template<double Re, double Im>
@@ -245,21 +252,16 @@ template<Pattern... Ops> constexpr FunctionPn<FnProps<Fn::name>, Ops...> name(Op
 	BMATH_DEFINE_FN(force)
 	BMATH_DEFINE_FN(diff)
 
-#define BMATH_DEFINE_NAMEDFN(name) \
-template<bmath::intern::meta_pn::Pattern... Ops> \
-constexpr bmath::intern::meta_pn::FunctionPn<bmath::intern::ToCharSeq_t<bmath::intern::meta_pn::NamedFnProps, bmath::intern::StringLiteral(#name)>, Ops...> name(Ops...) { return {}; }
-
-
 	using MinusOne = ComplexPn<-1.0, 0.0>;
 
 	template<Pattern... Operands>
-	using Sum = CommutativePn<Comm::sum, 0, Operands...>;
+	using Sum = FunctionPn<VariadicProps<Comm::sum, 0>, Operands...>;
 
 	template<Pattern... Operands>
-	using Product = CommutativePn<Comm::product, 0, Operands...>;
+	using Product = FunctionPn<VariadicProps<Comm::product, 0>, Operands...>;
 
 	template<Pattern Base, Pattern Expo>
-	using Pow = FnPn<Fn::pow, Base, Expo>;
+	using Pow = FunctionPn<FnProps<Fn::pow>, Base, Expo>;
 
 
 	/////////// operator+
@@ -401,8 +403,8 @@ constexpr bmath::intern::meta_pn::FunctionPn<bmath::intern::ToCharSeq_t<bmath::i
 	template<double Re, double Im>
 	struct Generality<ComplexPn<Re, Im>> :meta::Constant<generality(Literal::complex)> {};
 
-	template<char... Cs>
-	struct Generality<VariablePn<Cs...>> :meta::Constant<generality(Literal::variable)> {};
+	template<StringLiteral Name>
+	struct Generality<VariablePn<Name>> :meta::Constant<generality(Literal::variable)> {};
 
 	template<Pattern P> 
 	constexpr int generality_v = Generality<P>::value;
@@ -428,10 +430,10 @@ constexpr bmath::intern::meta_pn::FunctionPn<bmath::intern::ToCharSeq_t<bmath::i
 		FunctionPn<FnProps<Type>, ROps...>
 	> :std::bool_constant<meta::smaller_v<meta::List<LOps...>, meta::List<ROps...>, ComparePatternsIndirection>> {};
 
-	template<StringLiteral Name, Pattern... LOps, Pattern... ROps>
+	template<StringLiteral Name, std::size_t Arity, Pattern... LOps, Pattern... ROps>
 	struct ComparePatterns<
-		FunctionPn<NamedFnProps<Name>, LOps...>,
-		FunctionPn<NamedFnProps<Name>, ROps...>
+		FunctionPn<NamedFnProps<Name, Arity>, LOps...>,
+		FunctionPn<NamedFnProps<Name, Arity>, ROps...>
 	> :std::bool_constant<meta::smaller_v<meta::List<LOps...>, meta::List<ROps...>, ComparePatternsIndirection>> {};
 
 	template<std::size_t Idx1, std::size_t Idx2>
@@ -686,8 +688,8 @@ constexpr bmath::intern::meta_pn::FunctionPn<bmath::intern::ToCharSeq_t<bmath::i
 			meta::Pair<Sum<decltype(1337_), MultiMatchVariable<0>>, decltype(-1.25_)>
 		>);
 		static_assert(std::is_same_v<
-			AddOutermostMulti_t<CommutativePn<Comm::set, 0, decltype(1337_)>, decltype(-1.25_)>,
-			meta::Pair<CommutativePn<Comm::set, 0, decltype(1337_)>, decltype(-1.25_)>
+			AddOutermostMulti_t<FunctionPn<VariadicProps<Comm::set, 0>, decltype(1337_)>, decltype(-1.25_)>,
+			meta::Pair<FunctionPn<VariadicProps<Comm::set, 0>, decltype(1337_)>, decltype(-1.25_)>
 		>);
 
 
@@ -697,7 +699,7 @@ constexpr bmath::intern::meta_pn::FunctionPn<bmath::intern::ToCharSeq_t<bmath::i
 			fn::is_associative(Variadic(Type)) && std::is_same_v<NonComm, decltype(Type)>)
 		struct AddOutermostMulti<FunctionPn<VariadicProps<Type, 0>, Operands...>, ReplaceSide>
 		{
-			using type = meta::Pair <
+			using type = meta::Pair<
 				FunctionPn<VariadicProps<Type, 0>, MultiMatchVariable<0>, Operands..., MultiMatchVariable<0>>,
 				FunctionPn<VariadicProps<Type, 0>, MultiMatchVariable<0>, ReplaceSide, MultiMatchVariable<0>>
 			>;
@@ -745,7 +747,7 @@ constexpr bmath::intern::meta_pn::FunctionPn<bmath::intern::ToCharSeq_t<bmath::i
 			using MultiMatchAddedPair = AddOutermostMulti_t<MatchSideCorrectIndices, ReplaceSideCorrectIndices>;
 
 			using FinalMatchSide = meta::Fst_t<MultiMatchAddedPair>;
-			using FinalReplaceSide = OrderPattern_t < meta::Snd_t<MultiMatchAddedPair>>;
+			using FinalReplaceSide = OrderPattern_t<meta::Snd_t<MultiMatchAddedPair>>;
 		public:
 			using type = Rule<FinalMatchSide, FinalReplaceSide, Condts...>;
 		};
@@ -886,10 +888,10 @@ template<Pattern Lhs, Pattern Rhs> constexpr InRelation<name, Lhs, Rhs> op(Lhs, 
 				"(" + separate("", ", ", Ops{}...) + ")";
 		};
 
-		template<char... Cs, Pattern... Ops>
-		struct Name<FunctionPn<NamedFnProps<Cs...>, Ops...>>
+		template<StringLiteral FnName, std::size_t Arity, Pattern... Ops>
+		struct Name<FunctionPn<NamedFnProps<FnName, Arity>, Ops...>>
 		{
-			static constexpr auto value = StringLiteral(std::array{ Cs... }) + "(" + separate("", ", ", Ops{}...) + ")";
+			static constexpr auto value = FnName + "(" + separate("", ", ", Ops{}...) + ")";
 		};
 
 		template<double Re, double Im>
@@ -898,10 +900,10 @@ template<Pattern Lhs, Pattern Rhs> constexpr InRelation<name, Lhs, Rhs> op(Lhs, 
 			static constexpr auto value = complex_to_string_literal<Re, Im>();
 		};
 
-		template<char... Cs>
-		struct Name<VariablePn<Cs...>> 
+		template<StringLiteral VarName>
+		struct Name<VariablePn<VarName>> 
 		{ 
-			static constexpr auto value = StringLiteral(std::array{ Cs... });
+			static constexpr auto value = VarName;
 		};
 
 		template<std::size_t I>

@@ -581,7 +581,7 @@ namespace bmath::intern::test {
 			std::cout << "\n";
 		}
 		{
-			auto pi = VariablePn<'p', 'i'>{};
+			auto pi = VariablePn<"pi">{};
 			auto [x] = make_tree_matches<1>;
 			auto rule_1 = make_rule((sin(x)^2_) + (cos(x)^2_) = 1_);
 
@@ -655,21 +655,20 @@ namespace bmath::intern::test {
 		}
 	}
 
-	//BMATH_DEFINE_NAMEDFN(fib)
-
 	void meta_pattern_2() 
 	{
 		using namespace bmath::intern::meta_pn;
+		auto fib = NamedFnPn<"fib", 1>{};
 		{
-			//auto [n] = make_tree_matches<1>;
-			//auto rule_1 = make_rule(fib(0_) = 0_);
-			//auto rule_2 = make_rule(fib(1_) = 1_);
-			//auto rule_3 = make_rule(fib(n) = fib(n - 1_) + fib(n - 2_));
-			//
-			//std::cout << name(rule_1) << "\n";
-			//std::cout << name(rule_2) << "\n";
-			//std::cout << name(rule_3) << "\n";
-			//std::cout << "\n";
+			auto [n] = make_tree_matches<1>;
+			auto rule_1 = make_rule(fib(0_) = 0_);
+			auto rule_2 = make_rule(fib(1_) = 1_);
+			auto rule_3 = make_rule(fib(n) = fib(n - 1_) + fib(n - 2_));
+			
+			std::cout << name(rule_1) << "\n";
+			std::cout << name(rule_2) << "\n";
+			std::cout << name(rule_3) << "\n";
+			std::cout << "\n";
 		}
 	}
 

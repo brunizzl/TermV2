@@ -31,6 +31,7 @@ idea status:
  - change permutation_equals (currently returning bool) to permutation_compare returning one of {match, smaller, larger, unordered} -> binary search for math types?
 	   also requires find_matching_permutation to return same values.
  - sort pattern with care for match variables
+ - change macros in meta_pn to create function objects, not functions 
 */
 
 
