@@ -152,6 +152,7 @@ namespace bmath::intern {
 
 		constexpr OptionalComplex(const std::complex<double>& new_val) noexcept :val(new_val) {}
 		constexpr OptionalComplex(const double new_val) noexcept :val(new_val) {}
+		constexpr OptionalComplex(const double re, const double im) noexcept :val(re, im) {}
 		constexpr OptionalComplex() noexcept = default;
 
 		bool has_value() const noexcept { return !std::isnan(this->val.real()); }
