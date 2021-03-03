@@ -37,6 +37,7 @@ idea status:
 
 using namespace bmath::intern;
 using namespace bmath::intern::pattern;
+using namespace bmath::intern::meta_pn;
 
 //void test_f(PnType t) {
 //	using Options = EnumSwitch<PnType, 
@@ -74,6 +75,12 @@ int main()
 	//	test_f((PnType)i);
 	//}
 	//std::cout << "\n";
+
+	//auto cond = 11111_ + ((11_ * 11_i) ^ 2_) + MultiMatchVariable<1>{};
+	//
+	//const OptionalComplex res = run_time::Evaluate<std::remove_cvref_t<decltype(cond)>>::value(MathStore{}, pattern::match::MatchData{});
+	//
+	//std::cout << res.val.real() << std::showpos << res.val.imag() << "i\n";
 
 
 	//debug::enumerate_type();

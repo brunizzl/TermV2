@@ -26,13 +26,22 @@ namespace bmath::intern {
 	};
 
 	template<typename T>
-	concept Num = Eq<T> &&
-		requires (T a) {
+	concept MinimalNum = Eq<T> &&
+		requires (T a, T b) {
+			{a += b} -> std::same_as<T&>;
+			{a -= b} -> std::same_as<T&>;
+			{a *= b} -> std::same_as<T&>;
+			{a /= b} -> std::same_as<T&>;
+	};
+
+	template<typename T>
+	concept Num = MinimalNum<T> &&
+		requires (T a, T b) {
 			{-a}    -> std::same_as<T>;
-			{a + a} -> std::same_as<T>;
-			{a - a} -> std::same_as<T>;
-			{a * a} -> std::same_as<T>;
-			{a / a} -> std::same_as<T>;
+			{a + b} -> std::same_as<T>;
+			{a - b} -> std::same_as<T>;
+			{a * b} -> std::same_as<T>;
+			{a / b} -> std::same_as<T>;
 	};
 
 
@@ -94,7 +103,7 @@ namespace bmath::intern {
 	{
 		auto res = std::pair{ 0ull, 1ull };
 		while (iter > begin_) {
-			const unsigned char digit = *(--iter) - '0';
+			const unsigned digit = *(--iter) - unsigned('0');
 			assert(digit < 10);
 			res.first += digit * res.second;
 			res.second *= 10;
@@ -102,11 +111,8 @@ namespace bmath::intern {
 		return res;
 	}
 
-	template<typename T>
-	constexpr unsigned long long parse_ull(const T& chars) { return parse_ull(chars.begin(), chars.end()).first; }
-
-	constexpr auto _1234_sv = std::string_view("1234");
-	static_assert(parse_ull(std::string_view("1234")) == 1234);
+	constexpr auto _1234 = "12345.250";
+	static_assert(parse_ull(+_1234, _1234 + 4).first == 1234);
 
 	template<IterOver<char> Iter>
 	constexpr double parse_double(const Iter start, const Iter stop) 
@@ -122,10 +128,7 @@ namespace bmath::intern {
 		return integer_part;
 	}
 
-	template<typename T>
-	constexpr double parse_double(const T& chars) { return parse_double(chars.begin(), chars.end()); }
-
-	static_assert(parse_double(std::string_view("1234")) == 1234.0);
+	//static_assert(parse_double(+_1234, _1234 + 8) == 12345.25);
 
 } //namespace bmath::intern
 

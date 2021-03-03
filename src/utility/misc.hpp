@@ -10,6 +10,7 @@
 #include <bit>
 
 #include "array.hpp"
+#include "meta.hpp"
 
 #if defined(_MSC_VER)
 
@@ -71,10 +72,10 @@ namespace bmath::intern {
 		return itr != end(data) ? *itr : null_val;
 	}
 
-
-	constexpr double int_pow(double base, const unsigned long long expo) noexcept
+	template<MinimalNum T>
+	constexpr T nat_pow(T base, const unsigned long long expo) noexcept
 	{
-		double res = 1.0;
+		T res = 1.0;
 		for (std::size_t power = 1; power <= expo; power *= 2) {
 			if ((expo & power)) {
 				res *= base;
@@ -84,8 +85,8 @@ namespace bmath::intern {
 		return res;
 	}
 
-	static_assert(int_pow(3.0, 9) == 19683);
-	static_assert(int_pow(10.0, 6) == 1000000);
+	static_assert(nat_pow(3.0, 9) == 19683);
+	static_assert(nat_pow(10.0, 6) == 1000000);
 
 
 	//remove if c++20 libraries have catched up
@@ -151,8 +152,7 @@ namespace bmath::intern {
 		std::complex<double> val = std::numeric_limits<double>::quiet_NaN(); //default initialize to invalid state
 
 		constexpr OptionalComplex(const std::complex<double>& new_val) noexcept :val(new_val) {}
-		constexpr OptionalComplex(const double new_val) noexcept :val(new_val) {}
-		constexpr OptionalComplex(const double re, const double im) noexcept :val(re, im) {}
+		constexpr OptionalComplex(const double re, const double im = 0.0) noexcept :val(re, im) {}
 		constexpr OptionalComplex() noexcept = default;
 
 		bool has_value() const noexcept { return !std::isnan(this->val.real()); }
@@ -172,6 +172,10 @@ namespace bmath::intern {
 		constexpr OptionalComplex& operator-=(const OptionalComplex& snd) noexcept { this->val -= snd.val; return *this; }
 		constexpr OptionalComplex& operator*=(const OptionalComplex& snd) noexcept { this->val *= snd.val; return *this; }
 		constexpr OptionalComplex& operator/=(const OptionalComplex& snd) noexcept { this->val /= snd.val; return *this; }
+
+		constexpr std::strong_ordering operator<=>(const OptionalComplex& snd) noexcept { return compare_complex(this->val, snd.val); }
+		constexpr bool operator==(const OptionalComplex& snd) noexcept { return compare_complex(this->val, snd.val) == std::strong_ordering::equal; }
+		constexpr bool operator!=(const OptionalComplex& snd) noexcept { return compare_complex(this->val, snd.val) != std::strong_ordering::equal; }
 	}; //struct OptionalComplex
     
 } //namespace bmath::intern

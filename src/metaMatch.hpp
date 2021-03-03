@@ -5,6 +5,7 @@
 #include <array>
 #include <string>
 #include <tuple>
+#include <cassert>
 
 #include "utility/meta.hpp"
 #include "utility/stringLiteral.hpp"
@@ -124,14 +125,6 @@ namespace bmath::intern::meta_pn {
 	template<std::size_t MatchDataIndex>
 	struct IsTreeMatchVariable<TreeMatchVariable<MatchDataIndex>> :std::true_type {};
 
-	template<char... Cs>
-	constexpr auto operator "" _tree()
-	{
-		constexpr unsigned long long match_data_idx = parse_ull(std::to_array({ Cs... }));
-		static_assert(match_data_idx < pattern::match::MatchData::max_tree_match_count);
-		return TreeMatchVariable<match_data_idx>{};
-	}
-
 
 
 	template<std::size_t MatchDataIndex>
@@ -139,14 +132,6 @@ namespace bmath::intern::meta_pn {
 
 	template<std::size_t ID>
 	struct MultiMatchTemp :PatternMarker {};
-
-	template<char... Cs>
-	constexpr auto operator "" _multi()
-	{
-		constexpr unsigned long long match_data_idx = parse_ull(std::to_array({ Cs... }));
-		static_assert(match_data_idx < pattern::match::MatchData::max_variadic_count);
-		return MultiMatchTemp<match_data_idx>{};
-	}
 
 	namespace detail_variables {
 		template<std::size_t... Is>
@@ -201,10 +186,20 @@ namespace bmath::intern::meta_pn {
 
 
 	template<char... Cs>
-	constexpr ComplexPn<parse_double(std::to_array({ Cs... })), 0.0> operator "" _() { return {}; }
+	constexpr auto operator "" _() 
+	{ 
+		constexpr auto name = std::array{ Cs... };
+		constexpr double real = parse_double(name.begin(), name.end());
+		return ComplexPn<real, 0.0>{}; 
+	}
 
 	template<char... Cs>
-	constexpr ComplexPn<0.0, parse_double(std::to_array({ Cs... }))> operator "" _i() { return {}; }
+	constexpr auto operator "" _i() 
+	{ 
+		constexpr auto name = std::array{ Cs... };
+		constexpr double imag = parse_double(name.begin(), name.end());
+		return ComplexPn<0.0, imag>{}; 
+	}
 
 
 
@@ -291,7 +286,7 @@ template<Pattern... Ops> constexpr FunctionPn<FnProps<Fn::name>, Ops...> name(Op
 	using Plus_t = typename Plus<Lhs, Rhs>::type;
 
 	template<Pattern Lhs, Pattern Rhs> 
-	constexpr Plus_t<Lhs, Rhs> operator+(Lhs, Rhs) { return {}; }
+	constexpr auto operator+(Lhs, Rhs) { return Plus_t<Lhs, Rhs>{}; }
 
 
 	/////////// operator*
@@ -321,7 +316,7 @@ template<Pattern... Ops> constexpr FunctionPn<FnProps<Fn::name>, Ops...> name(Op
 	using Times_t = typename Times<Lhs, Rhs>::type;
 
 	template<Pattern Lhs, Pattern Rhs>
-	constexpr Times_t<Lhs, Rhs> operator*(Lhs, Rhs) { return {}; }
+	constexpr auto operator*(Lhs, Rhs) { return Times_t<Lhs, Rhs>{}; }
 
 
 	/////////// operator-
@@ -342,10 +337,10 @@ template<Pattern... Ops> constexpr FunctionPn<FnProps<Fn::name>, Ops...> name(Op
 	using Minus_t = typename Minus<P>::type;
 
 	template<Pattern P>
-	constexpr Minus_t<P> operator-(P) { return {}; }
+	constexpr auto operator-(P) { return Minus_t<P>{}; }
 
 	template<Pattern Lhs, Pattern Rhs>
-	constexpr Plus_t<Lhs, Minus_t<Rhs>> operator-(Lhs, Rhs) { return {}; }
+	constexpr auto operator-(Lhs, Rhs) { return Plus_t<Lhs, Minus_t<Rhs>>{}; }
 
 
 	/////////// operator/
@@ -367,13 +362,13 @@ template<Pattern... Ops> constexpr FunctionPn<FnProps<Fn::name>, Ops...> name(Op
 	using Divide_t = typename Divide<P>::type;
 
 	template<Pattern Lhs, Pattern Rhs> 
-	constexpr Times_t<Lhs, Divide_t<Rhs>> operator/(Lhs, Rhs) { return {}; }
+	constexpr auto operator/(Lhs, Rhs) { return Times_t<Lhs, Divide_t<Rhs>>{}; }
 
 
 	/////////// operator^
 
 	template<Pattern Lhs, Pattern Rhs>
-	constexpr Pow<Lhs, Rhs> operator^(Lhs, Rhs) { return {}; }
+	constexpr auto operator^(Lhs, Rhs) { return Pow<Lhs, Rhs>{}; }
 
 
 
@@ -767,15 +762,17 @@ template<Pattern... Ops> constexpr FunctionPn<FnProps<Fn::name>, Ops...> name(Op
 	//----------------------------------------------------------------------------------------------------------------------
 	//----------------------------------------------------------------------------------------------------------------------
 
-#define BMATH_DEFINE_DOMAIN(upper, lower) \
-template<Pattern P> struct upper :PredicateMarker {};\
-template<Pattern P> constexpr upper<P> lower(P) { return {}; }
+	template<pattern::Domain D, Pattern P>
+	struct InDomain :PredicateMarker {};
 
-	BMATH_DEFINE_DOMAIN(IsNat, is_nat)
-	BMATH_DEFINE_DOMAIN(IsNat0, is_nat0)
-	BMATH_DEFINE_DOMAIN(IsInt, is_int)
-	BMATH_DEFINE_DOMAIN(IsReal, is_real)
-	BMATH_DEFINE_DOMAIN(IsValue, is_value)
+#define BMATH_DEFINE_DOMAIN(enum_name, function_name) \
+template<Pattern P> constexpr InDomain<enum_name, P> function_name(P) { return {}; }
+
+	BMATH_DEFINE_DOMAIN(pattern::Domain::natural, is_nat)
+	BMATH_DEFINE_DOMAIN(pattern::Domain::natural_0, is_nat0)
+	BMATH_DEFINE_DOMAIN(pattern::Domain::integer, is_int)
+	BMATH_DEFINE_DOMAIN(pattern::Domain::real, is_real)
+	BMATH_DEFINE_DOMAIN(pattern::Domain::complex, is_value)
 
 	template<Pattern P> requires (IsTreeMatchVariable<P>::value)
 	struct IsVariable :PredicateMarker {};
@@ -836,8 +833,6 @@ template<Pattern Lhs, Pattern Rhs> constexpr InRelation<name, Lhs, Rhs> op(Lhs, 
 		template<Pattern P>
 		struct Evaluate { static_assert(P::this_identifier_does_not_exist_and_serves_to_tell_that_the_type_of_pattern_found_here_may_not_appear_in_a_condition); };
 
-		template<Pattern P>
-		constexpr auto evaluate_v = Evaluate<P>::value;
 
 		template<double Re, double Im>
 		struct Evaluate<ComplexPn<Re, Im>>
@@ -848,21 +843,87 @@ template<Pattern Lhs, Pattern Rhs> constexpr InRelation<name, Lhs, Rhs> op(Lhs, 
 			}
 		};
 
-		//template<std::size_t I, Pattern... Operands>
-		//struct Evaluate<FunctionPn<CommProps<Comm::sum, I>
-		//{
-		//	static constexpr OptionalComplex value(const MathStore& store, const pattern::match::MatchData& match_data) noexcept
-		//	{
-		//		return OptionalComplex{ Re, Im };
-		//	}
-		//};
+		template<Pattern... Operands>
+		struct Evaluate<FunctionPn<VariadicProps<Comm, Comm::sum, 0>, Operands...>>
+		{
+			static constexpr OptionalComplex value(const MathStore& store, const pattern::match::MatchData& match_data) noexcept
+			{
+				return (Evaluate<Operands>::value(store, match_data) + ...);
+			}
+		};
+
+		template<Pattern... Operands>
+		struct Evaluate<FunctionPn<VariadicProps<Comm, Comm::product, 0>, Operands...>>
+		{
+			static constexpr OptionalComplex value(const MathStore& store, const pattern::match::MatchData& match_data) noexcept
+			{
+				return (Evaluate<Operands>::value(store, match_data) * ...);
+			}
+		}; 
+		
+		template<Pattern Base, double Re> requires (Re - (int)Re == 0.0)
+		struct Evaluate<FunctionPn<FnProps<Fn::pow>, Base, ComplexPn<Re, 0.0>>>
+		{
+			static constexpr OptionalComplex value(const MathStore& store, const pattern::match::MatchData& match_data) noexcept
+			{
+				const OptionalComplex base = Evaluate<Base>::value(store, match_data);
+				if constexpr (Re < 0.0) {
+					constexpr unsigned long long exponent = -Re;
+					return OptionalComplex{ 1.0 } / nat_pow(base, exponent);
+				}
+				else {
+					constexpr unsigned long long exponent = Re;
+					return nat_pow(base, exponent);
+				}
+			}
+		}; 
+		
+		template<std::size_t MatchDataIdx>
+		struct Evaluate<TreeMatchVariable<MatchDataIdx>>
+		{
+			static constexpr OptionalComplex value(const MathStore& store, const pattern::match::MatchData& match_data) noexcept
+			{
+				const pattern::match::SharedTreeDatum datum = match_data.tree_match_data[MatchDataIdx];
+				assert(datum.is_set());
+				if (datum.match_idx.get_type() == Literal::complex) {
+					return store.at(datum.match_idx.get_index()).complex;
+				}
+				else {
+					return OptionalComplex{};
+				}
+			}
+		};
 
 
 		template<Predicate>
 		struct TestCondition;
 
+		template<Predicate P1, Predicate P2>
+		struct TestCondition<And<P1, P2>>
+		{
+			static constexpr bool value(const MathStore& store, const pattern::match::MatchData& match_data) noexcept
+			{
+				return TestCondition<P1>::value(store, match_data) && TestCondition<P2>::value(store, match_data);
+			}
+		};
+
+		template<Predicate P1, Predicate P2>
+		struct TestCondition<Or<P1, P2>>
+		{
+			static constexpr bool value(const MathStore& store, const pattern::match::MatchData& match_data) noexcept
+			{
+				return TestCondition<P1>::value(store, match_data) || TestCondition<P2>::value(store, match_data);
+			}
+		};
+
 		template<Predicate P>
-		constexpr auto test_condition_v = TestCondition<P>::value;
+		struct TestCondition<Not<P>>
+		{
+			static constexpr bool value(const MathStore& store, const pattern::match::MatchData& match_data) noexcept
+			{
+				return !TestCondition<P>::value(store, match_data);
+			}
+		};
 
 
 	} //namespace run_time
@@ -903,7 +964,7 @@ template<Pattern Lhs, Pattern Rhs> constexpr InRelation<name, Lhs, Rhs> op(Lhs, 
 		template<Pattern Lhs, Pattern Rhs, Predicate... Conds>
 		struct Name<Rule<Lhs, Rhs, Conds...>>
 		{
-			static constexpr auto value = name_v<Lhs> + " = " + name_v<Rhs> + separate(", ", ", ", Conds{}...);
+			static constexpr auto value = name_v<Lhs> + " = " + name_v<Rhs> + separate("  requires:  ", ", ", Conds{}...);
 		};
 
 		template<typename Category, Category Type, std::size_t I, Pattern... Ops>
@@ -956,16 +1017,40 @@ template<Pattern Lhs, Pattern Rhs> constexpr InRelation<name, Lhs, Rhs> op(Lhs, 
 			static constexpr auto value = "M" + ull_to_string_literal<I>() + "...";
 		};
 
-		template<template<typename> class InDomain, Pattern T> requires (Predicate<InDomain<T>>)
-		struct Name<InDomain<T>>
+		template<pattern::Domain D, Pattern T>
+		struct Name<InDomain<D, T>>
 		{
 			static constexpr auto value = "in_domain(" + name_v<T> + ")";
+		};
+
+		template<Pattern T>
+		struct Name<IsVariable<T>>
+		{
+			static constexpr auto value = "is_variable(" + name_v<T> +")";
 		};
 
 		template<Relation R, Pattern T1, Pattern T2>
 		struct Name<InRelation<R, T1, T2>>
 		{
 			static constexpr auto value = "in_relation(" + name_v<T1> + ", " + name_v<T2> + ")";
+		};
+
+		template<Predicate P1, Predicate P2>
+		struct Name<And<P1, P2>>
+		{
+			static constexpr auto value = "(" + name_v<P1> + " && " + name_v<P2> + ")";
+		};
+
+		template<Predicate P1, Predicate P2>
+		struct Name<Or<P1, P2>>
+		{
+			static constexpr auto value = "(" + name_v<P1> + " || " + name_v<P2> + ")";
+		};
+
+		template<Predicate P>
+		struct Name<Not<P>>
+		{
+			static constexpr auto value = "!" + name_v<P>;
 		};
 	} //namespace detail_name
 
