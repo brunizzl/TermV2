@@ -98,6 +98,8 @@ namespace bmath::intern {
 		}
 
 		constexpr const Union_T* raw_at(std::uint32_t idx) const noexcept { return this->ptr - this->index + idx; }
+
+		constexpr const Union_T* store_data() const noexcept { return this->ptr - this->index; }
 	}; //struct BasicSaveRef
 
 

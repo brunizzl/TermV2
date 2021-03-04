@@ -6,14 +6,17 @@
 #include <string>
 #include <tuple>
 #include <cassert>
+#include <algorithm>
 
 #include "utility/meta.hpp"
 #include "utility/stringLiteral.hpp"
+#include "utility/misc.hpp"
 
 #include "arithmeticTerm.hpp"
 #include "pattern.hpp"
 
 #include "ioArithmetic.hpp"
+#include "fold.hpp"
 
 namespace bmath::intern::meta_pn {
 
@@ -762,6 +765,46 @@ template<Pattern... Ops> constexpr FunctionPn<FnProps<Fn::name>, Ops...> name(Op
 	//----------------------------------------------------------------------------------------------------------------------
 	//----------------------------------------------------------------------------------------------------------------------
 
+	struct ConditionRes
+	{
+		enum Value { false_, true_, undecided } value;
+
+		constexpr ConditionRes(const Value v) noexcept :value(v) {}
+		constexpr ConditionRes(const bool  b) noexcept :value(static_cast<Value>(b)) {}
+
+		constexpr ConditionRes operator!() const noexcept 
+		{
+			switch (this->value) {
+			case false_:    return true_;
+			case true_:     return false_;
+			case undecided: return undecided;
+			default: BMATH_UNREACHABLE;
+			}
+		}
+
+		constexpr ConditionRes operator&&(const ConditionRes snd) const noexcept
+		{
+			switch (this->value) {
+			case false_:    return false_;
+			case true_:     return snd;
+			case undecided: return snd.value == false_ ? false_ : undecided;
+			default: BMATH_UNREACHABLE;
+			}
+		}
+
+		constexpr ConditionRes operator||(const ConditionRes snd) const noexcept
+		{
+			switch (this->value) {
+			case false_:    return snd;
+			case true_:     return true_;
+			case undecided: return snd.value == true_ ?	true_ :	undecided;
+			default: BMATH_UNREACHABLE;
+			}
+		}
+
+		constexpr bool to_bool() const noexcept { return this->value == true_; }
+	};
+
 	template<pattern::Domain D, Pattern P>
 	struct InDomain :PredicateMarker {};
 
@@ -783,10 +826,10 @@ template<Pattern P> constexpr InDomain<enum_name, P> function_name(P) { return {
 	enum class Relation 
 	{
 		//no preconditions
-		equal, unequal, contains, 
-
-		//these imply is_real for both arguments (else evaluate to false)
-		smaller, larger, smaller_equal, larger_equal, divides
+		equal, unequal, smaller, larger, smaller_equal, larger_equal, divides, 
+		
+		//requires both rhs and lhs to be tree match variables
+		contains
 	};
 
 	template<Relation relation, Pattern Lhs, Pattern Rhs>
@@ -797,12 +840,12 @@ template<Pattern Lhs, Pattern Rhs> constexpr InRelation<name, Lhs, Rhs> op(Lhs, 
 
 	BMATH_DEFINE_RELATION_OPERATOR(Relation::equal, operator==)
 	BMATH_DEFINE_RELATION_OPERATOR(Relation::unequal, operator!=)
-	BMATH_DEFINE_RELATION_OPERATOR(Relation::contains, contains)
 	BMATH_DEFINE_RELATION_OPERATOR(Relation::smaller, operator<)
 	BMATH_DEFINE_RELATION_OPERATOR(Relation::larger, operator>)
 	BMATH_DEFINE_RELATION_OPERATOR(Relation::smaller_equal, operator<=)
 	BMATH_DEFINE_RELATION_OPERATOR(Relation::larger_equal, operator>=)
 	BMATH_DEFINE_RELATION_OPERATOR(Relation::divides, operator|)
+	BMATH_DEFINE_RELATION_OPERATOR(Relation::contains, contains)
 
 	template<Predicate Lhs, Predicate Rhs>
 	struct Or :PredicateMarker {};
@@ -833,11 +876,10 @@ template<Pattern Lhs, Pattern Rhs> constexpr InRelation<name, Lhs, Rhs> op(Lhs, 
 		template<Pattern P>
 		struct Evaluate { static_assert(P::this_identifier_does_not_exist_and_serves_to_tell_that_the_type_of_pattern_found_here_may_not_appear_in_a_condition); };
 
-
 		template<double Re, double Im>
 		struct Evaluate<ComplexPn<Re, Im>>
 		{
-			static constexpr OptionalComplex value(const MathStore& store, const pattern::match::MatchData& match_data) noexcept
+			static constexpr OptionalComplex value(const MathUnion* store_data, const pattern::match::MatchData& match_data) noexcept
 			{
 				return OptionalComplex{ Re, Im };
 			}
@@ -846,27 +888,27 @@ template<Pattern Lhs, Pattern Rhs> constexpr InRelation<name, Lhs, Rhs> op(Lhs, 
 		template<Pattern... Operands>
 		struct Evaluate<FunctionPn<VariadicProps<Comm, Comm::sum, 0>, Operands...>>
 		{
-			static constexpr OptionalComplex value(const MathStore& store, const pattern::match::MatchData& match_data) noexcept
+			static constexpr OptionalComplex value(const MathUnion* store_data, const pattern::match::MatchData& match_data) noexcept
 			{
-				return (Evaluate<Operands>::value(store, match_data) + ...);
+				return (Evaluate<Operands>::value(store_data, match_data) + ...);
 			}
 		};
 
 		template<Pattern... Operands>
 		struct Evaluate<FunctionPn<VariadicProps<Comm, Comm::product, 0>, Operands...>>
 		{
-			static constexpr OptionalComplex value(const MathStore& store, const pattern::match::MatchData& match_data) noexcept
+			static constexpr OptionalComplex value(const MathUnion* store_data, const pattern::match::MatchData& match_data) noexcept
 			{
-				return (Evaluate<Operands>::value(store, match_data) * ...);
+				return (Evaluate<Operands>::value(store_data, match_data) * ...);
 			}
 		}; 
 		
 		template<Pattern Base, double Re> requires (Re - (int)Re == 0.0)
 		struct Evaluate<FunctionPn<FnProps<Fn::pow>, Base, ComplexPn<Re, 0.0>>>
 		{
-			static constexpr OptionalComplex value(const MathStore& store, const pattern::match::MatchData& match_data) noexcept
+			static constexpr OptionalComplex value(const MathUnion* store_data, const pattern::match::MatchData& match_data) noexcept
 			{
-				const OptionalComplex base = Evaluate<Base>::value(store, match_data);
+				const OptionalComplex base = Evaluate<Base>::value(store_data, match_data);
 				if constexpr (Re < 0.0) {
 					constexpr unsigned long long exponent = -Re;
 					return OptionalComplex{ 1.0 } / nat_pow(base, exponent);
@@ -881,12 +923,12 @@ template<Pattern Lhs, Pattern Rhs> constexpr InRelation<name, Lhs, Rhs> op(Lhs, 
 		template<std::size_t MatchDataIdx>
 		struct Evaluate<TreeMatchVariable<MatchDataIdx>>
 		{
-			static constexpr OptionalComplex value(const MathStore& store, const pattern::match::MatchData& match_data) noexcept
+			static constexpr OptionalComplex value(const MathUnion* store_data, const pattern::match::MatchData& match_data) noexcept
 			{
 				const pattern::match::SharedTreeDatum datum = match_data.tree_match_data[MatchDataIdx];
 				assert(datum.is_set());
 				if (datum.match_idx.get_type() == Literal::complex) {
-					return store.at(datum.match_idx.get_index()).complex;
+					return (store_data + datum.match_idx.get_index())->complex;
 				}
 				else {
 					return OptionalComplex{};
@@ -901,32 +943,290 @@ template<Pattern Lhs, Pattern Rhs> constexpr InRelation<name, Lhs, Rhs> op(Lhs, 
 		template<Predicate P1, Predicate P2>
 		struct TestCondition<And<P1, P2>>
 		{
-			static constexpr bool value(const MathStore& store, const pattern::match::MatchData& match_data) noexcept
+			static constexpr ConditionRes value(const MathUnion* store_data, const pattern::match::MatchData& match_data) noexcept
 			{
-				return TestCondition<P1>::value(store, match_data) && TestCondition<P2>::value(store, match_data);
+				return TestCondition<P1>::value(store_data, match_data) && TestCondition<P2>::value(store_data, match_data);
 			}
 		};
 
 		template<Predicate P1, Predicate P2>
 		struct TestCondition<Or<P1, P2>>
 		{
-			static constexpr bool value(const MathStore& store, const pattern::match::MatchData& match_data) noexcept
+			static constexpr ConditionRes value(const MathUnion* store_data, const pattern::match::MatchData& match_data) noexcept
 			{
-				return TestCondition<P1>::value(store, match_data) || TestCondition<P2>::value(store, match_data);
+				return TestCondition<P1>::value(store_data, match_data) || TestCondition<P2>::value(store_data, match_data);
 			}
 		};
 
 		template<Predicate P>
 		struct TestCondition<Not<P>>
 		{
-			static constexpr bool value(const MathStore& store, const pattern::match::MatchData& match_data) noexcept
+			static constexpr ConditionRes value(const MathUnion* store_data, const pattern::match::MatchData& match_data) noexcept
 			{
-				return !TestCondition<P>::value(store, match_data);
+				return !TestCondition<P>::value(store_data, match_data);
+			}
+		}; 
+		
+		template<pattern::Domain D, Pattern P>
+		struct TestCondition<InDomain<D, P>>
+		{
+			static constexpr ConditionRes value(const MathUnion* store_data, const pattern::match::MatchData& match_data) noexcept
+			{
+				const OptionalComplex c = Evaluate<P>::value(store_data, match_data);
+				if (c) {
+					return static_cast<ConditionRes::Value>(pattern::in_domain(c.val, D));
+				}
+				else {
+					return ConditionRes::undecided;
+				}
 			}
 		};
 
+		template<Relation R, Pattern P1, Pattern P2> requires (R != Relation::contains)
+		struct TestCondition<InRelation<R, P1, P2>>
+		{
+			static constexpr ConditionRes value(const MathUnion* store_data, const pattern::match::MatchData& match_data) noexcept
+			{
+				if constexpr (R == Relation::equal || R == Relation::unequal || R == Relation::divides) {
+					const OptionalComplex c1 = Evaluate<P1>::value(store_data, match_data);
+					const OptionalComplex c2 = Evaluate<P2>::value(store_data, match_data);
+					if (!c1 || !c2) {
+						return ConditionRes::undecided;
+					}
+					else {
+						if constexpr (R == Relation::equal)   { return c1.val == c2.val; }
+						if constexpr (R == Relation::unequal) { return c1.val != c2.val; }
+						if constexpr (R == Relation::divides) { return pattern::in_domain(c1.val / c2.val, pattern::Domain::integer); }
+					}
+				}
+				if constexpr (R == Relation::smaller || R == Relation::larger || R == Relation::smaller_equal || R == Relation::larger_equal) {
+					const OptionalComplex c1 = Evaluate<P1>::value(store_data, match_data);
+					const OptionalComplex c2 = Evaluate<P2>::value(store_data, match_data);
+					if (!c1 || !c2 || c1.val.imag() != 0.0 || c2.val.imag() != 0.0) {
+						return ConditionRes::undecided;
+					}
+					else {
+						if constexpr (R == Relation::smaller)       { return c1.val.real() <  c2.val.real(); }
+						if constexpr (R == Relation::larger)        { return c1.val.real() >  c2.val.real(); }
+						if constexpr (R == Relation::smaller_equal) { return c1.val.real() <= c2.val.real(); }
+						if constexpr (R == Relation::larger_equal)  { return c1.val.real() >= c2.val.real(); }
+					}
+				}
+			}
+		};
+
+		template<std::size_t Haystack_I, std::size_t Needle_I>
+		struct TestCondition<InRelation<Relation::contains, TreeMatchVariable<Haystack_I>, TreeMatchVariable<Needle_I>>>
+		{
+			static constexpr ConditionRes value(const MathUnion* store_data, const pattern::match::MatchData& match_data) noexcept
+			{
+				const pattern::match::SharedTreeDatum haystack_datum = match_data.tree_match_data[Haystack_I];
+				const pattern::match::SharedTreeDatum needle_datum   = match_data.tree_match_data[Needle_I];
+				assert(haystack_datum.is_set());
+				assert(needle_datum.is_set());
+				const auto make_ref = [store_data](const MathIdx i) {
+					const auto index = i.get_index();
+					const auto type = i.get_type();
+					return UnsaveRef(store_data + index, index, type);
+				};
+				const auto haystack = make_ref(haystack_datum.match_idx);					
+				const auto needle   = make_ref(needle_datum.match_idx);
+				const auto pred = [needle](const UnsaveRef ref) -> fold::FindTrue {
+					return tree::compare(ref, needle) == std::strong_ordering::equal;
+				};
+
+				const bool found_needle = fold::simple_fold<fold::FindTrue>(haystack, pred);
+				return static_cast<ConditionRes::Value>(found_needle);
+			}
+		};
+
+		template<meta::ListInstance>
+		struct TestAllConditions;
+
+		template<Predicate... Conds>
+		struct TestAllConditions<meta::List<Conds...>>
+		{
+			static constexpr bool value(const MathUnion* store_data, const pattern::match::MatchData& match_data)
+			{
+				constexpr ConditionRes fold_start = ConditionRes::true_;
+				return (fold_start && ... && TestCondition<Conds>::value(store_data, match_data)).to_bool();
+			}
+		};
+
+		template<Pattern P, meta::ListInstance MatchedVars, Predicate... Conditions>
+		struct Match;
+
+		template<StringLiteral Name, meta::ListInstance MatchedVars, Predicate... Conditions>
+		struct Match<VariablePn<Name>, MatchedVars, Conditions...>
+		{
+			static constexpr bool value(const UnsaveRef ref, pattern::match::MatchData& match_data) {
+				if (ref.type != Literal::variable) {
+					return false;
+				}
+				const CharVector& var = *ref;
+				return std::string_view(Name) == std::string_view(var);
+			}
+		};
+
+		template<double Re, double Im, meta::ListInstance MatchedVars, Predicate... Conditions>
+		struct Match<ComplexPn<Re, Im>, MatchedVars, Conditions...>
+		{
+			static constexpr bool value(const UnsaveRef ref, pattern::match::MatchData& match_data) {
+				if (ref.type != Literal::complex) {
+					return false;
+				}
+				const Complex& val = *ref;
+				return compare_complex(val, Complex{ Re, Im }) == std::strong_ordering::equal;
+			}
+		};
+
+		namespace detail_match {
+			template<typename T>
+			struct ListContainedTreeMatchVars { using type = meta::List<>; };
+
+			template<typename T>
+			using ListContainedTreeMatchVars_t = typename ListContainedTreeMatchVars<T>::type;
+
+			template<template<typename, typename> class TT, typename T1, typename T2>
+			struct ListContainedTreeMatchVars<TT<T1, T2>>
+			{
+				using type = meta::Concat_t<ListContainedTreeMatchVars_t<T1>, ListContainedTreeMatchVars_t<T2>>;
+			};
+
+			template<template<typename> class TT, typename T>
+			struct ListContainedTreeMatchVars<TT<T>>
+			{
+				using type = ListContainedTreeMatchVars_t<T>;
+			};
+
+			template<std::size_t Idx>
+			struct ListContainedTreeMatchVars<TreeMatchVariable<Idx>>
+			{
+				using type = meta::List<TreeMatchVariable<Idx>>;
+			};
+
+			template<FunctionProps Props, Pattern... Params>
+			struct ListContainedTreeMatchVars<FunctionPn<Props, Params...>>
+			{
+				using type = meta::Concat_t<ListContainedTreeMatchVars_t<Params>...>;
+			};
+
+			template<auto D, Pattern P>
+			struct ListContainedTreeMatchVars<InDomain<D, P>>
+			{
+				using type = ListContainedTreeMatchVars_t<P>;
+			};
+
+			template<auto R, Pattern P1, Pattern P2>
+			struct ListContainedTreeMatchVars<InRelation<R, P1, P2>>
+			{
+				using type = meta::Concat_t<ListContainedTreeMatchVars_t<P1>, ListContainedTreeMatchVars_t<P2>>;
+			};
+		} //namespace detail_match
+
+		template<std::size_t I, meta::ListInstance MatchedVars, Predicate... Conditions> requires (!meta::contains_v<TreeMatchVariable<I>, MatchedVars>)
+		class Match<TreeMatchVariable<I>, MatchedVars, Conditions...>
+		{
+			using MatchedVarsAfterCall = meta::Cons_t<TreeMatchVariable<I>, MatchedVars>;
+
+			template<Predicate Cond>
+			class NowTestable
+			{
+				using AllCondTreeMatchVars = detail_match::ListContainedTreeMatchVars_t<Cond>;
+				using MatchedCondTreeMatchVars = meta::Intersection_t<AllCondTreeMatchVars, MatchedVarsAfterCall>;
+			public:
+				static constexpr bool value =
+					meta::contains_v<TreeMatchVariable<I>, AllCondTreeMatchVars> &&
+					meta::size_v<MatchedCondTreeMatchVars> == meta::size_v<AllCondTreeMatchVars>;
+			};
+			using NowTestableConditions = meta::Filter_t<NowTestable, meta::List<Conditions...>>;
+
+		public:
+			static constexpr bool value(const UnsaveRef ref, pattern::match::MatchData& match_data) {
+				pattern::match::SharedTreeDatum& datum = match_data.tree_match_data[I];
+				assert(!datum.is_set());
+				datum.match_idx = ref.typed_idx();
+
+				const bool match_valid = TestAllConditions<NowTestableConditions>::value(ref.store_data(), match_data);
+				if (match_valid) {
+					return true;
+				}
+				else { //reset should not be strictly nessecairy. if system works, remove assert and directly return match_valid
+					datum.match_idx = MathIdx();
+					return false;
+				}
+			}
+		};
+
+		template<std::size_t I, meta::ListInstance MatchedVars, Predicate... Conditions> requires (meta::contains_v<TreeMatchVariable<I>, MatchedVars>)
+		struct Match<TreeMatchVariable<I>, MatchedVars, Conditions...>
+		{
+			static constexpr bool value(const UnsaveRef ref, pattern::match::MatchData& match_data) {
+				const pattern::match::SharedTreeDatum datum = match_data.tree_match_data[I];
+				assert(datum.is_set());
+				return tree::compare(ref, ref.new_at(datum.match_idx)) == std::strong_ordering::equal;
+			}
+		};
+
+		namespace detail_match {
+			template<meta::ListInstance Params, meta::ListInstance MatchedVars, Predicate... Conditions>
+			struct MatchParamsInOrder;
+
+			template<Pattern Param1, Pattern...Params, meta::ListInstance MatchedVars, Predicate... Conditions>
+			struct MatchParamsInOrder<meta::List<Param1, Params...>, MatchedVars, Conditions...>
+			{
+				static constexpr bool value(const UnsaveRef function, const MathIdx* const iter, pattern::match::MatchData& match_data)
+				{
+					const bool matched_first = Match<Param1, MatchedVars, Conditions...>::value(function.new_at(*iter), match_data);
+					if (!matched_first) {
+						return false;
+					}
+					using MatchedVarsAfterFirst = meta::Cons_t<MatchedVars, ListContainedTreeMatchVars_t<Param1>>;
+					return MatchParamsInOrder<
+						meta::List<Params...>, 
+						MatchedVarsAfterFirst, 
+						Conditions...
+					>::value(function, std::next(iter), match_data);
+				}
+			};
+
+			template<meta::ListInstance MatchedVars, Predicate... Conditions>
+			struct MatchParamsInOrder<meta::List<>, MatchedVars, Conditions...>
+			{
+				static constexpr bool value(const UnsaveRef function, const MathIdx* const iter, pattern::match::MatchData& match_data)
+				{
+					assert(iter == function->parameters.end());
+					return true;
+				}
+			};
+		} //namespace detail_match
+
+		template<StringLiteral Name, std::size_t Arity, Pattern... Params, meta::ListInstance MatchedVars, Predicate... Conditions>
+		struct Match<FunctionPn<NamedFnProps<Name, Arity>, Params...>, MatchedVars, Conditions...>
+		{
+			static constexpr bool value(const UnsaveRef ref, pattern::match::MatchData& match_data) {
+				if (!ref.type.is<NamedFn>()) {
+					return false;
+				}
+				const IndexVector& function = *ref;
+				if (Arity != function.size()) {
+					return false;
+				}
+				if (std::string_view(fn::named_fn_name(ref)) != std::string_view(Name)) {
+					return false;
+				}
+				return detail_match::MatchParamsInOrder<
+					meta::List<Params...>, 
+					MatchedVars, 
+					Conditions...
+				>::value(ref, function.begin(), match_data);
+			}
+		};
 
 	} //namespace run_time
+
+	template<Pattern MatchSide, Predicate... Conditions>
+	constexpr auto match = run_time::Match<MatchSide, meta::List<>, Conditions...>::value;
 
 
 	/////////////////////////////Test Facilities

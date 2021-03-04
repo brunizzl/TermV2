@@ -87,43 +87,25 @@ namespace bmath::intern::arr {
 
 	/////////////////   FromList
 
-	template<template<typename> class F, meta::ListInstance L>
+	template<typename ResT, template<typename> class F, meta::ListInstance L>
 	struct FromList;
 
-	template<template<typename> class F, meta::ListInstance L>
-	constexpr auto from_list_v = FromList<F, L>::value;
+	template<typename ResT, template<typename> class F, meta::ListInstance L>
+	constexpr auto from_list_v = FromList<ResT, F, L>::value;
 
-	template<template<typename> class F, typename T1>
-	struct FromList<F, meta::List<T1>>
+	template<typename ResT, template<typename> class F, typename... Ts>
+	struct FromList<ResT, F, meta::List<Ts...>>
 	{
-		static constexpr auto value = std::array{ F<T1>::value };
+		static constexpr auto value = std::array{ F<Ts>::value... };
 	};
 
-	template<template<typename> class F, typename T1, typename T2>
-	struct FromList<F, meta::List<T1, T2>>
+	template<typename ResT, template<typename> class F>
+	struct FromList<ResT, F, meta::List<>>
 	{
-		static constexpr auto value = std::array{ F<T1>::value, F<T2>::value };
+		static constexpr auto value = std::array<ResT, 0>{};
 	};
 
-	template<template<typename> class F, typename T1, typename T2, typename T3>
-	struct FromList<F, meta::List<T1, T2, T3>>
-	{
-		static constexpr auto value = std::array{ F<T1>::value, F<T2>::value, F<T3>::value };
-	};
-
-	template<template<typename> class F, typename T1, typename T2, typename T3, typename T4>
-	struct FromList<F, meta::List<T1, T2, T3, T4>>
-	{
-		static constexpr auto value = std::array{ F<T1>::value, F<T2>::value, F<T3>::value, F<T4>::value };
-	};
-
-	template<template<typename> class F, typename T1, typename T2, typename T3, typename T4, typename T5, typename... Ts>
-	struct FromList<F, meta::List<T1, T2, T3, T4, T5, Ts...>>
-	{
-		static constexpr auto value = arr::concat(
-			std::array{ F<T1>::value, F<T2>::value, F<T3>::value, F<T4>::value },
-			from_list_v<F, meta::List<T5, Ts...>>);
-	};
+	static_assert(from_list_v<int, meta::ValueIdentity, meta::List<meta::Constant<1>, meta::Constant<5>>> == std::array{ 1, 5 });
 
 
 	/////////////////   FromSeq

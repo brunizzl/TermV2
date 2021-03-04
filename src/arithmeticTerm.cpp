@@ -560,7 +560,7 @@ namespace bmath {
 	Term::Term(const std::string_view simple_name)
 	{
 		this->store.reserve(simple_name.size() / 2);
-		const auto tokens = TokenString(simple_name);
+		const auto tokens = tokenize(simple_name);
 		{
 			const std::size_t char_pos = find_first_not_arithmetic(tokens);
 			if (char_pos != TokenView::npos) [[unlikely]] throw ParseFailure{ char_pos, "illegal character" };

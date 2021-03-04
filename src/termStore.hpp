@@ -451,14 +451,14 @@ namespace bmath::intern {
 			, memory(std::move(snd.memory))
 		{}
 
-		BasicMonotonicStore& operator=(const BasicMonotonicStore& snd)
+		BasicMonotonicStore& operator=(const BasicMonotonicStore& snd) noexcept
 		{
 			this->~BasicMonotonicStore();
 			new (this) BasicMonotonicStore(snd);
 			return *this;
 		}
 
-		BasicMonotonicStore& operator=(BasicMonotonicStore&& snd)
+		BasicMonotonicStore& operator=(BasicMonotonicStore&& snd) noexcept
 		{
 			this->~BasicMonotonicStore();
 			new (this) BasicMonotonicStore(std::move(snd));

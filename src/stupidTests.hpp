@@ -672,5 +672,38 @@ namespace bmath::intern::test {
 		}
 	}
 
+	void match_meta_pattern()
+	{
+		using namespace bmath::intern::meta_pn;
+
+		auto [x, y] = make_tree_matches<2>;
+		auto f = NamedFnPn<"f", 3>{};
+		using P1 = decltype(f(x, y, y));
+		using P2 = decltype(f(ComplexPn<7.0, 0.0>{}, x, y));
+
+		using Cond1 = decltype(x > ComplexPn<4.0, 0.0>{});
+		using Cond2 = decltype(is_real(x));
+
+		auto terms = std::to_array<bmath::Term>({
+			{"1+a*3+a*sin(3+b)"},
+			{"f(3,4,4)"},
+			{"f(7,7,7)"},
+			{"f(7,-4,-4)"},
+			{"f(7,-4,-3)"},
+			{"g(7,-4,-4)"},
+			{"f(4,-4,-4)"},
+			{"f(100,34.5,34.5)"},
+			{"f(20,a+b,a+b)"}
+		});
+
+		for (const auto& term : terms) {
+			pattern::match::MatchData match_data_1;
+			pattern::match::MatchData match_data_2;
+			std::cout << match<P1, Cond1, Cond2>(term.ref(), match_data_1) <<
+				" " << match<P2>(term.ref(), match_data_2) <<
+				" in " << term.to_pretty_string() << "\n";
+		}
+	}
+
 
 } //namespace bmath::intern::test

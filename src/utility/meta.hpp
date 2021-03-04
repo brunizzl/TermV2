@@ -8,6 +8,18 @@
 #include <cassert>
 #include <utility>
 
+namespace bmath::intern::detail_print_type {
+	template<typename T>
+	struct PrintType
+	{
+		static_assert(std::is_same_v<void, T>&& std::is_same_v<int, T>);
+		static constexpr bool value = true;
+	};
+} //namespace bmath::intern::detail_print_type
+
+#define BMATH_PRINT_TYPE(T) static_assert(bmath::intern::detail_print_type::PrintType<T>::value)
+
+
 //general concepts
 namespace bmath::intern {
 	template<typename T>
@@ -169,6 +181,11 @@ namespace bmath::intern::meta {
 
 
 
+	template<typename T>
+	struct ValueIdentity { static constexpr auto value = T::value; };
+
+
+
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	//////////////////////////////////////////   Operations on Lists of types   ///////////////////////////////////////////
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -245,14 +262,29 @@ namespace bmath::intern::meta {
 	
 	/////////////////   Concat
 
-	template<ListInstance, ListInstance>
-	struct Concat;
+	template<ListInstance...>
+	struct Concat { using type = List<>; };
 
-	template<typename... Elems_1, typename... Elems_2>
-	struct Concat<List<Elems_1...>, List<Elems_2...>> { using type = List<Elems_1..., Elems_2...>; };
+	template<typename... Ls>
+	using Concat_t = typename Concat<Ls...>::type;
 
-	template<ListInstance List_1, ListInstance List_2>
-	using Concat_t = typename Concat<List_1, List_2>::type;
+	template<ListInstance L>
+	struct Concat<L> { using type = L; };
+
+	template<typename... Ts, typename... Us>
+	struct Concat<List<Ts...>, List<Us...>> { using type = List<Ts..., Us...>; };
+
+	template<typename... Ts, typename... Us, typename... Vs>
+	struct Concat<List<Ts...>, List<Us...>, List<Vs...>> { using type = List<Ts..., Us..., Vs...>; };
+
+	template<typename... Ts, typename... Us, typename... Vs, typename... Ws>
+	struct Concat<List<Ts...>, List<Us...>, List<Vs...>, List<Ws...>> { using type = List<Ts..., Us..., Vs..., Ws...>; };
+
+	template<typename... Ts, typename... Us, typename... Vs, typename... Ws, typename... Lists>
+	struct Concat<List<Ts...>, List<Us...>, List<Vs...>, List<Ws...>, Lists...> 
+	{ 
+		using type = Concat_t<List<Ts..., Us..., Vs..., Ws...>, Lists...>; 
+	};
 
 	static_assert(std::is_same_v<Concat_t<List<int, int>, List<double, nullptr_t>>, List<int, int, double, nullptr_t>>);
 
@@ -535,6 +567,9 @@ namespace bmath::intern::meta {
 	static_assert(smaller_v<List<int, bool, bool>, List<bool>, IntSmallerBool>);
 	static_assert(!smaller_v<List<bool, int, bool>, List<bool, int>, IntSmallerBool>);
 	static_assert(!smaller_v<List<bool, int, bool>, List<bool, int, bool>, IntSmallerBool>);
+
+
+
 
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
