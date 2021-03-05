@@ -146,6 +146,7 @@
     <ClInclude Include="src\termStore.hpp" />
     <ClInclude Include="src\transform.hpp" />
     <ClInclude Include="src\typedIndex.hpp" />
+    <ClInclude Include="src\utility\algorithm.hpp" />
     <ClInclude Include="src\utility\array.hpp" />
     <ClInclude Include="src\utility\bit.hpp" />
     <ClInclude Include="src\utility\meta.hpp" />

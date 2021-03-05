@@ -8,6 +8,7 @@
 
 #include "utility/bit.hpp"
 #include "utility/typeDebug.hpp"
+#include "utility/algorithm.hpp"
 
 #include "termStore.hpp"
 #include "arithmeticTerm.hpp"
@@ -711,6 +712,37 @@ namespace bmath::intern::test {
 			std::cout << term.to_pretty_string() << "\n";
 		}
 		std::cout << "\n\n";
+	}
+
+	void stable_sort() 
+	{
+		struct Pair { int fst, snd; };
+		auto pairs = std::to_array<Pair>({
+			{3, 1},
+			{2, 1},
+			{4, 1},
+			{1, 1},
+			{2, 2},
+			{3, 2},
+			{3, 3},
+			{3, 4},
+			{3, 5},
+			{5, 1},
+			{3, 6},
+			{4, 2},
+			{2, 3},
+			{4, 3},
+			{1, 2},
+			{4, 4},
+			{5, 2},
+			{1, 3},
+			{1, 4},
+			{4, 5},
+			});
+		bmath::intern::stable_sort(pairs, [](const Pair& a, const Pair& b) { return a.fst < b.fst; });
+		for (const auto& pair : pairs) {
+			std::cout << pair.fst << " " << pair.snd << "\n";
+		}
 	}
 
 

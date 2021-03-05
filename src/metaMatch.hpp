@@ -11,6 +11,7 @@
 #include "utility/meta.hpp"
 #include "utility/stringLiteral.hpp"
 #include "utility/misc.hpp"
+#include "utility/algorithm.hpp"
 
 #include "arithmeticTerm.hpp"
 #include "pattern.hpp"
@@ -1264,30 +1265,22 @@ template<Pattern Lhs, Pattern Rhs> constexpr InRelation<name, Lhs, Rhs> op(Lhs, 
 			}
 		};
 
-		template<InstanceOf<Rule>>
-		struct MatchRule;
-
-		template<Pattern MatchSide, Pattern ReplaceSide, Predicate... Conditions>
-		struct MatchRule<Rule<MatchSide, ReplaceSide, Conditions...>> :Match<MatchSide, meta::List<>, Conditions...> {};
-
 	} //namespace generate
 
-	template<InstanceOf<Rule> R>
+	template<Pattern MatchSide, Predicate... Conds>
 	constexpr bool match(const UnsaveRef ref, pattern::match::MatchData& match_data) noexcept
 	{
-		return generate::MatchRule<R>::value(ref, match_data);
+		return generate::Match<MatchSide, meta::List<>, Conds...>::value(ref, match_data);
 	}
 
 	///////////////////////////// RuleSet
 	//----------------------------------------------------------------------------------------------------------------------
 	//----------------------------------------------------------------------------------------------------------------------
 
-	template<InstanceOf<Rule>... Rules>
-	struct RuleSet__
-	{
+	namespace detail_rule_set {
 		struct SortElement
 		{
-			MathType match_type;
+			MathType match_type = MathType(-1u);
 			std::string_view match_name;
 			bool(*match_function)(UnsaveRef, pattern::match::MatchData&);
 			//TODO: add replace_function
@@ -1300,29 +1293,33 @@ template<Pattern Lhs, Pattern Rhs> constexpr InRelation<name, Lhs, Rhs> op(Lhs, 
 		struct ToSortElement<Rule<FunctionPn<VariadicProps<Category, Type, 0>, Params...>, ReplaceSide, Conds...>>
 		{
 			static constexpr SortElement value = { Type, fn::name_of((Variadic)Type),
-				match<Rule<FunctionPn<VariadicProps<Category, Type, 0>, Params...>, ReplaceSide, Conds...>> };
+				match<FunctionPn<VariadicProps<Category, Type, 0>, Params...>, Conds...> };
 		};
 
 		template<Fn Type, Pattern... Params, Pattern ReplaceSide, Predicate... Conds>
 		struct ToSortElement<Rule<FunctionPn<FnProps<Type>, Params...>, ReplaceSide, Conds...>>
 		{
 			static constexpr SortElement value = { Type, fn::name_of(Type),
-				match<Rule<FunctionPn<FnProps<Type>, Params...>, ReplaceSide, Conds...>> };
+				match<FunctionPn<FnProps<Type>, Params...>, Conds...> };
 		};
 
 		template<StringLiteral Name, std::size_t Arity, Pattern... Params, Pattern ReplaceSide, Predicate... Conds>
 		struct ToSortElement<Rule<FunctionPn<NamedFnProps<Name, Arity>, Params...>, ReplaceSide, Conds...>>
 		{
 			static constexpr SortElement value = { NamedFn{}, std::string_view(Name),
-				match<Rule<FunctionPn<NamedFnProps<Name, Arity>, Params...>, ReplaceSide, Conds...>> };
+				match<FunctionPn<NamedFnProps<Name, Arity>, Params...>, Conds...> };
 		};
+	} //namespace detail_rule_set
 
+	template<InstanceOf<Rule>... Rules>
+	struct RuleSet__
+	{
 		std::array<bool(*)(UnsaveRef, pattern::match::MatchData&), sizeof...(Rules)> match_functions;
 
 		constexpr void set_rules() noexcept
 		{
-			auto elements = std::array{ ToSortElement<Rules>::value... };
-			const auto compare = [](const SortElement& fst, const SortElement& snd) {
+			auto elems = std::array{ detail_rule_set::ToSortElement<Rules>::value... };
+			const auto smaller = [](const auto& fst, const auto& snd) {
 				if (fst.match_type == NamedFn{} && snd.match_type == NamedFn{}) {
 					return fst.match_name < snd.match_name;
 				}
@@ -1330,12 +1327,14 @@ template<Pattern Lhs, Pattern Rhs> constexpr InRelation<name, Lhs, Rhs> op(Lhs, 
 					return fst.match_type < snd.match_type;
 				}
 			};
-			std::stable_sort(elements.begin(), elements.end(), compare);
+			intern::stable_sort(elems, smaller);
+			std::transform(elems.begin(), elems.end(), this->match_functions.begin(),
+				[](const auto& elem) { return elem.match_function; });
 		}
 
-		constexpr RuleSet__(Rules...) :match_functions{ match<Rules>... } {}
+		constexpr RuleSet__(Rules...) { this->set_rules(); }
 
-		constexpr RuleSet__() : match_functions{ match<Rules>... } {}
+		constexpr RuleSet__() { this->set_rules(); }
 
 		template<typename... OtherRules>
 		constexpr RuleSet__<Rules..., OtherRules...> operator+(const RuleSet__<OtherRules...>&) { return {}; }

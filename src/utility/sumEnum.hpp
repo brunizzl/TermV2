@@ -6,6 +6,7 @@
 #include <concepts>
 #include <numeric>
 #include <algorithm>
+#include <utility>
 
 #include "meta.hpp"
 #include "array.hpp"
@@ -380,7 +381,7 @@ namespace bmath::intern {
 			struct OptionToRange { static constexpr auto value = std::pair{ O::begin_, O::end_ }; };
 
 			static constexpr auto reached_values = []() {
-				const auto ranges = arr::from_list_v<OptionToRange, Options>;
+				const auto ranges = arr::from_list_v<std::pair<std::size_t, std::size_t>, OptionToRange, Options>;
 				std::array<int, (unsigned)SumEnum_T::COUNT> result = {};
 				for (const auto range : ranges) {
 					for (std::size_t i = range.first; i < range.second; i++) {

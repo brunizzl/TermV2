@@ -39,7 +39,6 @@ idea status:
 
 using namespace bmath::intern;
 using namespace bmath::intern::pattern;
-using namespace bmath::intern::meta_pn;
 
 //void test_f(PnType t) {
 //	using Options = EnumSwitch<PnType, 
@@ -80,9 +79,10 @@ int main()
 
 	//debug::enumerate_type();
 	//debug::test_rechner();
-	test::match_meta_pattern();
-	test::meta_pattern();
-	test::meta_pattern_2();
+	test::stable_sort();
+	//test::match_meta_pattern();
+	//test::meta_pattern();
+	//test::meta_pattern_2();
 	//test::pattern_term();
 	//test::arithmetic_term();
 	//test::copy();

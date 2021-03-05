@@ -98,6 +98,8 @@ namespace bmath::intern {
 	static_assert(nat_pow(10.0, 6) == 1000000);
 
 
+
+
 	//remove if c++20 libraries have catched up
 	template<typename T>
 	constexpr std::strong_ordering compare_arrays(const T* lhs, const T* rhs, std::size_t size)
