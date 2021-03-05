@@ -13,18 +13,27 @@
 #include "meta.hpp"
 
 #if defined(_MSC_VER)
-
 #define BMATH_UNREACHABLE __assume(false)
-
 #elif (defined(__GNUC__) || defined(__clang__))
-
 #define BMATH_UNREACHABLE __builtin_unreachable()
-
 #else
-
 #define BMATH_UNREACHABLE ((void)0)
-
 #endif
+
+
+#if defined(_MSC_VER)
+#define BMATH_FORCE_INLINE __forceinline
+#else
+#define BMATH_FORCE_INLINE __attribute__((always_inline))
+#endif
+
+
+#ifdef NDEBUG
+#define BMATH_IF_DEBUG(x) ((void)0)
+#else
+#define BMATH_IF_DEBUG(x) x
+#endif
+
 
 
 namespace bmath::intern {

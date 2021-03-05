@@ -562,8 +562,7 @@ namespace bmath::intern::test {
 			std::cout << "\n";
 		}
 		{
-			auto [a, b] = make_tree_matches<2>;
-			auto [bs, cs] = make_multi_matches<2>;
+			auto [a, b, bs, cs] = make_match_variables<Matches::one, Matches::one, Matches::many, Matches::many>;
 			auto rule_1 = make_rule(a * bs + a * cs = a * (bs + cs), !is_value(a));
 			auto rule_2 = make_rule(a * bs + a      = a * (bs + 1_), !is_value(a));
 			auto rule_3 = make_rule(a      + a      = 2_ * a       , !is_value(a));
@@ -581,7 +580,7 @@ namespace bmath::intern::test {
 			std::cout << "\n";
 		}
 		{
-			auto pi = VariablePn<"pi">{};
+			auto pi = make_variable_literal<"pi">;
 			auto [x] = make_tree_matches<1>;
 			auto rule_1 = make_rule((sin(x)^2_) + (cos(x)^2_) = 1_);
 
@@ -658,12 +657,12 @@ namespace bmath::intern::test {
 	void meta_pattern_2() 
 	{
 		using namespace bmath::intern::meta_pn;
-		auto fib = NamedFnPn<"fib", 1>{};
+		auto fib = make_function<"fib", 1>;
 		{
 			auto [n] = make_tree_matches<1>;
 			auto rule_1 = make_rule(fib(0_) = 0_);
 			auto rule_2 = make_rule(fib(1_) = 1_);
-			auto rule_3 = make_rule(fib(n) = fib(n - 1_) + fib(n - 2_));
+			auto rule_3 = make_rule(fib(n) = fib(n - 1_) + fib(n - 2_), is_int(n));
 			
 			std::cout << name(rule_1) << "\n";
 			std::cout << name(rule_2) << "\n";
@@ -675,14 +674,17 @@ namespace bmath::intern::test {
 	void match_meta_pattern()
 	{
 		using namespace bmath::intern::meta_pn;
-
 		auto [x, y] = make_tree_matches<2>;
-		auto f = NamedFnPn<"f", 3>{};
-		using P1 = decltype(f(x, y, y));
-		using P2 = decltype(f(ComplexPn<7.0, 0.0>{}, x, y));
+		auto f = make_function<"f", 3>;
+		auto _7 = make_number<7.0>;
+		auto _4 = make_number<4.0>;
+		auto _2 = make_number<2.0>;
 
-		using Cond1 = decltype(x > ComplexPn<4.0, 0.0>{});
-		using Cond2 = decltype(is_real(x));
+		auto rules = RuleSet__(
+			make_rule(f(x, y, y) = _7, x > _4, is_real(x)),
+			make_rule(f(_7, x, y) = _7),
+			make_rule(x ^ y = _7, y == _2 * x)
+		);
 
 		auto terms = std::to_array<bmath::Term>({
 			{"1+a*3+a*sin(3+b)"},
@@ -693,16 +695,22 @@ namespace bmath::intern::test {
 			{"g(7,-4,-4)"},
 			{"f(4,-4,-4)"},
 			{"f(100,34.5,34.5)"},
-			{"f(20,a+b,a+b)"}
+			{"f(20,a+b,a+b)"},
+			{"pow(2,2)"},
+			{"pow(2,3)"},
+			{"pow(2,4)"},
+			{"pow(a,2*a)"},
 		});
 
-		for (const auto& term : terms) {
-			pattern::match::MatchData match_data_1;
-			pattern::match::MatchData match_data_2;
-			std::cout << match<P1, Cond1, Cond2>(term.ref(), match_data_1) <<
-				" " << match<P2>(term.ref(), match_data_2) <<
-				" in " << term.to_pretty_string() << "\n";
+		for (auto& term : terms) {
+			const UnsaveRef head = term.ref();
+			for (auto match_function : rules.match_functions) {
+				pattern::match::MatchData match_data;
+				std::cout << match_function(head, match_data) << " ";
+			}
+			std::cout << term.to_pretty_string() << "\n";
 		}
+		std::cout << "\n\n";
 	}
 
 

@@ -113,7 +113,7 @@ namespace bmath::intern::meta_pn {
 	};
 
 	template<StringLiteral Name, std::size_t Arity>
-	using NamedFnPn = CurriedFunctionPn<NamedFnProps<Name, Arity>>;
+	constexpr auto make_function = CurriedFunctionPn<NamedFnProps<Name, Arity>>{};
 
 
 
@@ -159,9 +159,42 @@ namespace bmath::intern::meta_pn {
 	constexpr auto make_multi_matches = detail_variables::make_multis(std::make_index_sequence<N>{});
 
 
+	enum class Matches { one, many }; 
+	
+	namespace detail_variables {
+
+		template<InstanceOf<std::tuple> Tuple, std::size_t TreeNr, std::size_t MultiNr>
+		struct Accumulator { using type = Tuple; };
+
+		template<typename, typename>
+		struct AddToTuple;
+
+		template<typename... Ts, std::size_t TreeNr, std::size_t MultiNr>
+		struct AddToTuple<Accumulator<std::tuple<Ts...>, TreeNr, MultiNr>, meta::Constant<Matches::one>>
+		{
+			using type = Accumulator<std::tuple<Ts..., TreeMatchVariable<TreeNr>>, TreeNr + 1, MultiNr>;
+		};
+
+		template<typename... Ts, std::size_t TreeNr, std::size_t MultiNr>
+		struct AddToTuple<Accumulator<std::tuple<Ts...>, TreeNr, MultiNr>, meta::Constant<Matches::many>>
+		{
+			using type = Accumulator<std::tuple<Ts..., MultiMatchVariable<MultiNr>>, TreeNr, MultiNr + 1>;
+		};
+	} //namespace detail_variables
+
+	template<Matches... Ms>
+	constexpr auto make_match_variables = typename meta::DirectFoldl_t<
+		detail_variables::AddToTuple, 
+		detail_variables::Accumulator<std::tuple<>, 0, 0>, 
+		meta::Constant<Ms>...
+	>::type{};
+
 
 	template<StringLiteral Name>
 	struct VariablePn :PatternMarker { static_assert(Name.size() > 0); };
+
+	template<StringLiteral Name>
+	constexpr auto make_variable_literal = VariablePn<Name>{};
 
 
 	template<double Re, double Im>
@@ -185,6 +218,9 @@ namespace bmath::intern::meta_pn {
 
 	template<>
 	struct MakeComplex<-0.0, -0.0> { using type = ComplexPn<0.0, 0.0>; };
+
+	template<double Re, double Im = 0.0>
+	constexpr auto make_number = MakeComplex_t<Re, Im>{};
 
 
 
@@ -625,9 +661,6 @@ template<Pattern... Ops> constexpr FunctionPn<FnProps<Fn::name>, Ops...> name(Op
 			static_assert(!std::is_same_v<ThisBuildingDatum, meta::FoundNothing>, 
 				"only multi-match-variables present in match side may occur in replacement side.");
 
-			static_assert((Function(ThisBuildingDatum::enclosing_type).is<Comm>() && std::is_same_v<Comm, std::remove_cv_t<decltype(ThisBuildingDatum::enclosing_type)>>) || 
-				(Function(ThisBuildingDatum::enclosing_type).is<NonComm>() && std::is_same_v<NonComm, std::remove_cv_t<decltype(ThisBuildingDatum::enclosing_type)>>));
-
 			using UnwrappedResult = MultiMatchVariable<ThisBuildingDatum::index>;
 			using WrappedProps = VariadicProps<std::remove_const_t<decltype(ThisBuildingDatum::enclosing_type)>, ThisBuildingDatum::enclosing_type, 0>;
 			using WrappedResult = FunctionPn<WrappedProps, UnwrappedResult>;
@@ -772,7 +805,7 @@ template<Pattern... Ops> constexpr FunctionPn<FnProps<Fn::name>, Ops...> name(Op
 		constexpr ConditionRes(const Value v) noexcept :value(v) {}
 		constexpr ConditionRes(const bool  b) noexcept :value(static_cast<Value>(b)) {}
 
-		constexpr ConditionRes operator!() const noexcept 
+		constexpr BMATH_FORCE_INLINE ConditionRes operator!() const noexcept
 		{
 			switch (this->value) {
 			case false_:    return true_;
@@ -782,7 +815,7 @@ template<Pattern... Ops> constexpr FunctionPn<FnProps<Fn::name>, Ops...> name(Op
 			}
 		}
 
-		constexpr ConditionRes operator&&(const ConditionRes snd) const noexcept
+		constexpr BMATH_FORCE_INLINE ConditionRes operator&&(const ConditionRes snd) const noexcept
 		{
 			switch (this->value) {
 			case false_:    return false_;
@@ -792,7 +825,7 @@ template<Pattern... Ops> constexpr FunctionPn<FnProps<Fn::name>, Ops...> name(Op
 			}
 		}
 
-		constexpr ConditionRes operator||(const ConditionRes snd) const noexcept
+		constexpr BMATH_FORCE_INLINE ConditionRes operator||(const ConditionRes snd) const noexcept
 		{
 			switch (this->value) {
 			case false_:    return snd;
@@ -825,8 +858,8 @@ template<Pattern P> constexpr InDomain<enum_name, P> function_name(P) { return {
 
 	enum class Relation 
 	{
-		//no preconditions
-		equal, unequal, smaller, larger, smaller_equal, larger_equal, divides, 
+		//no preconditions in pattern, but can only return true if both sides evaluate to values.
+		equal, unequal, smaller, larger, smaller_equal, larger_equal, 
 		
 		//requires both rhs and lhs to be tree match variables
 		contains
@@ -844,7 +877,6 @@ template<Pattern Lhs, Pattern Rhs> constexpr InRelation<name, Lhs, Rhs> op(Lhs, 
 	BMATH_DEFINE_RELATION_OPERATOR(Relation::larger, operator>)
 	BMATH_DEFINE_RELATION_OPERATOR(Relation::smaller_equal, operator<=)
 	BMATH_DEFINE_RELATION_OPERATOR(Relation::larger_equal, operator>=)
-	BMATH_DEFINE_RELATION_OPERATOR(Relation::divides, operator|)
 	BMATH_DEFINE_RELATION_OPERATOR(Relation::contains, contains)
 
 	template<Predicate Lhs, Predicate Rhs>
@@ -871,7 +903,7 @@ template<Pattern Lhs, Pattern Rhs> constexpr InRelation<name, Lhs, Rhs> op(Lhs, 
 	//----------------------------------------------------------------------------------------------------------------------
 	//----------------------------------------------------------------------------------------------------------------------
 
-	namespace run_time {
+	namespace generate {
 
 		template<Pattern P>
 		struct Evaluate { static_assert(P::this_identifier_does_not_exist_and_serves_to_tell_that_the_type_of_pattern_found_here_may_not_appear_in_a_condition); };
@@ -879,7 +911,7 @@ template<Pattern Lhs, Pattern Rhs> constexpr InRelation<name, Lhs, Rhs> op(Lhs, 
 		template<double Re, double Im>
 		struct Evaluate<ComplexPn<Re, Im>>
 		{
-			static constexpr OptionalComplex value(const MathUnion* store_data, const pattern::match::MatchData& match_data) noexcept
+			static constexpr BMATH_FORCE_INLINE OptionalComplex value(const MathUnion* store_data, const pattern::match::MatchData& match_data) noexcept
 			{
 				return OptionalComplex{ Re, Im };
 			}
@@ -888,7 +920,7 @@ template<Pattern Lhs, Pattern Rhs> constexpr InRelation<name, Lhs, Rhs> op(Lhs, 
 		template<Pattern... Operands>
 		struct Evaluate<FunctionPn<VariadicProps<Comm, Comm::sum, 0>, Operands...>>
 		{
-			static constexpr OptionalComplex value(const MathUnion* store_data, const pattern::match::MatchData& match_data) noexcept
+			static constexpr BMATH_FORCE_INLINE OptionalComplex value(const MathUnion* store_data, const pattern::match::MatchData& match_data) noexcept
 			{
 				return (Evaluate<Operands>::value(store_data, match_data) + ...);
 			}
@@ -897,7 +929,7 @@ template<Pattern Lhs, Pattern Rhs> constexpr InRelation<name, Lhs, Rhs> op(Lhs, 
 		template<Pattern... Operands>
 		struct Evaluate<FunctionPn<VariadicProps<Comm, Comm::product, 0>, Operands...>>
 		{
-			static constexpr OptionalComplex value(const MathUnion* store_data, const pattern::match::MatchData& match_data) noexcept
+			static constexpr BMATH_FORCE_INLINE OptionalComplex value(const MathUnion* store_data, const pattern::match::MatchData& match_data) noexcept
 			{
 				return (Evaluate<Operands>::value(store_data, match_data) * ...);
 			}
@@ -906,7 +938,7 @@ template<Pattern Lhs, Pattern Rhs> constexpr InRelation<name, Lhs, Rhs> op(Lhs, 
 		template<Pattern Base, double Re> requires (Re - (int)Re == 0.0)
 		struct Evaluate<FunctionPn<FnProps<Fn::pow>, Base, ComplexPn<Re, 0.0>>>
 		{
-			static constexpr OptionalComplex value(const MathUnion* store_data, const pattern::match::MatchData& match_data) noexcept
+			static constexpr BMATH_FORCE_INLINE OptionalComplex value(const MathUnion* store_data, const pattern::match::MatchData& match_data) noexcept
 			{
 				const OptionalComplex base = Evaluate<Base>::value(store_data, match_data);
 				if constexpr (Re < 0.0) {
@@ -923,7 +955,7 @@ template<Pattern Lhs, Pattern Rhs> constexpr InRelation<name, Lhs, Rhs> op(Lhs, 
 		template<std::size_t MatchDataIdx>
 		struct Evaluate<TreeMatchVariable<MatchDataIdx>>
 		{
-			static constexpr OptionalComplex value(const MathUnion* store_data, const pattern::match::MatchData& match_data) noexcept
+			static constexpr BMATH_FORCE_INLINE OptionalComplex value(const MathUnion* store_data, const pattern::match::MatchData& match_data) noexcept
 			{
 				const pattern::match::SharedTreeDatum datum = match_data.tree_match_data[MatchDataIdx];
 				assert(datum.is_set());
@@ -943,7 +975,7 @@ template<Pattern Lhs, Pattern Rhs> constexpr InRelation<name, Lhs, Rhs> op(Lhs, 
 		template<Predicate P1, Predicate P2>
 		struct TestCondition<And<P1, P2>>
 		{
-			static constexpr ConditionRes value(const MathUnion* store_data, const pattern::match::MatchData& match_data) noexcept
+			static constexpr BMATH_FORCE_INLINE ConditionRes value(const MathUnion* store_data, const pattern::match::MatchData& match_data) noexcept
 			{
 				return TestCondition<P1>::value(store_data, match_data) && TestCondition<P2>::value(store_data, match_data);
 			}
@@ -952,7 +984,7 @@ template<Pattern Lhs, Pattern Rhs> constexpr InRelation<name, Lhs, Rhs> op(Lhs, 
 		template<Predicate P1, Predicate P2>
 		struct TestCondition<Or<P1, P2>>
 		{
-			static constexpr ConditionRes value(const MathUnion* store_data, const pattern::match::MatchData& match_data) noexcept
+			static constexpr BMATH_FORCE_INLINE ConditionRes value(const MathUnion* store_data, const pattern::match::MatchData& match_data) noexcept
 			{
 				return TestCondition<P1>::value(store_data, match_data) || TestCondition<P2>::value(store_data, match_data);
 			}
@@ -961,7 +993,7 @@ template<Pattern Lhs, Pattern Rhs> constexpr InRelation<name, Lhs, Rhs> op(Lhs, 
 		template<Predicate P>
 		struct TestCondition<Not<P>>
 		{
-			static constexpr ConditionRes value(const MathUnion* store_data, const pattern::match::MatchData& match_data) noexcept
+			static constexpr BMATH_FORCE_INLINE ConditionRes value(const MathUnion* store_data, const pattern::match::MatchData& match_data) noexcept
 			{
 				return !TestCondition<P>::value(store_data, match_data);
 			}
@@ -970,7 +1002,7 @@ template<Pattern Lhs, Pattern Rhs> constexpr InRelation<name, Lhs, Rhs> op(Lhs, 
 		template<pattern::Domain D, Pattern P>
 		struct TestCondition<InDomain<D, P>>
 		{
-			static constexpr ConditionRes value(const MathUnion* store_data, const pattern::match::MatchData& match_data) noexcept
+			static constexpr BMATH_FORCE_INLINE ConditionRes value(const MathUnion* store_data, const pattern::match::MatchData& match_data) noexcept
 			{
 				const OptionalComplex c = Evaluate<P>::value(store_data, match_data);
 				if (c) {
@@ -985,32 +1017,25 @@ template<Pattern Lhs, Pattern Rhs> constexpr InRelation<name, Lhs, Rhs> op(Lhs, 
 		template<Relation R, Pattern P1, Pattern P2> requires (R != Relation::contains)
 		struct TestCondition<InRelation<R, P1, P2>>
 		{
-			static constexpr ConditionRes value(const MathUnion* store_data, const pattern::match::MatchData& match_data) noexcept
+			static constexpr BMATH_FORCE_INLINE ConditionRes value(const MathUnion* store_data, const pattern::match::MatchData& match_data) noexcept
 			{
-				if constexpr (R == Relation::equal || R == Relation::unequal || R == Relation::divides) {
-					const OptionalComplex c1 = Evaluate<P1>::value(store_data, match_data);
-					const OptionalComplex c2 = Evaluate<P2>::value(store_data, match_data);
+				const OptionalComplex c1 = Evaluate<P1>::value(store_data, match_data);
+				const OptionalComplex c2 = Evaluate<P2>::value(store_data, match_data);
+				if constexpr (R == Relation::equal || R == Relation::unequal) {
 					if (!c1 || !c2) {
 						return ConditionRes::undecided;
 					}
-					else {
-						if constexpr (R == Relation::equal)   { return c1.val == c2.val; }
-						if constexpr (R == Relation::unequal) { return c1.val != c2.val; }
-						if constexpr (R == Relation::divides) { return pattern::in_domain(c1.val / c2.val, pattern::Domain::integer); }
-					}
+					if constexpr (R == Relation::equal)   { return c1.val == c2.val; }
+					if constexpr (R == Relation::unequal) { return c1.val != c2.val; }
 				}
 				if constexpr (R == Relation::smaller || R == Relation::larger || R == Relation::smaller_equal || R == Relation::larger_equal) {
-					const OptionalComplex c1 = Evaluate<P1>::value(store_data, match_data);
-					const OptionalComplex c2 = Evaluate<P2>::value(store_data, match_data);
 					if (!c1 || !c2 || c1.val.imag() != 0.0 || c2.val.imag() != 0.0) {
 						return ConditionRes::undecided;
 					}
-					else {
-						if constexpr (R == Relation::smaller)       { return c1.val.real() <  c2.val.real(); }
-						if constexpr (R == Relation::larger)        { return c1.val.real() >  c2.val.real(); }
-						if constexpr (R == Relation::smaller_equal) { return c1.val.real() <= c2.val.real(); }
-						if constexpr (R == Relation::larger_equal)  { return c1.val.real() >= c2.val.real(); }
-					}
+					if constexpr (R == Relation::smaller)       { return c1.val.real() <  c2.val.real(); }
+					if constexpr (R == Relation::larger)        { return c1.val.real() >  c2.val.real(); }
+					if constexpr (R == Relation::smaller_equal) { return c1.val.real() <= c2.val.real(); }
+					if constexpr (R == Relation::larger_equal)  { return c1.val.real() >= c2.val.real(); }
 				}
 			}
 		};
@@ -1018,7 +1043,7 @@ template<Pattern Lhs, Pattern Rhs> constexpr InRelation<name, Lhs, Rhs> op(Lhs, 
 		template<std::size_t Haystack_I, std::size_t Needle_I>
 		struct TestCondition<InRelation<Relation::contains, TreeMatchVariable<Haystack_I>, TreeMatchVariable<Needle_I>>>
 		{
-			static constexpr ConditionRes value(const MathUnion* store_data, const pattern::match::MatchData& match_data) noexcept
+			static constexpr BMATH_FORCE_INLINE ConditionRes value(const MathUnion* store_data, const pattern::match::MatchData& match_data) noexcept
 			{
 				const pattern::match::SharedTreeDatum haystack_datum = match_data.tree_match_data[Haystack_I];
 				const pattern::match::SharedTreeDatum needle_datum   = match_data.tree_match_data[Needle_I];
@@ -1046,7 +1071,7 @@ template<Pattern Lhs, Pattern Rhs> constexpr InRelation<name, Lhs, Rhs> op(Lhs, 
 		template<Predicate... Conds>
 		struct TestAllConditions<meta::List<Conds...>>
 		{
-			static constexpr bool value(const MathUnion* store_data, const pattern::match::MatchData& match_data)
+			static constexpr BMATH_FORCE_INLINE bool value(const MathUnion* store_data, const pattern::match::MatchData& match_data) noexcept
 			{
 				constexpr ConditionRes fold_start = ConditionRes::true_;
 				return (fold_start && ... && TestCondition<Conds>::value(store_data, match_data)).to_bool();
@@ -1059,7 +1084,8 @@ template<Pattern Lhs, Pattern Rhs> constexpr InRelation<name, Lhs, Rhs> op(Lhs, 
 		template<StringLiteral Name, meta::ListInstance MatchedVars, Predicate... Conditions>
 		struct Match<VariablePn<Name>, MatchedVars, Conditions...>
 		{
-			static constexpr bool value(const UnsaveRef ref, pattern::match::MatchData& match_data) {
+			static constexpr BMATH_FORCE_INLINE bool value(const UnsaveRef ref, pattern::match::MatchData& match_data)  noexcept
+			{
 				if (ref.type != Literal::variable) {
 					return false;
 				}
@@ -1071,7 +1097,8 @@ template<Pattern Lhs, Pattern Rhs> constexpr InRelation<name, Lhs, Rhs> op(Lhs, 
 		template<double Re, double Im, meta::ListInstance MatchedVars, Predicate... Conditions>
 		struct Match<ComplexPn<Re, Im>, MatchedVars, Conditions...>
 		{
-			static constexpr bool value(const UnsaveRef ref, pattern::match::MatchData& match_data) {
+			static constexpr BMATH_FORCE_INLINE bool value(const UnsaveRef ref, pattern::match::MatchData& match_data)  noexcept
+			{
 				if (ref.type != Literal::complex) {
 					return false;
 				}
@@ -1142,26 +1169,21 @@ template<Pattern Lhs, Pattern Rhs> constexpr InRelation<name, Lhs, Rhs> op(Lhs, 
 			using NowTestableConditions = meta::Filter_t<NowTestable, meta::List<Conditions...>>;
 
 		public:
-			static constexpr bool value(const UnsaveRef ref, pattern::match::MatchData& match_data) {
+			static constexpr bool BMATH_FORCE_INLINE value(const UnsaveRef ref, pattern::match::MatchData& match_data)  noexcept
+			{
 				pattern::match::SharedTreeDatum& datum = match_data.tree_match_data[I];
 				assert(!datum.is_set());
 				datum.match_idx = ref.typed_idx();
 
-				const bool match_valid = TestAllConditions<NowTestableConditions>::value(ref.store_data(), match_data);
-				if (match_valid) {
-					return true;
-				}
-				else { //reset should not be strictly nessecairy. if system works, remove assert and directly return match_valid
-					datum.match_idx = MathIdx();
-					return false;
-				}
+				return TestAllConditions<NowTestableConditions>::value(ref.store_data(), match_data);
 			}
 		};
 
 		template<std::size_t I, meta::ListInstance MatchedVars, Predicate... Conditions> requires (meta::contains_v<TreeMatchVariable<I>, MatchedVars>)
 		struct Match<TreeMatchVariable<I>, MatchedVars, Conditions...>
 		{
-			static constexpr bool value(const UnsaveRef ref, pattern::match::MatchData& match_data) {
+			static constexpr BMATH_FORCE_INLINE bool value(const UnsaveRef ref, pattern::match::MatchData& match_data)  noexcept
+			{
 				const pattern::match::SharedTreeDatum datum = match_data.tree_match_data[I];
 				assert(datum.is_set());
 				return tree::compare(ref, ref.new_at(datum.match_idx)) == std::strong_ordering::equal;
@@ -1175,7 +1197,7 @@ template<Pattern Lhs, Pattern Rhs> constexpr InRelation<name, Lhs, Rhs> op(Lhs, 
 			template<Pattern Param1, Pattern...Params, meta::ListInstance MatchedVars, Predicate... Conditions>
 			struct MatchParamsInOrder<meta::List<Param1, Params...>, MatchedVars, Conditions...>
 			{
-				static constexpr bool value(const UnsaveRef function, const MathIdx* const iter, pattern::match::MatchData& match_data)
+				static constexpr BMATH_FORCE_INLINE bool value(const UnsaveRef function, const MathIdx* const iter, pattern::match::MatchData& match_data) noexcept
 				{
 					const bool matched_first = Match<Param1, MatchedVars, Conditions...>::value(function.new_at(*iter), match_data);
 					if (!matched_first) {
@@ -1193,7 +1215,7 @@ template<Pattern Lhs, Pattern Rhs> constexpr InRelation<name, Lhs, Rhs> op(Lhs, 
 			template<meta::ListInstance MatchedVars, Predicate... Conditions>
 			struct MatchParamsInOrder<meta::List<>, MatchedVars, Conditions...>
 			{
-				static constexpr bool value(const UnsaveRef function, const MathIdx* const iter, pattern::match::MatchData& match_data)
+				static constexpr BMATH_FORCE_INLINE bool value(const UnsaveRef function, const MathIdx* const iter, pattern::match::MatchData& match_data) noexcept
 				{
 					assert(iter == function->parameters.end());
 					return true;
@@ -1204,7 +1226,8 @@ template<Pattern Lhs, Pattern Rhs> constexpr InRelation<name, Lhs, Rhs> op(Lhs, 
 		template<StringLiteral Name, std::size_t Arity, Pattern... Params, meta::ListInstance MatchedVars, Predicate... Conditions>
 		struct Match<FunctionPn<NamedFnProps<Name, Arity>, Params...>, MatchedVars, Conditions...>
 		{
-			static constexpr bool value(const UnsaveRef ref, pattern::match::MatchData& match_data) {
+			static constexpr BMATH_FORCE_INLINE bool value(const UnsaveRef ref, pattern::match::MatchData& match_data)  noexcept
+			{
 				if (!ref.type.is<NamedFn>()) {
 					return false;
 				}
@@ -1223,10 +1246,103 @@ template<Pattern Lhs, Pattern Rhs> constexpr InRelation<name, Lhs, Rhs> op(Lhs, 
 			}
 		};
 
-	} //namespace run_time
+		template<Fn Type, Pattern... Params, meta::ListInstance MatchedVars, Predicate... Conditions>
+		struct Match<FunctionPn<FnProps<Type>, Params...>, MatchedVars, Conditions...>
+		{
+			static constexpr BMATH_FORCE_INLINE bool value(const UnsaveRef ref, pattern::match::MatchData& match_data)  noexcept
+			{
+				if (ref.type != Type) {
+					return false;
+				}
+				const IndexVector& function = *ref;
+				assert(fn::arity(Type) == function.size());
+				return detail_match::MatchParamsInOrder<
+					meta::List<Params...>,
+					MatchedVars,
+					Conditions...
+				>::value(ref, function.begin(), match_data);
+			}
+		};
 
-	template<Pattern MatchSide, Predicate... Conditions>
-	constexpr auto match = run_time::Match<MatchSide, meta::List<>, Conditions...>::value;
+		template<InstanceOf<Rule>>
+		struct MatchRule;
+
+		template<Pattern MatchSide, Pattern ReplaceSide, Predicate... Conditions>
+		struct MatchRule<Rule<MatchSide, ReplaceSide, Conditions...>> :Match<MatchSide, meta::List<>, Conditions...> {};
+
+	} //namespace generate
+
+	template<InstanceOf<Rule> R>
+	constexpr bool match(const UnsaveRef ref, pattern::match::MatchData& match_data) noexcept
+	{
+		return generate::MatchRule<R>::value(ref, match_data);
+	}
+
+	///////////////////////////// RuleSet
+	//----------------------------------------------------------------------------------------------------------------------
+	//----------------------------------------------------------------------------------------------------------------------
+
+	template<InstanceOf<Rule>... Rules>
+	struct RuleSet__
+	{
+		struct SortElement
+		{
+			MathType match_type;
+			std::string_view match_name;
+			bool(*match_function)(UnsaveRef, pattern::match::MatchData&);
+			//TODO: add replace_function
+		};
+
+		template<InstanceOf<Rule>>
+		struct ToSortElement;
+
+		template<typename Category, Category Type, Pattern... Params, Pattern ReplaceSide, Predicate... Conds>
+		struct ToSortElement<Rule<FunctionPn<VariadicProps<Category, Type, 0>, Params...>, ReplaceSide, Conds...>>
+		{
+			static constexpr SortElement value = { Type, fn::name_of((Variadic)Type),
+				match<Rule<FunctionPn<VariadicProps<Category, Type, 0>, Params...>, ReplaceSide, Conds...>> };
+		};
+
+		template<Fn Type, Pattern... Params, Pattern ReplaceSide, Predicate... Conds>
+		struct ToSortElement<Rule<FunctionPn<FnProps<Type>, Params...>, ReplaceSide, Conds...>>
+		{
+			static constexpr SortElement value = { Type, fn::name_of(Type),
+				match<Rule<FunctionPn<FnProps<Type>, Params...>, ReplaceSide, Conds...>> };
+		};
+
+		template<StringLiteral Name, std::size_t Arity, Pattern... Params, Pattern ReplaceSide, Predicate... Conds>
+		struct ToSortElement<Rule<FunctionPn<NamedFnProps<Name, Arity>, Params...>, ReplaceSide, Conds...>>
+		{
+			static constexpr SortElement value = { NamedFn{}, std::string_view(Name),
+				match<Rule<FunctionPn<NamedFnProps<Name, Arity>, Params...>, ReplaceSide, Conds...>> };
+		};
+
+		std::array<bool(*)(UnsaveRef, pattern::match::MatchData&), sizeof...(Rules)> match_functions;
+
+		constexpr void set_rules() noexcept
+		{
+			auto elements = std::array{ ToSortElement<Rules>::value... };
+			const auto compare = [](const SortElement& fst, const SortElement& snd) {
+				if (fst.match_type == NamedFn{} && snd.match_type == NamedFn{}) {
+					return fst.match_name < snd.match_name;
+				}
+				else {
+					return fst.match_type < snd.match_type;
+				}
+			};
+			std::stable_sort(elements.begin(), elements.end(), compare);
+		}
+
+		constexpr RuleSet__(Rules...) :match_functions{ match<Rules>... } {}
+
+		constexpr RuleSet__() : match_functions{ match<Rules>... } {}
+
+		template<typename... OtherRules>
+		constexpr RuleSet__<Rules..., OtherRules...> operator+(const RuleSet__<OtherRules...>&) { return {}; }
+	};
+
+	template<InstanceOf<Rule>... Rules>
+	RuleSet__(Rules...) -> RuleSet__<Rules...>;
 
 
 	/////////////////////////////Test Facilities

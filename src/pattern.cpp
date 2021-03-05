@@ -36,7 +36,6 @@ namespace bmath::intern::pattern {
 		default:
 			assert(false);
 			BMATH_UNREACHABLE;
-			return false;
 		}
 	} //in_domain
 
