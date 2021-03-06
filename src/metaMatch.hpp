@@ -224,7 +224,6 @@ namespace bmath::intern::meta_pn {
 	constexpr auto make_number = MakeComplex_t<Re, Im>{};
 
 
-
 	template<char... Cs>
 	constexpr auto operator "" _() 
 	{ 
@@ -240,6 +239,17 @@ namespace bmath::intern::meta_pn {
 		constexpr double imag = parse_double(name.begin(), name.end());
 		return ComplexPn<0.0, imag>{}; 
 	}
+
+	constexpr auto _0 = make_number<0.0>;
+	constexpr auto _1 = make_number<1.0>;
+	constexpr auto _2 = make_number<2.0>;
+	constexpr auto _3 = make_number<3.0>;
+	constexpr auto _4 = make_number<4.0>;
+	constexpr auto _5 = make_number<5.0>;
+	constexpr auto _6 = make_number<6.0>;
+	constexpr auto _7 = make_number<7.0>;
+	constexpr auto _8 = make_number<8.0>;
+	constexpr auto _9 = make_number<9.0>;
 
 
 
@@ -424,22 +434,22 @@ template<Pattern... Ops> constexpr FunctionPn<FnProps<Fn::name>, Ops...> name(Op
 	struct Generality;
 
 	template<FunctionProps Props, Pattern... Operands>
-	struct Generality<FunctionPn<Props, Operands...>> :meta::Constant<generality((MathType)Props::function_type)> {};
+	struct Generality<FunctionPn<Props, Operands...>> { static constexpr int value = generality((pattern::PnType)Props::function_type); };
 
 	template<std::size_t MatchDataIndex>
-	struct Generality<TreeMatchVariable<MatchDataIndex>> :meta::Constant<generality(pattern::TreeMatchNonOwning{})> {};
+	struct Generality<TreeMatchVariable<MatchDataIndex>> { static constexpr int value = generality(pattern::TreeMatchNonOwning{}); };
 
 	template<std::size_t ID>
-	struct Generality<MultiMatchTemp<ID>> :meta::Constant<generality(pattern::MultiParams{})> {};
+	struct Generality<MultiMatchTemp<ID>> { static constexpr int value = generality(pattern::MultiParams{}); };
 
 	template<std::size_t Idx>
-	struct Generality<MultiMatchVariable<Idx>> :meta::Constant < generality(pattern::MultiParams{}) > {};
+	struct Generality<MultiMatchVariable<Idx>> { static constexpr int value = generality(pattern::MultiParams{}); };
 
 	template<double Re, double Im>
-	struct Generality<ComplexPn<Re, Im>> :meta::Constant<generality(Literal::complex)> {};
+	struct Generality<ComplexPn<Re, Im>> { static constexpr int value = generality(Literal::complex); };
 
 	template<StringLiteral Name>
-	struct Generality<VariablePn<Name>> :meta::Constant<generality(Literal::variable)> {};
+	struct Generality<VariablePn<Name>> { static constexpr int value = generality(Literal::variable); };
 
 	template<Pattern P> 
 	constexpr int generality_v = Generality<P>::value;

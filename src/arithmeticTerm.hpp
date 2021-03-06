@@ -201,7 +201,6 @@ namespace bmath::intern {
 		{
 			Variadic type = Variadic::COUNT;
 			std::string_view name = "";
-
 			bool associative = false; //allows to flatten nested instances if true
 		};
 

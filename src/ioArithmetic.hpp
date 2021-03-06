@@ -158,7 +158,7 @@ namespace bmath::intern {
 				"wrong numer of function parameters" };
 			return MathIdx(IndexVector::build(store, result_parameters), type);
 		}
-		else if (const Variadic type = fn::variadic_type_of(name); type != Variadic::COUNT) {
+		else if (const Variadic type = fn::variadic_type_of(name); type != Variadic(Variadic::COUNT)) {
 			return MathIdx(IndexVector::build(store, result_parameters), type);
 		}
 		else { //build NamedFn

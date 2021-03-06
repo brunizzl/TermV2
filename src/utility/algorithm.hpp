@@ -11,17 +11,6 @@
 namespace bmath::intern {
 
 	namespace detail_sort {
-		//unsorted elements are found in range [from, from + length), and sorted into range [to, to + length)
-		//returns pointer at to + length
-		template<typename T, typename Smaller>
-		constexpr T* stable_sort_move(T* to, T* from, const std::size_t length, Smaller smaller);
-
-		//buffer is assumed to point at array with at least (length / 2) many elements
-		//sorts elements in range [to_sort, to_sort + length) using buffer as buffer
-		//returns pointer at to_sort + length
-		template<typename T, typename Smaller>
-		constexpr T* stable_sort_in_place(T* const buffer, T* to_sort, const std::size_t length, Smaller smaller);
-
 		template<typename T> //half open range [start, stop)
 		struct Range 
 		{ 
@@ -30,7 +19,7 @@ namespace bmath::intern {
 		};
 
 		//assumes fst and snd to be sorted, returns to + fst.length() + snd.length()
-		template<typename T, typename Smaller>
+		template<typename T, std::strict_weak_order<T, T> Smaller>
 		constexpr T* merge(T* to, Range<T> fst, Range<T> snd, Smaller smaller)
 		{
 			while (!fst.empty() && !snd.empty()) {
@@ -43,25 +32,15 @@ namespace bmath::intern {
 			return to;
 		}
 
+		//unsorted elements are found in range [from, from + length), and sorted into range [to, to + length)
+		//returns pointer at to + length
+		template<typename T, std::strict_weak_order<T, T> Smaller>
+		constexpr T* stable_sort_move(T* to, T* from, const std::size_t length, Smaller smaller);
 
-		template<typename T, typename Smaller>
-		constexpr T* stable_sort_move(T* const to, T* const from, const std::size_t length, Smaller smaller)
-		{
-			assert(from != to);
-			if (length < 2) {
-				*to = std::move(*from);
-				return to + 1;
-			}
-			const std::size_t fst_length = length / 2;
-			const std::size_t snd_length = length - fst_length;
-			T* const fst_start = from;
-			T* const snd_start = from + fst_length;
-			T* const fst_end = stable_sort_in_place(to, fst_start, fst_length, smaller);
-			T* const snd_end = stable_sort_in_place(to, snd_start, snd_length, smaller);
-			return merge(to, { fst_start, fst_end }, { snd_start, snd_end }, smaller);
-		}
-
-		template<typename T, typename Smaller>
+		//buffer is assumed to point at array with at least (length / 2) many elements
+		//sorts elements in range [to_sort, to_sort + length) using buffer as buffer
+		//returns pointer at to_sort + length
+		template<typename T, std::strict_weak_order<T, T> Smaller>
 		constexpr T* stable_sort_in_place(T* const buffer, T* const to_sort, const std::size_t length, Smaller smaller)
 		{
 			assert(buffer != to_sort);
@@ -76,9 +55,26 @@ namespace bmath::intern {
 			T* const fst_end = stable_sort_move(buffer, to_sort, fst_length, smaller);
 			return merge(to_sort, { fst_start, fst_end }, { snd_start, snd_end }, smaller);
 		}
+
+		template<typename T, std::strict_weak_order<T, T> Smaller>
+		constexpr T* stable_sort_move(T* const to, T* const from, const std::size_t length, Smaller smaller)
+		{
+			assert(from != to);
+			if (length < 2) {
+				*to = std::move(*from);
+				return to + 1;
+			}
+			const std::size_t fst_length = length / 2;
+			const std::size_t snd_length = length - fst_length;
+			T* const fst_start = from;
+			T* const snd_start = from + fst_length;
+			T* const fst_end = stable_sort_in_place(to, fst_start, fst_length, smaller);
+			T* const snd_end = stable_sort_in_place(to, snd_start, snd_length, smaller);
+			return merge(to, { fst_start, fst_end }, { snd_start, snd_end }, smaller);
+		}		
 	} //namespace detail_sort
 
-	template<typename T, std::size_t N, typename Smaller>
+	template<typename T, std::size_t N, std::strict_weak_order<T, T> Smaller>
 	constexpr void stable_sort(std::array<T, N>& arr, Smaller smaller)
 	{
 		std::array<T, N / 2> buffer;

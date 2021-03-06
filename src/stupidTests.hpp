@@ -520,12 +520,13 @@ namespace bmath::intern::test {
 	void meta_pattern()
 	{
 		using namespace bmath::intern::meta_pn;
+
 		{
 			auto [x] = make_tree_matches<1>;
-			auto rule_1 = make_rule(0_ * x = 0_);
-			auto rule_2 = make_rule(0_ ^ x = 0_);
-			auto rule_3 = make_rule(x ^ 0_ = 1_);
-			auto rule_4 = make_rule(x ^ 1_ = x );
+			auto rule_1 = make_rule(_0 * x = _0);
+			auto rule_2 = make_rule(_0 ^ x = _0);
+			auto rule_3 = make_rule(x ^ _0 = _1);
+			auto rule_4 = make_rule(x ^ _1 = x );
 
 			std::cout << name(rule_1) << "\n";
 			std::cout << name(rule_2) << "\n";
@@ -537,8 +538,8 @@ namespace bmath::intern::test {
 			auto [x, a, b] = make_tree_matches<3>;
 			auto [xs] = make_multi_matches<1>;
 			auto rule_1 = make_rule((x^a)^b         = x^(a * b));
-			auto rule_2 = make_rule(    x *     x   = x ^ 2_);
-			auto rule_3 = make_rule(    x * (x^a)   = x^(a + 1_));
+			auto rule_2 = make_rule(    x *     x   = x ^ _2);
+			auto rule_3 = make_rule(    x * (x^a)   = x^(a + _1));
 			auto rule_4 = make_rule((x^a) * (x^b)   = x^(a + b ));
 			auto rule_5 = make_rule(exp(ln(x) * xs) = x^xs);
 
@@ -551,11 +552,11 @@ namespace bmath::intern::test {
 		}
 		{
 			auto [a, b] = make_tree_matches<2>;
-			auto rule_1 = make_rule((a^2_) + 2_*a*b + (b^2_) = (a + b)^2_);
-			auto rule_2 = make_rule((a^2_) - 2_*a*b + (b^2_) = (a - b)^2_);
+			auto rule_1 = make_rule((a^_2) + _2*a*b + (b^_2) = (a + b)^_2);
+			auto rule_2 = make_rule((a^_2) - _2*a*b + (b^_2) = (a - b)^_2);
 
 			auto [a_square, two_a, b_] = make_tree_matches<3>;
-			auto rule_3 = make_rule(a_square + two_a*b_ + (b_^2_) = (two_a / 2_ + b_)^2_, sqrt(a_square) == two_a / 2_);
+			auto rule_3 = make_rule(a_square + two_a*b_ + (b_^_2) = (two_a / _2 + b_)^_2, sqrt(a_square) == two_a / _2);
 
 			std::cout << name(rule_1) << "\n";
 			std::cout << name(rule_2) << "\n";
@@ -565,12 +566,12 @@ namespace bmath::intern::test {
 		{
 			auto [a, b, bs, cs] = make_match_variables<Matches::one, Matches::one, Matches::many, Matches::many>;
 			auto rule_1 = make_rule(a * bs + a * cs = a * (bs + cs), !is_value(a));
-			auto rule_2 = make_rule(a * bs + a      = a * (bs + 1_), !is_value(a));
-			auto rule_3 = make_rule(a      + a      = 2_ * a       , !is_value(a));
+			auto rule_2 = make_rule(a * bs + a      = a * (bs + _1), !is_value(a));
+			auto rule_3 = make_rule(a      + a      = _2 * a       , !is_value(a));
 			auto rule_4 = make_rule(a * (b + cs)    = a * b + a * cs);
 
 			auto rule_5 = make_rule(-(a + bs)       = -a - bs);
-			auto rule_6 = make_rule((a * bs) ^ (-1_) = (a ^ (-1_)) * (bs ^ (-1_)));
+			auto rule_6 = make_rule((a * bs) ^ (-_1) = (a ^ (-_1)) * (bs ^ (-_1)));
 
 			std::cout << name(rule_1) << "\n";
 			std::cout << name(rule_2) << "\n";
@@ -583,17 +584,17 @@ namespace bmath::intern::test {
 		{
 			auto pi = make_variable_literal<"pi">;
 			auto [x] = make_tree_matches<1>;
-			auto rule_1 = make_rule((sin(x)^2_) + (cos(x)^2_) = 1_);
+			auto rule_1 = make_rule((sin(x)^_2) + (cos(x)^_2) = _1);
 
-			auto rule_2 = make_rule(cos(    pi) = -1_);
-			auto rule_3 = make_rule(cos(x * pi) =  0_, is_int(x - 0.5_));
-			auto rule_4 = make_rule(cos(x * pi) =  1_, is_int(x / 2_));
-			auto rule_5 = make_rule(cos(x * pi) = -1_, is_int((x - 1_) / 2_));
+			auto rule_2 = make_rule(cos(    pi) = -_1);
+			auto rule_3 = make_rule(cos(x * pi) =  _0, is_int(x - _1/_2));
+			auto rule_4 = make_rule(cos(x * pi) =  _1, is_int(x / _2));
+			auto rule_5 = make_rule(cos(x * pi) = -_1, is_int((x - _1) / _2));
 
-			auto rule_6 = make_rule(sin(    pi) =  0_);
-			auto rule_7 = make_rule(sin(x * pi) =  0_, is_int(x));
-			auto rule_8 = make_rule(sin(x * pi) =  1_, is_int((x - 0.5_) / 2_));
-			auto rule_9 = make_rule(sin(x * pi) = -1_, is_int((x - 1.5_) / 2_));
+			auto rule_6 = make_rule(sin(    pi) =  _0);
+			auto rule_7 = make_rule(sin(x * pi) =  _0, is_int(x));
+			auto rule_8 = make_rule(sin(x * pi) =  _1, is_int((x - _1/_2) / _2));
+			auto rule_9 = make_rule(sin(x * pi) = -_1, is_int((x - _3/_2) / _2));
 
 			std::cout << name(rule_1) << "\n";
 			std::cout << name(rule_2) << "\n";
@@ -609,9 +610,9 @@ namespace bmath::intern::test {
 		{
 			auto [x, a, f, g, h] = make_tree_matches<5>;
 			auto [as] = make_multi_matches<1>;
-			auto rule_1 = make_rule(diff(x, x)      = 1_                                               , is_variable(x));
-			auto rule_2 = make_rule(diff(a, x)      = 0_                                               , is_variable(x), is_variable(a) || is_value(a));
-			auto rule_3 = make_rule(diff(f^a, x)    = diff(f, x) * a * (f^(a - 1_))                    , is_variable(x), is_value(a));
+			auto rule_1 = make_rule(diff(x, x)      = _1                                               , is_variable(x));
+			auto rule_2 = make_rule(diff(a, x)      = _0                                               , is_variable(x), is_variable(a) || is_value(a));
+			auto rule_3 = make_rule(diff(f^a, x)    = diff(f, x) * a * (f^(a - _1))                    , is_variable(x), is_value(a));
 			auto rule_4 = make_rule(diff(a^f, x)    = diff(f, x) * ln(a) * (a^f)                       , is_variable(x), is_value(a));
 			auto rule_5 = make_rule(diff(g^h, x)    = (diff(h, x) * ln(g) + h * diff(g, x) / g) * (g^h), is_variable(x));
 			auto rule_6 = make_rule(diff(a + as, x) = diff(a, x) + diff(as, x)                         , is_variable(x));
@@ -661,9 +662,9 @@ namespace bmath::intern::test {
 		auto fib = make_function<"fib", 1>;
 		{
 			auto [n] = make_tree_matches<1>;
-			auto rule_1 = make_rule(fib(0_) = 0_);
-			auto rule_2 = make_rule(fib(1_) = 1_);
-			auto rule_3 = make_rule(fib(n) = fib(n - 1_) + fib(n - 2_), is_int(n));
+			auto rule_1 = make_rule(fib(_0) = _0);
+			auto rule_2 = make_rule(fib(_1) = _1);
+			auto rule_3 = make_rule(fib(n) = fib(n - _1) + fib(n - _2), is_int(n));
 			
 			std::cout << name(rule_1) << "\n";
 			std::cout << name(rule_2) << "\n";
