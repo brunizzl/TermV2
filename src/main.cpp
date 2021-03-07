@@ -72,16 +72,16 @@ void test_f(PnType t) {
 
 int main()
 {
-	for (int i = 0; i < (unsigned)PnType::COUNT; i++) {
-		test_f((PnType)i);
-	}
-	std::cout << "\n";
+	//for (int i = 0; i < (unsigned)PnType::COUNT; i++) {
+	//	test_f((PnType)i);
+	//}
+	//std::cout << "\n";
 
 	//debug::enumerate_type();
 	//debug::test_rechner();
-	test::stable_sort();
-	//test::match_meta_pattern();
-	//test::meta_pattern();
+	//test::stable_sort();
+	test::match_meta_pattern();
+	test::meta_pattern();
 	//test::meta_pattern_2();
 	//test::pattern_term();
 	//test::arithmetic_term();

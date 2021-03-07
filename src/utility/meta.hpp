@@ -297,29 +297,12 @@ namespace bmath::intern::meta {
 	template<typename T, ListInstance L>
 	constexpr bool contains_v = Contains<T, L>::value;
 
-	template<typename T>
-	struct Contains<T, List<>> 
-		:std::false_type {};
+	template<typename T, typename... Ts>
+	struct Contains<T, List<Ts...>> 
+		:std::bool_constant<(std::is_same_v<T, Ts> || ...)> {};
 
-	template<typename T, typename T1>
-	struct Contains<T, List<T1>> 
-		:std::bool_constant<std::is_same_v<T, T1>> {};
-
-	template<typename T, typename T1, typename T2>
-	struct Contains<T, List<T1, T2>> 
-		:std::bool_constant<std::is_same_v<T, T1> || std::is_same_v<T, T2>> {};
-
-	template<typename T, typename T1, typename T2, typename T3>
-	struct Contains<T, List<T1, T2, T3>> 
-		:std::bool_constant<std::is_same_v<T, T1> || std::is_same_v<T, T2> || std::is_same_v<T, T3>> {};
-
-	template<typename T, typename T1, typename T2, typename T3, typename T4>
-	struct Contains<T, List<T1, T2, T3, T4>> 
-		:std::bool_constant<std::is_same_v<T, T1> || std::is_same_v<T, T2> || std::is_same_v<T, T3> || std::is_same_v<T, T4>> {};
-
-	template<typename T, typename T1, typename T2, typename T3, typename T4, typename T5, typename... Ts>
-	struct Contains<T, List<T1, T2, T3, T4, T5, Ts...>>
-		:std::bool_constant<contains_v<T, List<T1, T2, T3, T4>> || contains_v<T, List<T5, Ts...>>> {};
+	template<typename T, typename... Ts>
+	constexpr bool direct_contains_v = (std::is_same_v<T, Ts> || ...);
 
 	static_assert(contains_v<int, List<bool, void, double, int, bool>>);
 	static_assert(!contains_v<int, List<bool, void, double, bool>>);
@@ -616,23 +599,6 @@ namespace bmath::intern::meta {
 	struct SSize<Seq<xs...>> :Constant<sizeof...(xs)> {};
 
 
-	/////////////////   SeqToList
-
-	template<template <auto> class F, SeqInstance S>
-	struct SeqToList;
-
-	template<template <auto> class F, SeqInstance S>
-	using SeqToList_t = typename SeqToList<F, S>::type;
-
-	template<template <auto> class F, auto... xs>
-	struct SeqToList<F, Seq<xs...>>
-	{
-		using type = List<typename F<xs>::type...>;
-	};
-
-	static_assert(std::is_same_v<List<Constant<1>, Constant<2>, Constant<3>>, SeqToList_t<Constant, Seq<1, 2, 3>>>);
-
-
 	/////////////////   SCons
 
 	template<auto, SeqInstance>
@@ -650,21 +616,90 @@ namespace bmath::intern::meta {
 	static_assert(std::is_same_v<SCons_t<1, Seq<2, 3, 4>>, Seq<1, 2, 3, 4>>);
 
 
-	/////////////////   SConcat
+	/////////////////   contains
+
+	template<auto x, SeqInstance S>
+	struct SContains;
+
+	template<auto x, SeqInstance S>
+	constexpr bool scontains_v = SContains<x, S>::value;
+
+	template<auto x, auto... xs>
+	struct SContains<x, Seq<xs...>> { static constexpr bool value = ((x == xs) || ...); };
+
+	template<auto x, auto... xs>
+	constexpr bool direct_scontains_v = ((x == xs) || ...);
+
+	static_assert(direct_scontains_v<2, 1, 4, 2, 3>);
+	static_assert(!direct_scontains_v<7, 1, 4, 2, 3>);
+
+	/////////////////   intersection
 
 	template<SeqInstance, SeqInstance>
-	struct SConcat;
+	struct SInstersection;
 
-	template<SeqInstance A1, SeqInstance A2>
-	using SConcat_t = typename SConcat<A1, A2>::type;
+	template<SeqInstance S1, SeqInstance S2>
+	using SIntersection_t = typename SInstersection<S1, S2>::type;
 
-	template<SeqInstance A1, SeqInstance A2>
-	constexpr SConcat_t<A1, A2> concat(A1, A2) { return {}; }
+	template<auto... ys>
+	struct SInstersection<Seq<>, Seq<ys...>> { using type = Seq<>; };
+
+	template<auto x, auto... xs, auto... ys>
+	class SInstersection<Seq<x, xs...>, Seq<ys...>>
+	{
+		using Tail = SIntersection_t<Seq<xs...>, Seq<ys...>>;
+	public:
+		using type = std::conditional_t<direct_scontains_v<x, ys...>,
+			SCons_t<x, Tail>,
+			Tail
+		>;
+	};
+
+
+	/////////////////   SeqToList
+
+	template<template <auto> class F, SeqInstance S>
+	struct SeqToList;
+
+	template<template <auto> class F, SeqInstance S>
+	using SeqToList_t = typename SeqToList<F, S>::type;
+
+	template<template <auto> class F, auto... xs>
+	struct SeqToList<F, Seq<xs...>>
+	{
+		using type = List<typename F<xs>::type...>;
+	};
+
+	static_assert(std::is_same_v<List<Constant<1>, Constant<2>, Constant<3>>, SeqToList_t<Constant, Seq<1, 2, 3>>>);
+
+
+	/////////////////   SConcat
+
+	template<SeqInstance...>
+	struct SConcat { using type = Seq<>; };
+
+	template<typename... Ls>
+	using SConcat_t = typename SConcat<Ls...>::type;
+
+	template<SeqInstance L>
+	struct SConcat<L> { using type = L; };
 
 	template<auto... xs, auto... ys>
 	struct SConcat<Seq<xs...>, Seq<ys...>> { using type = Seq<xs..., ys...>; };
 
-	static_assert(std::is_same_v<SConcat_t<Seq<0, 1>, Seq<2, 3, 4>>, Seq<0, 1, 2, 3, 4>>);
+	template<auto... xs, auto... ys, auto... zs>
+	struct SConcat<Seq<xs...>, Seq<ys...>, Seq<zs...>> { using type = Seq<xs..., ys..., zs...>; };
+
+	template<auto... xs, auto... ys, auto... zs, typename... Seqs>
+	struct SConcat<Seq<xs...>, Seq<ys...>, Seq<zs...>, Seqs...>
+	{
+		using type = SConcat_t<Seq<xs..., ys..., zs...>, Seqs...>;
+	};
+
+	static_assert(std::is_same_v<SConcat_t<
+		Seq<0, 1>, Seq<2, 3, 4>, Seq<1, 1>, Seq<0>, Seq<1, 2>>, 
+		Seq<0, 1, 2, 3, 4, 1, 1, 0, 1, 2>
+	>);
 
 
 	/////////////////   IndexOf
