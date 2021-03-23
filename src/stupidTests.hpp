@@ -680,9 +680,9 @@ namespace bmath::intern::test {
 		auto f = make_function<"f", 3>;
 
 		auto rules = RuleSet__(
+			make_rule(x ^ y = 7_),
 			make_rule(f(x, y, y) = 7_, x > 4_, is_real(x)),
-			make_rule(f(7_, x, y) = 7_),
-			make_rule(x ^ y = 7_)
+			make_rule(f(7_, x, y) = 7_)
 		);
 
 		auto terms = std::to_array<bmath::Term>({
