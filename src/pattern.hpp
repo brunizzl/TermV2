@@ -48,10 +48,12 @@ namespace bmath::intern::pattern {
 	//represent not actual nodes in pattern tree, as all match info is stored in VariadicMatchDatum in MatchData	
 	//thus all info required in the tree is given in the typed_idx, where the index is repurposed to point elsewhere
 	//(elsewhere means that VariadicMatchDatum array in MatchData)
-	struct MultiParams :SingleSumEnumEntry {};
+	//Comm can only hold one instance of MultiMatch directly (always fst), NonComm may hold both.
+	//occurence outside of Variadic is prohibited.
+	enum class MultiMatch { fst, snd, COUNT };
 
 	//all values contained within Proxy dont reference an element in the pattern tree, but in MatchData
-	using Proxy = SumEnum <ValueProxy, MultiParams, TreeMatch>;
+	using Proxy = SumEnum <ValueProxy, MultiMatch, TreeMatch>;
 
 	using MatchType = SumEnum<ValueMatch, Proxy>;
 

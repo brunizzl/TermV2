@@ -217,7 +217,7 @@ namespace bmath::intern::pattern {
 
 					void consume(const PnIdx child)
 					{
-						if (child.get_type().is<MultiParams>()) {
+						if (child.get_type().is<MultiMatch>()) {
 							if (this->own_idx == -1) throw std::exception("found MultiParams in unexprected place");
 							this->old_multis->at(this->own_idx) = child;
 						}
@@ -233,7 +233,7 @@ namespace bmath::intern::pattern {
 				const auto check_function_params = [&old_multis, test_lhs](const MutPnRef ref) -> fold::FindTrue {
 					if (ref.type.is<Function>()) {
 						for (auto& param : fn::range(ref)) {
-							if (param.get_type().is<MultiParams>()) {
+							if (param.get_type().is<MultiMatch>()) {
 								if (!ref.type.is<Variadic>() && test_lhs) { //only Variadic may carry MultiParams in lhs
 									return true;
 								}
@@ -276,7 +276,7 @@ namespace bmath::intern::pattern {
 					if (ref.type.is<Variadic>()) {
 						std::size_t nr_multi_matches = 0u;
 						for (const PnIdx elem : fn::range(ref)) {
-							nr_multi_matches += elem.get_type().is<MultiParams>();
+							nr_multi_matches += elem.get_type().is<MultiMatch>();
 						}
 						return nr_multi_matches > 1u;
 					}
@@ -290,7 +290,7 @@ namespace bmath::intern::pattern {
 			const auto contains_to_long_variadic = [](const PnRef head) -> bool {
 				const auto inspect_variadic = [](const PnRef ref) -> fold::FindTrue {
 					if (ref.type.is<Variadic>()) {
-						const std::uint32_t multi_at_back = ref->parameters.back().get_type().is<MultiParams>();
+						const std::uint32_t multi_at_back = ref->parameters.back().get_type().is<MultiMatch>();
 						return ref->parameters.size() - multi_at_back > match::SharedVariadicDatum::max_pn_variadic_params_count;
 					}
 					return false;
@@ -454,12 +454,12 @@ namespace bmath::intern::pattern {
 				if (const auto multi_match = math_rep::IntermediateMultiMatch::cast(src_ref)) {
 					const Variadic multi_parent = multi_match->type();
 					if (multi_parent == parent_type) {
-						return PnIdx(multi_match->index(), MultiParams{});
+						return PnIdx(multi_match->index(), MultiMatch::fst);
 					}
 					else {
 						assert(side == Side::rhs);
 						const std::size_t dst_index = dst_store.allocate_one();
-						dst_store.at(dst_index) = PnIdxVector{ PnIdx(multi_match->index(), MultiParams{}) };
+						dst_store.at(dst_index) = PnIdxVector{ PnIdx(multi_match->index(), MultiMatch::fst) };
 						return PnIdx(dst_index, multi_parent);
 					}
 				}
@@ -695,7 +695,7 @@ namespace bmath::intern::pattern {
 				}
 				assert(pn_ref.type.is<Function>());
 				if (pn_ref.type.is<Comm>()) {
-					const bool params_at_back = pn_ref->parameters.back().get_type() == MultiParams{};
+					const bool params_at_back = pn_ref->parameters.back().get_type().is<MultiMatch>();
 					if (pn_ref->parameters.size() - params_at_back > ref->parameters.size()) {  //params can also match nothing -> subtract 1 then
 						return false;
 					}
@@ -724,7 +724,7 @@ namespace bmath::intern::pattern {
 					const auto pn_stop = pn_range.end();
 					const auto stop = range.end();
 					for (; pn_iter != pn_stop && iter != stop; ++pn_iter, ++iter) {
-						if (pn_iter->get_type().is<MultiParams>()) {
+						if (pn_iter->get_type().is<MultiMatch>()) {
 							goto found_multi_pn;
 						}
 						else if (!match::permutation_equals(pn_ref.new_at(*pn_iter), ref.new_at(*iter), match_data)) {
@@ -732,7 +732,7 @@ namespace bmath::intern::pattern {
 						}
 					}
 					if (iter == stop) {
-						if (pn_iter->get_type() == MultiParams{}) {
+						if (pn_iter->get_type().is<MultiMatch>()) {
 							goto found_multi_pn;
 						}
 						return pn_iter == pn_stop;
@@ -789,7 +789,8 @@ namespace bmath::intern::pattern {
 			} break;
 			case PnType(ValueProxy{}): //may only be encountered in pn_tree::eval_value_match (as value_match does no permutation_equals call)
 				[[fallthrough]];
-			case PnType(MultiParams{}): //assumed to be handeled only as param of named_fn or ordered elements in Variadic 
+			case PnType(MultiMatch::fst): //assumed to be handeled only as param of named_fn or ordered elements in Variadic 
+			case PnType(MultiMatch::snd): //assumed to be handeled only as param of named_fn or ordered elements in Variadic 
 				assert(false);
 				BMATH_UNREACHABLE;
 				return false;
@@ -806,13 +807,13 @@ namespace bmath::intern::pattern {
 				const PnIdxVector& pn_params = *pn_ref;
 				assert(variadic_datum.match_idx == ref.typed_idx()); //assert pn_ref is currently matched in ref
 				std::uint32_t pn_i = pn_params.size() - 1u;
-				if (pn_params[pn_i].get_type().is<MultiParams>()) {
+				if (pn_params[pn_i].get_type().is<MultiMatch>()) {
 					if (pn_i == 0u) {
 						return false;
 					}
 					pn_i--;
 				}
-				assert(!pn_params[pn_i].get_type().is<MultiParams>()); //there may only be a single one in each variadic
+				assert(!pn_params[pn_i].get_type().is<MultiMatch>()); //there may only be a single one in each variadic
 				const std::uint32_t last_haystack_k = variadic_datum.match_positions[pn_i];
 				return find_matching_permutation(pn_ref, ref, match_data, pn_i, last_haystack_k + 1u);
 			}
@@ -854,7 +855,7 @@ namespace bmath::intern::pattern {
 
 			while (pn_i < pn_params.size()) {
 				const pattern::UnsavePnRef pn_i_ref = pn_ref.new_at(pn_params[pn_i]);
-				if (pn_i_ref.type.is<MultiParams>()) [[unlikely]] { //also summands and factors are matched as params
+				if (pn_i_ref.type.is<MultiMatch>()) [[unlikely]] { //also summands and factors are matched as params
 					assert(pn_i + 1ull == pn_params.size() && "MultiParams is only valid as last element -> only one per variadic");
 					assert(pn_params[pn_i].get_index() == meta_data.match_data_idx); //just out of paranoia
 					return true;
@@ -954,7 +955,7 @@ namespace bmath::intern::pattern {
 				assert(pn_ref.type.is<Function>());
 				StupidBufferVector<MathIdx, 12> dst_parameters;
 				for (const PnIdx pn_param : fn::range(pn_ref)) {
-					if (pn_param.get_type() == MultiParams{}) { 
+					if (pn_param.get_type().is<MultiMatch>()) { 
 						const SharedVariadicDatum& info = match_data.variadic_data[pn_param.get_index()];
 						const auto src_range = fn::save_range(Ref(src_store, info.match_idx));
 						const auto src_stop = end(src_range);

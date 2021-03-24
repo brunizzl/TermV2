@@ -234,7 +234,8 @@ namespace bmath::intern::print {
 			str.append("_VP");
 			str.append(std::to_string(ref.index));
 		} break;
-		case PnType(MultiParams{}): {
+		case PnType(MultiMatch::fst): 
+		case PnType(MultiMatch::snd): {
 			str.append("_P");
 			str.append(std::to_string(ref.index));
 			str.append("...");
@@ -307,7 +308,8 @@ namespace bmath::intern::print {
 			str.append("_VP");
 			str.append(std::to_string(ref.index));
 		} break;
-		case PnType(MultiParams{}): {
+		case PnType(MultiMatch::fst): 
+		case PnType(MultiMatch::snd): {
 			str.append("_P");
 			str.append(std::to_string(ref.index));
 			str.append("...");

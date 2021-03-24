@@ -13,6 +13,9 @@ important:
  - add RuleRef type grouping two pattern refs
  - make match and replace two distinct functions in RuleSet, allow caller to rematch
  - write version of tree::combine only checking changed tree parts
+ - decide if garbage collection should be used (and if so implement it + change functions currently deallocating)
+ - implement meta_pn::match function for variadic patterns
+ - improve multi-match capabilities of NonComm variadic patterns (allow multiple multis in one NonComm instance)
 
 nice to have:
  - enable StupidBufferVector to handle non-trivial destructible types -> change name to BufferVector
@@ -34,6 +37,7 @@ idea status:
 	   also requires find_matching_permutation to return same values.
  - sort pattern with care for match variables
  - change macros in meta_pn to create function objects, not functions 
+ - build meta_pn::match not from pattern encoded as type, but pattern encoded as value by taking lamdas returning pattern part as template parameter
 */
 
 
@@ -77,7 +81,7 @@ int main()
 	//}
 	//std::cout << "\n";
 
-	//debug::enumerate_type();
+	debug::enumerate_type();
 	//debug::test_rechner();
 	//test::stable_sort();
 	//test::match_meta_pattern();

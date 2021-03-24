@@ -428,10 +428,10 @@ template<Pattern... Ops> constexpr FunctionPn<FnProps<Fn::name>, Ops...> name(Op
 	struct Generality<TreeMatchVariable<MatchDataIndex>> { static constexpr int value = generality(pattern::TreeMatchNonOwning{}); };
 
 	template<std::size_t ID>
-	struct Generality<MultiMatchTemp<ID>> { static constexpr int value = generality(pattern::MultiParams{}); };
+	struct Generality<MultiMatchTemp<ID>> { static constexpr int value = generality(pattern::MultiMatch::fst); };
 
 	template<std::size_t Idx>
-	struct Generality<MultiMatchVariable<Idx>> { static constexpr int value = generality(pattern::MultiParams{}); };
+	struct Generality<MultiMatchVariable<Idx>> { static constexpr int value = generality(pattern::MultiMatch::fst); };
 
 	template<double Re, double Im>
 	struct Generality<ComplexPn<Re, Im>> { static constexpr int value = generality(Literal::complex); };
