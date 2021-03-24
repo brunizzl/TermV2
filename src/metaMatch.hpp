@@ -1269,8 +1269,9 @@ template<Pattern Lhs, Pattern Rhs> constexpr InRelation<name, Lhs, Rhs> op(Lhs, 
 
 		constexpr void set_rules() noexcept
 		{
-			auto elems = std::array{ detail_rule_set::ToSortElement<Rules>::value... };
-			const auto smaller = [](const auto& fst, const auto& snd) {
+			using namespace detail_rule_set;
+			auto elems = std::array{ ToSortElement<Rules>::value... };
+			const auto smaller = [](const SortElement& fst, const SortElement& snd) {
 				if (fst.match_type == NamedFn{} && snd.match_type == NamedFn{}) {
 					return fst.match_name < snd.match_name;
 				}

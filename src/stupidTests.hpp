@@ -660,17 +660,40 @@ namespace bmath::intern::test {
 	void meta_pattern_2() 
 	{
 		using namespace bmath::intern::meta_pn;
-		auto fib = make_function<"fib", 1>;
 		{
+			auto fib = make_function<"fib", 1>;
 			auto [n] = make_tree_matches<1>;
+
 			auto rule_1 = make_rule(fib(0_) = 0_);
 			auto rule_2 = make_rule(fib(1_) = 1_);
-			auto rule_3 = make_rule(fib(n) = fib(n - 1_) + fib(n - 2_), is_int(n));
+			auto rule_3 = make_rule(fib(n) = fib(n - 1_) + fib(n - 2_), is_int(n), n > 1_);
 			
 			std::cout << name(rule_1) << "\n";
 			std::cout << name(rule_2) << "\n";
 			std::cout << name(rule_3) << "\n";
 			std::cout << "\n";
+
+			auto rules = RuleSet__(rule_1, rule_2, rule_3);
+			auto terms = std::to_array<bmath::Term>({
+				{ "fib(-1)" },
+				{ "fib(-2)" },
+				{ "fib(0)" },
+				{ "fib(1)" },
+				{ "fib(2)" },
+				{ "fib(3)" },
+				{ "fib(4)" },
+				{ "fib(5)" },
+				{ "fib(6)" },
+				});
+			for (auto& term : terms) {
+				const UnsaveRef head = term.ref();
+				for (auto match_function : rules.match_functions) {
+					pattern::match::MatchData match_data;
+					std::cout << match_function(head, match_data) << " ";
+				}
+				std::cout << term.to_pretty_string() << "\n";
+			}
+			std::cout << "\n\n";
 		}
 	}
 

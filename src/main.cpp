@@ -81,11 +81,11 @@ int main()
 	//}
 	//std::cout << "\n";
 
-	debug::enumerate_type();
+	//debug::enumerate_type();
 	//debug::test_rechner();
 	//test::stable_sort();
 	//test::match_meta_pattern();
-	test::meta_pattern();
+	//test::meta_pattern();
 	test::meta_pattern_2();
 	//test::pattern_term();
 	//test::arithmetic_term();
