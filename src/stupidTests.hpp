@@ -524,10 +524,10 @@ namespace bmath::intern::test {
 
 		{
 			auto [x] = make_tree_matches<1>;
-			auto rule_1 = make_rule(0_ * x = 0_);
-			auto rule_2 = make_rule(0_ ^ x = 0_);
-			auto rule_3 = make_rule(x ^ 0_ = 1_);
-			auto rule_4 = make_rule(x ^ 1_ = x );
+			auto rule_1 = rule(0_ * x = 0_);
+			auto rule_2 = rule(0_ ^ x = 0_);
+			auto rule_3 = rule(x ^ 0_ = 1_);
+			auto rule_4 = rule(x ^ 1_ = x );
 
 			std::cout << name(rule_1) << "\n";
 			std::cout << name(rule_2) << "\n";
@@ -538,11 +538,11 @@ namespace bmath::intern::test {
 		{
 			auto [x, a, b] = make_tree_matches<3>;
 			auto [xs] = make_multi_matches<1>;
-			auto rule_1 = make_rule((x^a)^b         = x^(a * b));
-			auto rule_2 = make_rule(    x *     x   = x ^ 2_);
-			auto rule_3 = make_rule(    x * (x^a)   = x^(a + 1_));
-			auto rule_4 = make_rule((x^a) * (x^b)   = x^(a + b ));
-			auto rule_5 = make_rule(exp(ln(x) * xs) = x^xs);
+			auto rule_1 = rule((x^a)^b         = x^(a * b));
+			auto rule_2 = rule(    x *     x   = x ^ 2_);
+			auto rule_3 = rule(    x * (x^a)   = x^(a + 1_));
+			auto rule_4 = rule((x^a) * (x^b)   = x^(a + b ));
+			auto rule_5 = rule(exp(ln(x) * xs) = x^xs);
 
 			std::cout << name(rule_1) << "\n";
 			std::cout << name(rule_2) << "\n";
@@ -553,11 +553,11 @@ namespace bmath::intern::test {
 		}
 		{
 			auto [a, b] = make_tree_matches<2>;
-			auto rule_1 = make_rule((a ^ 2_) + 2_ * a * b + (b ^ 2_) = (a + b) ^ 2_);
-			auto rule_2 = make_rule((a ^ 2_) - 2_ * a * b + (b ^ 2_) = (a - b) ^ 2_);
+			auto rule_1 = rule((a ^ 2_) + 2_ * a * b + (b ^ 2_) = (a + b) ^ 2_);
+			auto rule_2 = rule((a ^ 2_) - 2_ * a * b + (b ^ 2_) = (a - b) ^ 2_);
 
 			auto [a_square, two_a, b_] = make_tree_matches<3>;
-			auto rule_3 = make_rule(a_square + two_a * b_ + (b_ ^ 2_) = (two_a / 2_ + b_) ^ 2_, sqrt(a_square) == two_a / 2_);
+			auto rule_3 = rule(a_square + two_a * b_ + (b_ ^ 2_) = (two_a / 2_ + b_) ^ 2_, sqrt(a_square) == two_a / 2_);
 
 			std::cout << name(rule_1) << "\n";
 			std::cout << name(rule_2) << "\n";
@@ -566,13 +566,13 @@ namespace bmath::intern::test {
 		}
 		{
 			auto [a, b, bs, cs] = make_match_variables<Matches::one, Matches::one, Matches::many, Matches::many>;
-			auto rule_1 = make_rule(a * bs + a * cs = a * (bs + cs), !is_value(a));
-			auto rule_2 = make_rule(a * bs + a      = a * (bs + 1_), !is_value(a));
-			auto rule_3 = make_rule(a      + a      = 2_ * a       , !is_value(a));
-			auto rule_4 = make_rule(a * (b + cs)    = a * b + a * cs);
+			auto rule_1 = rule(a * bs + a * cs = a * (bs + cs), !is_value(a));
+			auto rule_2 = rule(a * bs + a      = a * (bs + 1_), !is_value(a));
+			auto rule_3 = rule(a      + a      = 2_ * a       , !is_value(a));
+			auto rule_4 = rule(a * (b + cs)    = a * b + a * cs);
 
-			auto rule_5 = make_rule(-(a + bs)       = -a - bs);
-			auto rule_6 = make_rule((a * bs) ^ (-1_) = (a ^ (-1_)) * (bs ^ (-1_)));
+			auto rule_5 = rule(-(a + bs)       = -a - bs);
+			auto rule_6 = rule((a * bs) ^ (-1_) = (a ^ (-1_)) * (bs ^ (-1_)));
 
 			std::cout << name(rule_1) << "\n";
 			std::cout << name(rule_2) << "\n";
@@ -585,17 +585,17 @@ namespace bmath::intern::test {
 		{
 			auto pi = make_variable_literal<"pi">;
 			auto [x] = make_tree_matches<1>;
-			auto rule_1 = make_rule((sin(x) ^ 2_) + (cos(x) ^ 2_) = 1_);
+			auto rule_1 = rule((sin(x) ^ 2_) + (cos(x) ^ 2_) = 1_);
 
-			auto rule_2 = make_rule(cos(    pi) = -1_);
-			auto rule_3 = make_rule(cos(x * pi) =  0_, is_int(x - 0.5_));
-			auto rule_4 = make_rule(cos(x * pi) =  1_, is_int(x / 2_));
-			auto rule_5 = make_rule(cos(x * pi) = -1_, is_int((x - 1_) / 2_));
+			auto rule_2 = rule(cos(    pi) = -1_);
+			auto rule_3 = rule(cos(x * pi) =  0_, is_int(x - 0.5_));
+			auto rule_4 = rule(cos(x * pi) =  1_, is_int(x / 2_));
+			auto rule_5 = rule(cos(x * pi) = -1_, is_int((x - 1_) / 2_));
 
-			auto rule_6 = make_rule(sin(    pi) =  0_);
-			auto rule_7 = make_rule(sin(x * pi) =  0_, is_int(x));
-			auto rule_8 = make_rule(sin(x * pi) =  1_, is_int((x - 0.5_) / 2_));
-			auto rule_9 = make_rule(sin(x * pi) = -1_, is_int((x - 1.5_) / 2_));
+			auto rule_6 = rule(sin(    pi) =  0_);
+			auto rule_7 = rule(sin(x * pi) =  0_, is_int(x));
+			auto rule_8 = rule(sin(x * pi) =  1_, is_int((x - 0.5_) / 2_));
+			auto rule_9 = rule(sin(x * pi) = -1_, is_int((x - 1.5_) / 2_));
 
 			std::cout << name(rule_1) << "\n";
 			std::cout << name(rule_2) << "\n";
@@ -611,17 +611,17 @@ namespace bmath::intern::test {
 		{
 			auto [x, a, f, g, h] = make_tree_matches<5>;
 			auto [as] = make_multi_matches<1>;
-			auto rule_1 = make_rule(diff(x, x)      = 1_                                               , is_variable(x));
-			auto rule_2 = make_rule(diff(a, x)      = 0_                                               , is_variable(x), is_variable(a) || is_value(a));
-			auto rule_3 = make_rule(diff(f^a, x)    = diff(f, x) * a * (f^(a - 1_))                    , is_variable(x), is_value(a));
-			auto rule_4 = make_rule(diff(a^f, x)    = diff(f, x) * ln(a) * (a^f)                       , is_variable(x), is_value(a));
-			auto rule_5 = make_rule(diff(g^h, x)    = (diff(h, x) * ln(g) + h * diff(g, x) / g) * (g^h), is_variable(x));
-			auto rule_6 = make_rule(diff(a + as, x) = diff(a, x) + diff(as, x)                         , is_variable(x));
-			auto rule_7 = make_rule(diff(a * as, x) = diff(a, x) * as + a * diff(as, x)                , is_variable(x));
-			auto rule_8 = make_rule(diff(sin(f), x) = diff(f, x) * cos(f)                              , is_variable(x));
-			auto rule_9 = make_rule(diff(cos(f), x) = diff(f, x) * -sin(f)                             , is_variable(x));
-			auto rule10 = make_rule(diff(exp(f), x) = diff(f, x) * exp(f)                              , is_variable(x));
-			auto rule11 = make_rule(diff(ln(f), x)  = diff(f, x) / f                                   , is_variable(x));
+			auto rule_1 = rule(diff(x, x)      = 1_                                               , is_variable(x));
+			auto rule_2 = rule(diff(a, x)      = 0_                                               , is_variable(x), is_variable(a) || is_value(a));
+			auto rule_3 = rule(diff(f^a, x)    = diff(f, x) * a * (f^(a - 1_))                    , is_variable(x), is_value(a));
+			auto rule_4 = rule(diff(a^f, x)    = diff(f, x) * ln(a) * (a^f)                       , is_variable(x), is_value(a));
+			auto rule_5 = rule(diff(g^h, x)    = (diff(h, x) * ln(g) + h * diff(g, x) / g) * (g^h), is_variable(x));
+			auto rule_6 = rule(diff(a + as, x) = diff(a, x) + diff(as, x)                         , is_variable(x));
+			auto rule_7 = rule(diff(a * as, x) = diff(a, x) * as + a * diff(as, x)                , is_variable(x));
+			auto rule_8 = rule(diff(sin(f), x) = diff(f, x) * cos(f)                              , is_variable(x));
+			auto rule_9 = rule(diff(cos(f), x) = diff(f, x) * -sin(f)                             , is_variable(x));
+			auto rule10 = rule(diff(exp(f), x) = diff(f, x) * exp(f)                              , is_variable(x));
+			auto rule11 = rule(diff(ln(f), x)  = diff(f, x) / f                                   , is_variable(x));
 
 			std::cout << name(rule_1) << "\n";
 			std::cout << name(rule_2) << "\n";
@@ -639,13 +639,13 @@ namespace bmath::intern::test {
 		{
 			auto [x] = make_tree_matches<1>;
 			auto [xs, ys] = make_multi_matches<2>;
-			auto rule_1 = make_rule(set(x, x, xs) = set(x, xs));
+			auto rule_1 = rule(set(x, x, xs) = set(x, xs));
 
-			auto rule_2 = make_rule(union_(set(xs), set(ys)) = set(xs, ys));
-			auto rule_3 = make_rule(union_()                 = set());
-			auto rule_4 = make_rule(intersection(set(x, xs), set(x, ys)) = union_(set(x), intersection(set(xs), set(ys))));
-			auto rule_5 = make_rule(intersection(set(xs), set(ys))       = set());
-			auto rule_6 = make_rule(intersection()                       = set());
+			auto rule_2 = rule(union_(set(xs), set(ys)) = set(xs, ys));
+			auto rule_3 = rule(union_()                 = set());
+			auto rule_4 = rule(intersection(set(x, xs), set(x, ys)) = union_(set(x), intersection(set(xs), set(ys))));
+			auto rule_5 = rule(intersection(set(xs), set(ys))       = set());
+			auto rule_6 = rule(intersection()                       = set());
 
 			std::cout << name(rule_1) << "\n";
 			std::cout << name(rule_2) << "\n";
@@ -657,74 +657,9 @@ namespace bmath::intern::test {
 		}
 	}
 
-	void meta_pattern_2() 
+	template<InstanceOf<bmath::intern::meta_pn::RuleSet__> Rules, std::size_t N>
+	void try_matching(const Rules& rules, const std::array<bmath::Term, N>& terms)
 	{
-		using namespace bmath::intern::meta_pn;
-		{
-			auto fib = make_function<"fib", 1>;
-			auto [n] = make_tree_matches<1>;
-
-			auto rule_1 = make_rule(fib(0_) = 0_);
-			auto rule_2 = make_rule(fib(1_) = 1_);
-			auto rule_3 = make_rule(fib(n) = fib(n - 1_) + fib(n - 2_), is_int(n), n > 1_);
-			
-			std::cout << name(rule_1) << "\n";
-			std::cout << name(rule_2) << "\n";
-			std::cout << name(rule_3) << "\n";
-			std::cout << "\n";
-
-			auto rules = RuleSet__(rule_1, rule_2, rule_3);
-			auto terms = std::to_array<bmath::Term>({
-				{ "fib(-1)" },
-				{ "fib(-2)" },
-				{ "fib(0)" },
-				{ "fib(1)" },
-				{ "fib(2)" },
-				{ "fib(3)" },
-				{ "fib(4)" },
-				{ "fib(5)" },
-				{ "fib(6)" },
-				});
-			for (auto& term : terms) {
-				const UnsaveRef head = term.ref();
-				for (auto match_function : rules.match_functions) {
-					pattern::match::MatchData match_data;
-					std::cout << match_function(head, match_data) << " ";
-				}
-				std::cout << term.to_pretty_string() << "\n";
-			}
-			std::cout << "\n\n";
-		}
-	}
-
-	void match_meta_pattern()
-	{
-		using namespace bmath::intern::meta_pn;
-		auto [x, y] = make_tree_matches<2>;
-		auto f = make_function<"f", 3>;
-
-		auto rules = RuleSet__(
-			make_rule(x ^ y = 7_),
-			make_rule(f(x, y, y) = 7_, x > 4_, is_real(x)),
-			make_rule(f(7_, x, y) = 7_)
-		);
-
-		auto terms = std::to_array<bmath::Term>({
-			{"1+a*3+a*sin(3+b)"},
-			{"f(3,4,4)"},
-			{"f(7,7,7)"},
-			{"f(7,-4,-4)"},
-			{"f(7,-4,-3)"},
-			{"g(7,-4,-4)"},
-			{"f(4,-4,-4)"},
-			{"f(100,34.5,34.5)"},
-			{"f(20,a+b,a+b)"},
-			{"pow(2,2)"},
-			{"pow(2,3)"},
-			{"pow(2,4)"},
-			{"pow(a,2*a)"},
-		});
-
 		for (auto& term : terms) {
 			const UnsaveRef head = term.ref();
 			for (auto match_function : rules.match_functions) {
@@ -734,6 +669,99 @@ namespace bmath::intern::test {
 			std::cout << term.to_pretty_string() << "\n";
 		}
 		std::cout << "\n\n";
+	}
+
+	void meta_pattern_2() 
+	{
+		using namespace bmath::intern::meta_pn;
+		{
+			auto fib = make_function<"fib", 1>;
+			auto [n] = make_tree_matches<1>;
+
+			auto rule_1 = rule(fib(0_) = 0_);
+			auto rule_2 = rule(fib(1_) = 1_);
+			auto rule_3 = rule(fib(n) = fib(n - 1_) + fib(n - 2_), is_int(n), n > 1_);
+			
+			std::cout << name(rule_1) << "\n";
+			std::cout << name(rule_2) << "\n";
+			std::cout << name(rule_3) << "\n";
+			std::cout << "\n";
+
+			auto rules = RuleSet__(rule_1, rule_2, rule_3);
+			auto terms = std::to_array<bmath::Term>({
+				{ "fob(6)" },
+				{ "fibb(6)" },
+				{ "fib(-2)" },
+				{ "fib(-1)" },
+				{ "fib(0)" },
+				{ "fib(1)" },
+				{ "fib(2)" },
+				{ "fib(3)" },
+				{ "fib(4)" },
+				{ "fib(5)" },
+				{ "fib(6)" },
+				});
+			try_matching(rules, terms);
+		}
+		{
+			//reversing a list:
+			//{ "xs :list...                 | reverse(list{xs}) = reverse'(list{}, list{xs})" },
+			//{ "xs :list..., y, ys :list... | reverse'(list{xs}, list{y, ys}) = reverse'(list{y, xs}, list{ys})" },
+			//{ "xs :list...,                | reverse'(list{xs}, list{})      = list{xs}" },
+			auto reverse = make_function<"reverse", 1>;
+			auto reverse_ = make_function<"reverse'", 2>;
+			auto [xs, y, ys] = make_match_variables<Matches::many, Matches::one, Matches::many>;
+			auto rule_1 = rule(reverse(list(xs))               = reverse_(list(), list(xs)));
+			auto rule_2 = rule(reverse_(list(xs), list(y, ys)) = reverse_(list(y, xs), list(ys)));
+			auto rule_3 = rule(reverse_(list(xs), list())      = list(xs));
+
+			//listing first n fibonacci numbers:
+			//{ "n :nat0                     | fib_n(n + 2)                   = reverse(list_fibs(n, list{1, 0}))" },
+			//{ "n :nat, a, b, tail :list... | list_fibs(n, list{a, b, tail}) = list_fibs(n - 1, list{force(a + b), a, b, tail})" },
+			//{ "              tail :list... | list_fibs(0, list{tail})       = list{tail}" },
+			auto fib_n = make_function<"fib_n", 1>;
+			auto list_fibs = make_function<"list_fibs", 2>;
+			auto [n, a, b] = make_tree_matches<3>;
+			auto [tail] = make_multi_matches<1>;
+			auto rule_4 = rule(fib_n(n)                       = reverse(list_fibs(n - 2_, list(1_, 0_))), is_int(n), n >= 2_);
+			auto rule_5 = rule(list_fibs(n, list(a, b, tail)) = list_fibs(n - 1_, list(force(a + b), a, b, tail)), n > 0_);
+			auto rule_6 = rule(list_fibs(0_, a)               = a);
+		}
+		{
+			//sorting numbers:
+			//{ "                     | sort(list{})      = list{}" },
+			//{ "x                    | sort(list{x})     = list{x}" },
+			//{ "p :real, xs :list... | sort(list{p, xs}) = concat3(sort(filter_s(p, list{}, list{xs})), list{p}, sort(filter_le(p, list{}, list{xs})))" },
+			//
+			//{ "xs :list..., ys :list..., zs :list... | concat3(list{xs}, list{ys}, list{zs}) = list{xs, ys, zs}" },
+			//
+			//{ "cond :not_positive, true_res, false_res | if_positive(cond, true_res, false_res) = false_res" },
+			//{ "cond :positive,     true_res, false_res | if_positive(cond, true_res, false_res) = true_res" },
+			//
+			//{ "p :real, xs :list..., y :real, ys :list... | filter_le(p, list{xs}, list{y, ys}) = filter_le(p, if_positive[force(p - y), list{xs}, list{xs, y}], list{ys})" },
+			//{ "p :real, xs :list...,                      | filter_le(p, list{xs}, list{})      = list{xs}" },
+			//
+			//{ "p :real, xs :list..., y :real, ys :list... | filter_s(p, list{xs}, list{y, ys}) = filter_s(p, if_positive[force(p - y), list{xs, y}, list{xs}], list{ys})" },
+			//{ "p :real, xs :list...,                      | filter_s(p, list{xs}, list{})      = list{xs}" },
+			auto sort      = make_function<"sort", 1>;
+			auto concat3   = make_function<"concat3", 3>;
+			auto filter_le = make_function<"filter_le", 3>;
+			auto filter_s  = make_function<"filter_s", 3>;
+			auto [x, y, p] = make_tree_matches<3>;
+			auto [xs, ys, zs] = make_multi_matches<3>;
+			auto rule_1 = rule(sort(list())      = list());
+			auto rule_2 = rule(sort(list(x))     = list(x));
+				auto s_sorted  = sort( filter_s(x, list(), list(xs)));
+				auto le_sorted = sort(filter_le(x, list(), list(xs)));
+			auto rule_3 = rule(sort(list(x, xs)) = concat3(s_sorted, list(x), le_sorted), is_real(p));
+			auto rule_4 = rule(concat3(list(xs), list(ys), list(zs)) = list(xs, ys, zs));
+			auto rule_5 = rule(filter_le(p, list(xs), list(y, ys)) = filter_le(p, list(xs, y), list(ys)), y >= p);
+			auto rule_6 = rule(filter_le(p, list(xs), list(y, ys)) = filter_le(p,    list(xs), list(ys)), y <  p);
+			auto rule_7 = rule(filter_le(p, list(xs), list())      = list(xs));
+			auto rule_8 = rule( filter_s(p, list(xs), list(y, ys)) =  filter_s(p, list(xs, y), list(ys)), y <  p);
+			auto rule_9 = rule( filter_s(p, list(xs), list(y, ys)) =  filter_s(p,    list(xs), list(ys)), y >= p);
+			auto rule10 = rule( filter_s(p, list(xs), list())      = list(xs));
+		}
 	}
 
 	void stable_sort() 

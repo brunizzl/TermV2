@@ -16,6 +16,7 @@ important:
  - decide if garbage collection should be used (and if so implement it + change functions currently deallocating)
  - implement meta_pn::match function for variadic patterns
  - improve multi-match capabilities of NonComm variadic patterns (allow multiple multis in one NonComm instance)
+ - achieve feature parity between compile time pattern and run time pattern (add value match to ct and conditions to rt
 
 nice to have:
  - enable StupidBufferVector to handle non-trivial destructible types -> change name to BufferVector
@@ -84,7 +85,6 @@ int main()
 	//debug::enumerate_type();
 	//debug::test_rechner();
 	//test::stable_sort();
-	//test::match_meta_pattern();
 	//test::meta_pattern();
 	test::meta_pattern_2();
 	//test::pattern_term();

@@ -783,7 +783,7 @@ template<Pattern... Ops> constexpr FunctionPn<FnProps<Fn::name>, Ops...> name(Op
 	/////////// construct pattern
 
 	template<Pattern MP, Pattern RP, Predicate... Cs>
-	constexpr auto make_rule(meta::Pair<MP, RP>, Cs...) 
+	constexpr auto rule(meta::Pair<MP, RP>, Cs...) 
 	{ 
 		using ResultRule = ArmRule_t<MP, RP, Cs...>;
 		return ResultRule{};
