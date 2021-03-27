@@ -96,6 +96,7 @@ namespace bmath::intern {
 
 	static_assert(nat_pow(3.0, 9) == 19683);
 	static_assert(nat_pow(10.0, 6) == 1000000);
+	static_assert(nat_pow(10.0, 2) == 100);
 
 
 

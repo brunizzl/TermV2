@@ -85,7 +85,7 @@ int main()
 	//}
 	//std::cout << "\n";
 
-	debug::enumerate_type();
+	//debug::enumerate_type();
 	debug::test_rechner();
 	//test::stable_sort();
 	//test::meta_pattern();

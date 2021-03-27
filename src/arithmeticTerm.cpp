@@ -80,6 +80,10 @@ namespace bmath::intern {
 							std::sqrt(param_vals[0]->real()) :
 							std::sqrt(*param_vals[0]);
 					}
+					else if (pattern::in_domain(*param_vals[1], pattern::Domain::natural)) {
+						const std::size_t expo = param_vals[1]->real();
+						return nat_pow(*param_vals[0], expo);
+					}
 					else {
 						return std::pow(*param_vals[0], *param_vals[1]);
 					}

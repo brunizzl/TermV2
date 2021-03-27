@@ -89,7 +89,7 @@ namespace bmath {
 				if (head_match || deeper_match) {
 					term.establish_order();
 					//std::cout << " rule: " << intern::pattern::RewriteRuleRef{ this->heads[i].lhs, this->heads[i].rhs, &this->store }.to_string() << "\n";
-					//std::cout << "  ->   " << term.to_pretty_string() << "\n";
+					//std::cout << "  ->   " << term.to_string() << "\n";
 					goto try_all_rules;
 				}
 			}

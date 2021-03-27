@@ -132,7 +132,7 @@ namespace bmath::intern::debug {
 
 			//differentiation rules:
 			{ "x :symbol                        | diff(x, x)      = 1" },
-			{ "x :symbol, a :symbol           | diff(a, x)      = 0" },
+			{ "x :symbol, a :symbol             | diff(a, x)      = 0" },
 			{ "x :symbol, a :value              | diff(a, x)      = 0" },
 			{ "x :symbol, a :value, f :any      | diff(f^a, x)    = diff(f, x) a f^(a-1)" },
 			{ "x :symbol, a :value, f :any      | diff(a^f, x)    = diff(f, x) ln(a) a^f" },
@@ -198,14 +198,17 @@ namespace bmath::intern::debug {
 			{ "'not'   = lambda(call($0, lambda($1), lambda($0)))" },
 			{ "'and'   = lambda(call($0, $1, $0))" },
 			{ "'or'    = lambda(call($0, $0, $1))" },
-			//{ "" },
+
+			{ "   x, xs :list... | cons(x, list{xs})   = list{x, xs}" },
+			{ "f, x, xs :list... | map(f, list{x, xs}) = cons(call(f, x), map(f, list{xs}))" },
+			{ "f,                | map(f, list{})      = list{}" },
 			//{ "" },
 		});
 
 
-		for (const auto& rule : rules) {
-			std::cout << rule.to_string() << "\n\n";
-		}
+		//for (const auto& rule : rules) {
+		//	std::cout << rule.to_string() << "\n\n";
+		//}
 
 		while (true) {
 			std::string name;
