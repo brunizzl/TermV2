@@ -22,7 +22,7 @@ namespace bmath::intern::pattern {
 		{ Restriction::any                 , "any"           },
 		{ Restriction::nn1                 , "nn1"           },
 		{ Restriction::no_val              , "no_val"        },
-		{ Restriction::variable            , "variable"      },
+		{ Restriction::symbol            , "symbol"      },
 		{ TreeDomain(Domain::complex)      , "value"         }, //not to be mistaken for ValueDomain(Domain::complex)
 		{ ValueDomain(Domain::natural)     , "nat"           },
 		{ ValueDomain(Domain::natural_0)   , "nat0"          },
@@ -97,7 +97,7 @@ namespace bmath::intern::pattern {
 			{
 				const std::array<MathIdx, 2> parameters = {
 					build_value(store, Complex{ static_cast<double>(match_data_idx), 0.0 }),
-					MathIdx(CharVector::build(store, name_of(restr)), MathType(Literal::variable)),
+					MathIdx(CharVector::build(store, name_of(restr)), MathType(Literal::symbol)),
 				};
 				return fn::build_named_fn<MathType>(store, function_name, parameters);
 			}
@@ -111,7 +111,7 @@ namespace bmath::intern::pattern {
 						assert(params.size() == 2);
 						assert(params[0].get_type() == Literal::complex);
 						assert(in_domain(*new_ref.new_at(params[0]), Domain::natural_0));
-						assert(params[1].get_type() == Literal::variable);
+						assert(params[1].get_type() == Literal::symbol);
 						assert(type_of(new_ref.new_at(params[1])->characters).is<TreeMatchOwning>());
 						return IntermediateTreeMatch(new_ref);
 					}
@@ -149,7 +149,7 @@ namespace bmath::intern::pattern {
 			{
 				const std::array<MathIdx, 2> parameters = {
 					build_value(store, Complex{ static_cast<double>(idx), 0.0 }),
-					MathIdx(CharVector::build(store, name_of(type)), MathType(Literal::variable)),
+					MathIdx(CharVector::build(store, name_of(type)), MathType(Literal::symbol)),
 				};
 				return fn::build_named_fn<MathType>(store, function_name, parameters);
 			}
@@ -163,7 +163,7 @@ namespace bmath::intern::pattern {
 						assert(params.size() == 2);
 						assert(params[0].get_type() == Literal::complex);
 						assert(in_domain(*new_ref.new_at(params[0]), Domain::natural_0));
-						assert(params[1].get_type() == Literal::variable);
+						assert(params[1].get_type() == Literal::symbol);
 						assert(type_of(new_ref.new_at(params[1])->characters).is<Multi>());
 						return IntermediateMultiMatch(new_ref);
 					}
@@ -246,7 +246,7 @@ namespace bmath::intern::pattern {
 				const std::array<MathIdx, 3> parameters = {
 					IntermediateValueProxy::build(store, match_data_idx),
 					build_value(store, Complex{ static_cast<double>(match_data_idx), 0.0 }),
-					MathIdx(CharVector::build(store, name_of(domain)), MathType(Literal::variable)),
+					MathIdx(CharVector::build(store, name_of(domain)), MathType(Literal::symbol)),
 				};
 				return fn::build_named_fn<MathType>(store, function_name, parameters);
 			}
@@ -260,7 +260,7 @@ namespace bmath::intern::pattern {
 						assert(params.size() == 3);
 						assert(params[1].get_type() == Literal::complex);
 						assert(in_domain(*new_ref.new_at(params[1]), Domain::natural_0));
-						assert(params[2].get_type() == Literal::variable);
+						assert(params[2].get_type() == Literal::symbol);
 						assert(type_of(new_ref.new_at(params[2])->characters).is<ValueDomain>());
 						return IntermediateValueMatch(new_ref);
 					}

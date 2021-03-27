@@ -99,6 +99,7 @@ namespace bmath::intern {
 				case '|': tokenized[i] = token::bar;    continue;
 				case ':': tokenized[i] = token::colon;  continue;
 				case ' ': tokenized[i] = token::space;  continue;
+				case '$': tokenized[i] = token::dollar; continue;
 
 				case '+': [[fallthrough]];
 				case '-': 
@@ -187,6 +188,10 @@ namespace bmath::intern {
 			// if it is, change token::unary_minus to part of number
 			else if (prev_tn == token::unary_minus && curr_tn == token::number) {
 				tokenized[prev_idx] = token::number;
+			}
+			//change token::number occuring after token::dollar to token:dollar
+			else if (prev_tn == token::dollar && curr_tn == token::number) {
+				tokenized[curr_idx] = token::dollar;
 			}
 		}
 

@@ -48,11 +48,15 @@ namespace bmath::intern::debug {
 			<< "PnType(Fn::re)                           = " << unsigned(PnType(Fn::re))                           << "\n"
 			<< "PnType(Fn::im)                           = " << unsigned(PnType(Fn::im))                           << "\n"
 			<< "PnType(Fn::force)                        = " << unsigned(PnType(Fn::force))                        << "\n"
-			<< "PnType(Fn::diff)                         = " << unsigned(PnType(Fn::diff))                         << "\n\n"
+			<< "PnType(Fn::diff)                         = " << unsigned(PnType(Fn::diff))                         << "\n"
+			<< "PnType(Fn::pair)                         = " << unsigned(PnType(Fn::pair))                         << "\n"
+			<< "PnType(Fn::triple)                       = " << unsigned(PnType(Fn::triple))                       << "\n"
+			<< "PnType(Fn::lambda)                       = " << unsigned(PnType(Fn::lambda))                       << "\n\n"
 			<< "PnType(NamedFn{})                        = " << unsigned(PnType(NamedFn{}))                        << "\n\n"
 			<< "PnType(NonComm::list)                    = " << unsigned(PnType(NonComm::list))                    << "\n"
 			<< "PnType(NonComm::ordered_sum)             = " << unsigned(PnType(NonComm::ordered_sum))             << "\n"
-			<< "PnType(NonComm::ordered_product)         = " << unsigned(PnType(NonComm::ordered_product))         << "\n\n"
+			<< "PnType(NonComm::ordered_product)         = " << unsigned(PnType(NonComm::ordered_product))         << "\n"
+			<< "PnType(NonComm::call)                    = " << unsigned(PnType(NonComm::call))                    << "\n\n"
 			<< "PnType(Comm::sum)                        = " << unsigned(PnType(Comm::sum))                        << "\n"
 			<< "PnType(Comm::product)                    = " << unsigned(PnType(Comm::product))                    << "\n"
 			<< "PnType(Comm::multiset)                   = " << unsigned(PnType(Comm::multiset))                   << "\n"
@@ -61,13 +65,13 @@ namespace bmath::intern::debug {
 			<< "PnType(Comm::intersection)               = " << unsigned(PnType(Comm::intersection))               << "\n"
 			<< "PnType(Comm::min)                        = " << unsigned(PnType(Comm::min))                        << "\n"
 			<< "PnType(Comm::max)                        = " << unsigned(PnType(Comm::max))                        << "\n\n"
-			<< "PnType(Literal::variable)                = " << unsigned(PnType(Literal::variable))                << "\n"
+			<< "PnType(Literal::symbol)                  = " << unsigned(PnType(Literal::symbol))                  << "\n"
 			<< "PnType(Literal::complex)                 = " << unsigned(PnType(Literal::complex))                 << "\n\n\n\n"
 			<< "PnType(TreeMatchNonOwning{})             = " << unsigned(PnType(TreeMatchNonOwning{}))             << "\n\n"
 			<< "PnType(Restriction::any)                 = " << unsigned(PnType(Restriction::any))                 << "\n"
 			<< "PnType(Restriction::nn1)                 = " << unsigned(PnType(Restriction::nn1))                 << "\n"
 			<< "PnType(Restriction::no_val)              = " << unsigned(PnType(Restriction::no_val))              << "\n"
-			<< "PnType(Restriction::variable)            = " << unsigned(PnType(Restriction::variable))            << "\n\n"
+			<< "PnType(Restriction::symbol)              = " << unsigned(PnType(Restriction::symbol))              << "\n\n"
 			<< "PnType(TreeDomain(Domain::natural))      = " << unsigned(PnType(TreeDomain(Domain::natural)))      << "\n"
 			<< "PnType(TreeDomain(Domain::natural_0))    = " << unsigned(PnType(TreeDomain(Domain::natural_0)))    << "\n"
 			<< "PnType(TreeDomain(Domain::integer))      = " << unsigned(PnType(TreeDomain(Domain::integer)))      << "\n"
@@ -127,18 +131,18 @@ namespace bmath::intern::debug {
 			{ "k :int | sin((2 k + 1.5) 'pi') = -1" },
 
 			//differentiation rules:
-			{ "x :variable                        | diff(x, x)      = 1" },
-			{ "x :variable, a :variable           | diff(a, x)      = 0" },
-			{ "x :variable, a :value              | diff(a, x)      = 0" },
-			{ "x :variable, a :value, f :any      | diff(f^a, x)    = diff(f, x) a f^(a-1)" },
-			{ "x :variable, a :value, f :any      | diff(a^f, x)    = diff(f, x) ln(a) a^f" },
-			{ "x :variable, g :any, h :any        | diff(g^h, x)    = (diff(h, x) ln(g) + h diff(g, x)/g) g^h" },
-			{ "x :variable, u :any, v :sum...     | diff(u + v, x)  = diff(u, x) + diff(v, x)" },
-			{ "x :variable, u :any, v :product... | diff(u v, x)    = diff(u, x) v + u diff(v, x)" },
-			{ "x :variable, f :any                | diff(sin(f), x) = diff(f, x) cos(f)" },
-			{ "x :variable, f :any                | diff(cos(f), x) = diff(f, x) (-sin(f))" },
-			{ "x :variable, f :any                | diff(exp(f), x) = diff(f, x) exp(f)" },
-			{ "x :variable, f :any                | diff(ln(f), x)  = diff(f, x) 1/f" },
+			{ "x :symbol                        | diff(x, x)      = 1" },
+			{ "x :symbol, a :symbol           | diff(a, x)      = 0" },
+			{ "x :symbol, a :value              | diff(a, x)      = 0" },
+			{ "x :symbol, a :value, f :any      | diff(f^a, x)    = diff(f, x) a f^(a-1)" },
+			{ "x :symbol, a :value, f :any      | diff(a^f, x)    = diff(f, x) ln(a) a^f" },
+			{ "x :symbol, g :any, h :any        | diff(g^h, x)    = (diff(h, x) ln(g) + h diff(g, x)/g) g^h" },
+			{ "x :symbol, u :any, v :sum...     | diff(u + v, x)  = diff(u, x) + diff(v, x)" },
+			{ "x :symbol, u :any, v :product... | diff(u v, x)    = diff(u, x) v + u diff(v, x)" },
+			{ "x :symbol, f :any                | diff(sin(f), x) = diff(f, x) cos(f)" },
+			{ "x :symbol, f :any                | diff(cos(f), x) = diff(f, x) (-sin(f))" },
+			{ "x :symbol, f :any                | diff(exp(f), x) = diff(f, x) exp(f)" },
+			{ "x :symbol, f :any                | diff(ln(f), x)  = diff(f, x) 1/f" },
 
 			//exponential runtime fibonacci implementation:
 			{ "         fib(0) = 0" },
@@ -188,18 +192,12 @@ namespace bmath::intern::debug {
 			{ "x, xs :set..., y, ys :set... | set{x, xs} / set{x, ys} = set{xs} / set{x, ys}" },
 			{ "   xs :set...,    ys :set... | set{xs}    / set{ys}    = set{xs}" },
 
-			//lambda calculus (write a lambda "\x.e" as "L(x, e)" and function application "xy" as "A(x, y)")
-			{ "x, e, y | A(L(x, e), y) = replace(x, y, e)" }, //beta conversion
-			{ "x, y,           | replace(x, y, x)         = y" },
-			{ "x, y,    e      | replace(x, y, L(x, e))   = L(x, e)" },
-			{ "x, y, z, e      | replace(x, y, L(z, e))   = L(z, replace(x, y, e))" },
-			{ "x, y,    e1, e2 | replace(x, y, A(e1, e2)) = A(replace(x, y, e1), replace(x, y, e2))" },
-			{ "x, y, z         | replace(x, y, z)         = z" },
 
-			{ "'true' = L('x', L('y', 'x'))" },
-			{ "'false' = L('x', L('y', 'y'))" },
-			{ "'not' = L('x', A(A('x', 'false'), 'true'))" },
-			{ "'and' = L('x', L('y', A(A('x', 'y'), 'x')))" },
+			{ "'true'  = lambda($0)" },
+			{ "'false' = lambda($1)" },
+			{ "'not'   = lambda(call($0, lambda($1), lambda($0)))" },
+			{ "'and'   = lambda(call($0, $1, $0))" },
+			{ "'or'    = lambda(call($0, $0, $1))" },
 			//{ "" },
 			//{ "" },
 		});

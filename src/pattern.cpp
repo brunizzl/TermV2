@@ -45,8 +45,8 @@ namespace bmath::intern::pattern {
 			return true;
 		}
 		switch (restr) {
-		case TreeMatchOwning(Restriction::variable):
-			return ref.type == Literal::variable;
+		case TreeMatchOwning(Restriction::symbol):
+			return ref.type == Literal::symbol;
 		case TreeMatchOwning(Restriction::no_val):
 			return ref.type != Literal::complex;
 		case TreeMatchOwning(Restriction::nn1):
@@ -508,7 +508,7 @@ namespace bmath::intern::pattern {
 					return PnIdx(PnIdxVector::build(dst_store, dst_parameters), src_ref.type);
 				}
 			} break;
-			case MathType(Literal::variable): {
+			case MathType(Literal::symbol): {
 				const CharVector& src_var = *src_ref;
 				const std::size_t dst_index = CharVector::build(dst_store, src_var);
 				return PnIdx(dst_index, src_ref.type);
@@ -517,6 +517,9 @@ namespace bmath::intern::pattern {
 				const std::size_t dst_index = dst_store.allocate_one();
 				dst_store.at(dst_index) = src_ref->complex; //bitwise copy of src
 				return PnIdx(dst_index, src_ref.type);
+			} break;
+			case MathType(LambdaParam{}): {
+				return PnIdx(src_ref.index, src_ref.type);
 			} break;
 			}
 			assert(false);
@@ -527,7 +530,7 @@ namespace bmath::intern::pattern {
 		{
 			switch (src_ref.type) {
 			default: {
-				if (src_ref.type.is<Proxy>()) {
+				if (src_ref.type.is<Proxy>() || src_ref.type.is<LambdaParam>()) {
 					return src_ref.typed_idx();
 				}
 				assert(src_ref.type.is<Function>());
@@ -549,7 +552,7 @@ namespace bmath::intern::pattern {
 					return PnIdx(PnIdxVector::build(dst_store, dst_parameters), src_ref.type);
 				}
 			} break;
-			case PnType(Literal::variable): {
+			case PnType(Literal::symbol): {
 				const CharVector& src_var = *src_ref;
 				const auto src_name = std::string(src_var.data(), src_var.size());
 				const std::size_t dst_index = CharVector::build(dst_store, src_name);
@@ -598,7 +601,7 @@ namespace bmath::intern::pattern {
 				}
 			} [[fallthrough]];
 			default: {
-				if (fst.type.is<Proxy>()) {
+				if (fst.type.is<Proxy>() || fst.type.is<LambdaParam>()) {
 					return fst.index <=> snd.index;
 				}
 				assert(fst.type.is<Function>());
@@ -617,7 +620,7 @@ namespace bmath::intern::pattern {
 				}
 				return fst_vec.size() <=> snd_vec.size();
 			} break;
-			case PnType(Literal::variable): {
+			case PnType(Literal::symbol): {
 				return compare_char_vecs(*fst, *snd);
 			} break;
 			case PnType(Literal::complex): {
@@ -748,7 +751,7 @@ namespace bmath::intern::pattern {
 					return true;
 				}
 			} break;
-			case PnType(Literal::variable): {
+			case PnType(Literal::symbol): {
 				const CharVector& var = *ref;
 				const CharVector& pn_var = *pn_ref;
 				return std::string_view(var) == std::string_view(pn_var);
@@ -757,6 +760,9 @@ namespace bmath::intern::pattern {
 				const Complex& complex = *ref;
 				const Complex& pn_complex = *pn_ref;
 				return compare_complex(complex, pn_complex) == std::strong_ordering::equal;
+			} break;
+			case PnType(LambdaParam{}): {
+				return pn_ref.index == ref.index;
 			} break;
 			case PnType(TreeMatchNonOwning{}): {
 				const SharedTreeDatum match_datum = match_data.tree_match_data[pn_ref.index];
@@ -980,7 +986,7 @@ namespace bmath::intern::pattern {
 					return MathIdx(IndexVector::build(dst_store, dst_parameters), pn_ref.type.to<MathType>());
 				}
 			} break;
-			case PnType(Literal::variable): {
+			case PnType(Literal::symbol): {
 				const CharVector& src_var = *pn_ref;
 				const auto src_name = std::string(src_var.data(), src_var.size());
 				const std::size_t dst_index = CharVector::build(dst_store, src_name);
@@ -990,6 +996,9 @@ namespace bmath::intern::pattern {
 				const std::size_t dst_index = dst_store.allocate_one();
 				dst_store.at(dst_index) = pn_ref->complex; //bitwise copy
 				return MathIdx(dst_index, pn_ref.type.to<MathType>());
+			} break;
+			case PnType(LambdaParam{}): {
+				return MathIdx(pn_ref.index, pn_ref.type.to<MathType>());
 			} break;
 			case PnType(ValueProxy{}): {
 				const Complex& val = match_data.value_match_data[pn_ref.index].value;

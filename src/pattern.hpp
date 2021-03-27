@@ -10,7 +10,7 @@ namespace bmath::intern::pattern {
 		any,
 		nn1, //compact for "not negative one" (basically any, but the exact term "-1" will not be accepted)
 		no_val, //any, but Literal::complex is forbidden    
-		variable, //only Literal::variable is accepted
+		symbol, //only Literal::symbol is accepted
 		COUNT
 	};
 
@@ -53,7 +53,8 @@ namespace bmath::intern::pattern {
 	enum class MultiMatch { fst, snd, COUNT };
 
 	//all values contained within Proxy dont reference an element in the pattern tree, but in MatchData
-	using Proxy = SumEnum <ValueProxy, MultiMatch, TreeMatch>;
+	//note: also LambdaParam has this behavior but is unfortunately contained in MathType, thus not in this SumEnum
+	using Proxy = SumEnum<ValueProxy, MultiMatch, TreeMatch>;
 
 	using MatchType = SumEnum<ValueMatch, Proxy>;
 
@@ -421,9 +422,10 @@ namespace bmath::intern {
 		using namespace pattern;
 		constexpr auto type_generality_table = std::to_array<std::pair<PnType, int>>({
 			{ Literal::complex      , 1000 },
-			{ Literal::variable     , 1001 },
+			{ Literal::symbol       , 1001 },
 			{ ValueMatch::owning    , 1002 }, //may match different subsets of complex numbers, but always requires an actual value to match against
 			{ ValueMatch::non_owning, 1003 }, //dont care really where this sits, as it never ist used in matching anyway
+			{ LambdaParam{}         , 1004 },
 			//values 2xxx are not present, as that would require every item in Fn to be listed here (instead default_generality kicks in here)	
 			//values 3xxx are not present, as that would require every item in Domain to be listed here
 		});

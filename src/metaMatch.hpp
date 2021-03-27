@@ -438,7 +438,7 @@ template<Pattern... Ops> constexpr FunctionPn<FnProps<Fn::name>, Ops...> name(Op
 	struct Generality<ComplexPn<Re, Im>> { static constexpr int value = generality(Literal::complex); };
 
 	template<StringLiteral Name>
-	struct Generality<VariablePn<Name>> { static constexpr int value = generality(Literal::variable); };
+	struct Generality<VariablePn<Name>> { static constexpr int value = generality(Literal::symbol); };
 
 	template<Pattern P> 
 	constexpr int generality_v = Generality<P>::value;
@@ -1055,7 +1055,7 @@ template<Pattern Lhs, Pattern Rhs> constexpr InRelation<name, Lhs, Rhs> op(Lhs, 
 		{
 			static constexpr BMATH_FORCE_INLINE bool value(const UnsaveRef ref, pattern::match::MatchData& match_data)  noexcept
 			{
-				if (ref.type != Literal::variable) {
+				if (ref.type != Literal::symbol) {
 					return false;
 				}
 				const CharVector& var = *ref;

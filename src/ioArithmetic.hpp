@@ -17,9 +17,10 @@ namespace bmath::intern {
 			power,       //where specifies position of found operator
 			real_value,  //where is unspecified
 			imag_value,  //where is unspecified
-			variable,    //where is unspecified
+			symbol,      //where is unspecified
 			group,       //where is unspecified
 			function,    //where specifies position of opening parenthesis
+			parameter,   //where is unspecified
 			natural_computable,  //where is unspecified
 			complex_computable,  //where is unspecified
 		} type;

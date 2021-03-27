@@ -31,6 +31,9 @@ namespace bmath::intern {
 		//'n' might also represent "+-e" if used to specify numbers 
 		//  as by engineering notation: "<base>'e'<optional '+' or '-'><exponent>"
 		constexpr Token number = 'n';
+		//a lambda parameter is identified by a single dollar followed by a natural number (including 0)
+		//example: "$0" denoting the first lambda parameter or "$1" denoting the second (note: in most languages parameters are named, not here)
+		constexpr Token dollar = '$';
 		constexpr Token open_grouping = '('; //representing "([{"
 		constexpr Token clse_grouping = ')'; //representing ")]}"
 		constexpr Token unary_minus = '-';

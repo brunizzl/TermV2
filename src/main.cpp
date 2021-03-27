@@ -23,7 +23,7 @@ nice to have:
  - pattern::match::copy should copy in same store (again...)
  - noexceptify everything
  - restructure everything to use modules (basically needed to constexprfy all the things)
- - allow to restrict a variables domain (split Literal::variable in own enum?)
+ - allow to restrict a variables domain (split Literal::symbol in own enum?)
 
 idea status:
  - add type system: check only when pattern /usual term instanciates, not needed when copied
@@ -47,8 +47,8 @@ using namespace bmath::intern::pattern;
 
 void test_f(PnType t) {
 	using Options = EnumSwitch<PnType, 
-		meta::List<Variadic, NamedFn, Fn, MatchType>,
-		meta::Seq<Literal::complex, Literal::variable>
+		meta::List<Variadic, NamedFn, Fn, MatchType, LambdaParam>,
+		meta::Seq<Literal::complex, Literal::symbol>
 	>;
 
 	std::cout << (unsigned)t << "\t=   ";
@@ -63,11 +63,14 @@ void test_f(PnType t) {
 	case Options::is_type<Fn>:
 		std::cout << "type Fn\n";
 		break;
-	case Options::is_value<Literal::variable>:
-		std::cout << "value variable\n";
+	case Options::is_value<Literal::symbol>:
+		std::cout << "value symbol\n";
 		break;
 	case Options::is_value<Literal::complex>:
 		std::cout << "value complex\n";
+		break;
+	case Options::is_type<LambdaParam>:
+		std::cout << "type MatchType\n";
 		break;
 	case Options::is_type<MatchType>:
 		std::cout << "type MatchType\n";

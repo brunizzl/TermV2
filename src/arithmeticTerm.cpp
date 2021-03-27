@@ -127,12 +127,14 @@ namespace bmath::intern {
 					IndexVector::free(*ref.store, ref.index);
 				}
 				break;
-			case MathType(Literal::variable): 
+			case MathType(Literal::symbol): 
 				CharVector::free(*ref.store, ref.index);
 				break;
 			case MathType(Literal::complex):
 				ref.store->free_one(ref.index);
 				break;
+			case MathType(LambdaParam{}):
+				break; //no node to free here
 			}
 		} //free
 
@@ -279,6 +281,35 @@ namespace bmath::intern {
 					return result_val;
 				}
 			} break;
+			case MathType(NonComm::call): {
+				IndexVector& call_params = *ref;
+				if (call_params.size()) {
+					const MathIdx lambda_idx = tree::combine(ref.new_at(call_params.front()), exact);
+					const MutRef lambda = ref.new_at(lambda_idx);
+					if (lambda.type == Fn::lambda) {
+						const MathIdx result = [&]() {
+							StupidBufferVector<MathIdx, 16> lambda_params;
+							{
+								auto call_iter = call_params.begin();
+								for (++call_iter; call_iter != call_params.end(); ++call_iter) {
+									lambda_params.push_back(*call_iter);
+								}
+							}
+							IndexVector::free(*ref.store, ref.index); //free call, but not lambda nor parameters
+
+							BitVector used_lambda_params(lambda_params.size());
+							const MathIdx result = tree::eval_lambda(lambda, lambda_params, used_lambda_params);
+							for (std::size_t i = 0u; i < lambda_params.size(); i++) {
+								if (!used_lambda_params.test(i)) {
+									tree::free(ref.new_at(lambda_params[i]));
+								}
+							}
+							return result;
+						}();
+						return tree::combine(ref.new_at(result), exact);
+					}
+				}
+			} [[fallthrough]];
 			default: 
 				if (ref.type.is<Fn>()) {
 					IndexVector& params = *ref;
@@ -329,13 +360,83 @@ namespace bmath::intern {
 					}
 				}
 				break; 
-			case MathType(Literal::variable):
+			case MathType(Literal::symbol):
 				break;
 			case MathType(Literal::complex):
+				break;
+			case MathType(LambdaParam{}):
 				break;
 			}
 			return ref.typed_idx();
 		} //combine
+
+		//returns true if lambda could be only partially evaluated
+		bool replace_lambda_params(const MutRef ref, const StupidBufferVector<MathIdx, 16>& lambda_params, BitVector& used_lambda_params) {
+			switch (ref.type) {
+			default: {
+				assert(ref.type.is<Function>());
+				bool curry = false;
+				auto range = fn::range(ref);
+				const auto stop = end(range);
+				for (auto iter = begin(range); iter != stop; ++iter) {
+					if (iter->get_type().is<LambdaParam>()) {
+						const std::uint32_t index = iter->get_index();
+						if (index >= lambda_params.size()) {
+							*iter = MathIdx(index - lambda_params.size(), LambdaParam{});
+							curry = true;
+						}
+						else if (used_lambda_params.test(index)) {
+							const MathIdx inserted_param = tree::copy(ref.new_at(lambda_params[index]), *ref.store);
+							*iter = inserted_param;
+						}
+						else {
+							*iter = lambda_params[index];
+							used_lambda_params.set(index);
+						}						
+					}
+					else {
+						curry |= replace_lambda_params(ref.new_at(*iter), lambda_params, used_lambda_params);
+					}
+				}
+				return curry;
+			} break;
+			case MathType(LambdaParam{}): //handled in function directly
+				assert(false);
+				return false;
+			case MathType(Literal::symbol):
+			case MathType(Literal::complex):
+			case MathType(Fn::lambda):
+				return false; //nothing to replace
+			}
+		} //replace_lambda_params
+
+		MathIdx eval_lambda(const MutRef lambda, const StupidBufferVector<MathIdx, 16>& lambda_params, BitVector& used_lambda_params)
+		{
+			assert(lambda.type == Fn::lambda);
+			MathIdx& definition = lambda->parameters[0];
+			if (definition.get_type().is<LambdaParam>()) {
+				const std::uint32_t index = definition.get_index();
+				if (index >= lambda_params.size()) {
+					definition = MathIdx(index - lambda_params.size(), LambdaParam{});
+					return lambda.typed_idx();
+				}
+				else {
+					lambda.store->free_one(lambda.index);
+					used_lambda_params.set(index);
+					return lambda_params[index];
+				}
+			}
+			else {
+				const MathIdx save_definition = definition; //replace_lambda_params might cause store to reallocate (only without garbage collection)
+				if (replace_lambda_params(lambda.new_at(save_definition), lambda_params, used_lambda_params)) {
+					return lambda.typed_idx();
+				}
+				else {
+					lambda.store->free_one(lambda.index);
+					return save_definition;
+				}
+			}
+		} //eval_lambda
 
 		[[nodiscard]] std::strong_ordering compare(const UnsaveRef ref_1, const UnsaveRef ref_2)
 		{
@@ -382,11 +483,14 @@ namespace bmath::intern {
 				}
 				return std::strong_ordering::equal;
 			} break;			
-			case MathType(Literal::variable): {
+			case MathType(Literal::symbol): {
 				return compare_char_vecs(*ref_1, *ref_2);
 			} break;
 			case MathType(Literal::complex): {
 				return compare_complex(*ref_1, *ref_2);
+			} break;
+			case MathType(LambdaParam{}): {
+				return ref_1.index <=> ref_2.index;
 			} break;
 			}
 			assert(false); 
@@ -443,7 +547,7 @@ namespace bmath::intern {
 					return MathIdx(IndexVector::build(dst_store, dst_parameters), src_ref.type);
 				}
 			} break;
-			case MathType(Literal::variable): {
+			case MathType(Literal::symbol): {
 				const CharVector& src_var = *src_ref;
 				const auto src_name = std::string(src_var.data(), src_var.size());
 				const std::size_t dst_index = CharVector::build(dst_store, src_name);
@@ -453,6 +557,9 @@ namespace bmath::intern {
 				const std::size_t dst_index = dst_store.allocate_one();
 				dst_store.at(dst_index) = *src_ref; //bitwise copy of src
 				return MathIdx(dst_index, src_ref.type);
+			} break;
+			case MathType(LambdaParam{}): {
+				return src_ref.typed_idx();
 			} break;
 			}
 			assert(false); 
@@ -500,9 +607,12 @@ namespace bmath::intern {
 						if (set_all_in_range(name_index, name_index + name_node_count)) return true;
 					}
 				}					
-				else if (ref.type == Literal::variable) {
+				else if (ref.type == Literal::symbol) {
 					const CharVector& vec = *ref;
 					if (set_all_in_range(ref.index, ref.index + vec.node_count())) return true;
+				}
+				else if (ref.type == LambdaParam{}) {
+					return false;
 				}
 				else {
 					if (set_all_in_range(ref.index, ref.index + 1ull)) return true;
@@ -512,7 +622,7 @@ namespace bmath::intern {
 
 			for (const MathIdx head : heads) {
 				if (fold::simple_fold<fold::FindTrue>((UnsaveRef)Ref(store, head), reset_and_check_position)) {
-					false;
+					return false;
 				}
 			}
 			return store_positions.none();
@@ -521,7 +631,7 @@ namespace bmath::intern {
 		bool contains_variables(const UnsaveRef ref)
 		{
 			const auto test_for_variables = [](const UnsaveRef ref) -> fold::FindTrue {
-				return ref.type == Literal::variable;
+				return ref.type == Literal::symbol;
 			};
 			return fold::simple_fold<fold::FindTrue>(ref, test_for_variables);
 		} //contains_variables
@@ -529,7 +639,7 @@ namespace bmath::intern {
 		MathIdx search_variable(const UnsaveRef ref, const std::string_view name)
 		{
 			const auto test_for_name = [name](UnsaveRef ref) -> fold::Find<MathIdx> {
-				return (ref.type == Literal::variable && std::string_view(ref->characters.data(), ref->characters.size()) == name) ?
+				return (ref.type == Literal::symbol && std::string_view(ref->characters.data(), ref->characters.size()) == name) ?
 					fold::done(MathIdx(ref.index, ref.type)) : //name was found -> cut tree evaluation here
 					fold::more(MathIdx());
 			};

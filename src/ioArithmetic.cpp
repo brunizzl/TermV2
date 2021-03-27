@@ -13,10 +13,10 @@ namespace bmath::intern {
 		Result exactly_computable(const ParseView view) noexcept
 		{
 			if (view.tokens.find_first_of(token::character) == TokenView::npos) {
-				if (view.to_string_view().find_first_of("/-.ie") == std::string_view::npos) { //with prohibiting e, it it harder to easily surpass 2^53-1 (largest save integer stored as double)
+				if (view.to_string_view().find_first_of("/-.ie$") == std::string_view::npos) { //with prohibiting e, it it harder to easily surpass 2^53-1 (largest save integer stored as double)
 					return Result::natural; //found no minus or i -> natural number is result
 				}
-				if (view.to_string_view().find_first_of("/^.e")  == std::string_view::npos) { //e is forbidden as it otherwise enables non-integer numbers (e.g. "1e-20") 
+				if (view.to_string_view().find_first_of("/^.e$")  == std::string_view::npos) { //e is forbidden as it otherwise enables non-integer numbers (e.g. "1e-20") 
 					return Result::complex; //found no power -> complex with { a + bi | a, b in Z } is result
 				}
 			}
@@ -111,7 +111,7 @@ namespace bmath::intern {
 	{
 		using namespace token;
 		//'\0' only as end symbol for allowed_tokens, not as part of aritmetic symbols
-		const Token allowed_tokens[] = { character, comma, hat, unary_minus, sum, product, number, imag_unit, open_grouping, clse_grouping, '\0' }; 
+		const Token allowed_tokens[] = { character, comma, hat, unary_minus, sum, product, number, imag_unit, open_grouping, clse_grouping, dollar, '\0' }; 
 		return view.find_first_not_of(allowed_tokens);
 	}
 
@@ -145,7 +145,11 @@ namespace bmath::intern {
 		}
 		const std::size_t first_not_character = view.tokens.find_first_not_of(token::character);
 		if (first_not_character == TokenView::npos) {
-			return Head{ 0u, Head::Type::variable };
+			return Head{ 0u, Head::Type::symbol };
+		}
+		if (first_not_character == 0u && view.tokens[first_not_character] == token::dollar) {
+			if (view.tokens.find_first_not_of(token::dollar) != TokenView::npos) [[unlikely]] throw ParseFailure{ view.offset, "ill formed lambda parameter" };
+			return Head{ 0u, Head::Type::parameter };
 		}
 		if (view.tokens[first_not_character] != token::open_grouping) [[unlikely]] throw ParseFailure{ first_not_character + view.offset, "illegal character, expected '('" };
 		if (!view.tokens.ends_with(token::clse_grouping)) [[unlikely]] throw ParseFailure{ view.size() + view.offset, "poor grouping, expected ')'" };
@@ -203,10 +207,14 @@ namespace bmath::intern {
 		case Head::Type::function: {
 			return build_function(store, input, head.where, build);
 		} break;
-		case Head::Type::variable: {
-			return MathIdx(CharVector::build(store, input.to_string_view()), Literal::variable);
+		case Head::Type::parameter: {
+			input.remove_prefix(1u); //remove dollar symbol
+			return MathIdx(compute::parse_value(input), LambdaParam{});
 		} break;
-		default: 
+		case Head::Type::symbol: {
+			return MathIdx(CharVector::build(store, input.to_string_view()), Literal::symbol);
+		} break;
+		default:
 			assert(false); 
 			return MathIdx();
 		}
@@ -228,8 +236,9 @@ namespace bmath::intern {
 				{ Comm::sum          , 2 },
 				{ Comm::product      , 4 },
 				{ Fn::pow            , 5 }, //not between other function types -> assumed to be printed with '^'  
-				{ Literal::variable  , 6 },
+				{ Literal::symbol    , 6 },
 				{ Literal::complex   , 6 }, //may be printed as sum/product itself, then (maybe) has to add parentheses on its own
+				{ LambdaParam{}      , 6 },
 				});
 			static_assert(std::is_sorted(infixr_table.begin(), infixr_table.end(), [](auto a, auto b) { return a.second < b.second; }));
 
@@ -348,11 +357,15 @@ namespace bmath::intern {
 					print::append_to_string(ref.new_at(param), str, own_infixr);
 				}
 			} break;
-			case MathType(Literal::variable): {
+			case MathType(Literal::symbol): {
 				str += ref->characters;
 			} break;
 			case MathType(Literal::complex): {
 				append_complex(ref->complex, str, parent_infixr);
+			} break;
+			case MathType(LambdaParam{}): {
+				str += "$";
+				str += std::to_string(ref.index);
 			} break;
 			}
 
@@ -504,11 +517,15 @@ namespace bmath::intern {
 				}
 				str.push_back(')');
 			} break;
-			case MathType(Literal::variable): {
+			case MathType(Literal::symbol): {
 				str += std::string_view(ref->characters.data(), ref->characters.size());
 			} break;
 			case MathType(Literal::complex): {
 				append_complex(ref->complex, str, parent_infixr);
+			} break;
+			case MathType(LambdaParam{}): {
+				str += "$";
+				str += std::to_string(ref.index);
 			} break;
 			}
 
@@ -532,6 +549,9 @@ namespace bmath::intern {
 					rows[idx++] += "(CharVector)";
 				}
 			};
+			if (ref.type.is<LambdaParam>()) {
+				return;
+			}
 
 			std::string& current_str = rows[ref.index];
 			switch (ref.type) {
@@ -572,8 +592,8 @@ namespace bmath::intern {
 				}
 				*current_line += " }";
 			} break;
-			case MathType(Literal::variable): {
-				current_str += "variable   : ";
+			case MathType(Literal::symbol): {
+				current_str += "symbol     : ";
 				show_string_nodes(ref.index, false);
 			} break;
 			case MathType(Literal::complex): {
@@ -670,13 +690,17 @@ namespace bmath::intern {
 					print::append_tree_row(ref.new_at(param), rows, offset + tab_width);
 				}
 			} break;
-			case MathType(Literal::variable): {
+			case MathType(Literal::symbol): {
 				current_str += ' ';
 				current_str += std::string_view(ref->characters.data(), ref->characters.size());
 			} break;
 			case MathType(Literal::complex): {
 				current_str += ' ';
 				print::append_complex(*ref, current_str, 0u);
+			} break;
+			case MathType(LambdaParam{}): {
+				current_str += " $";
+				current_str += std::to_string(ref.index);
 			} break;
 			}
 		} //append_tree_row

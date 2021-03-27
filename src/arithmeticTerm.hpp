@@ -38,6 +38,7 @@ namespace bmath::intern {
 		list,
 		ordered_sum,
 		ordered_product,
+		call, //first parameter is lambda, succeding parameters are forwarded to lambda
 		COUNT
 	};
 
@@ -81,6 +82,7 @@ namespace bmath::intern {
 		diff,   //params[0] := function  params[1] := variable the derivation is done in respect to
 		pair,   //two parameters, no evaluation
 		triple, //three parameters, no evaluation
+		lambda, //params[0] := function definition
 		COUNT
 	};
 	using FixedArity = SumEnum<NamedFn, Fn>;
@@ -90,12 +92,27 @@ namespace bmath::intern {
 	//the only leaves in MathType
 	enum class Literal
 	{
-		variable,
+		symbol,
 		complex,
 		COUNT
 	};
 
-	using MathType = SumEnum<Literal, Function>;
+	//this is the only kind of subterm in MathType not associated with an actual node in the term tree, 
+	//  two MathIdx holding type LambdaParam are this only distinguished by their index.
+	//thus the index of a MathIdx with type CallParam does not point into the store, instead it directly represents the number of the function parameter.
+	//example (haskell notation): "(\x y -> x + 2 * y)" becomes "lambda($0 + 2 * $1)", where the numbers starting with an dollar sign represent a function parameter, not a value
+	//this function could then be called with x = 7 and y = 6 using the syntax "call(lambda($0 + 2 * $1), 7, 6)" (equivalent to haskells "(\x y -> x + 2 * y) 7 6"), returning 19.
+	//if a function is called with fewer arguments than the highest index of a contained CallParam, it is only partially applied (curried), 
+	//  thus resulting in the expression of the original lambda, but with known parameters replaced and unknown parameter indices shifted down by the number of applied parameters.
+	//example : "call(lambda($0 + 2 * $1), 7)" becomes "lambda(7 + 2 * $0)", making "call(lambda($0 + 2 * $1), 7, 6)" and "call(call(lambda($0 + 2 * $1), 7), 6)" eqivalent
+	// 
+	//note: haskells "(\x -> \y -> x + 2 * y)" will not translate to this notation, 
+	//  as "lambda(lambda($0 + 2 * $1))" is a function expecting zero parameters, returning a function expecting two parameters:
+	//  "call(lambda(lambda($0 + 2 * $1)), 7, 6)" becomes "lambda($0 + 2 * $1)", not the (perhaps) expected value 19.
+	//this is required to resolve conflicts, where it would otherwise be unclear, to which nested lambda instance a parameter belongs.
+	struct LambdaParam :SingleSumEnumEntry {};
+
+	using MathType = SumEnum<LambdaParam, Literal, Function>;
 
 	using MathIdx = BasicTypedIdx<MathType>;
 
@@ -185,6 +202,7 @@ namespace bmath::intern {
 			{ Fn::diff  , "diff"  , 2u },
 			{ Fn::pair  , "pair"  , 2u },
 			{ Fn::triple, "triple", 3u },
+			{ Fn::lambda, "lambda", 1u },
 		});
 		static_assert(static_cast<unsigned>(fn_props_table.front().type) == 0u);
 		static_assert(std::is_sorted(fn_props_table.begin(), fn_props_table.end(), 
@@ -216,6 +234,7 @@ namespace bmath::intern {
 			{ NonComm::list           , "list"        , false },
 			{ NonComm::ordered_sum    , "sum'"        , true  },
 			{ NonComm::ordered_product, "product'"    , true  },
+			{ NonComm::call           , "call"        , false },
 			{ Comm::sum               , "sum"         , true  },
 			{ Comm::product           , "product"     , true  },
 			{ Comm::multiset          , "multiset"    , false },
@@ -300,6 +319,12 @@ namespace bmath::intern {
 		//eliminates unescesary indirections like sums with a single summand or products with a single factor
 		//returns new location and type of ref
 		[[nodiscard]] MathIdx combine(const MutRef ref, const bool exact);
+
+		//ref is expexted to be of type Fn::lambda. every occurance of LambdaParam is replaced with the element in lambda_params at the corresponding index.
+		//used_lambda_params is only needed without garbage collection, to decide to copy a lambda parameter if it has already been used elsewhere.
+		//returns result of lambda evaluation.
+		//required cleanup afterwards: free all unused lambda_params
+		[[nodiscard]] MathIdx eval_lambda(const MutRef lambda, const StupidBufferVector<MathIdx, 16>& lambda_params, BitVector& used_lambda_params);
 
 		//compares two subterms of perhaps different stores, assumes both to have their parameters parts sorted
 		[[nodiscard]] std::strong_ordering compare(const UnsaveRef ref_1, const UnsaveRef ref_2);

@@ -147,10 +147,14 @@ namespace bmath::intern::pattern {
 		case Head::Type::function: {
 			return build_function(store, input, head.where, *this);
 		} break;
-		case Head::Type::variable: {
+		case Head::Type::parameter: {
+			input.remove_prefix(1u); //remove dollar symbol
+			return MathIdx(compute::parse_value(input), LambdaParam{});
+		} break;
+		case Head::Type::symbol: {
 			if (input.chars[0u] == '\'') {
 				if (input.chars[input.size() - 1u] != '\'') [[unlikely]] throw ParseFailure{ input.offset + 1u, "found no matching \"'\"" };
-				return MathIdx(CharVector::build(store, input.to_string_view(1u, input.size() - 1u)), MathType(Literal::variable));
+				return MathIdx(CharVector::build(store, input.to_string_view(1u, input.size() - 1u)), MathType(Literal::symbol));
 			}
 			else {
 				return this->table.insert_instance(store, input);
@@ -204,7 +208,7 @@ namespace bmath::intern::print {
 			}
 			str.push_back(clse_paren);
 		} break;
-		case PnType(Literal::variable): {
+		case PnType(Literal::symbol): {
 			str += ref->characters;
 		} break;
 		case PnType(Literal::complex): {
@@ -214,6 +218,10 @@ namespace bmath::intern::print {
 			str.append("_T");
 			str.append(std::to_string(ref.index));
 			str.push_back('\'');
+		} break;
+		case PnType(LambdaParam{}): {
+			str.append("$");
+			str.append(std::to_string(ref.index));
 		} break;
 		case PnType(ValueMatch::non_owning):
 			[[fallthrough]];
@@ -278,7 +286,7 @@ namespace bmath::intern::print {
 				print::appent_to_simple_tree(ref.new_at(param), str, depth + 1);
 			}
 		} break;
-		case PnType(Literal::variable): {
+		case PnType(Literal::symbol): {
 			str += ref->characters;
 		} break;
 		case PnType(Literal::complex): {
@@ -288,6 +296,10 @@ namespace bmath::intern::print {
 			str.append("_T");
 			str.append(std::to_string(ref.index));
 			str.push_back('\'');
+		} break;
+		case PnType(LambdaParam{}): {
+			str.append("$");
+			str.append(std::to_string(ref.index));
 		} break;
 		case PnType(ValueMatch::non_owning):
 			[[fallthrough]];
