@@ -12,6 +12,7 @@
 #include "utility/stringLiteral.hpp"
 #include "utility/misc.hpp"
 #include "utility/algorithm.hpp"
+#include "utility/bit.hpp"
 
 #include "arithmeticTerm.hpp"
 #include "pattern.hpp"
@@ -1119,7 +1120,7 @@ template<Pattern Lhs, Pattern Rhs> constexpr InRelation<name, Lhs, Rhs> op(Lhs, 
 			using NowTestableConditions = meta::Filter_t<NowTestable, meta::List<Conditions...>>;
 
 		public:
-			static constexpr bool BMATH_FORCE_INLINE value(const UnsaveRef ref, pattern::match::MatchData& match_data)  noexcept
+			static constexpr BMATH_FORCE_INLINE bool value(const UnsaveRef ref, pattern::match::MatchData& match_data)  noexcept
 			{
 				pattern::match::SharedTreeDatum& datum = match_data.tree_match_data[I];
 				assert(!datum.is_set());
@@ -1214,7 +1215,53 @@ template<Pattern Lhs, Pattern Rhs> constexpr InRelation<name, Lhs, Rhs> op(Lhs, 
 			}
 		};
 
+		//TODO
+		namespace detail_match {
+			//this is the parallel to the run-time function pattern::match::find_matching_permutation.
+			template<meta::ListInstance PrevParams, //parts of enclosing variadic pattern already matched, when this is called
+				meta::ListInstance Params, //parts of enclosing variadic pattern yet to match, when this is called
+				meta::SeqInstance MatchedIs, //indices of tree-match-variables already matched, when this is called
+				Predicate... Conditions> //all conditions restricting pattern
+			struct MatchParamPermutation;
 
+			template<meta::ListInstance PrevParams, Pattern Param1, Pattern...Params, meta::SeqInstance MatchedIs, Predicate... Conditions>
+			struct MatchParamPermutation<PrevParams, meta::List<Param1, Params...>, MatchedIs, Conditions...>
+			{
+				static constexpr BMATH_FORCE_INLINE bool value(const UnsaveRef ref, const IndexVector& function, pattern::match::MatchData& match_data, std::uint32_t function_k, bool rematch) noexcept
+				{
+					if (!rematch) {
+						while (true) {
+							//match Param1 in function
+							//if Param1 does not match return false
+							//if Param1 matches, 
+						}
+					}
+				}
+			};
+
+			template<meta::ListInstance PrevParams, meta::SeqInstance MatchedIs, Predicate... Conditions>
+			struct MatchParamPermutation<PrevParams, meta::List<>, MatchedIs, Conditions...>
+			{
+				static constexpr BMATH_FORCE_INLINE bool value() noexcept
+				{
+
+				}
+			};
+
+		} //namespace detail_match
+
+		template<typename Category, Category Type, std::size_t I, Pattern... Params, meta::SeqInstance MatchedIs, Predicate... Conditions>
+		struct Match<FunctionPn<VariadicProps<Category, Type, I>, Params...>, MatchedIs, Conditions...>
+		{
+			static constexpr BMATH_FORCE_INLINE bool value(const UnsaveRef ref, pattern::match::MatchData& match_data)  noexcept
+			{
+				if (ref.type != Type) {
+					return false;
+				}
+				const IndexVector& function = *ref;
+
+			}
+		};
 
 	} //namespace generate
 

@@ -6,16 +6,47 @@
 #include <concepts>
 #include <string>
 
+#include <iostream>
+
 #include "arithmeticTerm.hpp"
 #include "pattern.hpp"
 
 namespace bmath {
 
+	namespace detail_ruleset {
+
+		struct RuleHead { intern::pattern::PnIdx lhs, rhs; };
+
+		struct RuleIter {
+			const RuleHead* head;
+			const intern::pattern::PnStore* store;
+
+			using value_type = intern::pattern::RewriteRuleRef;
+			using difference_type = std::ptrdiff_t;
+			using pointer = value_type*;
+			using reference = value_type&;
+			using iterator_category = std::contiguous_iterator_tag;
+
+			constexpr RuleIter& operator++() noexcept { ++this->head; return *this; }
+			constexpr RuleIter operator++(int) noexcept { auto result = *this; ++(*this); return result; }
+			constexpr RuleIter& operator+=(difference_type n) noexcept { this->head += n; return *this; }
+			constexpr RuleIter operator+(difference_type n) const noexcept { auto result = *this; result += n; return result; }
+
+			constexpr RuleIter& operator--() noexcept { --this->head; return *this; }
+			constexpr RuleIter operator--(int) noexcept { auto result = *this; --(*this); return result; }
+			constexpr RuleIter& operator-=(difference_type n) noexcept { this->head -= n; return *this; }
+			constexpr RuleIter operator-(difference_type n) const noexcept { auto result = *this; result -= n; return result; }
+
+			constexpr value_type  operator*() const noexcept { return value_type{ this->head->lhs, this->head->rhs, this->store }; }
+
+			constexpr bool operator==(const RuleIter& snd) const noexcept { return this->head == snd.head; }
+		};
+	} //namespace detail_ruleset
+
 	class RuleSet {
 		intern::pattern::PnStore store = {};
 
-		struct RuleHead { intern::pattern::PnIdx lhs, rhs; };
-		std::vector<RuleHead> heads;
+		std::vector<detail_ruleset::RuleHead> heads;
 
 	public:
 		template<intern::ContainerOf<intern::pattern::RewriteRule> Rules>
@@ -57,12 +88,15 @@ namespace bmath {
 				}
 				if (head_match || deeper_match) {
 					term.establish_order();
-					//std::cout << " rule: " << rule->to_string() << "\n";
-					//std::cout << "  ->   " << print::to_pretty_string(ref.new_at(head)) << "\n\n\n";
+					//std::cout << " rule: " << intern::pattern::RewriteRuleRef{ this->heads[i].lhs, this->heads[i].rhs, &this->store }.to_string() << "\n";
+					//std::cout << "  ->   " << term.to_pretty_string() << "\n";
 					goto try_all_rules;
 				}
 			}
 		}
+
+		detail_ruleset::RuleIter begin() const noexcept { return { this->heads.data(), &this->store }; }
+		detail_ruleset::RuleIter end()   const noexcept { return { this->heads.data() + this->heads.size(), &this->store }; }
 	};
 
 

@@ -28,6 +28,8 @@ namespace bmath::intern {
 		set,
 		union_,
 		intersection,
+		min,
+		max,
 		COUNT
 	};
 
@@ -77,6 +79,8 @@ namespace bmath::intern {
 		im,		//params[0] := argument
 		force,  //params[0] := argument   forces evaluation even if it is unexact
 		diff,   //params[0] := function  params[1] := variable the derivation is done in respect to
+		pair,   //two parameters, no evaluation
+		triple, //three parameters, no evaluation
 		COUNT
 	};
 	using FixedArity = SumEnum<NamedFn, Fn>;
@@ -156,29 +160,31 @@ namespace bmath::intern {
 
 		//every item enumerated in Fn (except COUNT, duh) may be listed here in order of apperance in Fn
 		constexpr auto fn_props_table = std::to_array<FnProperties>({
-			{ Fn::pow  , "pow"  , 2u },   
-			{ Fn::log  , "log"  , 2u }, 
-			{ Fn::sqrt , "sqrt" , 1u },	
-			{ Fn::exp  , "exp"  , 1u },	
-			{ Fn::ln   , "ln"   , 1u },
-			{ Fn::sin  , "sin"  , 1u },	
-			{ Fn::cos  , "cos"  , 1u },	
-			{ Fn::tan  , "tan"  , 1u },	
-			{ Fn::sinh , "sinh" , 1u },	
-			{ Fn::cosh , "cosh" , 1u },	
-			{ Fn::tanh , "tanh" , 1u },	
-			{ Fn::asin , "asin" , 1u },	
-			{ Fn::acos , "acos" , 1u },	
-			{ Fn::atan , "atan" , 1u },		
-			{ Fn::asinh, "asinh", 1u },	
-			{ Fn::acosh, "acosh", 1u },
-			{ Fn::atanh, "atanh", 1u },	
-			{ Fn::abs  , "abs"  , 1u },	
-			{ Fn::arg  , "arg"  , 1u },	
-			{ Fn::re   , "re"   , 1u },	
-			{ Fn::im   , "im"   , 1u },		
-			{ Fn::force, "force", 1u },
-			{ Fn::diff , "diff" , 2u },   	
+			{ Fn::pow   , "pow"   , 2u },   
+			{ Fn::log   , "log"   , 2u }, 
+			{ Fn::sqrt  , "sqrt"  , 1u },	
+			{ Fn::exp   , "exp"   , 1u },	
+			{ Fn::ln    , "ln"    , 1u },
+			{ Fn::sin   , "sin"   , 1u },	
+			{ Fn::cos   , "cos"   , 1u },	
+			{ Fn::tan   , "tan"   , 1u },	
+			{ Fn::sinh  , "sinh"  , 1u },	
+			{ Fn::cosh  , "cosh"  , 1u },	
+			{ Fn::tanh  , "tanh"  , 1u },	
+			{ Fn::asin  , "asin"  , 1u },	
+			{ Fn::acos  , "acos"  , 1u },	
+			{ Fn::atan  , "atan"  , 1u },		
+			{ Fn::asinh , "asinh" , 1u },	
+			{ Fn::acosh , "acosh" , 1u },
+			{ Fn::atanh , "atanh" , 1u },	
+			{ Fn::abs   , "abs"   , 1u },	
+			{ Fn::arg   , "arg"   , 1u },	
+			{ Fn::re    , "re"    , 1u },	
+			{ Fn::im    , "im"    , 1u },		
+			{ Fn::force , "force" , 1u },
+			{ Fn::diff  , "diff"  , 2u },
+			{ Fn::pair  , "pair"  , 2u },
+			{ Fn::triple, "triple", 3u },
 		});
 		static_assert(static_cast<unsigned>(fn_props_table.front().type) == 0u);
 		static_assert(std::is_sorted(fn_props_table.begin(), fn_props_table.end(), 
@@ -216,6 +222,8 @@ namespace bmath::intern {
 			{ Comm::set               , "set"         , false },
 			{ Comm::union_            , "union"       , true  },
 			{ Comm::intersection      , "intersection", true  },
+			{ Comm::min               , "min"         , true  },
+			{ Comm::max               , "max"         , true  },
 		});
 		static_assert(static_cast<unsigned>(variadic_props_table.front().type) == 0u);
 		static_assert(std::is_sorted(variadic_props_table.begin(), variadic_props_table.end(), 
@@ -278,135 +286,6 @@ namespace bmath::intern {
 			CharVector::emplace(store.at(result_index + nr_parameter_nodes), name, name_capacity);
 			return TypedIdx(result_index, NamedFn{});
 		}
-
-
-		enum class Commutative :bool { no, ye };
-		enum class Associative :bool { no, ye };
-
-		struct FunctionProperties
-		{
-			static constexpr std::size_t variadic = -1ull;
-
-			std::string_view name; //assumed to be pointing at c-string literal (e.g. "sin" written as such in code)			
-			std::size_t arity;
-			Commutative commutative; //"ye" assumes arity == variadic
-			Associative associative; //"ye" assumes arity == variadic
-
-			constexpr FunctionProperties(std::string_view const n, Commutative const c, Associative const a) noexcept
-				:name(n), arity(variadic), commutative(c), associative(a) {}
-
-			constexpr FunctionProperties(std::string_view const n, std::size_t const a) noexcept
-				:name(n), arity(a), associative(Associative::no), commutative(Commutative::no) {}
-
-			enum class Category 
-			{
-				commutative,    //implies variadic
-				noncommutative, //implies variadic
-				nonvariadic,
-			};
-
-			constexpr Category category() const noexcept 
-			{
-				if (this->arity == variadic) {
-					return (bool)this->commutative ? Category::commutative : Category::noncommutative;
-				}
-				else {
-					assert(!(bool)this->commutative && !(bool)this->associative);
-					return Category::nonvariadic;
-				}
-			}
-		};
-
-		constexpr auto functions = []() {
-			auto functions = std::to_array<FunctionProperties>({
-				{ "sum"         , Commutative::ye, Associative::ye },
-				{ "product"     , Commutative::ye, Associative::ye },
-				{ "sum'"        , Commutative::no, Associative::ye },
-				{ "product'"    , Commutative::no, Associative::ye },
-				{ "list"        , Commutative::no, Associative::no },
-				{ "set"         , Commutative::ye, Associative::no },
-				{ "union"       , Commutative::ye, Associative::ye },
-				{ "intersection", Commutative::ye, Associative::ye },
-				{ "multiset"    , Commutative::ye, Associative::no },
-				{ "pow"         , 2u },
-				{ "log"         , 2u },
-				{ "sqrt"        , 1u },
-				{ "exp"         , 1u },
-				{ "ln"          , 1u },
-				{ "sin"         , 1u },
-				{ "cos"         , 1u },
-				{ "tan"         , 1u },
-				{ "sinh"        , 1u },
-				{ "cosh"        , 1u },
-				{ "tanh"        , 1u },
-				{ "asin"        , 1u },
-				{ "acos"        , 1u },
-				{ "atan"        , 1u },
-				{ "asinh"       , 1u },
-				{ "acosh"       , 1u },
-				{ "atanh"       , 1u },
-				{ "abs"         , 1u },
-				{ "arg"         , 1u },
-				{ "re"          , 1u },
-				{ "im"          , 1u },
-				{ "force"       , 1u },
-				{ "diff"        , 2u },
-			});
-
-			std::sort(functions.begin(), functions.end(), 
-				[](FunctionProperties const& fst, FunctionProperties const& snd) {
-					return fst.category() != snd.category() ?
-						fst.category() < snd.category() :
-						fst.name < snd.name;
-			});
-			return functions;
-		}();
-
-		constexpr std::size_t commutative_count = std::count_if(functions.begin(), functions.end(),
-			[](const FunctionProperties& fp) { return fp.category() == FunctionProperties::Category::commutative; });
-		constexpr std::size_t noncommutative_count = std::count_if(functions.begin(), functions.end(),
-			[](const FunctionProperties& fp) { return fp.category() == FunctionProperties::Category::noncommutative; });
-		constexpr std::size_t nonvariadic_count = std::count_if(functions.begin(), functions.end(),
-			[](const FunctionProperties& fp) { return fp.category() == FunctionProperties::Category::nonvariadic; });
-
-	} //namespace fn
-
-	using Commutative_   = FiniteUnsignedInt<fn::commutative_count>;
-	using NonCommutative = FiniteUnsignedInt<fn::noncommutative_count>;
-	using FixedArity_    = FiniteUnsignedInt<fn::nonvariadic_count>;
-
-	using Variadic_ = SumEnum<NonCommutative, Commutative_>;
-	using Function_ = SumEnum<NamedFn, FixedArity_, Variadic_>;
-
-	static_assert((unsigned)Function_::COUNT == fn::functions.size() + 1u, 
-		"a value of type Function_ encodes an element in fn::functions table or NamedFn");
-
-	namespace fn {
-
-		template<Reference R>
-		constexpr std::string_view name_of(R const ref) noexcept
-		{
-			assert(ref.type.is<Function_>());
-			if (ref.type.is<NamedFn>()) {
-				return fn::named_fn_name(ref);
-			}
-			else {
-				return functions[static_cast<unsigned>(ref.type.to<Function_>())].name;
-			}
-		}
-
-		constexpr Function_ type_of(std::string_view const name_) noexcept 
-		{
-			auto const iter = std::find_if(functions.begin(), functions.end(), 
-				[name_](FunctionProperties const& f) { return f.name == name_; });
-			if (iter == functions.end()) {
-				return Function_::COUNT;
-			}
-			else {
-				return Function_(iter - functions.begin());
-			}
-		}
-
 
 	} //namespace fn
 

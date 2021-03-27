@@ -58,7 +58,9 @@ namespace bmath::intern::debug {
 			<< "PnType(Comm::multiset)                   = " << unsigned(PnType(Comm::multiset))                   << "\n"
 			<< "PnType(Comm::set)                        = " << unsigned(PnType(Comm::set))                        << "\n"
 			<< "PnType(Comm::union_)                     = " << unsigned(PnType(Comm::union_))                     << "\n"
-			<< "PnType(Comm::intersection)               = " << unsigned(PnType(Comm::intersection))               << "\n\n"
+			<< "PnType(Comm::intersection)               = " << unsigned(PnType(Comm::intersection))               << "\n"
+			<< "PnType(Comm::min)                        = " << unsigned(PnType(Comm::min))                        << "\n"
+			<< "PnType(Comm::max)                        = " << unsigned(PnType(Comm::max))                        << "\n\n"
 			<< "PnType(Literal::variable)                = " << unsigned(PnType(Literal::variable))                << "\n"
 			<< "PnType(Literal::complex)                 = " << unsigned(PnType(Literal::complex))                 << "\n\n\n\n"
 			<< "PnType(TreeMatchNonOwning{})             = " << unsigned(PnType(TreeMatchNonOwning{}))             << "\n\n"
@@ -85,6 +87,7 @@ namespace bmath::intern::debug {
 
 	void test_rechner() 
 	{
+
 		static const RuleSet rules = std::to_array<pattern::RewriteRule>({
 			{ "x :product... | 0 x = 0" },
 			{ "x             | 0^x = 0" },
@@ -177,12 +180,34 @@ namespace bmath::intern::debug {
 			{ "x, xs :set..., ys :set... | intersection(set(x, xs), set(x, ys)) = union(set(x), intersection(set(xs), set(ys)))" },
 			{ "xs, ys                    | intersection(xs, ys)                 = set()" },
 			{ "                          | intersection()                       = set()" },
+
+			{ "x :real, y :real | min{x, y} = if_positive(force(x-y), y, x)" },
+			{ "x :real, y :real | max{x, y} = if_positive(force(x-y), x, y)" },
+
+			//A / B is more commonly written A \ B
+			{ "x, xs :set..., y, ys :set... | set{x, xs} / set{x, ys} = set{xs} / set{x, ys}" },
+			{ "   xs :set...,    ys :set... | set{xs}    / set{ys}    = set{xs}" },
+
+			//lambda calculus (write a lambda "\x.e" as "L(x, e)" and function application "xy" as "A(x, y)")
+			{ "x, e, y | A(L(x, e), y) = replace(x, y, e)" }, //beta conversion
+			{ "x, y,           | replace(x, y, x)         = y" },
+			{ "x, y,    e      | replace(x, y, L(x, e))   = L(x, e)" },
+			{ "x, y, z, e      | replace(x, y, L(z, e))   = L(z, replace(x, y, e))" },
+			{ "x, y,    e1, e2 | replace(x, y, A(e1, e2)) = A(replace(x, y, e1), replace(x, y, e2))" },
+			{ "x, y, z         | replace(x, y, z)         = z" },
+
+			{ "'true' = L('x', L('y', 'x'))" },
+			{ "'false' = L('x', L('y', 'y'))" },
+			{ "'not' = L('x', A(A('x', 'false'), 'true'))" },
+			{ "'and' = L('x', L('y', A(A('x', 'y'), 'x')))" },
+			//{ "" },
+			//{ "" },
 		});
 
 
-		//for (const auto& rule : rules) {
-		//	std::cout << rule.to_string() << "\n\n";
-		//}
+		for (const auto& rule : rules) {
+			std::cout << rule.to_string() << "\n\n";
+		}
 
 		while (true) {
 			std::string name;
@@ -190,7 +215,7 @@ namespace bmath::intern::debug {
 			std::getline(std::cin, name);
 			try {
 				bmath::Term test(name); 
-				std::cout << "input:  " << test.to_pretty_string() << "\n";
+				//std::cout << "input:  " << test.to_pretty_string() << "\n";
 				rules.apply_to(test);
 
 				std::cout << "    = " << test.to_pretty_string() << "\n";
