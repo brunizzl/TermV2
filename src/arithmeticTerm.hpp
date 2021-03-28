@@ -316,19 +316,13 @@ namespace bmath::intern {
 
 		//flattens sums holding sums as summands and products holding products as factors
 		//evaluates parts that can be evaluated (if exact, only those, that can be exact evaluated)
-		//eliminates unescesary indirections like sums with a single summand or products with a single factor
+		//eliminates unecessary indirections like sums with a single summand or products with a single factor
 		//returns new location and type of ref
-		[[nodiscard]] MathIdx combine(const MutRef ref, const bool exact);
+		[[nodiscard]] MathIdx combine(const MutRef ref, const bool exact, const bool in_lambda);
 
 		//returns true if the subtree starting at ref contains a LambdaParam not wrapped in a lambda
 		//example: "1 + sin($0)" -> true,  but "1 + lambda(sin($0))" -> false
 		bool contains_unwrapped_lambda_parameters(const UnsaveRef ref);
-
-		//ref is expexted to be of type Fn::lambda. every occurance of LambdaParam is replaced with the element in lambda_params at the corresponding index.
-		//used_lambda_params is only needed without garbage collection, to decide to copy a lambda parameter if it has already been used elsewhere.
-		//returns result of lambda evaluation.
-		//required cleanup afterwards: free all unused lambda_params
-		[[nodiscard]] MathIdx eval_lambda(const MutRef lambda, const StupidBufferVector<MathIdx, 16>& lambda_params, BitVector& used_lambda_params);
 
 		//compares two subterms of perhaps different stores, assumes both to have their parameters parts sorted
 		[[nodiscard]] std::strong_ordering compare(const UnsaveRef ref_1, const UnsaveRef ref_2);

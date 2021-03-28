@@ -192,14 +192,6 @@ namespace bmath::intern::debug {
 			{ "x, xs :set..., y, ys :set... | set{x, xs} / set{x, ys} = set{xs} / set{x, ys}" },
 			{ "   xs :set...,    ys :set... | set{xs}    / set{ys}    = set{xs}" },
 
-			////eta conversion
-			//{ "f | call(lambda(f), $0                ) = f" },
-			//{ "f | call(lambda(f), $0, $1            ) = f" },
-			//{ "f | call(lambda(f), $0, $1, $2        ) = f" },
-			//{ "f | call(lambda(f), $0, $1, $2, $3    ) = f" },
-			//{ "f | call(lambda(f), $0, $1, $2, $3, $4) = f" },
-			////{ "" },
-
 			{ "'true'  = lambda($0)" },
 			{ "'false' = lambda($1)" },
 			{ "'not'   = lambda(call($0, lambda($1), lambda($0)))" },

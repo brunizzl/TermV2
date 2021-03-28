@@ -142,7 +142,47 @@ namespace bmath::intern {
 			}
 		} //free
 
-		MathIdx combine(const MutRef ref, const bool exact)
+		//returns true if lambda could be only partially evaluated
+		bool replace_lambda_params(const MutRef ref, const StupidBufferVector<MathIdx, 16>& lambda_params, BitVector& used_lambda_params) {
+			switch (ref.type) {
+			default: {
+				assert(ref.type.is<Function>());
+				bool curry = false;
+				auto range = fn::range(ref);
+				const auto stop = end(range);
+				for (auto iter = begin(range); iter != stop; ++iter) {
+					if (iter->get_type().is<LambdaParam>()) {
+						const std::uint32_t index = iter->get_index();
+						if (index >= lambda_params.size()) {
+							*iter = MathIdx(index - lambda_params.size(), LambdaParam{});
+							curry = true;
+						}
+						else if (used_lambda_params.test(index)) {
+							const MathIdx inserted_param = tree::copy(ref.new_at(lambda_params[index]), *ref.store);
+							*iter = inserted_param;
+						}
+						else {
+							*iter = lambda_params[index];
+							used_lambda_params.set(index);
+						}
+					}
+					else {
+						curry |= replace_lambda_params(ref.new_at(*iter), lambda_params, used_lambda_params);
+					}
+				}
+				return curry;
+			} break;
+			case MathType(LambdaParam{}): //handled in function directly
+				assert(false);
+				return false;
+			case MathType(Literal::symbol):
+			case MathType(Literal::complex):
+			case MathType(Fn::lambda):
+				return false; //nothing to replace
+			}
+		} //replace_lambda_params
+
+		MathIdx combine(const MutRef ref, const bool exact, const bool in_lambda)
 		{
 			const auto compute = [exact](auto operate) -> OptionalComplex {
 				if (exact) {
@@ -158,7 +198,7 @@ namespace bmath::intern {
 				StupidBufferVector<MathIdx, 16> new_sum;
 
 				for (MathIdx& summand : fn::unsave_range(ref)) {
-					summand = tree::combine(ref.new_at(summand), exact);
+					summand = tree::combine(ref.new_at(summand), exact, in_lambda);
 					switch (summand.get_type()) {
 					case MathType(Comm::sum):
 						for (const MathIdx nested_summand : fn::unsave_range(ref.new_at(summand))) {
@@ -203,7 +243,7 @@ namespace bmath::intern {
 				StupidBufferVector<MathIdx, 16> new_product;
 
 				for (MathIdx& factor : fn::unsave_range(ref)) {
-					factor = tree::combine(ref.new_at(factor), exact);
+					factor = tree::combine(ref.new_at(factor), exact, in_lambda);
 					switch (factor.get_type()) {
 					case MathType(Fn::pow): {
 						IndexVector& power = *ref.new_at(factor);
@@ -278,7 +318,7 @@ namespace bmath::intern {
 			} break;
 			case MathType(Fn::force): {
 				MathIdx& param = ref->parameters[0];
-				param = tree::combine(ref.new_at(param), false);
+				param = tree::combine(ref.new_at(param), false, in_lambda);
 				if (param.get_type() == Literal::complex) {
 					const MathIdx result_val = param;
 					ref.store->free_one(ref.index);
@@ -286,14 +326,11 @@ namespace bmath::intern {
 				}
 			} break;
 			case MathType(NonComm::call): {
-				if (ref->parameters.size()) {
-					const MathIdx lambda_idx = tree::combine(ref.new_at(ref->parameters.front()), exact);
+				if (ref->parameters.size()) [[likely]] {
+					const MathIdx lambda_idx = tree::combine(ref.new_at(ref->parameters.front()), exact, false);
 					const MutRef lambda = ref.new_at(lambda_idx);
 					IndexVector& call_params = *ref; //create this reference only after combining lambda as tree::combine could cause store to reallocate
-					if (lambda.type == Fn::lambda && 
-						std::none_of(std::next(call_params.begin()), call_params.end(), //there is no outer lambda in need to be evaluated first
-						[ref](const MathIdx idx) { return tree::contains_unwrapped_lambda_parameters(ref.new_at(idx)); }))
-					{
+					if (lambda.type == Fn::lambda) {
 						//beta conversion: evaluate lambda
 						//call(lambda(expr), params...) -> expr[$... <- params...]
 						const MathIdx result = [&]() {
@@ -305,17 +342,42 @@ namespace bmath::intern {
 								}
 							}
 							IndexVector::free(*ref.store, ref.index); //free call, but not lambda nor parameters
-
 							BitVector used_lambda_params(lambda_params.size());
-							const MathIdx result = tree::eval_lambda(lambda, lambda_params, used_lambda_params);
+
+							const MathIdx evaluated_call = [&lambda, &lambda_params, &used_lambda_params, &in_lambda]() {
+								MathIdx& definition = lambda->parameters[0];
+								if (definition.get_type().is<LambdaParam>()) {
+									const std::uint32_t index = definition.get_index();
+									if (index >= lambda_params.size() && !in_lambda) {
+										definition = MathIdx(index - lambda_params.size(), LambdaParam{});
+										return lambda.typed_idx();
+									}
+									else {
+										lambda.store->free_one(lambda.index);
+										used_lambda_params.set(index);
+										return lambda_params[index];
+									}
+								}
+								else {
+									const MathIdx save_definition = definition; //replace_lambda_params might cause store to reallocate (only without garbage collection)
+									if (replace_lambda_params(lambda.new_at(save_definition), lambda_params, used_lambda_params) && !in_lambda) 
+									{
+										return lambda.typed_idx();
+									}
+									else {
+										lambda.store->free_one(lambda.index);
+										return save_definition;
+									}
+								}
+							}();
 							for (std::size_t i = 0u; i < lambda_params.size(); i++) {
 								if (!used_lambda_params.test(i)) {
 									tree::free(ref.new_at(lambda_params[i]));
 								}
 							}
-							return result;
+							return evaluated_call;
 						}();
-						return tree::combine(ref.new_at(result), exact);
+						return tree::combine(ref.new_at(result), exact, in_lambda);
 					}
 					else {
 						call_params.front() = lambda_idx;
@@ -328,7 +390,7 @@ namespace bmath::intern {
 					std::array<OptionalComplex, 4> res_vals = { OptionalComplex{}, {}, {}, {} }; //default initialized to NaN
 					assert(fn::arity(ref.type) <= 4); //else res_vals size to small
 					for (std::size_t i = 0; i < fn::arity(ref.type); i++) {
-						params[i] = tree::combine(ref.new_at(params[i]), exact);
+						params[i] = tree::combine(ref.new_at(params[i]), exact, ref.type == Fn::lambda);
 						if (params[i].get_type() == Literal::complex) {
 							res_vals[i] = ref.store->at(params[i].get_index()).complex;
 						}
@@ -341,7 +403,7 @@ namespace bmath::intern {
 				else if (ref.type.is<Variadic>() && fn::is_associative(ref.type)) { //-> flatten nested instances allowed
 					StupidBufferVector<MathIdx, 16> new_parameters;
 					for (const MathIdx param : fn::unsave_range(ref)) {
-						const MathIdx new_param = tree::combine(ref.new_at(param), exact);
+						const MathIdx new_param = tree::combine(ref.new_at(param), exact, in_lambda);
 						if (new_param.get_type() == ref.type) {
 							for (const MathIdx nested_param : fn::unsave_range(ref.new_at(new_param))) {
 								new_parameters.push_back(nested_param);
@@ -367,7 +429,7 @@ namespace bmath::intern {
 				else {
 					assert(ref.type.is<Variadic>() || ref.type.is<NamedFn>()); 
 					for (MathIdx& param : fn::unsave_range(ref)) {
-						param = tree::combine(ref.new_at(param), exact);
+						param = tree::combine(ref.new_at(param), exact, in_lambda);
 
 					}
 				}
@@ -401,73 +463,7 @@ namespace bmath::intern {
 			}
 		} //contains_unwrapped_lambda_parameters
 
-		//returns true if lambda could be only partially evaluated
-		bool replace_lambda_params(const MutRef ref, const StupidBufferVector<MathIdx, 16>& lambda_params, BitVector& used_lambda_params) {
-			switch (ref.type) {
-			default: {
-				assert(ref.type.is<Function>());
-				bool curry = false;
-				auto range = fn::range(ref);
-				const auto stop = end(range);
-				for (auto iter = begin(range); iter != stop; ++iter) {
-					if (iter->get_type().is<LambdaParam>()) {
-						const std::uint32_t index = iter->get_index();
-						if (index >= lambda_params.size()) {
-							*iter = MathIdx(index - lambda_params.size(), LambdaParam{});
-							curry = true;
-						}
-						else if (used_lambda_params.test(index)) {
-							const MathIdx inserted_param = tree::copy(ref.new_at(lambda_params[index]), *ref.store);
-							*iter = inserted_param;
-						}
-						else {
-							*iter = lambda_params[index];
-							used_lambda_params.set(index);
-						}						
-					}
-					else {
-						curry |= replace_lambda_params(ref.new_at(*iter), lambda_params, used_lambda_params);
-					}
-				}
-				return curry;
-			} break;
-			case MathType(LambdaParam{}): //handled in function directly
-				assert(false);
-				return false;
-			case MathType(Literal::symbol):
-			case MathType(Literal::complex):
-			case MathType(Fn::lambda):
-				return false; //nothing to replace
-			}
-		} //replace_lambda_params
-
-		MathIdx eval_lambda(const MutRef lambda, const StupidBufferVector<MathIdx, 16>& lambda_params, BitVector& used_lambda_params)
-		{
-			assert(lambda.type == Fn::lambda);
-			MathIdx& definition = lambda->parameters[0];
-			if (definition.get_type().is<LambdaParam>()) {
-				const std::uint32_t index = definition.get_index();
-				if (index >= lambda_params.size()) {
-					definition = MathIdx(index - lambda_params.size(), LambdaParam{});
-					return lambda.typed_idx();
-				}
-				else {
-					lambda.store->free_one(lambda.index);
-					used_lambda_params.set(index);
-					return lambda_params[index];
-				}
-			}
-			else {
-				const MathIdx save_definition = definition; //replace_lambda_params might cause store to reallocate (only without garbage collection)
-				if (replace_lambda_params(lambda.new_at(save_definition), lambda_params, used_lambda_params)) {
-					return lambda.typed_idx();
-				}
-				else {
-					lambda.store->free_one(lambda.index);
-					return save_definition;
-				}
-			}
-		} //eval_lambda
+		
 
 		[[nodiscard]] std::strong_ordering compare(const UnsaveRef ref_1, const UnsaveRef ref_2)
 		{
@@ -608,7 +604,7 @@ namespace bmath::intern {
 
 		MathIdx establish_basic_order(const MutRef ref)
 		{
-			const MathIdx combine_result = tree::combine(ref, true);
+			const MathIdx combine_result = tree::combine(ref, true, false);
 			tree::sort(ref.new_at(combine_result));
 			return combine_result;
 		} //establish_basic_order

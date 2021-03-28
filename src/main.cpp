@@ -17,7 +17,6 @@ important:
  - implement meta_pn::match function for variadic patterns
  - improve multi-match capabilities of NonComm variadic patterns (allow multiple multis in one NonComm instance)
  - achieve feature parity between compile time pattern and run time pattern (add value match to ct and conditions to rt)
- - eta conversion
  - NamedFn -> call(name, params...) and also Function -> call(type, params...)
 
 nice to have:
