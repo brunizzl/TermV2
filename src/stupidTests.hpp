@@ -202,6 +202,9 @@ namespace bmath::intern::debug {
 			{ "   x, xs :list... | cons(x, list{xs})   = list{x, xs}" },
 			{ "f, x, xs :list... | map(f, list{x, xs}) = cons(call(f, x), map(f, list{xs}))" },
 			{ "f,                | map(f, list{})      = list{}" },
+
+			{ "f, acc, x, xs :list... | foldl(f, acc, list{x, xs}) = call(f, x, foldl(f, acc, list{xs}))" },
+			{ "f, acc,                | foldl(f, acc, list{})      = acc" },
 			//{ "" },
 		});
 
