@@ -331,9 +331,7 @@ namespace bmath::intern {
 					const MutRef lambda = ref.new_at(lambda_idx);
 					IndexVector& call_params = *ref; //create this reference only after combining lambda as tree::combine could cause store to reallocate
 					if (lambda.type == Fn::lambda) {
-						//beta conversion: evaluate lambda
-						//call(lambda(expr), params...) -> expr[$... <- params...]
-						const MathIdx result = [&]() {
+						const MathIdx result = [&call_params, &ref, &lambda, &in_lambda]() {
 							StupidBufferVector<MathIdx, 16> lambda_params;
 							{
 								auto call_iter = call_params.begin();
