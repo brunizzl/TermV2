@@ -496,6 +496,25 @@ namespace bmath::intern {
 					str += print::to_pretty_string(ref.new_at(params[1]), infixr(ref.type));
 				}
 			} break;
+			case MathType(NonComm::call): {
+				bool first = true;
+				const char* seperator = "";
+				for (const auto param : fn::range(ref)) {
+					if (std::exchange(first, false)) {
+						str += print::to_pretty_string(ref.new_at(param), infixr(ref.type));
+						str.push_back('(');
+					}
+					else {
+						str.append(std::exchange(seperator, ", "));
+						str += print::to_pretty_string(ref.new_at(param), infixr(ref.type));
+					}
+				}
+				if (!first) {
+					str.push_back(')');
+					need_parentheses = false;
+					break;
+				}
+			} [[fallthrough]];
 			default: {
 				need_parentheses = false;
 				if (ref.type.is<NamedFn>()) {
@@ -651,26 +670,34 @@ namespace bmath::intern {
 			std::string& current_str = rows.back();
 
 			//appending current_str to previously inserted parts of tree visually
-			{
-				constexpr signed char bar_up_down = -77;		//(179)
-				constexpr signed char bar_up_right = -64;		//(192)
-				constexpr signed char bar_up_right_down = -61;	//(195)
-				constexpr signed char bar_left_right = -60;	    //(196)
+			if (rows.size() > 1u) { //(only nessecairy if there are previously inserted parts)
+				constexpr signed char bar_up_down = -77;		//(179)	  (these are probably locale dependent, but i dont care)
+				constexpr signed char bar_up_right = -64;		//(192)	  (these are probably locale dependent, but i dont care)
+				constexpr signed char bar_up_right_down = -61;	//(195)	  (these are probably locale dependent, but i dont care)
+				constexpr signed char bar_left_right = -60;	    //(196)	  (these are probably locale dependent, but i dont care)
 
-				{
-					assert(rows.size() > 1u); //"head" is first row
-					std::size_t bar_row_i = rows.size() - 2u; //start one row above current_str
-					for (; rows[bar_row_i][offset] == ' '; bar_row_i--) {
-						rows[bar_row_i][offset] = bar_up_down;
+				//the tab_with many chars (currently) at the end of current_str can be divided into tree parts: 
+				//  space(s), the one vertical bar char and horizontal bar chars.
+				//so far, all of current_str's last tab_width many characters are spaces, thus the spaces need not to be drawn here.
+				constexpr std::size_t horizontal_bar_length = 1u;
+				static_assert(tab_width >= horizontal_bar_length + 1u);
+				{ //draw vertical bar
+					std::size_t row = rows.size() - 2u; //start one row above current_str
+					const std::size_t col = offset - 1u - horizontal_bar_length; //(offset - 1u) is pos of last char in current_str
+					for (; rows[row][col] == ' '; row--) {
+						rows[row][col] = bar_up_down;
 					}
-					if (rows[bar_row_i][offset] == bar_up_right) {
-						rows[bar_row_i][offset] = bar_up_right_down;
+					if (rows[row][col] == bar_up_right) {
+						rows[row][col] = bar_up_right_down;
 					}
+				}				
+				{ //draw horizontal bar at current hight
+					std::size_t col = current_str.size() - 1u;
+					for (; col >= offset - horizontal_bar_length; col--) {
+						current_str[col] = bar_left_right;
+					}
+					current_str[col] = bar_up_right;
 				}
-
-				current_str += bar_up_right;
-				static_assert(tab_width >= 2u);
-				current_str += std::string(tab_width - 2u, bar_left_right);
 			}
 
 			switch (ref.type) {
@@ -708,7 +735,6 @@ namespace bmath::intern {
 		std::string to_tree(const UnsaveRef ref, const std::size_t offset)
 		{
 			std::vector<std::string> rows;
-			rows.push_back(std::string(offset, ' ') + "head");
 			print::append_tree_row(ref, rows, offset);
 
 			std::string result;
@@ -716,7 +742,6 @@ namespace bmath::intern {
 				result.append(row);
 				result.push_back('\n');
 			}
-
 			return result;
 		} //to_tree
 

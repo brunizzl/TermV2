@@ -47,8 +47,8 @@ namespace bmath::intern {
 			const Token prev = this->tokens[prev_idx];
 			const Token curr = this->tokens[prev_idx + 1];
 			const Token next = this->tokens[prev_idx + 2];
-			if (is_one_of<token::character, token::number, token::imag_unit, token::clse_grouping>(prev) && 
-				is_one_of<token::character, token::number, token::imag_unit, token::open_grouping>(next) && 
+			if (is_one_of<token::character, token::number, token::imag_unit, token::clse_grouping, token::dollar>(prev) && 
+				is_one_of<token::character, token::number, token::imag_unit, token::open_grouping, token::dollar>(next) && 
 				curr == token::space) 
 			{
 				this->tokens[curr_idx] = token::product;

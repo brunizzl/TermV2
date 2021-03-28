@@ -16,10 +16,13 @@ important:
  - decide if garbage collection should be used (and if so implement it + change functions currently deallocating)
  - implement meta_pn::match function for variadic patterns
  - improve multi-match capabilities of NonComm variadic patterns (allow multiple multis in one NonComm instance)
- - achieve feature parity between compile time pattern and run time pattern (add value match to ct and conditions to rt
+ - achieve feature parity between compile time pattern and run time pattern (add value match to ct and conditions to rt)
+ - eta conversion
+ - NamedFn -> call(name, params...) and also Function -> call(type, params...)
 
 nice to have:
  - enable StupidBufferVector to handle non-trivial destructible types -> change name to BufferVector
+ - automate error checking in stupidTests.hpp -> change name to tests.hpp
  - pattern::match::copy should copy in same store (again...)
  - noexceptify everything
  - restructure everything to use modules (basically needed to constexprfy all the things)
@@ -27,8 +30,7 @@ nice to have:
 
 idea status:
  - add type system: check only when pattern /usual term instanciates, not needed when copied
- - introduce "intrinsic" type and use index in intrinsic typed_idx to specify witch (have all stored at central function pointer array)
- - add a pattern variable type catching functions with other pattern variables beeing parameters of these functions (perhaps two types, one parameters?)
+ - introduce "intrinsic" rule type and use index in intrinsic typed_idx to specify witch (have all stored at central function pointer array)
  - add concept of "easy pattern" with every pattern variable occuring only once, match these in guaranteed linear time
  - const term_slc iterator dereferences to Ref, not typed_idx
  - let each RewriteRule have a name in form of a constant c-string (not what pattern is constructed from, but name of rule, e.g. "differentiation: product rule" or something)

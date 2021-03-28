@@ -192,6 +192,13 @@ namespace bmath::intern::debug {
 			{ "x, xs :set..., y, ys :set... | set{x, xs} / set{x, ys} = set{xs} / set{x, ys}" },
 			{ "   xs :set...,    ys :set... | set{xs}    / set{ys}    = set{xs}" },
 
+			////eta conversion
+			//{ "f | call(lambda(f), $0                ) = f" },
+			//{ "f | call(lambda(f), $0, $1            ) = f" },
+			//{ "f | call(lambda(f), $0, $1, $2        ) = f" },
+			//{ "f | call(lambda(f), $0, $1, $2, $3    ) = f" },
+			//{ "f | call(lambda(f), $0, $1, $2, $3, $4) = f" },
+			////{ "" },
 
 			{ "'true'  = lambda($0)" },
 			{ "'false' = lambda($1)" },
@@ -199,12 +206,20 @@ namespace bmath::intern::debug {
 			{ "'and'   = lambda(call($0, $1, $0))" },
 			{ "'or'    = lambda(call($0, $0, $1))" },
 
+			{ "'zero'  = lambda($1)" },
+			{ "'one'   = lambda(call($0, $1))" },
+			{ "'two'   = lambda(call($0, call($0, $1)))" },
+			{ "'three' = lambda(call($0, call($0, call($0, $1))))" },
+			{ "'succ'  = lambda(call($1, call($0, $1, $2)))" },
+
 			{ "   x, xs :list... | cons(x, list{xs})   = list{x, xs}" },
 			{ "f, x, xs :list... | map(f, list{x, xs}) = cons(call(f, x), map(f, list{xs}))" },
 			{ "f,                | map(f, list{})      = list{}" },
 
 			{ "f, acc, x, xs :list... | foldl(f, acc, list{x, xs}) = call(f, x, foldl(f, acc, list{xs}))" },
 			{ "f, acc,                | foldl(f, acc, list{})      = acc" },
+
+			{ "'Y' = lambda(call($0, call($1, $1), call($0, call($1, $1))))" },
 			//{ "" },
 		});
 
@@ -224,7 +239,7 @@ namespace bmath::intern::debug {
 
 				std::cout << "    = " << test.to_pretty_string() << "\n";
 				//std::cout << test.to_memory_layout() << "\n";
-				//std::cout << test.to_tree() << "\n";
+				std::cout << test.to_tree() << "\n";
 				std::cout << "\n";
 
 				assert(tree::valid_storage(test.store, { test.head }));

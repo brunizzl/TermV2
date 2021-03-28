@@ -286,11 +286,16 @@ namespace bmath::intern {
 				}
 			} break;
 			case MathType(NonComm::call): {
-				IndexVector& call_params = *ref;
-				if (call_params.size()) {
-					const MathIdx lambda_idx = tree::combine(ref.new_at(call_params.front()), exact);
+				if (ref->parameters.size()) {
+					const MathIdx lambda_idx = tree::combine(ref.new_at(ref->parameters.front()), exact);
 					const MutRef lambda = ref.new_at(lambda_idx);
-					if (lambda.type == Fn::lambda) {
+					IndexVector& call_params = *ref; //create this reference only after combining lambda as tree::combine could cause store to reallocate
+					if (lambda.type == Fn::lambda && 
+						std::none_of(std::next(call_params.begin()), call_params.end(), //there is no outer lambda in need to be evaluated first
+						[ref](const MathIdx idx) { return tree::contains_unwrapped_lambda_parameters(ref.new_at(idx)); }))
+					{
+						//beta conversion: evaluate lambda
+						//call(lambda(expr), params...) -> expr[$... <- params...]
 						const MathIdx result = [&]() {
 							StupidBufferVector<MathIdx, 16> lambda_params;
 							{
@@ -311,6 +316,9 @@ namespace bmath::intern {
 							return result;
 						}();
 						return tree::combine(ref.new_at(result), exact);
+					}
+					else {
+						call_params.front() = lambda_idx;
 					}
 				}
 			} [[fallthrough]];
@@ -373,6 +381,25 @@ namespace bmath::intern {
 			}
 			return ref.typed_idx();
 		} //combine
+
+		bool contains_unwrapped_lambda_parameters(const UnsaveRef ref)
+		{
+			switch (ref.type) {
+			case MathType(Fn::lambda):
+				return false;
+			case MathType(LambdaParam{}):
+				return true;
+			default:
+				if (ref.type.is<Function>()) {
+					for (const MathIdx param : fn::range(ref)) {
+						if (contains_unwrapped_lambda_parameters(ref.new_at(param))) {
+							return true;
+						}
+					}
+				}
+				return false;
+			}
+		} //contains_unwrapped_lambda_parameters
 
 		//returns true if lambda could be only partially evaluated
 		bool replace_lambda_params(const MutRef ref, const StupidBufferVector<MathIdx, 16>& lambda_params, BitVector& used_lambda_params) {

@@ -320,6 +320,10 @@ namespace bmath::intern {
 		//returns new location and type of ref
 		[[nodiscard]] MathIdx combine(const MutRef ref, const bool exact);
 
+		//returns true if the subtree starting at ref contains a LambdaParam not wrapped in a lambda
+		//example: "1 + sin($0)" -> true,  but "1 + lambda(sin($0))" -> false
+		bool contains_unwrapped_lambda_parameters(const UnsaveRef ref);
+
 		//ref is expexted to be of type Fn::lambda. every occurance of LambdaParam is replaced with the element in lambda_params at the corresponding index.
 		//used_lambda_params is only needed without garbage collection, to decide to copy a lambda parameter if it has already been used elsewhere.
 		//returns result of lambda evaluation.
