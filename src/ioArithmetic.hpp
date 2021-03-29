@@ -147,12 +147,12 @@ namespace bmath::intern {
 			const auto param_view = input.steal_prefix(comma); //now input starts with comma
 			result_parameters.push_back(build_any(store, param_view));
 		}
-			while (input.size()) {
-				input.remove_prefix(1u); //erase leading comma
-				const std::size_t comma = find_first_of_skip_pars(input.tokens, token::comma);
-				const auto param_view = input.steal_prefix(comma);
-				result_parameters.push_back(build_any(store, param_view));
-			}
+		while (input.size()) {
+			input.remove_prefix(1u); //erase leading comma
+			const std::size_t comma = find_first_of_skip_pars(input.tokens, token::comma);
+			const auto param_view = input.steal_prefix(comma);
+			result_parameters.push_back(build_any(store, param_view));
+		}
 
 		if (const Fn type = fn::fn_type_of(name); type != Fn::COUNT) {
 			if (result_parameters.size() != fn::arity(type)) [[unlikely]] throw ParseFailure{ input.offset, 

@@ -22,7 +22,7 @@ namespace bmath::intern::pattern {
 		{ Restriction::any                 , "any"           },
 		{ Restriction::nn1                 , "nn1"           },
 		{ Restriction::no_val              , "no_val"        },
-		{ Restriction::symbol            , "symbol"      },
+		{ Restriction::symbol              , "symbol"        },
 		{ TreeDomain(Domain::complex)      , "value"         }, //not to be mistaken for ValueDomain(Domain::complex)
 		{ ValueDomain(Domain::natural)     , "nat"           },
 		{ ValueDomain(Domain::natural_0)   , "nat0"          },

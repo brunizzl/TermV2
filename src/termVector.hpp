@@ -10,6 +10,7 @@
 #include <string_view>
 
 #include "termStore.hpp"
+#include "reference.hpp"
 
 namespace bmath::intern {
 
@@ -24,19 +25,18 @@ namespace bmath::intern {
 	//what is done instead, is to allocate an array of StoredVector, where only the Info part of the first one is 
 	//  used, and all succeeding ones just act as an elongation of StoredVector::data of the first.
 	template<typename Value_T, //data stored in array
-		std::size_t AllocNodeSize = sizeof(std::complex<double>),
-		typename Manage_T = detail_vector::EmptyManagementType> //if some fixed size metadata should be stored with the array, this is the type to wrap it in.		
+		std::size_t AllocNodeSize = sizeof(std::complex<double>)> //if some fixed size metadata should be stored with the array, this is the type to wrap it in.		
 	struct StoredVector
 	{
 		static_assert(std::is_trivially_destructible_v<Value_T>);
 		static_assert(std::is_trivially_copyable_v<Value_T>);
 		static_assert(AllocNodeSize % sizeof(Value_T) == 0);
 
-		struct Info :Manage_T
+		struct Info
 		{
 			std::uint16_t size = 0u;
 			std::uint16_t capacity = min_capacity;
-		}; 
+		};
 
 		static constexpr std::size_t min_capacity = (AllocNodeSize - sizeof(Info)) / sizeof(Value_T);
 		static constexpr std::size_t values_per_node = AllocNodeSize / sizeof(Value_T);
@@ -142,13 +142,13 @@ namespace bmath::intern {
 		//this iterator does not hold the position pointed at directly, but always takes the way via the store,
 		//  where the StoredVector we walk along is held.
 		//The Store is thus allowed to move its data elsewhere during StoredVector traversal.
-		template<typename Value_T, std::size_t AllocNodeSize, typename Manage_T, StoreLike Store_T>
+		template<typename Value_T, std::size_t AllocNodeSize, StoreLike Store_T>
 		class SaveIterator
 		{
 			static_assert(std::is_const_v<Value_T> == std::is_const_v<Store_T>);
 			using StoredVector_T = std::conditional_t<std::is_const_v<Store_T>,
-				const StoredVector<std::remove_const_t<Value_T>, AllocNodeSize, Manage_T>,
-				      StoredVector<std::remove_const_t<Value_T>, AllocNodeSize, Manage_T>
+				const StoredVector<std::remove_const_t<Value_T>, AllocNodeSize>,
+				      StoredVector<std::remove_const_t<Value_T>, AllocNodeSize>
 			>;
 
 			using Diff_T = const std::ptrdiff_t;	
@@ -221,16 +221,16 @@ namespace bmath::intern {
 
 	} //namespace stored_vector
 
-	template<typename Value_T, std::size_t AllocNodeSize, typename Manage_T, StoreLike Store_T> 
-	constexpr auto begin(const BasicNodeRef<StoredVector<Value_T, AllocNodeSize, Manage_T>, Store_T>& ref)
+	template<typename Value_T, std::size_t AllocNodeSize, StoreLike Store_T> 
+	constexpr auto begin(const BasicNodeRef<StoredVector<Value_T, AllocNodeSize>, Store_T>& ref)
 	{
 		using CV_Value_T = std::conditional_t<std::is_const_v<Store_T>, const Value_T, Value_T>;
-		using Iter = detail_vector::SaveIterator<CV_Value_T, AllocNodeSize, Manage_T, Store_T>;
+		using Iter = detail_vector::SaveIterator<CV_Value_T, AllocNodeSize, Store_T>;
 		return Iter{ *ref.store, ref.index, 0u };
 	}
 
-	template<typename Value_T, std::size_t AllocNodeSize, typename Manage_T, StoreLike Store_T>
-	constexpr auto end(const BasicNodeRef<StoredVector<Value_T, AllocNodeSize, Manage_T>, Store_T>& ref)
+	template<typename Value_T, std::size_t AllocNodeSize, StoreLike Store_T>
+	constexpr auto end(const BasicNodeRef<StoredVector<Value_T, AllocNodeSize>, Store_T>& ref)
 	{
 		return detail_vector::SaveEndIndicator{ (std::uint32_t) ref->size() };
 	}

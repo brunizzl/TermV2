@@ -87,19 +87,25 @@ namespace bmath::intern {
 					tokenized[i] = token::character;
 					continue;
 				}
-				if (in_interval(current, '0', '9') || current == '.') {
+				if (in_interval(current, '0', '9')) {
 					tokenized[i] = token::number;
 					continue;
 				}
 
 				switch (current) {
-				case ',': tokenized[i] = token::comma;  continue;
-				case '^': tokenized[i] = token::hat;    continue;
-				case '=': tokenized[i] = token::equals; continue;
-				case '|': tokenized[i] = token::bar;    continue;
-				case ':': tokenized[i] = token::colon;  continue;
-				case ' ': tokenized[i] = token::space;  continue;
-				case '$': tokenized[i] = token::dollar; continue;
+				case  ',': tokenized[i] = token::comma;     continue;
+				case  '.': tokenized[i] = token::dot;       continue;
+				case  '^': tokenized[i] = token::hat;       continue;
+				case  '=': tokenized[i] = token::equals;    continue;
+				case  '|': tokenized[i] = token::bar;       continue;
+				case  ':': tokenized[i] = token::colon;     continue;
+				case  '$': tokenized[i] = token::dollar;    continue;
+				case  '!': tokenized[i] = token::bang;      continue;
+				case  '&': tokenized[i] = token::ampersand; continue;
+				case  '<': tokenized[i] = token::relation;  continue;
+				case  '>': tokenized[i] = token::relation;  continue;
+				case '\\': tokenized[i] = token::backslash; continue;
+				case  ' ': tokenized[i] = token::space;     continue;
 
 				case '+': [[fallthrough]];
 				case '-': 
@@ -172,8 +178,21 @@ namespace bmath::intern {
 				tokenized[curr_idx] = token::character;
 			}
 			//change token representing digits or 'i' occuring in names to token::character
-			else if (prev_tn == token::character && is_number_literal(curr_tn)) { 
+			else if (prev_tn == token::character && is_one_of<token::number, token::imag_unit>(curr_tn)) {
 				tokenized[curr_idx] = token::character;
+			}
+			//change decimal dot to token::number
+			else if (prev_tn == token::number && curr_tn == token::dot) {
+				tokenized[curr_idx] = token::number;
+			}
+			//change ellipses to token::character
+			else if (prev_tn == token::dot && curr_tn == token::dot) {
+				const std::size_t next_idx = curr_idx + 1u;
+				if (tokenized.size() <= next_idx || tokenized[next_idx] != token::dot) 
+					[[unlikely]] throw ParseFailure{ curr_idx, "dots are expected to come alone or in groups of three" };
+				tokenized[prev_idx] = token::character;
+				tokenized[curr_idx] = token::character;
+				tokenized[next_idx] = token::character;
 			}
 			//change token representing any of "e+-" occuring in numbers to token::number
 			else if (prev_tn == token::number && curr_ch == 'e' ||
@@ -182,7 +201,7 @@ namespace bmath::intern {
 				tokenized[curr_idx] = token::number;
 			}
 			//change unary minus to token::unary_minus
-			else if (is_one_of<token::open_grouping, token::equals, token::comma, token::bar>(last_nonspace_tn) && curr_ch == '-') {
+			else if (is_one_of<token::open_grouping, token::equals, token::comma, token::bar, token::dot>(last_nonspace_tn) && curr_ch == '-') {
 				tokenized[curr_idx] = token::unary_minus;
 			}
 			// if it is, change token::unary_minus to part of number
@@ -192,6 +211,20 @@ namespace bmath::intern {
 			//change token::number occuring after token::dollar to token:dollar
 			else if (prev_tn == token::dollar && curr_tn == token::number) {
 				tokenized[curr_idx] = token::dollar;
+			}
+
+			//replace relations and operators composed of two characters
+			else if (is_one_of<'=', '!', '>', '<'>(prev_ch) && curr_ch == '=') {
+				tokenized[prev_idx] = token::relation;
+				tokenized[curr_idx] = token::relation;
+			}
+			else if (prev_ch == '&' && curr_ch == '&') {
+				tokenized[prev_idx] = token::and_;
+				tokenized[curr_idx] = token::and_;
+			}
+			else if (prev_ch == '|' && curr_ch == '|') {
+				tokenized[prev_idx] = token::or_;
+				tokenized[curr_idx] = token::or_;
 			}
 		}
 

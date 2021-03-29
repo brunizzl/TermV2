@@ -5,6 +5,8 @@
 #include "stupidTests.hpp"
 #include "utility/typeDebug.hpp"
 
+#include "types.hpp"
+#include "io.hpp"
 
 /*
 TODO:
@@ -43,51 +45,26 @@ idea status:
 */
 
 
-using namespace bmath::intern;
-using namespace bmath::intern::pattern;
+//using namespace bmath::intern;
+//using namespace bmath::intern::pattern;
 
-void test_f(PnType t) {
-	using Options = EnumSwitch<PnType, 
-		meta::List<Variadic, NamedFn, Fn, MatchType, LambdaParam>,
-		meta::Seq<Literal::complex, Literal::symbol>
-	>;
-
-	std::cout << (unsigned)t << "\t=   ";
-	
-	switch (Options::decide(t)) {
-	case Options::is_type<Variadic>:
-		std::cout << "type Variadic\n";
-		break;
-	case Options::is_type<NamedFn>:
-		std::cout << "type NamedFn\n";
-		break;
-	case Options::is_type<Fn>:
-		std::cout << "type Fn\n";
-		break;
-	case Options::is_value<Literal::symbol>:
-		std::cout << "value symbol\n";
-		break;
-	case Options::is_value<Literal::complex>:
-		std::cout << "value complex\n";
-		break;
-	case Options::is_type<LambdaParam>:
-		std::cout << "type MatchType\n";
-		break;
-	case Options::is_type<MatchType>:
-		std::cout << "type MatchType\n";
-		break;
-	}
-}
+using namespace simp;
 
 int main()
 {
-	//for (int i = 0; i < (unsigned)PnType::COUNT; i++) {
-	//	test_f((PnType)i);
-	//}
-	//std::cout << "\n";
+	std::string name = "(\\x,y. x((\\z,x. x + z + y)))(b + c)";
+	auto parse = bmath::intern::ParseString(name);
+	parse.remove_space();
+	Store store;
+	std::vector<name_lookup::NameInfo> lambda_params;
+	auto head = build_literal(store, lambda_params, parse);
+
+	std::string res;
+	print::append_to_string(Ref(store, head), res);
+	std::cout << res << "\n";
 
 	//debug::enumerate_type();
-	debug::test_rechner();
+	//debug::test_rechner();
 	//test::stable_sort();
 	//test::meta_pattern();
 	//test::meta_pattern_2();

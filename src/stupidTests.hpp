@@ -212,7 +212,7 @@ namespace bmath::intern::debug {
 			{ "f, acc,                | foldl(f, acc, list{})      = acc" },
 
 			{ "'Y' = lambda(call($0, call($1, $1), call($0, call($1, $1))))" },
-			//{ "" },
+			//{ "'Y' = [\\f.[\\x.f(x(x))](\\x.f(x(x)))]" },
 		});
 
 
@@ -527,31 +527,6 @@ namespace bmath::intern::test {
 
 		std::cout << "final:\n";
 		print();
-	}
-
-	void term_array()
-	{
-		using StringArray = StoredVector<char, 16>;
-		using Store_T = BasicStore<StringArray>;
-		using Ref_T = BasicNodeRef<StringArray, Store_T>;
-	
-		static_assert(StringArray::min_capacity == 12u);
-		static_assert(StringArray::values_per_node == 16u);
-	
-		Store_T store;
-		const std::vector<std::string> inputs = { "haaaaaaaaaaaaaaaaaaaaaalllllllllllooooo", "du", "nudel", ":)" };
-		std::vector<std::size_t> positions;
-		for (const auto& input : inputs) {
-			positions.push_back(StringArray::build(store, input));
-		}
-	
-		for (std::size_t position : positions) {
-			for (char c : Ref_T(store, position)) {
-				std::cout << c;
-			}
-			std::cout << " ";
-		}
-		std::cout << "\n";
 	}
 
 	void meta_pattern()

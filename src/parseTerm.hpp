@@ -44,9 +44,17 @@ namespace bmath::intern {
 		constexpr Token hat = '^';
 		constexpr Token equals = '='; //only used as single char, not to compare
 		constexpr Token bar = '|';
+		constexpr Token bang = '!';
+		constexpr Token ampersand = '&';
 		constexpr Token colon = ':';
 		constexpr Token space = ' ';
 		constexpr Token imag_unit = 'i';
+		constexpr Token backslash = '\\';
+		constexpr Token dot = '.';
+
+		constexpr Token relation = 'r'; //represents "==", "!=", ">=", "<=", "<", ">"
+		constexpr Token and_ = 'a'; //represents "&&"
+		constexpr Token or_ = 'o'; //represents "||"
 	}
 
 	struct [[nodiscard]] TokenString :std::string
