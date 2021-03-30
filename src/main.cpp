@@ -47,11 +47,19 @@ idea status:
 
 //using namespace bmath::intern;
 //using namespace bmath::intern::pattern;
-
 int main()
 {
-	auto term = simp::Literal("(\\x y. x(\\z x. x * z + y))((true || c <= e) && !d)");
-	std::cout << term.to_string() << "\n";
+	const auto names = std::to_array<std::string>({
+		{ "(\\x y. x(\\z x. x * z + y))((true || c <= e) && !d)" },
+		{ "\\f.(\\x.f(x(x)))(\\x.f(x(x)))" },
+		{ "\\x.\\y. x + y" },
+		{ "\\x.(\\y. x + y)" },
+		{ "\\x. x + \\y. x + y" },
+	});
+	for (const auto& name : names) {
+		auto term = simp::Literal(name);
+		std::cout << name << "\n  ->  " << term.to_string() << "\n";
+	}
 
 	//debug::enumerate_type();
 	//debug::test_rechner();

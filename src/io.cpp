@@ -13,49 +13,55 @@ namespace simp {
 	{
 		using namespace bmath;
 		using namespace bmath::intern;
-
-		if (view.tokens.starts_with('\\')) {
-			const std::size_t dot_pos = find_first_of_skip_pars(view.tokens, token::dot);
-			if (dot_pos == TokenView::npos) [[unlikely]] throw ParseFailure{ view.offset + dot_pos, "found no dot in lambda" };
-			return Head{ dot_pos, Head::Type::lambda };
-		}
-		if (const std::size_t or_pos = find_first_of_skip_pars(view.tokens, token::or_); or_pos != TokenView::npos) {
-			return Head{ or_pos, Head::Type::or_ };
-		}
-		if (const std::size_t and_pos = find_first_of_skip_pars(view.tokens, token::and_); and_pos != TokenView::npos) {
-			return Head{ and_pos, Head::Type::and_ };
-		}
-		if (view.tokens.starts_with(token::bang)) {
-			return Head{ 0u, Head::Type::not_ };
-		}
-		if (const std::size_t relation_pos = find_first_of_skip_pars(view.tokens, token::relation); relation_pos != TokenView::npos) {
-			const Head::Type type = [&]() {
-				if (view.tokens[relation_pos + 1u] != token::relation) {
-					return view.chars[relation_pos] == '>' ? Head::Type::greater : Head::Type::smaller;
+		const std::size_t operator_pos = [](TokenView token_view) {
+			enum class Arity { unary, binary };
+			struct Operator { Token tok; Arity arity; };
+			//order by precedence (low to high)
+			constexpr auto operators = std::to_array<Operator>({
+				{ token::backslash,   Arity::unary  },
+				{ token::or_,         Arity::binary },
+				{ token::and_,        Arity::binary },
+				{ token::relation,    Arity::binary },
+				{ token::sum,         Arity::binary },
+				{ token::product,     Arity::binary },
+				{ token::hat,         Arity::binary },
+				{ token::bang,        Arity::unary  },
+				{ token::unary_minus, Arity::unary  },
+			});			
+			for (std::size_t i = 0u; i < operators.size(); i++) {
+				const std::size_t pos = find_first_of_skip_pars(token_view, operators[i].tok);
+				if (pos != TokenView::npos) {
+					if (operators[i].arity == Arity::binary || pos == 0u) {
+						return pos;
+					}
+					else { //found unary operation in middle of view -> return binary operation bevore it
+						token_view.remove_suffix(token_view.size() - pos);
+					}
 				}
-				switch (view.chars[relation_pos]) {
-				case '=': return Head::Type::equals;
-				case '!': return Head::Type::not_equals;
-				case '<': return Head::Type::smaller_eq;
-				case '>': return Head::Type::greater_eq;
+			}
+			return TokenView::npos;
+		}(view.tokens);
+		if (operator_pos != TokenView::npos) {
+			const Head::Type type = [&]() {
+				switch (view.chars[operator_pos]) {
+				case '\\': return Head::Type::lambda;
+				case '|':  return Head::Type::or_;
+				case '&':  return Head::Type::and_;
+				case '!':  return Head::Type::not_;
+				case '=':  return Head::Type::equals;
+				case '<':  return view.chars[operator_pos + 1u] == '=' ? Head::Type::smaller_eq : Head::Type::smaller;
+				case '>':  return view.chars[operator_pos + 1u] == '=' ? Head::Type::greater_eq : Head::Type::greater;
+				case '+':  return Head::Type::plus;
+				case '-':  return operator_pos == 0u ? Head::Type::negate : Head::Type::minus;
+				case '*':  return Head::Type::times;
+				case '/':  return Head::Type::divided;
+				case '^':  return Head::Type::power;
 				default:
 					assert(false);
-					return Head::Type::equals;
+					return Head::Type::symbol;
 				}
 			}();
-			return Head{ relation_pos, type };
-		}
-		if (const std::size_t sum_pos = find_first_of_skip_pars(view.tokens, token::sum); sum_pos != TokenView::npos) {
-			return Head{ sum_pos, view.chars[sum_pos] == '+' ? Head::Type::plus : Head::Type::minus };
-		}
-		if (view.tokens.starts_with(token::unary_minus)) {
-			return Head{ 0u, Head::Type::negate };
-		}
-		if (const std::size_t product_pos = find_first_of_skip_pars(view.tokens, token::product); product_pos != TokenView::npos) {
-			return Head{ product_pos, view.chars[product_pos] == '*' ? Head::Type::times : Head::Type::divided };
-		}
-		if (const std::size_t pow_pos = find_first_of_skip_pars(view.tokens, token::hat); pow_pos != TokenView::npos) {
-			return Head{ pow_pos, Head::Type::power };
+			return Head{ operator_pos, type };
 		}
 		{
 			const std::size_t not_number_pos = view.tokens.find_first_not_of(token::number);
@@ -280,8 +286,11 @@ namespace simp {
 			return TypedIdx(Call::build(store, subterms), MathType::call);
 		} break;
 		case Head::Type::lambda: {
-			const unsigned param_count = name_lookup::add_lambda_params(infos.lambda_params, view.steal_prefix(head.where));
-			assert(view.tokens.starts_with(token::dot));
+			const std::size_t dot_pos = view.tokens.find_first_of(token::dot);
+			if (dot_pos == TokenView::npos) [[unllikely]] {
+				throw ParseFailure { view.offset, "there is no valid lambda without the definition preceeded by a dot" };
+			}
+			const unsigned param_count = name_lookup::add_lambda_params(infos.lambda_params, view.steal_prefix(dot_pos));
 			view.remove_prefix(1u); //remove dot
 			const TypedIdx definition = simp::build(store, infos, view);
 			const std::size_t res_index = store.allocate_one();
@@ -379,7 +388,7 @@ namespace simp {
 				str.push_back(')');
 			} break;
 			case Type(MathType::lambda_param):
-				str.push_back('$');
+				str.push_back('%');
 				str.append(std::to_string(ref.index));
 				break;
 			default:
