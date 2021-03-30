@@ -131,6 +131,7 @@
     <ClCompile Include="src\parseTerm.cpp" />
     <ClCompile Include="src\pattern.cpp" />
     <ClCompile Include="src\transform.cpp" />
+    <ClCompile Include="src\types.cpp" />
     <ClCompile Include="src\utility\typeDebug.cpp" />
   </ItemGroup>
   <ItemGroup>

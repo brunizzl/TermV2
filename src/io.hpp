@@ -2,6 +2,7 @@
 
 #include <string_view>
 #include <string>
+#include <concepts>
 
 #include "types.hpp"
 #include "parseTerm.hpp"
@@ -51,23 +52,29 @@ namespace simp {
 			TypedIdx value;
 		};
 
-		struct NameInfos
+		struct PatternInfos
 		{
-			//name_infos can contain lambda parameter or the different types of match variables.
-			std::vector<NameInfo> lambda_infos = {};
-			std::vector<NameInfo> match_infos = {};
+			std::vector<NameInfo> lambda_params = {};
+			std::vector<NameInfo> match_variables = {};
 		};
+		struct LiteralInfos
+		{
+			std::vector<NameInfo> lambda_params = {};
+		};
+		template<typename I>
+		concept InfoLike = requires (I i) { {i.lambda_params} -> std::same_as<std::vector<NameInfo>&>; };
+		static_assert(InfoLike<PatternInfos> && InfoLike<LiteralInfos>);
 
 		//looks up global function names and the names contained in info (expected to refer to lambda parameters)
 		//unknown names are returned as symbols
-		TypedIdx build_literal_from_name(Store& store, const std::vector<NameInfo>& lambda_infos, std::string_view name);
+		TypedIdx build_symbol(Store& store, const LiteralInfos& lambda_params, bmath::intern::ParseView view);
 
 		//same as above, but unwraps unknown beginning and ending in single quotes
-		TypedIdx build_pattern_from_name(Store& store, const NameInfos& infos, std::string_view name);
+		TypedIdx build_symbol(Store& store, PatternInfos& infos, bmath::intern::ParseView view);
 
-		//expects argument list of lambda starting with '\\', adds names to infos, returns number of parameters added
-		unsigned add_lambda_params(std::vector<NameInfo>& lambda_infos, bmath::intern::ParseView params);
-
+		//expects params_view to be argument list of lambda starting with '\\', adds names to lambda_params
+		//returns number of parameters added
+		unsigned add_lambda_params(std::vector<NameInfo>& lambda_params, bmath::intern::ParseView params_view);
 	} //namespace name_lookup
 
 	template<bmath::intern::StoreLike Store_T>
@@ -81,7 +88,7 @@ namespace simp {
 	template<bmath::intern::StoreLike Store_T>
 	[[nodiscard]] TypedIdx build_negated(Store_T& store, const TypedIdx to_negate) noexcept
 	{
-		const TypedIdx minus_1 = build_value(store, -1.0);
+		const TypedIdx minus_1 = simp::build_value(store, -1.0);
 		const std::size_t result_idx = store.allocate_one();
 		new (&store.at(result_idx)) TermNode(Call{ fn::to_typed_idx(fn::Comm::product), minus_1, to_negate });
 		return TypedIdx(result_idx, MathType::call);
@@ -90,19 +97,20 @@ namespace simp {
 	template<bmath::intern::StoreLike Store_T>
 	[[nodiscard]] TypedIdx build_inverted(Store_T& store, const TypedIdx to_invert) noexcept
 	{
-		const TypedIdx minus_1 = build_value(store, -1.0);
+		const TypedIdx minus_1 = simp::build_value(store, -1.0);
 		const std::size_t result_idx = store.allocate_one();
 		new (&store.at(result_idx)) TermNode(Call{ fn::to_typed_idx(fn::FixedArity::pow), to_invert, minus_1 });
 		return TypedIdx(result_idx, MathType::call);
 	}
 
 	//returns the tree representation of view in store
-	//lambda_offset is the sum of all parameter counts of all parent lambdas (no outside lambdas -> lambda_offset == 0)
-	[[nodiscard]] TypedIdx build_literal(Store& store, std::vector<name_lookup::NameInfo>& lambda_infos, bmath::intern::ParseView view);
+	//lambda_offset is the sum of all parameter counts of all parent lambdas (no outside lambdas -> lambda_offset == 0)template<typename Infos>
+	template<name_lookup::InfoLike Infos>
+	[[nodiscard]] TypedIdx build(Store& store, Infos& infos, bmath::intern::ParseView view);
 
 	namespace print {
 
-		void append_to_string(const UnsaveRef ref, std::string& str);
+		void append_to_string(const UnsaveRef ref, std::string& str, const int parent_infixr);
 
 	} //namespace print
 

@@ -81,6 +81,10 @@ namespace bmath::intern {
 		//converts spaces to multiplication operator if appropriate
 		void allow_implicit_product() noexcept;
 
+		//changes token::space occuring between two token::character to token::character
+		//(hack to make parsing of lambdas easier)
+		void mark_char_space() noexcept;
+
 		//will not remove '\n' and the like, only ' ' -> assumes standardize_whitespace already run (done in constructor)
 		void remove_space() noexcept;
 
@@ -146,7 +150,7 @@ namespace bmath::intern {
 		}
 	};
 
-	TokenString tokenize(const std::string_view name);
+	TokenString tokenize(const std::string_view name);	
 
 	//searches from clsd_par to front, as term is constructed from the right.
 	std::size_t find_open_par(std::size_t clsd_par, const TokenView name) noexcept;

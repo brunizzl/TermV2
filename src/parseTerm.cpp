@@ -57,11 +57,31 @@ namespace bmath::intern {
 		}
 	} //allow_implicit_product
 
+	void ParseString::mark_char_space() noexcept
+	{
+		for (std::size_t i = 0; i + 2 < this->size(); i++) {
+			if (this->tokens[i] == token::character &&
+				this->tokens[i + 1] == token::space &&
+				this->tokens[i + 2] == token::character)
+			{
+				this->tokens[i + 1] = token::character;
+			}
+		}
+	} //mark_char_space
+
 	void ParseString::remove_space() noexcept
 	{
 		assert(this->tokens.size() == this->name.size());
-		this->name.erase(std::remove(this->name.begin(), this->name.end(), ' '), this->name.end());
-		this->tokens.erase(std::remove(this->tokens.begin(), this->tokens.end(), token::space), this->tokens.end());
+		std::size_t next_insert_pos = 0;
+		for (std::size_t i = 0; i < tokens.size(); i++) {
+			if (this->tokens[i] != token::space) {
+				this->name[next_insert_pos] = this->name[i];
+				this->tokens[next_insert_pos] = this->tokens[i];
+				next_insert_pos++;
+			}
+		}
+		this->name.erase(next_insert_pos);
+		this->tokens.erase(next_insert_pos);
 		assert(this->tokens.size() == this->name.size());
 	} //remove_space
 
@@ -158,8 +178,8 @@ namespace bmath::intern {
 		Token last_nonspace_tn = '\0';
 		for (std::size_t prev_idx = 0u; prev_idx + 1u < name.length(); prev_idx++) {
 			const std::size_t curr_idx = prev_idx + 1u;
-			const Token prev_tn = tokenized[prev_idx];
-			const Token curr_tn = tokenized[curr_idx];
+			Token& prev_tn = tokenized[prev_idx];
+			Token& curr_tn = tokenized[curr_idx];
 			const char prev_ch = name[prev_idx];
 			const char curr_ch = name[curr_idx];
 
@@ -171,60 +191,64 @@ namespace bmath::intern {
 
 			//change 'i' occuring at start of characters belonging to variables / function names to token::character
 			if (prev_tn == token::imag_unit && curr_tn == token::character) {
-				tokenized[prev_idx] = token::character;
+				prev_tn = token::character;
 			}
 			if (prev_tn == token::imag_unit && curr_tn == token::imag_unit) {
-				tokenized[prev_idx] = token::character;
-				tokenized[curr_idx] = token::character;
+				prev_tn = token::character;
+				curr_tn = token::character;
 			}
 			//change token representing digits or 'i' occuring in names to token::character
 			else if (prev_tn == token::character && is_one_of<token::number, token::imag_unit>(curr_tn)) {
-				tokenized[curr_idx] = token::character;
+				curr_tn = token::character;
 			}
 			//change decimal dot to token::number
 			else if (prev_tn == token::number && curr_tn == token::dot) {
-				tokenized[curr_idx] = token::number;
+				curr_tn = token::number;
 			}
 			//change ellipses to token::character
 			else if (prev_tn == token::dot && curr_tn == token::dot) {
 				const std::size_t next_idx = curr_idx + 1u;
 				if (tokenized.size() <= next_idx || tokenized[next_idx] != token::dot) 
 					[[unlikely]] throw ParseFailure{ curr_idx, "dots are expected to come alone or in groups of three" };
-				tokenized[prev_idx] = token::character;
-				tokenized[curr_idx] = token::character;
+				prev_tn = token::character;
+				curr_tn = token::character;
 				tokenized[next_idx] = token::character;
 			}
 			//change token representing any of "e+-" occuring in numbers to token::number
 			else if (prev_tn == token::number && curr_ch == 'e' ||
 			         prev_tn == token::number && prev_ch == 'e' && curr_tn == token::sum) 
 			{
-				tokenized[curr_idx] = token::number;
+				curr_tn = token::number;
 			}
 			//change unary minus to token::unary_minus
 			else if (is_one_of<token::open_grouping, token::equals, token::comma, token::bar, token::dot>(last_nonspace_tn) && curr_ch == '-') {
-				tokenized[curr_idx] = token::unary_minus;
+				curr_tn = token::unary_minus;
 			}
 			// if it is, change token::unary_minus to part of number
 			else if (prev_tn == token::unary_minus && curr_tn == token::number) {
-				tokenized[prev_idx] = token::number;
+				prev_tn = token::number;
 			}
 			//change token::number occuring after token::dollar to token:dollar
 			else if (prev_tn == token::dollar && curr_tn == token::number) {
-				tokenized[curr_idx] = token::dollar;
+				curr_tn = token::dollar;
+			}
+			//change token::dollar occuring in front of token::character to token::character
+			else if (prev_tn == token::dollar && curr_tn == token::character) {
+				prev_tn = token::character;
 			}
 
 			//replace relations and operators composed of two characters
 			else if (is_one_of<'=', '!', '>', '<'>(prev_ch) && curr_ch == '=') {
-				tokenized[prev_idx] = token::relation;
-				tokenized[curr_idx] = token::relation;
+				prev_tn = token::relation;
+				curr_tn = token::relation;
 			}
 			else if (prev_ch == '&' && curr_ch == '&') {
-				tokenized[prev_idx] = token::and_;
-				tokenized[curr_idx] = token::and_;
+				prev_tn = token::and_;
+				curr_tn = token::and_;
 			}
 			else if (prev_ch == '|' && curr_ch == '|') {
-				tokenized[prev_idx] = token::or_;
-				tokenized[curr_idx] = token::or_;
+				prev_tn = token::or_;
+				curr_tn = token::or_;
 			}
 		}
 

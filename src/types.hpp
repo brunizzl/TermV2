@@ -4,6 +4,7 @@
 #include <cassert>
 #include <array>
 #include <algorithm>
+#include <string>
 
 #include "utility/sumEnum.hpp"
 
@@ -20,7 +21,7 @@ namespace simp {
 	enum struct MathType
 	{
 		complex, 
-		boolean,
+		boolean, //can act as function of two parameters: true returns first, false second (can not be curried)
 		symbol, 
 		call,
 		buildin,
@@ -277,8 +278,8 @@ namespace simp {
 		constexpr const TypedIdx& function() const noexcept { return this->front(); }
 
 		//iterate over all but function
-		constexpr IdxRange range() noexcept { return { this->begin() + 1u, this->end() }; }
-		constexpr ConstIdxRange range() const noexcept { return { this->begin() + 1u, this->end() }; }
+		constexpr IdxRange parameters() noexcept { return { this->begin() + 1u, this->end() }; }
+		constexpr ConstIdxRange parameters() const noexcept { return { this->begin() + 1u, this->end() }; }
 	};
 
 	struct Lambda
@@ -378,5 +379,18 @@ namespace simp {
 	using Ref = bmath::intern::BasicSaveRef<Type, const Store>;
 	using UnsaveRef = bmath::intern::BasicUnsaveRef<Type, TermNode>;
 	using MutRef = bmath::intern::BasicSaveRef<Type, Store>;
+
+	//term without any pattern shenaniganz
+	struct Literal 
+	{
+		Store store;
+		TypedIdx head;
+
+		Literal(std::string name);
+
+		std::string to_string() const noexcept;
+
+		constexpr Ref ref() const noexcept { return Ref(this->store, this->head); }
+	};
 
 } //namespace simp

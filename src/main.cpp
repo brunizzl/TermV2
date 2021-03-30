@@ -48,20 +48,10 @@ idea status:
 //using namespace bmath::intern;
 //using namespace bmath::intern::pattern;
 
-using namespace simp;
-
 int main()
 {
-	std::string name = "(\\x,y. x((\\z,x. x + z + y)))(b + c)";
-	auto parse = bmath::intern::ParseString(name);
-	parse.remove_space();
-	Store store;
-	std::vector<name_lookup::NameInfo> lambda_params;
-	auto head = build_literal(store, lambda_params, parse);
-
-	std::string res;
-	print::append_to_string(Ref(store, head), res);
-	std::cout << res << "\n";
+	auto term = simp::Literal("(\\x y. x(\\z x. x * z + y))((true || c <= e) && !d)");
+	std::cout << term.to_string() << "\n";
 
 	//debug::enumerate_type();
 	//debug::test_rechner();
