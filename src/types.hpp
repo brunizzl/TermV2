@@ -20,7 +20,7 @@ namespace simp {
 
 	enum struct MathType
 	{
-		complex, 
+		complex, //only of MathType never expected as function in call
 		boolean, //can act as function of two parameters: true returns first, false second (can not be curried)
 		symbol, 
 		call,
@@ -47,8 +47,8 @@ namespace simp {
 
 	enum class MultiMatch { fst, snd, COUNT };
 
-	using MatchType = SumEnum<SingleMatch, ValueMatch, MultiMatch>;	
-	using Type = SumEnum<MathType, MatchType>;
+	using MatchType = SumEnum<MultiMatch, ValueMatch, SingleMatch>;
+	using Type = SumEnum<MatchType, MathType>;
 
 	using TypedIdx = BasicTypedIdx<Type>;
 
@@ -288,15 +288,6 @@ namespace simp {
 		std::uint32_t param_count;
 	}; 	
 
-	enum class Restriction
-	{
-		condition, //restricted by RestrictedSingleMatch::condition
-		nn1, //compact for "not negative one" (basically any, but the exact term "-1" will not be accepted)
-		no_val, //any, but Complex is forbidden    
-		symbol, //only Symbol is accepted
-		COUNT
-	};
-
 	enum class Domain
 	{
 		natural,   //{ 1, 2, 3, ... }
@@ -311,18 +302,21 @@ namespace simp {
 		COUNT
 	};
 
+	struct Unrestricted :bmath::intern::SingleSumEnumEntry {}; //used if SingleMatch is restricted only by a condition
+	using Restriction = SumEnum<Type, fn::Buildin, Domain, Unrestricted>;
+
 	struct RestrictedSingleMatch
 	{
 		Restriction restriction;
-		TypedIdx condition; //only pointig to something if this->restriction == Restriction::condition 
-		std::uint32_t match_data_index;
+		TypedIdx condition; //may be TypedIdx(), then there is no extra condition (else indexes in pattern)
+		std::uint32_t match_data_index; //indexes in MatchData::value_match_data
 	};
 
 	struct StrongValueMatch
 	{
-		TypedIdx match_index;
 		Domain domain;
-		std::uint32_t match_data_index;
+		TypedIdx match_index; //indexes in pattern
+		std::uint32_t match_data_index; //indexes in MatchData::value_match_data
 	};
 
 	//in a valid pattern every Variadic is preceeded by an element of this
@@ -391,6 +385,17 @@ namespace simp {
 		std::string to_string() const noexcept;
 
 		constexpr Ref ref() const noexcept { return Ref(this->store, this->head); }
+	}; //struct Literal
+
+	struct RewriteRule
+	{
+		Store store;
+		TypedIdx lhs_head; //start of <match side>
+		TypedIdx rhs_head; //start of <replace side>
+
+		RewriteRule(std::string name);
+
+		std::string to_string() const noexcept;
 	};
 
 } //namespace simp

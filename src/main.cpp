@@ -12,16 +12,13 @@
 TODO:
 
 important:
- - add RuleRef type grouping two pattern refs
- - make match and replace two distinct functions in RuleSet, allow caller to rematch
  - write version of tree::combine only checking changed tree parts
- - decide if garbage collection should be used (and if so implement it + change functions currently deallocating)
- - implement meta_pn::match function for variadic patterns
  - improve multi-match capabilities of NonComm variadic patterns (allow multiple multis in one NonComm instance)
- - achieve feature parity between compile time pattern and run time pattern (add value match to ct and conditions to rt)
- - NamedFn -> call(name, params...) and also Function -> call(type, params...)
+ - check for invalid tokens when parsing pattern and literal
 
 nice to have:
+ - implement meta_pn::match function for variadic patterns
+ - achieve feature parity between compile time pattern and run time pattern (add value match to ct and conditions to rt)
  - enable StupidBufferVector to handle non-trivial destructible types -> change name to BufferVector
  - automate error checking in stupidTests.hpp -> change name to tests.hpp
  - pattern::match::copy should copy in same store (again...)
@@ -49,16 +46,33 @@ idea status:
 //using namespace bmath::intern::pattern;
 int main()
 {
-	const auto names = std::to_array<std::string>({
-		{ "(\\x y. x(\\z x. x * z + y))((true || c <= e) && !d)" },
-		{ "\\f.(\\x.f(x(x)))(\\x.f(x(x)))" },
-		{ "\\x.\\y. x + y" },
-		{ "\\x.(\\y. x + y)" },
-		{ "\\x. x + \\y. x + y" },
-	});
-	for (const auto& name : names) {
-		auto term = simp::Literal(name);
-		std::cout << name << "\n  ->  " << term.to_string() << "\n";
+	{
+		const auto names = std::to_array<std::string>({
+			{ "(\\x y. x(\\z x. x * z + y))((true || c <= e) && !d)" },
+			{ "\\f.(\\x.f(x(x)))(\\x.f(x(x)))" },
+			{ "\\x.\\y. x + y" },
+			{ "\\x.(\\y. x + y)" },
+			{ "\\x. x + \\y. x + y" },
+			});
+		for (const auto& name : names) {
+			auto term = simp::Literal(name);
+			std::cout << name << "\n  ->  " << term.to_string() << "\n";
+		}
+		std::cout << "\n";
+	}
+	{
+		const auto names = std::to_array<std::string>({
+			{ "a^2 + 2*a*b + b^2 = (a + b)^2" },
+			{ "$a^2 + 2*$a*b + b^2 = ($a + b)^2" },
+			{ "list(x, xs...) = list(xs..., x)" },
+			{ "x*as... + x*bs... = x*(as... + bs...)" },
+			{ "x*as... + x*bs... = x*(as... + bs...)" },
+		});
+		for (const auto& name : names) {
+			auto rule = simp::RewriteRule(name);
+			std::cout << name << "\n  ->  " << rule.to_string() << "\n";
+		}
+		std::cout << "\n";
 	}
 
 	//debug::enumerate_type();
