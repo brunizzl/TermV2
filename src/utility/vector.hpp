@@ -3,6 +3,8 @@
 #include <span>
 #include <compare>
 
+#include "meta.hpp"
+
 namespace bmath::intern {
     
     
@@ -42,6 +44,8 @@ namespace bmath::intern {
 		}
 
 	public:
+		using value_type = Value_T;
+
 		constexpr std::size_t size() const noexcept { return this->size_; }
 		constexpr const Value_T* data() const noexcept { return this->data_; }
 		constexpr Value_T* data() noexcept { return this->data_; }
@@ -185,6 +189,8 @@ namespace bmath::intern {
 		Value_T data_[MaxSize];
 
 	public:
+		using value_type = Value_T;
+
 		constexpr std::size_t size() const noexcept { return this->size_; }
 		constexpr const Value_T* data() const noexcept { return this->data_; }
 		constexpr Value_T* data() noexcept { return this->data_; }
@@ -248,6 +254,12 @@ namespace bmath::intern {
 		constexpr friend bool operator==(const ShortVector&, const ShortVector&) = default;
 
 	}; //class ShortVector
+
+	template<typename V, typename T>
+	concept VectorOf = ContainerOf<V, T> && requires (V v, T t) {
+		{ v.push_back(t) };
+		{ v.pop_back() };
+	};
 
 
     

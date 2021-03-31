@@ -98,6 +98,7 @@ namespace bmath::intern {
 	concept ContainerOf = std::is_same_v<T, typename C::value_type> &&
 		requires (C c) { {c.begin()} -> IterOver<T>;
 			             {c.end()  } -> IterOver<T>;
+						 {c.size() } -> std::same_as<std::size_t>;
 	};
 
 	static_assert(ContainerOf<std::array<int, 3>, int>);

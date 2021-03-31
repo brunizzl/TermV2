@@ -7,6 +7,7 @@
 
 #include "types.hpp"
 #include "io.hpp"
+#include "rewrite.hpp"
 
 /*
 TODO:
@@ -42,8 +43,8 @@ idea status:
 */
 
 
-//using namespace bmath::intern;
-//using namespace bmath::intern::pattern;
+using namespace bmath::intern;
+using namespace bmath::intern::pattern;
 int main()
 {
 	{
@@ -53,10 +54,16 @@ int main()
 			{ "\\x.\\y. x + y" },
 			{ "\\x.(\\y. x + y)" },
 			{ "\\x. x + \\y. x + y" },
+			{ "\\x y z. x + y + z" },
+			{ "true(3, 4)" },
+			{ "false(3, 4)" },
+			{ "a + b + 3 + c + 1 + 6 + a" }
 			});
 		for (const auto& name : names) {
 			auto term = simp::Literal(name);
 			std::cout << name << "\n  ->  " << term.to_string() << "\n";
+			term.establish_order();
+			std::cout << "  ->  " << term.to_string() << "\n\n";
 		}
 		std::cout << "\n";
 	}
@@ -70,7 +77,7 @@ int main()
 		});
 		for (const auto& name : names) {
 			auto rule = simp::RewriteRule(name);
-			std::cout << name << "\n  ->  " << rule.to_string() << "\n";
+			std::cout << name << "\n  ->  " << rule.to_string() << "\n\n";
 		}
 		std::cout << "\n";
 	}

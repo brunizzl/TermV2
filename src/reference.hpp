@@ -34,8 +34,8 @@ namespace bmath::intern {
 		static constexpr bool is_const = std::is_const_v<Store_T>;
 
 		Store_T* const store; //actual pointer to have shallow constness
-		std::uint32_t const index;
-		Type_T const type;
+		std::uint32_t index;
+		Type_T type;
 
 		constexpr BasicTypedIdx<Type_T> typed_idx() const noexcept { return BasicTypedIdx<Type_T>(this->index, this->type); }
 

@@ -1,8 +1,9 @@
-#include "types.hpp"
+#include "rewrite.hpp"
 
 #include <string>
 #include <tuple>
 
+#include "algorithms.hpp"
 #include "parseTerm.hpp"
 #include "io.hpp"
 
@@ -27,18 +28,20 @@ namespace simp {
 	RewriteRule::RewriteRule(std::string name)
 	{
 		{ //value match is not yet functional
-			const auto [lhs, rhs] = parse::build_simple_rule(this->store, std::move(name));
+			const auto [lhs, rhs] = parse::raw_rule(this->store, std::move(name));
 			this->lhs_head = lhs;
 			this->rhs_head = rhs;
 		}
+		this->lhs_head = combine::combine_(this->lhs_mut_ref(), { .remove_unary_assoc = false }, 0);
+		this->rhs_head = combine::combine_(this->lhs_mut_ref(), { .remove_unary_assoc = false }, 0);
 	}
 
 	std::string RewriteRule::to_string() const noexcept
 	{
 		std::string res;
-		print::append_to_string(Ref(this->store, this->lhs_head), res, 0);
+		print::append_to_string(this->lhs_ref(), res, 0);
 		res.append(" = ");
-		print::append_to_string(Ref(this->store, this->rhs_head), res, 0);
+		print::append_to_string(this->rhs_ref(), res, 0);
 		return res;
 	}
 

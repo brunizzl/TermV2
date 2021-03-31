@@ -3,6 +3,7 @@
 #include <charconv>
 #include <limits>
 #include <concepts>
+#include <bitset>
 
 #include "utility/vector.hpp"
 #include "utility/misc.hpp"
@@ -310,11 +311,18 @@ namespace simp {
 		template TypedIdx build(Store&, name_lookup::LiteralInfos&, bmath::intern::ParseView);
 		template TypedIdx build(Store&, name_lookup::PatternInfos&, bmath::intern::ParseView);
 
-		std::pair<TypedIdx, TypedIdx> build_simple_rule(Store& store, std::string name)
+		std::pair<TypedIdx, TypedIdx> raw_rule(Store& store, std::string name)
 		{
 			using namespace bmath;
 			using namespace bmath::intern;
 			auto parse_str = ParseString(name);
+			constexpr char allowed[] = { token::character, token::number, token::open_grouping, 
+				token::clse_grouping, token::unary_minus, token::sum, token::product, token::comma, 
+				token::hat, token::equals, token::bar, token::bang, token::space, token::imag_unit, 
+				token::backslash, token::dot, token::relation, token::and_, token::or_, '\0' };
+			if (const std::size_t pos = parse_str.tokens.find_first_not_of(allowed); pos != TokenString::npos) [[unlikely]] {
+				throw ParseFailure{ pos, "unexpected character" };
+			}
 			parse_str.mark_char_space();
 			parse_str.remove_space();
 			auto [lhs_view, conditions_view, rhs_view] = [](ParseView view) {
@@ -356,7 +364,7 @@ namespace simp {
 			//bubble value match variables up as high as possible, make first occurence strong
 
 			return std::pair{ lhs_head, rhs_head };
-		} //build_simple_rule
+		} //raw_rule
 	} //namespace parse
 
 	namespace print {
@@ -417,6 +425,19 @@ namespace simp {
 						default:                              return nullptr;
 						}
 					}();
+				}
+				else if (function.get_type() == PatternBuildin{}) {
+					const auto data = variadic_meta_data(ref);
+					str.append("[");
+					str.append(fn::name_of(fn::from_typed_idx(function)));
+					str.append(", ");
+					str.append(std::to_string(data.match_data_idx));
+					str.append(", ");
+					str.append(std::bitset<32>(data.rematchable).to_string());
+					str.append(", ");
+					str.append(std::bitset<32>(data.always_after_prev).to_string());
+					str.append("]");
+					replacement_seperator = ", ";
 				}
 				if (!replacement_seperator) {
 					append_to_string(ref.new_at(function), str, max_infixr);

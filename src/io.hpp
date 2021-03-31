@@ -109,13 +109,13 @@ namespace simp {
 		template<name_lookup::InfoLike Infos>
 		[[nodiscard]] TypedIdx build(Store& store, Infos& infos, bmath::intern::ParseView view);
 
-		//has not adjusted the places of its ValueMatch variables yet
+		//has neighter activated multi match and variadic, nor value match
 		//build from a string of form "<match side> = <replace side>" 
 		//  or form "<match side> | <condition(s)> = <replace side>"
 		//   where <match side> and <replace side> are terms similar to Literal, but they may contain match variables
 		//         <condition(s)> is a comma separated listing of extra conditions and relations on single match variables
 		//note: <condition(s)> are incorporated into <match side> in constructor
-		std::pair<TypedIdx, TypedIdx> build_simple_rule(Store& store, std::string name);
+		std::pair<TypedIdx, TypedIdx> raw_rule(Store& store, std::string name);
 	} //namespace parse
 
 	namespace print {

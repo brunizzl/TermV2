@@ -18,7 +18,7 @@ namespace simp {
 	using bmath::intern::StoredVector;
 	using bmath::intern::BasicTypedIdx;
 
-	enum struct MathType
+	enum class MathType
 	{
 		complex, //only of MathType never expected as function in call
 		boolean, //can act as function of two parameters: true returns first, false second (can not be curried)
@@ -30,25 +30,40 @@ namespace simp {
 		COUNT
 	};
 
-	enum struct SingleMatch
+	//is present instead of MathType::buildin in a match side pattern node representing a Variadic
+	//acts exactly like MathType::buildin 
+	//  -> .get_index() of TypedIdx with .get_type() == PatternBuildin{} yields fn::Buildin value
+	//difference: if PatternBuildin is used, there is a VariadicMetaData allocated directly 
+	//  in front of call calling  PatternBuildin
+	//layout in store: [...][...][VariadicMetaData][Call][...][...] 
+	//  if the [Call] node has a .function() of type PatternBuildin
+	struct PatternBuildin :bmath::intern::SingleSumEnumEntry {}; 
+
+	enum class SingleMatch
 	{ 
 		restricted, 
 		unrestricted,
 		weak, 
 		COUNT 
 	};
-
-	enum struct ValueMatch
+	enum class ValueMatch
 	{
 		strong,
 		weak,
 		COUNT
 	};
-
-	enum class MultiMatch { fst, snd, COUNT };
-
+	enum class MultiMatch 
+	{ 
+		fst, 
+		snd, 
+		COUNT 
+	};
 	using MatchType = SumEnum<MultiMatch, ValueMatch, SingleMatch>;
-	using Type = SumEnum<MatchType, MathType>;
+
+	using PatternType = SumEnum<MatchType, PatternBuildin>;
+	using Type = SumEnum<PatternType, MathType>;
+
+	constexpr auto type_count = Type::COUNT;
 
 	using TypedIdx = BasicTypedIdx<Type>;
 
@@ -73,6 +88,7 @@ namespace simp {
 		case Type(ValueMatch::weak):          return false;
 		case Type(MultiMatch::fst):           return false;
 		case Type(MultiMatch::snd):           return false;
+		case Type(PatternBuildin{}):          return true;
 		default:
 			assert(false);
 			return false;
@@ -149,9 +165,14 @@ namespace simp {
 
 		using Buildin = SumEnum<Variadic, FixedArity>;
 
-		constexpr TypedIdx to_typed_idx(const Buildin type) noexcept { return TypedIdx(static_cast<unsigned>(type), MathType::buildin); }
-		constexpr Buildin from_typed_idx(const TypedIdx idx) noexcept {
-			assert(idx.get_type() == MathType::buildin);
+		inline constexpr TypedIdx to_typed_idx(const Buildin type) noexcept 
+		{ 
+			return TypedIdx(static_cast<unsigned>(type), MathType::buildin); 
+		}
+
+		inline constexpr Buildin from_typed_idx(const TypedIdx idx) noexcept 
+		{
+			assert(idx.get_type() == MathType::buildin || idx.get_type() == PatternBuildin{});
 			return Buildin(idx.get_index());
 		}
 
@@ -228,6 +249,11 @@ namespace simp {
 			[](auto lhs, auto rhs) { return lhs.type < rhs.type; }));
 		static_assert(variadic_table.size() == static_cast<unsigned>(Variadic::COUNT));
 
+		constexpr bool is_associative(const Variadic v) noexcept
+		{
+			return variadic_table[static_cast<unsigned>(v)].associative;
+		}
+
 		//returns Buildin::COUNT if no name was found
 		constexpr Buildin type_of(std::string_view name_) noexcept
 		{
@@ -262,12 +288,17 @@ namespace simp {
 	using Complex = std::complex<double>;
 	using Symbol = StoredVector<char>;
 
-	struct IdxRange { TypedIdx* start; TypedIdx* stop; };
-	struct ConstIdxRange { const TypedIdx* start; const TypedIdx *stop; };
-	constexpr TypedIdx* begin(const IdxRange& r) noexcept { return r.start; }
-	constexpr TypedIdx* end(const IdxRange& r) noexcept { return r.stop; }
-	constexpr const TypedIdx* begin(const ConstIdxRange& r) noexcept { return r.start; }
-	constexpr const TypedIdx* end(const ConstIdxRange& r) noexcept { return r.stop; }
+	template<typename T>
+	struct Range
+	{ 
+		T* start = nullptr; 
+		T* stop = nullptr;
+		constexpr T& operator[](const std::size_t offset) const noexcept { return *(start + offset); }
+		constexpr void remove_prefix(const std::size_t length) noexcept { start += std::min(length, stop - start); }
+		constexpr void remove_suffix(const std::size_t length) noexcept { stop -= std::min(length, stop - start); }
+		constexpr T* begin() const noexcept { return this->start; }
+		constexpr T* end() const noexcept { return this->stop; }
+	};
 
 	struct Call :StoredVector<TypedIdx>
 	{
@@ -278,8 +309,8 @@ namespace simp {
 		constexpr const TypedIdx& function() const noexcept { return this->front(); }
 
 		//iterate over all but function
-		constexpr IdxRange parameters() noexcept { return { this->begin() + 1u, this->end() }; }
-		constexpr ConstIdxRange parameters() const noexcept { return { this->begin() + 1u, this->end() }; }
+		constexpr Range<TypedIdx> parameters() noexcept { return { this->begin() + 1u, this->end() }; }
+		constexpr Range<const TypedIdx> parameters() const noexcept { return { this->begin() + 1u, this->end() }; }
 	};
 
 	struct Lambda
@@ -323,11 +354,8 @@ namespace simp {
 	struct VariadicMetaData
 	{
 		std::uint32_t match_data_idx = -1u; //indexes in MatchData::variadic_match_data
-
 		//bit i dertermines whether parameter i is rematchable
 		bmath::intern::BitSet32 rematchable = -1u;
-		//bit i determines whether parameter i is only matched with term directly succeding match of parameter i-1
-		bmath::intern::BitSet32 directly_after_prev = 0u;
 		//bit i determines whether parameter i is only matched with terms succeding match of parameter i-1
 		bmath::intern::BitSet32 always_after_prev = 0u;
 	};
@@ -374,28 +402,26 @@ namespace simp {
 	using UnsaveRef = bmath::intern::BasicUnsaveRef<Type, TermNode>;
 	using MutRef = bmath::intern::BasicSaveRef<Type, Store>;
 
-	//term without any pattern shenaniganz
-	struct Literal 
+	
+	constexpr auto begin(const MutRef& ref) noexcept
 	{
-		Store store;
-		TypedIdx head;
+		assert(ref.type == MathType::call);
+		using Iter = bmath::intern::detail_vector::SaveIterator<TypedIdx, sizeof(Complex), Store>;
+		return Iter{ *ref.store, ref.index, 0u };
+	}
 
-		Literal(std::string name);
-
-		std::string to_string() const noexcept;
-
-		constexpr Ref ref() const noexcept { return Ref(this->store, this->head); }
-	}; //struct Literal
-
-	struct RewriteRule
+	constexpr auto end(const MutRef& ref) noexcept
 	{
-		Store store;
-		TypedIdx lhs_head; //start of <match side>
-		TypedIdx rhs_head; //start of <replace side>
+		assert(ref.type == MathType::call);
+		return bmath::intern::detail_vector::SaveEndIndicator{ (std::uint32_t)ref->call.size() };
+	}
 
-		RewriteRule(std::string name);
 
-		std::string to_string() const noexcept;
-	};
+	constexpr VariadicMetaData variadic_meta_data(const UnsaveRef ref)
+	{
+		assert(ref.type == MathType::call);
+		assert(ref->call.function().get_type().is<PatternBuildin>());
+		return *(ref.ptr - 1);
+	}
 
 } //namespace simp
