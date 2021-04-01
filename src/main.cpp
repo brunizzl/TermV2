@@ -55,10 +55,15 @@ int main()
 			{ "\\x. x + \\y. x + y" },
 			{ "\\x.\\y.\\z. x + y + z" },
 			{ "true(3, 4)" },
-			{ "false(3, 4)" },
+			{ "false(3, 4^2)" },
 			{ "a + b + 3 + c + 1 + 6 + a" },
 			{ "(\\x y. x y)(a, 4)" },
 			{ "(\\x y z. list(x, y, z))(a, 4)" },
+			{ "(\\x y z. list(x, y, z))(a, 4, sin(x))" },
+			{ "(\\x y z. list(x, y, z))(a)(4)(sin(x))" },
+			{ "(\\x y z. list(x, y, z))(a)(4, sin(x))" },
+			{ "4^(0.5)" },
+			{ "2^(0.5)" },
 			});
 		for (const auto& name : names) {
 			auto term = simp::Literal(name);

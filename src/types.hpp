@@ -128,6 +128,7 @@ namespace simp {
 		//  function fn::eval specifies how to evaluate
 		enum class FixedArity
 		{
+			id, //unary identity function
 			pow,    //params[0] := base      params[1] := expo    
 			log,	//params[0] := base      params[1] := argument
 			sqrt,	//params[0] := argument
@@ -175,112 +176,6 @@ namespace simp {
 			assert(idx.get_type() == MathType::buildin || idx.get_type() == PatternBuildin{});
 			return Buildin(idx.get_index());
 		}
-
-		struct FixedArityProps
-		{
-			FixedArity type;
-			std::string_view name;
-			std::size_t arity;
-		};
-
-		constexpr auto fixed_arity_table = std::to_array<FixedArityProps>({
-			{ FixedArity::pow       , "pow"       , 2u },
-			{ FixedArity::log       , "log"       , 2u },
-			{ FixedArity::sqrt      , "sqrt"      , 1u },
-			{ FixedArity::exp       , "exp"       , 1u },
-			{ FixedArity::ln        , "ln"        , 1u },
-			{ FixedArity::sin       , "sin"       , 1u },
-			{ FixedArity::cos       , "cos"       , 1u },
-			{ FixedArity::tan       , "tan"       , 1u },
-			{ FixedArity::sinh      , "sinh"      , 1u },
-			{ FixedArity::cosh      , "cosh"      , 1u },
-			{ FixedArity::tanh      , "tanh"      , 1u },
-			{ FixedArity::asin      , "asin"      , 1u },
-			{ FixedArity::acos      , "acos"      , 1u },
-			{ FixedArity::atan      , "atan"      , 1u },
-			{ FixedArity::asinh     , "asinh"     , 1u },
-			{ FixedArity::acosh     , "acosh"     , 1u },
-			{ FixedArity::atanh     , "atanh"     , 1u },
-			{ FixedArity::abs       , "abs"       , 1u },
-			{ FixedArity::arg       , "arg"       , 1u },
-			{ FixedArity::re        , "re"        , 1u },
-			{ FixedArity::im        , "im"        , 1u },
-			{ FixedArity::force     , "force"     , 1u },
-			{ FixedArity::diff      , "diff"      , 2u },
-			{ FixedArity::pair      , "pair"      , 2u },
-			{ FixedArity::triple    , "triple"    , 3u },
-			{ FixedArity::not_      , "not"       , 1u },
-			{ FixedArity::eq        , "eq"        , 2u },
-			{ FixedArity::neq       , "neq"       , 2u },
-			{ FixedArity::greater   , "greater"   , 2u },
-			{ FixedArity::smaller   , "smaller"   , 2u },
-			{ FixedArity::greater_eq, "greater_eq", 2u },
-			{ FixedArity::smaller_eq, "smaller_eq", 2u },
-		});
-		static_assert(static_cast<unsigned>(fixed_arity_table.front().type) == 0u);
-		static_assert(std::is_sorted(fixed_arity_table.begin(), fixed_arity_table.end(),
-			[](auto lhs, auto rhs) { return lhs.type < rhs.type; }));
-		static_assert(fixed_arity_table.size() == static_cast<unsigned>(FixedArity::COUNT));
-
-		struct VariadicProps
-		{
-			Variadic type;
-			std::string_view name;
-			bool associative; //allows to flatten nested instances if true
-		};
-
-		constexpr auto variadic_table = std::to_array<VariadicProps>({
-			{ NonComm::list           , "list"        , false },
-			{ NonComm::ordered_sum    , "sum'"        , true  },
-			{ NonComm::ordered_product, "product'"    , true  },
-			{ Comm::sum               , "sum"         , true  },
-			{ Comm::product           , "product"     , true  },
-			{ Comm::and_              , "and"         , true  },
-			{ Comm::or_               , "or"          , true  },
-			{ Comm::multiset          , "multiset"    , false },
-			{ Comm::set               , "set"         , false },
-			{ Comm::union_            , "union"       , true  },
-			{ Comm::intersection      , "intersection", true  },
-			{ Comm::min               , "min"         , true  },
-			{ Comm::max               , "max"         , true  },
-		});
-		static_assert(static_cast<unsigned>(variadic_table.front().type) == 0u);
-		static_assert(std::is_sorted(variadic_table.begin(), variadic_table.end(),
-			[](auto lhs, auto rhs) { return lhs.type < rhs.type; }));
-		static_assert(variadic_table.size() == static_cast<unsigned>(Variadic::COUNT));
-
-		constexpr bool is_associative(const Variadic v) noexcept
-		{
-			return variadic_table[static_cast<unsigned>(v)].associative;
-		}
-
-		//returns Buildin::COUNT if no name was found
-		constexpr Buildin type_of(std::string_view name_) noexcept
-		{
-			if (const auto iter = std::find_if(fixed_arity_table.begin(), fixed_arity_table.end(),
-				[name_](const FixedArityProps& p) { return p.name == name_; });
-				iter != fixed_arity_table.end()) 
-			{
-				return iter->type;
-			}
-			if (const auto iter = std::find_if(variadic_table.begin(), variadic_table.end(),
-				[name_](const VariadicProps& p) { return p.name == name_; });
-				iter != variadic_table.end())
-			{
-				return iter->type;
-			}
-			return Buildin::COUNT;
-		}
-
-		constexpr std::string_view name_of(const Buildin type)
-		{
-			if (type.is<Variadic>()) {
-				return variadic_table[static_cast<unsigned>(type.to<Variadic>())].name;
-			}
-			assert(type.is<FixedArity>());
-			return fixed_arity_table[static_cast<unsigned>(type.to<FixedArity>())].name;
-		}
-
 	} //namespace fn
 
 
@@ -340,7 +235,7 @@ namespace simp {
 	};
 
 	struct Unrestricted :bmath::intern::SingleSumEnumEntry {}; //used if SingleMatch is restricted only by a condition
-	using Restriction = SumEnum<Type, fn::Buildin, Domain, Unrestricted>;
+	using Restriction = SumEnum<Type, fn::Buildin, Domain, Unrestricted>; //fn::BUildin is more precise MathType::call
 
 	struct RestrictedSingleMatch
 	{
@@ -434,5 +329,144 @@ namespace simp {
 		assert(ref->call.function().get_type().is<PatternBuildin>());
 		return *(ref.ptr - 1);
 	}
+
+
+
+	namespace fn {
+		struct FixedArityProps
+		{
+			FixedArity type;
+			std::string_view name;
+			std::size_t arity;
+			Restriction input_space = Unrestricted{}; //assumes all parameters to have the same restriction
+			Restriction result_space = Unrestricted{};
+		};
+
+		constexpr auto fixed_arity_table = std::to_array<FixedArityProps>({
+			{ FixedArity::id        , "id"        , 1u, Unrestricted{}   , Unrestricted{}     },
+			{ FixedArity::pow       , "pow"       , 2u, MathType::complex, MathType::complex  },
+			{ FixedArity::log       , "log"       , 2u, MathType::complex, MathType::complex  },
+			{ FixedArity::sqrt      , "sqrt"      , 1u, MathType::complex, MathType::complex  },
+			{ FixedArity::exp       , "exp"       , 1u, MathType::complex, MathType::complex  },
+			{ FixedArity::ln        , "ln"        , 1u, MathType::complex, MathType::complex  },
+			{ FixedArity::sin       , "sin"       , 1u, MathType::complex, MathType::complex  },
+			{ FixedArity::cos       , "cos"       , 1u, MathType::complex, MathType::complex  },
+			{ FixedArity::tan       , "tan"       , 1u, MathType::complex, MathType::complex  },
+			{ FixedArity::sinh      , "sinh"      , 1u, MathType::complex, MathType::complex  },
+			{ FixedArity::cosh      , "cosh"      , 1u, MathType::complex, MathType::complex  },
+			{ FixedArity::tanh      , "tanh"      , 1u, MathType::complex, MathType::complex  },
+			{ FixedArity::asin      , "asin"      , 1u, MathType::complex, MathType::complex  },
+			{ FixedArity::acos      , "acos"      , 1u, MathType::complex, MathType::complex  },
+			{ FixedArity::atan      , "atan"      , 1u, MathType::complex, MathType::complex  },
+			{ FixedArity::asinh     , "asinh"     , 1u, MathType::complex, MathType::complex  },
+			{ FixedArity::acosh     , "acosh"     , 1u, MathType::complex, MathType::complex  },
+			{ FixedArity::atanh     , "atanh"     , 1u, MathType::complex, MathType::complex  },
+			{ FixedArity::abs       , "abs"       , 1u, MathType::complex, MathType::complex  },
+			{ FixedArity::arg       , "arg"       , 1u, MathType::complex, MathType::complex  },
+			{ FixedArity::re        , "re"        , 1u, MathType::complex, MathType::complex  },
+			{ FixedArity::im        , "im"        , 1u, MathType::complex, MathType::complex  },
+			{ FixedArity::force     , "force"     , 1u, MathType::complex, MathType::complex  },
+			{ FixedArity::diff      , "diff"      , 2u, Unrestricted{}   , Unrestricted{}     },
+			{ FixedArity::pair      , "pair"      , 2u, Unrestricted{}   , FixedArity::pair   },
+			{ FixedArity::triple    , "triple"    , 3u, Unrestricted{}   , FixedArity::triple },
+			{ FixedArity::not_      , "not"       , 1u, MathType::boolean, MathType::boolean  },
+			{ FixedArity::eq        , "eq"        , 2u, Unrestricted{}   , MathType::boolean  },
+			{ FixedArity::neq       , "neq"       , 2u, Unrestricted{}   , MathType::boolean  },
+			{ FixedArity::greater   , "greater"   , 2u, Domain::real     , MathType::boolean  },
+			{ FixedArity::smaller   , "smaller"   , 2u, Domain::real     , MathType::boolean  },
+			{ FixedArity::greater_eq, "greater_eq", 2u, Domain::real     , MathType::boolean  },
+			{ FixedArity::smaller_eq, "smaller_eq", 2u, Domain::real     , MathType::boolean  },
+		});
+		static_assert(static_cast<unsigned>(fixed_arity_table.front().type) == 0u);
+		static_assert(std::is_sorted(fixed_arity_table.begin(), fixed_arity_table.end(),
+			[](auto lhs, auto rhs) { return lhs.type < rhs.type; }));
+		static_assert(fixed_arity_table.size() == static_cast<unsigned>(FixedArity::COUNT));
+
+		constexpr std::size_t arity(const FixedArity f) noexcept
+		{
+			return fixed_arity_table[static_cast<unsigned>(f)].arity;
+		}
+
+		struct VariadicProps
+		{
+			Variadic type;
+			std::string_view name;
+			bool associative; //allows to flatten nested instances if true
+			Restriction input_space = Unrestricted{}; //assumes all parameters to have the same restriction
+			Restriction result_space = Unrestricted{};
+		};
+
+		constexpr auto variadic_table = std::to_array<VariadicProps>({
+			{ NonComm::list           , "list"        , false, Unrestricted{}   , NonComm::list     },
+			{ NonComm::ordered_sum    , "sum'"        , true , Unrestricted{}   , Unrestricted{}    },
+			{ NonComm::ordered_product, "product'"    , true , Unrestricted{}   , Unrestricted{}    },
+			{ Comm::sum               , "sum"         , true , MathType::complex, MathType::complex },
+			{ Comm::product           , "product"     , true , MathType::complex, MathType::complex },
+			{ Comm::and_              , "and"         , true , MathType::boolean, MathType::boolean },
+			{ Comm::or_               , "or"          , true , MathType::boolean, MathType::boolean },
+			{ Comm::multiset          , "multiset"    , false, Unrestricted{}   , Comm::multiset    },
+			{ Comm::set               , "set"         , false, Unrestricted{}   , Comm::set         },
+			{ Comm::union_            , "union"       , true , Comm::set        , Comm::set         },
+			{ Comm::intersection      , "intersection", true , Comm::set        , Comm::set         },
+			{ Comm::min               , "min"         , true , Domain::real     , Domain::real      },
+			{ Comm::max               , "max"         , true , Domain::real     , Domain::real      },
+		});
+		static_assert(static_cast<unsigned>(variadic_table.front().type) == 0u);
+		static_assert(std::is_sorted(variadic_table.begin(), variadic_table.end(),
+			[](auto lhs, auto rhs) { return lhs.type < rhs.type; }));
+		static_assert(variadic_table.size() == static_cast<unsigned>(Variadic::COUNT));
+
+		constexpr bool is_associative(const Variadic v) noexcept
+		{
+			return variadic_table[static_cast<unsigned>(v)].associative;
+		}
+
+		//returns Buildin::COUNT if no name was found
+		constexpr Buildin type_of(std::string_view name_) noexcept
+		{
+			if (const auto iter = std::find_if(fixed_arity_table.begin(), fixed_arity_table.end(),
+				[name_](const FixedArityProps& p) { return p.name == name_; });
+				iter != fixed_arity_table.end())
+			{
+				return iter->type;
+			}
+			if (const auto iter = std::find_if(variadic_table.begin(), variadic_table.end(),
+				[name_](const VariadicProps& p) { return p.name == name_; });
+				iter != variadic_table.end())
+			{
+				return iter->type;
+			}
+			return Buildin::COUNT;
+		}
+
+		constexpr std::string_view name_of(const Buildin f)
+		{
+			if (f.is<Variadic>()) {
+				return variadic_table[static_cast<unsigned>(f.to<Variadic>())].name;
+			}
+			assert(f.is<FixedArity>());
+			return fixed_arity_table[static_cast<unsigned>(f.to<FixedArity>())].name;
+		}
+
+		constexpr Restriction result_space(const Buildin f)
+		{
+			if (f.is<Variadic>()) {
+				return variadic_table[static_cast<unsigned>(f.to<Variadic>())].result_space;
+			}
+			assert(f.is<FixedArity>());
+			return fixed_arity_table[static_cast<unsigned>(f.to<FixedArity>())].result_space;
+		}
+
+		constexpr Restriction input_space(const Buildin f)
+		{
+			if (f.is<Variadic>()) {
+				return variadic_table[static_cast<unsigned>(f.to<Variadic>())].input_space;
+			}
+			assert(f.is<FixedArity>());
+			return fixed_arity_table[static_cast<unsigned>(f.to<FixedArity>())].input_space;
+		}
+	} //namespace fn
+
+
 
 } //namespace simp

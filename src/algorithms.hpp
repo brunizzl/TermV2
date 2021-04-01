@@ -4,6 +4,11 @@
 
 namespace simp {
 
+    bool in_domain(const Complex& nr, const Domain domain);
+
+    //only interested in final results -> a function call guaranteed to return something meeting restr results in false
+    bool meets_restriction(const UnsaveRef ref, const Restriction restr);
+
     namespace combine {
         struct Options 
         {

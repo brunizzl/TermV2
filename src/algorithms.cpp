@@ -1,6 +1,7 @@
 #include "algorithms.hpp"
 
 #include <tuple>
+#include <cfenv>
 
 #include "utility/bit.hpp"
 #include "utility/vector.hpp"
@@ -13,6 +14,61 @@
 
 
 namespace simp {
+
+    bool in_domain(const Complex& nr, const Domain domain)
+    {
+        constexpr double max_save_int = 9007199254740991; //== 2^53 - 1, largest integer explicitly stored in double
+
+        const double re = nr.real();
+        const double im = nr.imag();
+
+        bool accept = true;
+        switch (domain) {
+        case Domain::natural:   accept &= re > 0.0; [[fallthrough]];
+        case Domain::natural_0: accept &= re >= 0.0; [[fallthrough]];
+        case Domain::integer:   accept &= re - std::int64_t(re) == 0.0;
+            accept &= (std::abs(re) <= max_save_int); [[fallthrough]];
+        case Domain::real:      accept &= im == 0.0; [[fallthrough]];
+        case Domain::complex:
+            return accept;
+
+        case Domain::negative:      return re < 0.0 && im == 0.0;
+        case Domain::positive:      return re > 0.0 && im == 0.0;
+        case Domain::not_negative:  return re >= 0.0 && im == 0.0;
+        case Domain::not_positive:  return re <= 0.0 && im == 0.0;
+        default:
+            assert(false);
+            BMATH_UNREACHABLE;
+        }
+    } //in_domain
+
+    bool meets_restriction(const UnsaveRef ref, const Restriction restr)
+    {
+        using namespace bmath::intern;
+        if (restr.is<Unrestricted>()) {
+            return true;
+        }
+        else if (restr.is<Type>()) {
+            return ref.type == restr;
+        }
+        else if (restr.is<fn::Buildin>()) {
+            if (ref.type != MathType::call) {
+                return false;
+            }
+            const TypedIdx function = ref->call.function();
+            return fn::to_typed_idx(restr.to<fn::Buildin>()) == function;
+        }
+        else {
+            assert(restr.is<Domain>());
+            if (ref.type != MathType::complex) {
+                return false;
+            }
+            return in_domain(*ref, restr.to<Domain>());
+        }
+    } //meets_restriction
+
+
+
     namespace combine {
 
         void BMATH_FORCE_INLINE merge_associative_calls(MutRef& ref, const TypedIdx function)
@@ -47,9 +103,81 @@ namespace simp {
             }
         } //merge_associative
 
-        TypedIdx BMATH_FORCE_INLINE eval_buildin(const MutRef ref, const TypedIdx function, const bool exact)
+        TypedIdx BMATH_FORCE_INLINE eval_buildin(const MutRef& ref, const TypedIdx function, const bool exact)
         {
-            //TODO
+            using namespace fn;
+            using namespace bmath::intern;
+            assert(function.get_type() == MathType::buildin);
+            assert(ref.type == MathType::call);
+            const Call& call = *ref;
+            assert(call.function() == function);
+            const Buildin f = from_typed_idx(function);
+            if (const Restriction f_input = input_space(f); f_input != Unrestricted{}) {
+                for (const TypedIdx param : call.parameters()) {
+                    if (!meets_restriction(ref.new_at(param), f_input)) {
+                        return TypedIdx();
+                    }
+                }
+            }
+            if (f.is<FixedArity>()) {
+                const FixedArity fixed_f = f.to<FixedArity>();
+                const std::size_t f_arity = arity(fixed_f);
+                if (f_arity + 1u != call.size()) [[unlikely]]
+                    throw "wrong number of parameters in function call";
+
+                const auto compute_and_replace = [&](auto operate) -> TypedIdx {
+                    std::feclearexcept(FE_ALL_EXCEPT);
+                    const Complex result = operate();
+                    if (!exact || !std::fetestexcept(FE_ALL_EXCEPT)) { //operation was successfull
+                        //free all but last parameter of call
+                        for (std::size_t i = 1; i < f_arity; i++) {
+                            assert(call[i].get_type() == MathType::complex);
+                            ref.store->free_one(call[i].get_index());
+                        }
+                        //store result in last parameter
+                        const TypedIdx result_idx = call[f_arity];
+                        assert(result_idx.get_type() == MathType::complex);
+                        ref.store->at(result_idx.get_index()) = result;
+                        Call::free(*ref.store, ref.index); //free call itself
+                        return result_idx;
+                    }
+                    return TypedIdx();
+                };
+                //parameters are now guaranteed to meet restriction given in fn::fixed_arity_table
+                //also parameter cout is guaranteed to be correct
+                switch (fixed_f) {
+
+                case FixedArity::id: {
+                    const TypedIdx res = call[1];
+                    Call::free(*ref.store, ref.index);
+                    return res;
+                } break;
+                case FixedArity::pow: {
+                    return compute_and_replace([&] {
+                        const Complex& base = *ref.new_at(call[1]);
+                        const Complex& expo = *ref.new_at(call[2]);
+                        if (expo == 0.5) {
+                            return (base.imag() == 0.0 && base.real() >= 0.0) ?
+                                std::sqrt(base.real()) :
+                                std::sqrt(base);
+                        }
+                        else if (in_domain(expo, Domain::natural_0)) {
+                            const std::size_t nat_expo = expo.real();
+                            return nat_pow(base, nat_expo);
+                        }
+                        else {
+                            return std::pow(base, expo);
+                        }
+                    });
+                } break;
+                }
+            } //end fixed arity
+            else {
+                assert(f.is<Variadic>());
+                switch (f.to<Variadic>()) {
+
+                }
+            } //end variadic
             return TypedIdx();
         } //eval_buildin
 
@@ -151,6 +279,7 @@ namespace simp {
                         merge_associative_calls(ref, function);
                     }
                     if (options.eval_values) {
+                        //if the function could be fully evaluated, the following steps can no longer be executedd -> return
                         const TypedIdx res = eval_buildin(ref, function, options.exact);
                         if (res != TypedIdx()) {
                             return res;
