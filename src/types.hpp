@@ -317,6 +317,12 @@ namespace simp {
 	{
 		TypedIdx definition;
 		std::uint32_t param_count;
+		//if a lambda is transparent, there is the possibility, that lambdas in the ancestry of this
+		//  "own" variables in this, meaning calling the ancestor lambda will effect his definition.
+		//the outermost lambda is never transparent.
+		//in the normal form, all lambdas but the outermost one are transparent, otherwise matching in such lambdas
+		//  is undefined behavior.
+		bool transparent;
 	}; 	
 
 	enum class Domain

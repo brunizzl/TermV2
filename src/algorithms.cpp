@@ -52,10 +52,31 @@ namespace simp {
             return TypedIdx();
         } //eval_buildin
 
-        void BMATH_FORCE_INLINE eval_lambda(MutRef& lambda_call, const unsigned lambda_param_offset)
+        void BMATH_FORCE_INLINE eval_lambda(MutRef& lambda_call)
         {
             //TODO
         } //eval_lambda
+
+        
+        [[nodiscard]] TypedIdx add_offset(const MutRef ref, const unsigned lambda_param_offset)
+        {
+            if (ref.type == MathType::call) {
+                for (TypedIdx& subterm : ref) {
+                    subterm = add_offset(ref.new_at(subterm), lambda_param_offset);
+                }
+            }
+            else if (ref.type == MathType::lambda) {
+                Lambda& lambda = *ref;
+                if (lambda.transparent) {
+                    lambda.definition = add_offset(ref.new_at(lambda.definition), lambda_param_offset);
+                }
+            }
+            else if (ref.type == MathType::lambda_param) {
+                const std::uint32_t new_index = ref.index + lambda_param_offset;
+                return TypedIdx(new_index, MathType::lambda_param);
+            }
+            return ref.typed_idx();
+        }
 
         TypedIdx combine_(MutRef ref, const Options options, const unsigned lambda_param_offset)
         {
@@ -95,7 +116,7 @@ namespace simp {
                 } break;
                 case Type(MathType::lambda): {
                     if (options.eval_lambdas) {
-                        eval_lambda(ref, lambda_param_offset);
+                        eval_lambda(ref);
                     }
                 } break;
                 case Type(MathType::boolean): {
@@ -121,25 +142,25 @@ namespace simp {
                 }
             } //end ref.type == MathType::call
             else if (ref.type == MathType::lambda) {
-                if (options.recurse) {
-                    const Lambda lambda = *ref;
-                    const unsigned new_offset = lambda_param_offset + lambda.param_count;
-                    ref->lambda.definition = combine_(ref.new_at(lambda.definition), options, new_offset);
-                }
-                if (options.eval_lambdas) {
-                    Lambda lambda = *ref;
-                    while (lambda.definition.get_type() == MathType::lambda) {
+                if (options.normalize_lambdas) {
+                    Lambda& lambda = *ref;
+                    if (!lambda.transparent && lambda_param_offset != 0u) {
+                        lambda.transparent = true;
+                        lambda.definition = add_offset(ref.new_at(lambda.definition), lambda_param_offset);
+                    }
+                    if (lambda.definition.get_type() == MathType::lambda) {
                         const MutRef nested = ref.new_at(lambda.definition);
                         lambda.param_count += nested->lambda.param_count;
                         lambda.definition = nested->lambda.definition;
-                        *ref = lambda;
                         ref.store->free_one(nested.index);
                     }
-                    if (lambda.param_count == 0u) {
-                        ref.store->free_one(ref.index);
-                        ref.index = lambda.definition.get_index(); //possible, because lambda is value
-                        ref.type = lambda.definition.get_type();   //possible, because lambda is value
-                    }
+                }
+                if (options.recurse) {
+                    const Lambda lambda = *ref;
+                    const unsigned new_offset = lambda.transparent ?
+                        lambda.param_count + lambda_param_offset :
+                        lambda.param_count;
+                    ref->lambda.definition = combine_(ref.new_at(lambda.definition), options, new_offset);
                 }
             } //end ref.type == MathType::lambda
             return ref.typed_idx();

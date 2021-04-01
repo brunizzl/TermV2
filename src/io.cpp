@@ -192,6 +192,8 @@ namespace simp {
 					const std::string_view name = params_view.steal_prefix(space).to_string_view();
 					if (!mundane_name(name)) [[unlikely]]
 						throw bmath::ParseFailure{ params_view.offset, "we name lambda parameters less exiting around here" };
+					if (!name.size()) [[unlikely]]
+						throw bmath::ParseFailure{ params_view.offset, "there is no reason for nullary lambdas in a purely functional language" };
 					lambda_params.push_back({ name, TypedIdx(lambda_params.size(), MathType::lambda_param) });
 					param_count++;
 				}
@@ -291,6 +293,7 @@ namespace simp {
 				return TypedIdx(Call::build(store, subterms), MathType::call);
 			} break;
 			case Head::Type::lambda: {
+				const bool outermost_lambda = infos.lambda_params.size() == 0u;
 				const std::size_t dot_pos = view.tokens.find_first_of(token::dot);
 				if (dot_pos == TokenView::npos) [[unllikely]] {
 					throw ParseFailure { view.offset, "there is no valid lambda without the definition preceeded by a dot" };
@@ -299,7 +302,7 @@ namespace simp {
 				view.remove_prefix(1u); //remove dot
 				const TypedIdx definition = parse::build(store, infos, view);
 				const std::size_t res_index = store.allocate_one();
-				store.at(res_index) = Lambda{ definition, param_count };
+				store.at(res_index) = Lambda{ definition, param_count, !outermost_lambda };
 				infos.lambda_params.resize(infos.lambda_params.size() - param_count); //remove own names again
 				return TypedIdx(res_index, MathType::lambda);
 			} break;
