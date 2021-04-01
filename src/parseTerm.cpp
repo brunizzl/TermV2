@@ -39,7 +39,7 @@ namespace bmath::intern {
 		this->tokens = tokenize(name);
 	}
 
-	void ParseString::allow_implicit_product() noexcept
+	void ParseString::allow_implicit_product(const Token replace_tk, const char replace_ch) noexcept
 	{
 		assert(this->tokens.length() == this->name.length());
 		for (std::size_t prev_idx = 0; prev_idx + 2 < this->tokens.length(); prev_idx++) {
@@ -51,8 +51,8 @@ namespace bmath::intern {
 				is_one_of<token::character, token::number, token::imag_unit, token::open_grouping, token::dollar>(next) && 
 				curr == token::space) 
 			{
-				this->tokens[curr_idx] = token::product;
-				this->name[curr_idx] = '*';
+				this->tokens[curr_idx] = replace_tk;
+				this->name[curr_idx] =  replace_ch;
 			}
 		}
 	} //allow_implicit_product

@@ -11,8 +11,9 @@ namespace simp {
 
 	simp::Literal::Literal(std::string name)
 	{
-		auto parse_str = bmath::intern::ParseString(name);
-		parse_str.mark_char_space();
+		using namespace bmath::intern;
+		auto parse_str = ParseString(name);
+		parse_str.allow_implicit_product(token::sticky_space, ' ');
 		parse_str.remove_space();
 		parse::name_lookup::LiteralInfos lambda_params;
 		this->head = parse::build(this->store, lambda_params, parse_str);
@@ -27,13 +28,13 @@ namespace simp {
 
 	RewriteRule::RewriteRule(std::string name)
 	{
-		{ //value match is not yet functional
+		{
 			const auto [lhs, rhs] = parse::raw_rule(this->store, std::move(name));
 			this->lhs_head = lhs;
 			this->rhs_head = rhs;
 		}
-		this->lhs_head = combine::combine_(this->lhs_mut_ref(), { .remove_unary_assoc = false }, 0);
-		this->rhs_head = combine::combine_(this->lhs_mut_ref(), { .remove_unary_assoc = false }, 0);
+		this->lhs_head = combine::combine_(this->lhs_mut_ref(), {}, 0);
+		this->rhs_head = combine::combine_(this->rhs_mut_ref(), { .eval_lambdas = false, .remove_unary_assoc = false }, 0);
 	}
 
 	std::string RewriteRule::to_string() const noexcept

@@ -2,6 +2,7 @@
 
 #include <tuple>
 
+#include "utility/bit.hpp"
 #include "utility/vector.hpp"
 #include "utility/misc.hpp"
 
@@ -52,9 +53,62 @@ namespace simp {
             return TypedIdx();
         } //eval_buildin
 
-        void BMATH_FORCE_INLINE eval_lambda(MutRef& lambda_call)
+        [[nodiscard]] TypedIdx replace_lambda_params(const MutRef ref, const bmath::intern::StupidBufferVector<TypedIdx, 16>& params, 
+            bmath::intern::BitVector& used_params)
         {
-            //TODO
+            if (ref.type == MathType::call) {
+                const auto stop = end(ref);
+                for (auto iter = begin(ref); iter != stop; ++iter) {
+                    *iter = replace_lambda_params(ref.new_at(*iter), params, used_params);
+                }
+            }
+            else if (ref.type == MathType::lambda) {
+                ref->lambda.definition = replace_lambda_params(ref.new_at(ref->lambda.definition), params, used_params);
+            }
+            else if (ref.type == MathType::lambda_param) {
+                if (ref.index >= params.size()) { 
+                    //function is not fully evaluated but only curried -> new param index = old - (number evaluated)
+                    return TypedIdx(ref.index - params.size(), MathType::lambda_param);
+                }
+                else if (used_params.test(ref.index)) {
+                    return copy_tree(ref.new_at(params[ref.index]), *ref.store);
+                }
+                else {
+                    used_params.set(ref.index);
+                    return params[ref.index];
+                }
+            }
+            return ref.typed_idx();
+        } //replace_lambda_params
+
+        [[nodiscard]] TypedIdx BMATH_FORCE_INLINE eval_lambda(const MutRef ref)
+        {
+            assert(ref.type == MathType::call);
+            const Call& call = *ref;
+            const MutRef lambda = ref.new_at(call.function());
+            assert(lambda.type == MathType::lambda);
+            bmath::intern::StupidBufferVector<TypedIdx, 16> params;
+            for (const TypedIdx param : call.parameters()) {
+                params.push_back(param);
+            }
+            const std::uint32_t lambda_param_count = lambda->lambda.param_count;
+            if (lambda_param_count < params.size()) [[unlikely]] {
+                throw "too many arguments for called lambda";
+            }
+            Call::free(*ref.store, ref.index); //only free call itself, neighter lambda nor lambda parameters
+            bmath::intern::BitVector used_params(params.size());
+            if (lambda_param_count == params.size()) {
+                const TypedIdx definition = lambda->lambda.definition;
+                ref.store->free_one(lambda.index);
+                return replace_lambda_params(ref.new_at(definition), params, used_params);
+            }
+            else { //lambda is curried -> keep remaining lambda as lambda
+                assert(lambda_param_count > params.size());
+                lambda->lambda.definition = 
+                    replace_lambda_params(ref.new_at(lambda->lambda.definition), params, used_params);
+                lambda->lambda.param_count -= params.size();
+                return lambda.typed_idx();
+            }
         } //eval_lambda
 
         
@@ -116,7 +170,7 @@ namespace simp {
                 } break;
                 case Type(MathType::lambda): {
                     if (options.eval_lambdas) {
-                        eval_lambda(ref);
+                        return eval_lambda(ref);
                     }
                 } break;
                 case Type(MathType::boolean): {
@@ -124,7 +178,7 @@ namespace simp {
                     if (call.size() != 3u) [[unlikely]] {
                         throw "boolean may only be called as binary function";
                     }
-                    if (options.eval_lambdas) {
+                    if (options.eval_values || options.eval_lambdas) {
                         const TypedIdx res = [&]() {
                             if (function.get_index()) {
                                 free_tree(ref.new_at(call[2]));
@@ -142,6 +196,15 @@ namespace simp {
                 }
             } //end ref.type == MathType::call
             else if (ref.type == MathType::lambda) {
+                assert(!ref->lambda.transparent || lambda_param_offset != 0u && 
+                    "no top-level lambda may be transparent!"); 
+                if (options.recurse) {
+                    const Lambda lambda = *ref;
+                    const unsigned new_offset = lambda.transparent ?
+                        lambda.param_count + lambda_param_offset :
+                        lambda.param_count;
+                    ref->lambda.definition = combine_(ref.new_at(lambda.definition), options, new_offset);
+                }
                 if (options.normalize_lambdas) {
                     Lambda& lambda = *ref;
                     if (!lambda.transparent && lambda_param_offset != 0u) {
@@ -149,18 +212,13 @@ namespace simp {
                         lambda.definition = add_offset(ref.new_at(lambda.definition), lambda_param_offset);
                     }
                     if (lambda.definition.get_type() == MathType::lambda) {
-                        const MutRef nested = ref.new_at(lambda.definition);
-                        lambda.param_count += nested->lambda.param_count;
+                        //relies on this beeing transparent
+                        const UnsaveRef nested = ref.new_at(lambda.definition);
                         lambda.definition = nested->lambda.definition;
+                        lambda.param_count += nested->lambda.param_count;
+                        lambda.transparent = nested->lambda.transparent;
                         ref.store->free_one(nested.index);
                     }
-                }
-                if (options.recurse) {
-                    const Lambda lambda = *ref;
-                    const unsigned new_offset = lambda.transparent ?
-                        lambda.param_count + lambda_param_offset :
-                        lambda.param_count;
-                    ref->lambda.definition = combine_(ref.new_at(lambda.definition), options, new_offset);
                 }
             } //end ref.type == MathType::lambda
             return ref.typed_idx();
@@ -206,6 +264,71 @@ namespace simp {
             assert(!is_node(ref.type));
         }
     } //free_tree
+
+    TypedIdx copy_tree(const Ref src_ref, Store& dst_store)
+    {
+        if (!is_node(src_ref.type)) {
+            return src_ref.typed_idx();
+        }
+
+        const auto insert_node = [&](const TermNode& n, Type type) {
+            const std::size_t dst_index = dst_store.allocate_one();
+            dst_store.at(dst_index) = n; 
+            return TypedIdx(dst_index, type);            
+        };
+
+        switch (src_ref.type) {
+        case Type(MathType::complex):
+            return insert_node(*src_ref, src_ref.type);
+        case Type(MathType::symbol): {
+            const Symbol& src_var = *src_ref;
+            const auto src_name = std::string(src_var.data(), src_var.size());
+            const std::size_t dst_index = Symbol::build(dst_store, src_name);
+            return TypedIdx(dst_index, src_ref.type);
+        } break;
+        case Type(MathType::call): {
+            bmath::intern::StupidBufferVector<TypedIdx, 16> dst_subterms;
+            const auto stop = end(src_ref);
+            for (auto iter = begin(src_ref); iter != stop; ++iter) {
+                dst_subterms.push_back(copy_tree(src_ref.new_at(*iter), dst_store));
+            }
+            if (dst_subterms.front().get_type() == PatternBuildin{}) { //also copy variadic metadata
+                const std::size_t call_capacity = Call::smallest_fit_capacity(dst_subterms.size());
+                const std::size_t nr_call_nodes = Call::_node_count(call_capacity);
+
+                const std::size_t dst_index = dst_store.allocate_n(1u + nr_call_nodes) + 1u;
+                dst_store.at(dst_index - 1u) = variadic_meta_data(src_ref);
+                Call::emplace(dst_store.at(dst_index), dst_subterms, call_capacity);
+                return TypedIdx(dst_index, src_ref.type);
+            }
+            else {
+                const std::size_t dst_index = Call::build(dst_store, dst_subterms);
+                return TypedIdx(dst_index, src_ref.type);
+            }
+        } break;
+        case Type(MathType::lambda): {
+            Lambda lambda = *src_ref;
+            lambda.definition = copy_tree(src_ref.new_at(lambda.definition), dst_store);
+            return insert_node(lambda, src_ref.type);
+        } break;
+        case Type(SingleMatch::restricted): {
+            RestrictedSingleMatch var = *src_ref;
+            if (var.condition != TypedIdx()) {
+                var.condition = copy_tree(src_ref.new_at(var.condition), dst_store);
+            }
+            return insert_node(var, src_ref.type);
+        } break;
+        case Type(ValueMatch::strong): {
+            StrongValueMatch var = *src_ref;
+            var.match_index = copy_tree(src_ref.new_at(var.match_index), dst_store);
+            return insert_node(var, src_ref.type);
+        } break;
+        default:
+            assert(false);
+            BMATH_UNREACHABLE;
+            return TypedIdx();
+        }
+    } //copy_tree
 
     //namespace combine    
 } //namespace simp

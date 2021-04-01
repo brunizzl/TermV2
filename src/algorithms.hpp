@@ -8,9 +8,9 @@ namespace simp {
         struct Options 
         {
             bool recurse = true; //true: first combines subterms of MathType (no recursion for any of PatternType!)
-            bool eval_values = true; //true: sums, products... are evaluated as much as possible ("1 + a + 3 -> 4 + a")
+            bool eval_values = true; //true: sums, products... (and calls to true/ false) are evaluated as much as possible (e.g. "1 + a + 3 -> 4 + a")
             bool exact = true; //(only significant if eval_values) true: only exact operations are permitted
-            bool eval_lambdas = true; //true: lambdas are evaluated
+            bool eval_lambdas = true; //seems to be self explanatory
             bool normalize_lambdas = true; //true: all nested lambdas become transparent & unessecary indirections are removed
             bool remove_unary_assoc = true; //true: "f(a) -> a" for all associative f (e.g. sum, product, and...)
             bool sort = true; //true: fn::Comm calls are sorted
@@ -28,5 +28,8 @@ namespace simp {
 
     //frees subtree starting at ref
     void free_tree(const MutRef ref);
+
+    //copies tree starting at src_ref into dst_store
+    [[nodiscard]] TypedIdx copy_tree(const Ref src_ref, Store& dst_store);
     
 } //namespace simp

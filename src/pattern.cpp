@@ -67,7 +67,7 @@ namespace bmath::intern::pattern {
 	{
 		//parsing and such
 		auto parse_string = ParseString(name);
-		parse_string.allow_implicit_product();
+		parse_string.allow_implicit_product(token::product, '*');
 		parse_string.remove_space();
 		const auto parts = PatternParts(parse_string);
 		auto match_variables_table = NameLookupTable(parts.declarations);

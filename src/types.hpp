@@ -317,12 +317,12 @@ namespace simp {
 	{
 		TypedIdx definition;
 		std::uint32_t param_count;
-		//if a lambda is transparent, there is the possibility, that lambdas in the ancestry of this
-		//  "own" variables in this, meaning calling the ancestor lambda will effect his definition.
-		//the outermost lambda is never transparent.
+		//if a lambda is transparent, there is the possibility, that lambdas in the ancestry
+		//  own variables in this definition.
+		//the outermost lambda is never transparent, otherwise matching in such lambdas is undefined behavior.
 		//in the normal form, all lambdas but the outermost one are transparent, otherwise matching in such lambdas
 		//  is undefined behavior.
-		bool transparent;
+		bool transparent; //note: an intransparent lambda is a combinator
 	}; 	
 
 	enum class Domain
@@ -401,22 +401,27 @@ namespace simp {
 		constexpr operator VariadicMetaData     & () noexcept { return this->variadic_data; }
 	};
 
-	static_assert(sizeof(TermNode) * 8 == 128);
+	static_assert(sizeof(TermNode) == sizeof(Complex));
 	using Store = bmath::intern::BasicStore<TermNode>;
 
 	using Ref = bmath::intern::BasicSaveRef<Type, const Store>;
 	using UnsaveRef = bmath::intern::BasicUnsaveRef<Type, TermNode>;
 	using MutRef = bmath::intern::BasicSaveRef<Type, Store>;
 
-	
-	constexpr auto begin(const MutRef& ref) noexcept
+	//caution: can only be used as a range-based-for-loop, if there is no reallocation possible inside the loop body!
+	template<bmath::intern::Reference R> requires (requires { R::store; })
+	constexpr auto begin(const R& ref) noexcept
 	{
 		assert(ref.type == MathType::call);
-		using Iter = bmath::intern::detail_vector::SaveIterator<TypedIdx, sizeof(Complex), Store>;
+		using TypedIdx_T = std::conditional_t<R::is_const, const TypedIdx, TypedIdx>;
+		using Store_T = std::remove_reference_t<decltype(*ref.store)>;
+		using Iter = bmath::intern::detail_vector::SaveIterator<TypedIdx_T, sizeof(TermNode), Store_T>;
 		return Iter{ *ref.store, ref.index, 0u };
 	}
 
-	constexpr auto end(const MutRef& ref) noexcept
+	//caution: can only be used as a range-based-for-loop, if there is no reallocation possible inside the loop body!
+	template<bmath::intern::Reference R> requires (requires { R::store; })
+	constexpr auto end(const R& ref) noexcept
 	{
 		assert(ref.type == MathType::call);
 		return bmath::intern::detail_vector::SaveEndIndicator{ (std::uint32_t)ref->call.size() };

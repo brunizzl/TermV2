@@ -49,7 +49,6 @@ int main()
 {
 	{
 		const auto names = std::to_array<std::string>({
-			{ "(\\x y. x(\\z x. x * z + y))((true || c <= e) && !d)" },
 			{ "\\f.(\\x.f(x(x)))(\\x.f(x(x)))" },
 			{ "\\x.\\y. x + y" },
 			{ "\\x.(\\y. x + y)" },
@@ -57,7 +56,9 @@ int main()
 			{ "\\x.\\y.\\z. x + y + z" },
 			{ "true(3, 4)" },
 			{ "false(3, 4)" },
-			{ "a + b + 3 + c + 1 + 6 + a" }
+			{ "a + b + 3 + c + 1 + 6 + a" },
+			{ "(\\x y. x y)(a, 4)" },
+			{ "(\\x y z. list(x, y, z))(a, 4)" },
 			});
 		for (const auto& name : names) {
 			auto term = simp::Literal(name);
@@ -74,6 +75,8 @@ int main()
 			{ "list(x, xs...) = list(xs..., x)" },
 			{ "x*as... + x*bs... = x*(as... + bs...)" },
 			{ "x*as... + x*bs... = x*(as... + bs...)" },
+			{ "'Y' = \\f.(\\x.f(x(x)))(\\x.f(x(x)))" },
+			{ "'true_' = \\x y . x" }
 		});
 		for (const auto& name : names) {
 			auto rule = simp::RewriteRule(name);

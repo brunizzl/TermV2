@@ -21,15 +21,16 @@ namespace simp {
 				struct Operator { Token tok; Arity arity; };
 				//order by precedence (low to high)
 				constexpr auto operators = std::to_array<Operator>({
-					{ token::backslash,   Arity::unary  },
-					{ token::or_,         Arity::binary },
-					{ token::and_,        Arity::binary },
-					{ token::relation,    Arity::binary },
-					{ token::sum,         Arity::binary },
-					{ token::product,     Arity::binary },
-					{ token::hat,         Arity::binary },
-					{ token::bang,        Arity::unary  },
-					{ token::unary_minus, Arity::unary  },
+					{ token::backslash,    Arity::unary  },
+					{ token::or_,          Arity::binary },
+					{ token::and_,         Arity::binary },
+					{ token::relation,     Arity::binary },
+					{ token::sum,          Arity::binary },
+					{ token::product,      Arity::binary },
+					{ token::sticky_space, Arity::binary }, //can also act as multiplication
+					{ token::hat,          Arity::binary },
+					{ token::bang,         Arity::unary  },
+					{ token::unary_minus,  Arity::unary  },
 					});
 				for (std::size_t i = 0u; i < operators.size(); i++) {
 					const std::size_t pos = find_first_of_skip_pars(token_view, operators[i].tok);
@@ -57,6 +58,7 @@ namespace simp {
 					case '+':  return Head::Type::plus;
 					case '-':  return operator_pos == 0u ? Head::Type::negate : Head::Type::minus;
 					case '*':  return Head::Type::times;
+					case ' ':  return Head::Type::times;
 					case '/':  return Head::Type::divided;
 					case '^':  return Head::Type::power;
 					default:
@@ -91,9 +93,11 @@ namespace simp {
 
 		namespace name_lookup {
 			//returns false if name represents multi match or value match or is otherwise invalid
-			bool mundane_name(const std::string_view name) noexcept
+			bool mundane_name(const bmath::intern::ParseView view) noexcept
 			{
-				return name.find_first_of('.') == std::string_view::npos &&
+				const std::string_view name = view.to_string_view();
+				return view.tokens.find_first_not_of(bmath::intern::token::character) == std::string_view::npos &&
+					name.find_first_of('.') == std::string_view::npos &&
 					name.find_first_of('$') == std::string_view::npos &&
 					name.find_first_of(' ') == std::string_view::npos;
 			}
@@ -120,7 +124,7 @@ namespace simp {
 			TypedIdx build_symbol(Store& store, const LiteralInfos& infos, bmath::intern::ParseView view)
 			{
 				const std::string_view name = view.to_string_view();
-				if (!mundane_name(name)) [[unlikely]] {
+				if (!mundane_name(view)) [[unlikely]] {
 					throw bmath::ParseFailure{ view.offset, "ellipses or the dollar symbol are only expected when building a pattern" };
 				}
 				if (const TypedIdx res = to_keyword(name); res != TypedIdx()) {
@@ -153,7 +157,7 @@ namespace simp {
 				if (name.starts_with('\'') && name.ends_with('\'')) {
 					name.remove_prefix(1u);
 					name.remove_suffix(1u);
-					if (!mundane_name(name)) [[unlikely]] {
+					if (!mundane_name(view)) [[unlikely]] { //tests not name, but the '\'' make no difference
 						throw bmath::ParseFailure{ view.offset, "please decide: this looks weird" };
 					}
 					if (const TypedIdx res = to_keyword(name); res != TypedIdx()) [[unlikely]] {
@@ -183,18 +187,18 @@ namespace simp {
 			unsigned add_lambda_params(std::vector<NameInfo>& lambda_params, bmath::intern::ParseView params_view)
 			{
 				using namespace bmath::intern;
-				if (!params_view.tokens.starts_with(token::backslash) || params_view.tokens.find_last_not_of(token::character) != 0u) [[unlikely]]
+				if (!params_view.tokens.starts_with(token::backslash) /*|| params_view.tokens.find_last_not_of(token::character) != 0u*/) [[unlikely]]
 					throw bmath::ParseFailure{ params_view.offset, "this is a weird looking lambda parameter declaration" };
 				unsigned param_count = 0u;
 				while (params_view.size()) {
 					params_view.remove_prefix(1u); //remove previous space (or '\\' for first parameter)
 					const std::size_t space = params_view.to_string_view().find_first_of(' ');
-					const std::string_view name = params_view.steal_prefix(space).to_string_view();
-					if (!mundane_name(name)) [[unlikely]]
+					const ParseView param = params_view.steal_prefix(space);
+					if (!mundane_name(param)) [[unlikely]]
 						throw bmath::ParseFailure{ params_view.offset, "we name lambda parameters less exiting around here" };
-					if (!name.size()) [[unlikely]]
+					if (!param.size()) [[unlikely]]
 						throw bmath::ParseFailure{ params_view.offset, "there is no reason for nullary lambdas in a purely functional language" };
-					lambda_params.push_back({ name, TypedIdx(lambda_params.size(), MathType::lambda_param) });
+					lambda_params.push_back({ param.to_string_view(), TypedIdx(lambda_params.size(), MathType::lambda_param) });
 					param_count++;
 				}
 				return param_count;
@@ -205,8 +209,10 @@ namespace simp {
 		{
 			double value;
 			const auto [ptr, error] = std::from_chars(view.chars, view.chars + view.size(), value);
-			if (error != std::errc()) [[unlikely]] throw bmath::ParseFailure{ view.offset, "value syntax is illformed or value out of bounds" };
-			if (ptr != view.chars + view.size()) [[unlikely]] throw bmath::ParseFailure{ std::size_t(view.offset + ptr - view.chars + 1u), "value syntax is illformed" };
+			if (error != std::errc()) [[unlikely]] 
+				throw bmath::ParseFailure{ view.offset, "value syntax is illformed or value out of bounds" };
+			if (ptr != view.chars + view.size()) [[unlikely]] 
+				throw bmath::ParseFailure{ std::size_t(view.offset + ptr - view.chars + 1u), "value syntax is illformed" };
 			return value;
 		} //parse_value
 
@@ -326,7 +332,7 @@ namespace simp {
 			if (const std::size_t pos = parse_str.tokens.find_first_not_of(allowed); pos != TokenString::npos) [[unlikely]] {
 				throw ParseFailure{ pos, "unexpected character" };
 			}
-			parse_str.mark_char_space();
+			parse_str.allow_implicit_product(token::sticky_space, ' ');
 			parse_str.remove_space();
 			auto [lhs_view, conditions_view, rhs_view] = [](ParseView view) {
 				const std::size_t equals_pos = find_first_of_skip_pars(view.tokens, token::equals);

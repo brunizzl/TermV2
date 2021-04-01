@@ -48,6 +48,7 @@ namespace bmath::intern {
 		constexpr Token ampersand = '&';
 		constexpr Token colon = ':';
 		constexpr Token space = ' ';
+		constexpr Token sticky_space = 's'; //is not removed by ParseString::remove_space
 		constexpr Token imag_unit = 'i';
 		constexpr Token backslash = '\\';
 		constexpr Token dot = '.';
@@ -78,8 +79,8 @@ namespace bmath::intern {
 
 		ParseString(std::string& new_name);
 
-		//converts spaces to multiplication operator if appropriate
-		void allow_implicit_product() noexcept;
+		//converts spaces to input, if space could represent a multiplikaction
+		void allow_implicit_product(const Token replace_tk, const char replace_ch) noexcept;
 
 		//changes token::space occuring between two token::character to token::character
 		//(hack to make parsing of lambdas easier)

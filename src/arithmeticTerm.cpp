@@ -683,7 +683,7 @@ namespace bmath {
 	{
 		this->store.reserve(name.size() / 2);
 		auto parse_string = ParseString(name);
-		parse_string.allow_implicit_product();
+		parse_string.allow_implicit_product(token::product, '*');
 		parse_string.remove_space();
 		{
 			const std::size_t error_pos = find_first_not_arithmetic(parse_string.tokens);
