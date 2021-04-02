@@ -2,6 +2,8 @@
 
 #include "types.hpp"
 
+#include <compare>
+
 namespace simp {
 
     bool in_domain(const Complex& nr, const Domain domain);
@@ -36,5 +38,8 @@ namespace simp {
 
     //copies tree starting at src_ref into dst_store
     [[nodiscard]] TypedIdx copy_tree(const Ref src_ref, Store& dst_store);
+
+    //lexicographic ordering, not meaningful in a math context
+    std::strong_ordering compare_tree(const UnsaveRef fst, const UnsaveRef snd);
     
 } //namespace simp

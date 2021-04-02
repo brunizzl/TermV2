@@ -112,14 +112,14 @@ namespace simp {
             const Call& call = *ref;
             assert(call.function() == function);
             const Buildin f = from_typed_idx(function);
-            if (const Restriction f_input = input_space(f); f_input != Unrestricted{}) {
-                for (const TypedIdx param : call.parameters()) {
-                    if (!meets_restriction(ref.new_at(param), f_input)) {
-                        return TypedIdx();
+            if (f.is<FixedArity>()) {
+                if (const Restriction f_input = input_space(f); f_input != Unrestricted{}) {
+                    for (const TypedIdx param : call.parameters()) {
+                        if (!meets_restriction(ref.new_at(param), f_input)) {
+                            return TypedIdx();
+                        }
                     }
                 }
-            }
-            if (f.is<FixedArity>()) {
                 const FixedArity fixed_f = f.to<FixedArity>();
                 const std::size_t f_arity = arity(fixed_f);
                 if (f_arity + 1u != call.size()) [[unlikely]]
@@ -165,9 +165,20 @@ namespace simp {
                             const std::size_t nat_expo = expo.real();
                             return nat_pow(base, nat_expo);
                         }
-                        else {
-                            return std::pow(base, expo);
-                        }
+                        return std::pow(base, expo);
+                        });
+                } break;
+                case FixedArity::log: {
+                    return compute_and_replace([&] {
+                        const Complex& base = *ref.new_at(call[1]);
+                        const Complex& argu = *ref.new_at(call[2]);
+                        const Complex num = (argu.imag() == 0.0) ?
+                            std::log(argu.real()) :
+                            std::log(argu);
+                        const Complex denom = (base.imag() == 0.0) ?
+                            std::log(base.real()) :
+                            std::log(base);
+                        return num / denom;
                     });
                 } break;
                 }
@@ -459,5 +470,60 @@ namespace simp {
         }
     } //copy_tree
 
-    //namespace combine    
+    //remove if c++20 catches up
+    constexpr std::strong_ordering operator<=>(std::string_view fst, std::string_view snd)
+    {
+        if (fst < snd) { return std::strong_ordering::less; }
+        if (fst > snd) { return std::strong_ordering::greater; }
+        return std::strong_ordering::equal;
+    } //makeshift operator<=>
+
+    std::strong_ordering compare_tree(const UnsaveRef fst, const UnsaveRef snd)
+    {
+        if (fst.type != snd.type) {
+            return fst.type <=> snd.type;
+        }
+        switch (fst.type) {
+        case Type(MathType::complex): 
+            return bmath::intern::compare_complex(*fst, *snd);
+        case Type(MathType::symbol):
+            return std::string_view(fst->symbol) <=> std::string_view(snd->symbol);
+        case Type(MathType::call): {
+            const auto fst_end = fst->call.end();
+            const auto snd_end = snd->call.end();
+            auto fst_iter = fst->call.begin();
+            auto snd_iter = snd->call.begin();
+            for (; fst_iter != fst_end && snd_iter != snd_end; ++fst_iter, ++snd_iter) {
+                const std::strong_ordering cmp = 
+                    compare_tree(fst.new_at(*fst_iter), snd.new_at(*snd_iter));
+                if (cmp != std::strong_ordering::equal) {
+                    return cmp;
+                }
+            }
+            if (fst_iter != fst_end || snd_iter != snd_end) {
+                return fst->call.size() <=> snd->call.size();
+            }
+            return std::strong_ordering::equal;
+        } break;
+        case Type(MathType::lambda): {
+            const Lambda fst_lambda = *fst;
+            const Lambda snd_lambda = *snd;
+            if (fst_lambda.param_count != snd_lambda.param_count) {
+                return fst_lambda.param_count <=> snd_lambda.param_count;
+            }
+            if (fst_lambda.transparent != snd_lambda.transparent) {
+                return fst_lambda.transparent <=> snd_lambda.transparent;
+            }
+            return compare_tree(fst.new_at(fst_lambda.definition), snd.new_at(snd_lambda.definition));
+        } break;
+        case Type(SingleMatch::restricted): 
+            return fst->single_match.match_data_index <=> snd->single_match.match_data_index;
+        case Type(ValueMatch::strong):
+            return fst->value_match.match_data_index <=> snd->value_match.match_data_index;
+        default:
+            assert(!is_node(fst.type));
+            return fst.index <=> snd.index;
+        }
+    } //compare_tree
+ 
 } //namespace simp
