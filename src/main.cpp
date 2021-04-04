@@ -64,6 +64,7 @@ int main()
 			{ "(\\x y z. list(x, y, z))(a)(4, sin(x))" },
 			{ "4^(0.5)" },
 			{ "2^(0.5)" },
+			{ "fmap(\\x. -x, sum(a, b, sin(x), 3))" },
 			});
 		for (const auto& name : names) {
 			auto term = simp::Literal(name);

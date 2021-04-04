@@ -103,6 +103,15 @@ namespace simp {
             }
         } //merge_associative
 
+        constexpr bool is_unary_function(const UnsaveRef ref) 
+        { 
+            if (ref.type == MathType::buildin) {
+                const fn::Buildin f = fn::Buildin(ref.index);
+                return f.is<fn::Variadic>() || fn::arity(f.to<fn::FixedArity>()) == 1u;
+            }
+            return ref.type == MathType::lambda;
+        }
+
         TypedIdx BMATH_FORCE_INLINE eval_buildin(const MutRef& ref, const TypedIdx function, const bool exact)
         {
             using namespace fn;
@@ -146,7 +155,6 @@ namespace simp {
                 //parameters are now guaranteed to meet restriction given in fn::fixed_arity_table
                 //also parameter cout is guaranteed to be correct
                 switch (fixed_f) {
-
                 case FixedArity::id: {
                     const TypedIdx res = call[1];
                     Call::free(*ref.store, ref.index);
@@ -180,6 +188,38 @@ namespace simp {
                             std::log(base);
                         return num / denom;
                     });
+                } break;
+                case FixedArity::fmap: {
+                    const TypedIdx converter = call[1];
+                    const TypedIdx convertee = call[2];
+                    const MutRef converter_ref = ref.new_at(converter);
+                    const MutRef convertee_ref = ref.new_at(convertee);
+                    if (!is_unary_function(converter_ref) || convertee_ref.type != MathType::call) {
+                        return TypedIdx();
+                    }
+                    const auto stop = end(convertee_ref);
+                    auto iter = begin(convertee_ref);
+                    std::size_t remaining_parameters = convertee_ref->call.size() - 1u;
+                    if (remaining_parameters == 0u) [[unlikely]] {
+                        static_assert(Call::min_capacity >= 3u, "assumes fmap call to only use one store slot");
+                        ref.store->free_one(ref.index); //free call to fmap
+                        free_tree(converter_ref);
+                        return convertee;
+                    }
+                    for (++iter; iter != stop; ++iter) {
+                        static_assert(Call::min_capacity >= 2u, "assumes call to only use one store slot");
+                        const std::size_t call_index = ref.store->allocate_one();
+                        const TypedIdx converter_copy = --remaining_parameters ? 
+                            copy_tree(converter_ref, *ref.store) : 
+                            converter;
+                        ref.store->at(call_index) = Call({ converter_copy, *iter });
+                        const TypedIdx res = combine_(MutRef(*ref.store, call_index, MathType::call), 
+                            { .recurse = false, .exact = exact }, 0);
+                        *iter = res;
+                    }
+                    static_assert(Call::min_capacity >= 3u, "assumes fmap call to only use one store slot");
+                    ref.store->free_one(ref.index); //free call to fmap
+                    return combine_(convertee_ref, { .recurse = false, .exact = exact }, 0);
                 } break;
                 }
             } //end fixed arity
@@ -473,8 +513,8 @@ namespace simp {
     //remove if c++20 catches up
     constexpr std::strong_ordering operator<=>(std::string_view fst, std::string_view snd)
     {
-        if (fst < snd) { return std::strong_ordering::less; }
-        if (fst > snd) { return std::strong_ordering::greater; }
+        if (std::operator<(fst, snd)) { return std::strong_ordering::less; }
+        if (std::operator>(fst, snd)) { return std::strong_ordering::greater; }
         return std::strong_ordering::equal;
     } //makeshift operator<=>
 

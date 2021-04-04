@@ -161,6 +161,7 @@ namespace simp {
 			smaller,
 			greater_eq,
 			smaller_eq,
+			fmap, //params[0] := unary lambda, params[1] := function call evaluates "fmap(f, g(xs...)) -> g(f(xs)...)"
 			COUNT
 		};
 
@@ -376,6 +377,7 @@ namespace simp {
 			{ FixedArity::smaller   , "smaller"   , 2u, Domain::real     , MathType::boolean  },
 			{ FixedArity::greater_eq, "greater_eq", 2u, Domain::real     , MathType::boolean  },
 			{ FixedArity::smaller_eq, "smaller_eq", 2u, Domain::real     , MathType::boolean  },
+			{ FixedArity::fmap      , "fmap"      , 2u, Unrestricted{}   , Unrestricted{}     },
 		});
 		static_assert(static_cast<unsigned>(fixed_arity_table.front().type) == 0u);
 		static_assert(std::is_sorted(fixed_arity_table.begin(), fixed_arity_table.end(),
@@ -384,6 +386,7 @@ namespace simp {
 
 		constexpr std::size_t arity(const FixedArity f) noexcept
 		{
+			assert(f < FixedArity::COUNT);
 			return fixed_arity_table[static_cast<unsigned>(f)].arity;
 		}
 
