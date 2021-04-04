@@ -311,12 +311,47 @@ namespace simp {
                         return TypedIdx();
                     }
                 };
+                const auto maybe_accumulate = [&](Complex& acc, const Complex& new_, auto operation) -> bool {
+                    std::feclearexcept(FE_ALL_EXCEPT);
+                    const Complex result = operation(acc, new_);
+                    if (options.exact && std::fetestexcept(FE_ALL_EXCEPT)) { //operation failed to be exact
+                        return false;
+                    }
+                    //operation successfull -> store result in acc
+                    acc = result;
+                    return true;
+                };
                 switch (f.to<Variadic>()) {
                 case Variadic(Comm::and_): 
                     return eval_bool(TypedIdx(1, MathType::boolean), TypedIdx(0, MathType::boolean));
                 case Variadic(Comm::or_):
                     return eval_bool(TypedIdx(0, MathType::boolean), TypedIdx(1, MathType::boolean));
-
+                case Variadic(Comm::sum): {
+                    auto range = call.parameters();
+                    const TypedIdx* const stop = range.end();
+                    TypedIdx* iter_1 = range.begin();
+                    for (; iter_1 != stop; ++iter_1) {
+                        if (iter_1->get_type() == MathType::complex) {
+                            Complex& acc = *ref.new_at(*iter_1);
+                            for (auto iter_2 = std::next(iter_1); iter_2 != stop; ++iter_2) {
+                                if (iter_2->get_type() == MathType::complex) {
+                                    Complex& summand = *ref.new_at(*iter_2);
+                                    if (maybe_accumulate(acc, summand,
+                                        [](const Complex& lhs, const Complex& rhs) { return lhs + rhs; })) 
+                                    {
+                                        *iter_2 = TypedIdx();
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    const auto new_end = std::remove(range.begin(), range.end(), TypedIdx());
+                    const std::size_t new_size = new_end - range.begin();
+                    call.size() = new_size + 1u; //+1 for function info itself
+                } break;
+                case Variadic(Comm::product): {
+                    //TODO
+                } break;
                 }
             } //end variadic
             return TypedIdx();
@@ -420,7 +455,7 @@ namespace simp {
                         merge_associative_calls(ref, function);
                     }
                     if (options.eval_values) {
-                        //if the function could be fully evaluated, the following steps can no longer be executedd -> return
+                        //if the function could be fully evaluated, the following steps can no longer be executed -> return
                         const TypedIdx res = eval_buildin(ref, options, function);
                         if (res != TypedIdx()) {
                             return res;
@@ -435,7 +470,11 @@ namespace simp {
                         }
                     }
                     if (options.sort && buildin_type.is<fn::Comm>()) {
-                        //TODO
+                        const auto compare = [&](const TypedIdx fst, const TypedIdx snd) {
+                            return compare_tree(ref.new_at(fst), ref.new_at(snd)) == std::strong_ordering::less;
+                        };
+                        auto range = ref->call.parameters();
+                        std::sort(range.begin(), range.end(), compare);
                     }
                 } break;
                 case Type(MathType::lambda): {

@@ -65,8 +65,8 @@ int main()
 			{ "4^(0.5)" },
 			{ "2^(0.5)" },
 			{ "fmap(\\x. -x, sum(a, b, sin(x), 3))" },
-			{ "!true && true && (false || !false)" },
-			});
+			{ "berb && frobbl && true && (false || !false || schmenck) && true" },
+		});
 		for (const auto& name : names) {
 			auto term = simp::Literal(name);
 			std::cout << name << "\n  ->  " << term.to_string() << "\n";
