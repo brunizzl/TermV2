@@ -112,7 +112,63 @@ namespace simp {
             return ref.type == MathType::lambda;
         }
 
-        TypedIdx BMATH_FORCE_INLINE eval_buildin(const MutRef& ref, const TypedIdx function, const bool exact)
+        Complex BMATH_FORCE_INLINE eval_unary_complex(fn::FixedArity f, const Complex param)
+        {
+            using namespace fn;
+            assert(input_space(f) == MathType::complex && result_space(f) == MathType::complex);
+            assert(arity(f) == 1u);
+            if (param.imag() == 0.0) {
+                const double real_param = param.real();
+                switch (f) {
+                case FixedArity::asinh: return std::asinh(real_param);
+                case FixedArity::acosh: return (         real_param  >= 1.0 ? std::acosh(real_param) : std::acosh(param));
+                case FixedArity::atanh: return (std::abs(real_param) <= 1.0 ? std::atanh(real_param) : std::atanh(param));
+                case FixedArity::asin : return (std::abs(real_param) <= 1.0 ?  std::asin(real_param) :  std::asin(param));
+                case FixedArity::acos : return (std::abs(real_param) <= 1.0 ?  std::acos(real_param) :  std::acos(param));
+                case FixedArity::atan : return std::atan (real_param);
+                case FixedArity::sinh : return std::sinh (real_param);
+                case FixedArity::cosh : return std::cosh (real_param);
+                case FixedArity::tanh : return std::tanh (real_param);
+                case FixedArity::sqrt : return (         real_param  >= 0.0 ?  std::sqrt(real_param) :  std::sqrt(param));
+                case FixedArity::exp  : return std::exp  (real_param);
+                case FixedArity::sin  : return std::sin  (real_param);
+                case FixedArity::cos  : return std::cos  (real_param);
+                case FixedArity::tan  : return std::tan  (real_param);
+                case FixedArity::abs  : return std::abs  (real_param);
+                case FixedArity::arg  : return std::arg  (real_param);
+                case FixedArity::ln   : return std::log  (real_param);
+                case FixedArity::re   : return real_param;
+                case FixedArity::im   : return 0.0;
+                }
+            }
+            else {
+                switch (f) {
+                case FixedArity::asinh: return std::asinh(param);
+                case FixedArity::acosh: return std::acosh(param);
+                case FixedArity::atanh: return std::atanh(param);
+                case FixedArity::asin : return std::asin (param);
+                case FixedArity::acos : return std::acos (param);
+                case FixedArity::atan : return std::atan (param);
+                case FixedArity::sinh : return std::sinh (param);
+                case FixedArity::cosh : return std::cosh (param);
+                case FixedArity::tanh : return std::tanh (param);
+                case FixedArity::sqrt : return std::sqrt (param);
+                case FixedArity::exp  : return std::exp  (param);
+                case FixedArity::sin  : return std::sin  (param);
+                case FixedArity::cos  : return std::cos  (param);
+                case FixedArity::tan  : return std::tan  (param);
+                case FixedArity::abs  : return std::abs  (param);
+                case FixedArity::arg  : return std::arg  (param);
+                case FixedArity::ln   : return std::log  (param);
+                case FixedArity::re   : return std::real (param);
+                case FixedArity::im   : return std::imag (param);
+                }
+            }
+            assert(false);
+            return {};
+        } //eval_unary_complex
+
+        TypedIdx BMATH_FORCE_INLINE eval_buildin(const MutRef& ref, Options options, const TypedIdx function)
         {
             using namespace fn;
             using namespace bmath::intern;
@@ -134,26 +190,29 @@ namespace simp {
                 if (f_arity + 1u != call.size()) [[unlikely]]
                     throw "wrong number of parameters in function call";
 
-                const auto compute_and_replace = [&](auto operate) -> TypedIdx {
+                const auto compute_and_replace = [&](auto compute) -> TypedIdx {
                     std::feclearexcept(FE_ALL_EXCEPT);
-                    const Complex result = operate();
-                    if (!exact || !std::fetestexcept(FE_ALL_EXCEPT)) { //operation was successfull
-                        //free all but last parameter of call
-                        for (std::size_t i = 1; i < f_arity; i++) {
-                            assert(call[i].get_type() == MathType::complex);
-                            ref.store->free_one(call[i].get_index());
-                        }
-                        //store result in last parameter
-                        const TypedIdx result_idx = call[f_arity];
-                        assert(result_idx.get_type() == MathType::complex);
-                        ref.store->at(result_idx.get_index()) = result;
-                        Call::free(*ref.store, ref.index); //free call itself
-                        return result_idx;
+                    const Complex result = compute();
+                    if (options.exact && std::fetestexcept(FE_ALL_EXCEPT)) { //operation failed to be exact
+                        return TypedIdx();
                     }
-                    return TypedIdx();
+                    //free all but last parameter of call
+                    for (std::size_t i = 1; i < f_arity; i++) {
+                        assert(call[i].get_type() == MathType::complex);
+                        ref.store->free_one(call[i].get_index());
+                    }
+                    //store result in last parameter
+                    const TypedIdx result_idx = call[f_arity];
+                    assert(result_idx.get_type() == MathType::complex);
+                    ref.store->at(result_idx.get_index()) = result;
+                    Call::free(*ref.store, ref.index); //free call itself
+                    return result_idx;
                 };
                 //parameters are now guaranteed to meet restriction given in fn::fixed_arity_table
                 //also parameter cout is guaranteed to be correct
+                if (f_arity == 1u && input_space(f) == MathType::complex && result_space(f) == MathType::complex) {
+                    return compute_and_replace([&] { return eval_unary_complex(fixed_f, *ref.new_at(call[1u])); });
+                }
                 switch (fixed_f) {
                 case FixedArity::id: {
                     const TypedIdx res = call[1];
@@ -174,7 +233,7 @@ namespace simp {
                             return nat_pow(base, nat_expo);
                         }
                         return std::pow(base, expo);
-                        });
+                    });
                 } break;
                 case FixedArity::log: {
                     return compute_and_replace([&] {
@@ -206,6 +265,7 @@ namespace simp {
                         free_tree(converter_ref);
                         return convertee;
                     }
+                    options.recurse = false;
                     for (++iter; iter != stop; ++iter) {
                         static_assert(Call::min_capacity >= 2u, "assumes call to only use one store slot");
                         const std::size_t call_index = ref.store->allocate_one();
@@ -214,12 +274,12 @@ namespace simp {
                             converter;
                         ref.store->at(call_index) = Call({ converter_copy, *iter });
                         const TypedIdx res = combine_(MutRef(*ref.store, call_index, MathType::call), 
-                            { .recurse = false, .exact = exact }, 0);
+                            options, 0);
                         *iter = res;
                     }
                     static_assert(Call::min_capacity >= 3u, "assumes fmap call to only use one store slot");
                     ref.store->free_one(ref.index); //free call to fmap
-                    return combine_(convertee_ref, { .recurse = false, .exact = exact }, 0);
+                    return combine_(convertee_ref, options, 0);
                 } break;
                 }
             } //end fixed arity
@@ -331,7 +391,7 @@ namespace simp {
                     }
                     if (options.eval_values) {
                         //if the function could be fully evaluated, the following steps can no longer be executedd -> return
-                        const TypedIdx res = eval_buildin(ref, function, options.exact);
+                        const TypedIdx res = eval_buildin(ref, options, function);
                         if (res != TypedIdx()) {
                             return res;
                         }
