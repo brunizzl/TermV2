@@ -174,7 +174,7 @@ namespace simp {
             using namespace bmath::intern;
             assert(function.get_type() == MathType::buildin);
             assert(ref.type == MathType::call);
-            const Call& call = *ref;
+            Call& call = *ref;
             assert(call.function() == function);
             const Buildin f = from_typed_idx(function);
             if (f.is<FixedArity>()) {
@@ -248,6 +248,11 @@ namespace simp {
                         return num / denom;
                     });
                 } break;
+                case FixedArity::not_: {
+                    const TypedIdx param = call[1u];
+                    ref.store->free_one(ref.index);
+                    return TypedIdx(!param.get_index(), MathType::boolean);
+                } break;
                 case FixedArity::fmap: {
                     const TypedIdx converter = call[1];
                     const TypedIdx convertee = call[2];
@@ -285,7 +290,32 @@ namespace simp {
             } //end fixed arity
             else {
                 assert(f.is<Variadic>());
+                const auto eval_bool = [&](const TypedIdx neutral_value, const TypedIdx short_circuit_value) {
+                    { //remove values not changing outcome (true for and, false for or)
+                        const auto range = call.parameters();
+                        const auto new_end = std::remove(range.begin(), range.end(), neutral_value);
+                        const std::size_t new_param_count = new_end - range.begin();
+                        if (!new_param_count) {
+                            free_tree(ref);
+                            return neutral_value;
+                        }                    
+                        call.size() = new_param_count + 1u; //+1 for function itself
+                    }
+                    { //evaluate if possible
+                        const auto range = call.parameters();
+                        const auto first_short_circuit = std::find(range.begin(), range.end(), short_circuit_value);
+                        if (first_short_circuit != range.end()) {
+                            free_tree(ref);
+                            return short_circuit_value;
+                        }
+                        return TypedIdx();
+                    }
+                };
                 switch (f.to<Variadic>()) {
+                case Variadic(Comm::and_): 
+                    return eval_bool(TypedIdx(1, MathType::boolean), TypedIdx(0, MathType::boolean));
+                case Variadic(Comm::or_):
+                    return eval_bool(TypedIdx(0, MathType::boolean), TypedIdx(1, MathType::boolean));
 
                 }
             } //end variadic
