@@ -123,6 +123,10 @@ namespace bmath::intern {
 
 	constexpr std::strong_ordering compare_complex(const std::complex<double>& lhs, const std::complex<double>& rhs)
 	{
+		//const auto abs_squared = [](const std::complex<double>& c) { return c.real() * c.real() + c.imag() * c.imag(); };
+		//if (const auto cmp = compare_double(abs_squared(lhs), abs_squared(rhs)); cmp != std::strong_ordering::equal) {
+		//	return cmp;
+		//}
 		if (const auto cmp = compare_double(lhs.real(), rhs.real()); cmp != std::strong_ordering::equal) {
 			return cmp;
 		}

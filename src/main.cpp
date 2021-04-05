@@ -45,27 +45,27 @@ idea status:
 
 using namespace bmath::intern;
 using namespace bmath::intern::pattern;
+
 int main()
 {
 	{
 		const auto names = std::to_array<std::string>({
 			{ "\\f.(\\x.f(x(x)))(\\x.f(x(x)))" },
-			{ "\\x.\\y. x + y" },
-			{ "\\x.(\\y. x + y)" },
-			{ "\\x. x + \\y. x + y" },
 			{ "\\x.\\y.\\z. x + y + z" },
 			{ "true(3, 4)" },
 			{ "false(3, 4^2)" },
 			{ "a + b + 3 + c + 1 + 6 + a" },
 			{ "(\\x y. x y)(a, 4)" },
-			{ "(\\x y z. list(x, y, z))(a, 4)" },
-			{ "(\\x y z. list(x, y, z))(a, 4, sin(x))" },
 			{ "(\\x y z. list(x, y, z))(a)(4)(sin(x))" },
 			{ "(\\x y z. list(x, y, z))(a)(4, sin(x))" },
 			{ "4^(0.5)" },
 			{ "2^(0.5)" },
-			{ "fmap(\\x. -x, sum(a, b, sin(x), 3))" },
-			{ "berb && frobbl && true && (false || !false || schmenck) && true" },
+			{ "fmap(\\x. -x, sum(a, b, sin(x), 3, 5))" },
+			{ "berb && frobbl && true && (false || !false || schmenck) && true && !alf" },
+			{ "10/5" },
+			{ "set(1, 100, a, b, 50 + 2 * 25, a, (\\x.2 x)(50))" },
+			{ "min(1, 100, 40, 50 + 2 * 25, -20, 101, (\\x.2 x)(50))" },
+			{ "max(1, 100, 40, 50 + 2 * 25, -20, 101, (\\x.2 x)(50))" },
 		});
 		for (const auto& name : names) {
 			auto term = simp::Literal(name);
@@ -91,7 +91,7 @@ int main()
 		}
 		std::cout << "\n";
 	}
-
+	std::cin.get();
 	//debug::enumerate_type();
 	//debug::test_rechner();
 	//test::stable_sort();

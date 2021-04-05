@@ -73,9 +73,9 @@ namespace bmath::intern {
 		using value_type = Union_T;
 		static constexpr bool is_const = true;
 
-		const Union_T* const ptr; //pointer to element 
-		std::uint32_t const index; //index of element in store
-		Type_T const type;
+		const Union_T* ptr; //pointer to element 
+		std::uint32_t index; //index of element in store
+		Type_T type;
 
 		constexpr auto typed_idx() const noexcept { return BasicTypedIdx<Type_T>(this->index, this->type); }
 

@@ -290,17 +290,18 @@ namespace simp {
             } //end fixed arity
             else {
                 assert(f.is<Variadic>());
+                const auto remove_shallow_value = [&](const TypedIdx to_remove) {
+                    const auto range = call.parameters();
+                    const auto new_end = std::remove(range.begin(), range.end(), to_remove);
+                    const std::size_t new_size = new_end - range.begin();
+                    call.size() = new_size + 1u; //+1 for function info itself
+                    return new_size;
+                };
                 const auto eval_bool = [&](const TypedIdx neutral_value, const TypedIdx short_circuit_value) {
-                    { //remove values not changing outcome (true for and, false for or)
-                        const auto range = call.parameters();
-                        const auto new_end = std::remove(range.begin(), range.end(), neutral_value);
-                        const std::size_t new_param_count = new_end - range.begin();
-                        if (!new_param_count) {
-                            free_tree(ref);
-                            return neutral_value;
-                        }                    
-                        call.size() = new_param_count + 1u; //+1 for function itself
-                    }
+                    if (!remove_shallow_value(neutral_value)) { //remove values not changing outcome (true for and, false for or)
+                        free_tree(ref);
+                        return neutral_value;
+                    }                    
                     { //evaluate if possible
                         const auto range = call.parameters();
                         const auto first_short_circuit = std::find(range.begin(), range.end(), short_circuit_value);
@@ -321,6 +322,22 @@ namespace simp {
                     acc = result;
                     return true;
                 };
+                const auto find_extreme = [&](auto more_extreme) {
+                    //sorted with complex at beginning: last is complex -> all values are complex
+                    //it is assumed, that only values along the real axis are encountered
+                    UnsaveRef extreme = ref.new_at(call[1]);
+                    assert(extreme.type == MathType::complex);
+                    for (auto iter = &call[2]; iter != call.end(); ++iter) {
+                        const UnsaveRef new_val = ref.new_at(*iter);
+                        assert(new_val.type == MathType::complex);
+                        if (more_extreme(new_val->complex.real(), extreme->complex.real())) {
+                            ref.store->free_one(extreme.index);
+                            extreme = new_val;
+                        }
+                    }
+                    Call::free(*ref.store, ref.index);
+                    return extreme.typed_idx();
+                };
                 switch (f.to<Variadic>()) {
                 case Variadic(Comm::and_): 
                     return eval_bool(TypedIdx(1, MathType::boolean), TypedIdx(0, MathType::boolean));
@@ -329,28 +346,71 @@ namespace simp {
                 case Variadic(Comm::sum): {
                     auto range = call.parameters();
                     const TypedIdx* const stop = range.end();
-                    TypedIdx* iter_1 = range.begin();
-                    for (; iter_1 != stop; ++iter_1) {
-                        if (iter_1->get_type() == MathType::complex) {
-                            Complex& acc = *ref.new_at(*iter_1);
-                            for (auto iter_2 = std::next(iter_1); iter_2 != stop; ++iter_2) {
-                                if (iter_2->get_type() == MathType::complex) {
-                                    Complex& summand = *ref.new_at(*iter_2);
-                                    if (maybe_accumulate(acc, summand,
-                                        [](const Complex& lhs, const Complex& rhs) { return lhs + rhs; })) 
-                                    {
-                                        *iter_2 = TypedIdx();
-                                    }
-                                }
+                    for (auto iter_1 = range.begin(); iter_1 != stop; ++iter_1) {
+                        if (iter_1->get_type() != MathType::complex) {
+                            break; //complex are ordered in front and sum is sorted
+                        }
+                        Complex& acc = *ref.new_at(*iter_1);
+                        for (auto iter_2 = std::next(iter_1); iter_2 != stop; ++iter_2) {
+                            if (iter_2->get_type() != MathType::complex) {
+                                break;
+                            }
+                            Complex& summand = *ref.new_at(*iter_2);
+                            if (maybe_accumulate(acc, summand,
+                                [](const Complex& lhs, const Complex& rhs) { return lhs + rhs; })) 
+                            {
+                                *iter_2 = TypedIdx();
                             }
                         }
                     }
-                    const auto new_end = std::remove(range.begin(), range.end(), TypedIdx());
-                    const std::size_t new_size = new_end - range.begin();
-                    call.size() = new_size + 1u; //+1 for function info itself
+                    remove_shallow_value(TypedIdx());
                 } break;
-                case Variadic(Comm::product): {
-                    //TODO
+                case Variadic(Comm::product): { //TODO: evaluate exact division / combine two divisions
+                    auto range = call.parameters();
+                    const TypedIdx* const stop = range.end();
+                    for (auto iter_1 = range.begin(); iter_1 != stop; ++iter_1) {
+                        switch (iter_1->get_type()) {
+                        case Type(MathType::complex): {
+                            Complex& acc = *ref.new_at(*iter_1);
+                            for (auto iter_2 = std::next(iter_1); iter_2 != stop; ++iter_2) {
+                                switch (iter_2->get_type()) {
+                                case Type(MathType::complex): {
+                                    Complex& factor = *ref.new_at(*iter_2);
+                                    if (maybe_accumulate(acc, factor,
+                                        [](const Complex& lhs, const Complex& rhs) { return lhs * rhs; })) 
+                                    {
+                                        *iter_2 = TypedIdx();
+                                    }
+                                } break;
+                                } //switch iter_2
+                            }
+                        } break;
+                        } //switch iter_1
+                    }
+                    remove_shallow_value(TypedIdx());
+                } break;
+                case Variadic(Comm::set): if (call.size() >= 3) { 
+                    auto range = call.parameters();
+                    auto iter = range.begin();
+                    UnsaveRef fst = ref.new_at(*iter);
+                    for (++iter; iter != range.end(); ++iter) {
+                        UnsaveRef snd = ref.new_at(*iter); //remove duplicates (remember: already sorted)
+                        if (compare_tree(fst, snd) == std::strong_ordering::equal) {
+                            *iter = TypedIdx();
+                        }
+                        fst = snd;
+                    }
+                    remove_shallow_value(TypedIdx());
+                } break;
+                case Variadic(Comm::min): {
+                    if (call.back().get_type() == MathType::complex) {
+                        return find_extreme([](double lhs, double rhs) { return lhs < rhs; });
+                    }
+                } break;
+                case Variadic(Comm::max): {
+                    if (call.back().get_type() == MathType::complex) {
+                        return find_extreme([](double lhs, double rhs) { return lhs > rhs; });
+                    }
                 } break;
                 }
             } //end variadic
@@ -358,16 +418,18 @@ namespace simp {
         } //eval_buildin
 
         [[nodiscard]] TypedIdx replace_lambda_params(const MutRef ref, const bmath::intern::StupidBufferVector<TypedIdx, 16>& params, 
-            bmath::intern::BitVector& used_params)
+            bmath::intern::BitVector& used_params, const Options options, const unsigned lambda_param_offset)
         {
             if (ref.type == MathType::call) {
                 const auto stop = end(ref);
                 for (auto iter = begin(ref); iter != stop; ++iter) {
-                    *iter = replace_lambda_params(ref.new_at(*iter), params, used_params);
+                    *iter = replace_lambda_params(ref.new_at(*iter), params, used_params, options, lambda_param_offset);
                 }
+                return combine_(ref, options, lambda_param_offset);
             }
             else if (ref.type == MathType::lambda) {
-                ref->lambda.definition = replace_lambda_params(ref.new_at(ref->lambda.definition), params, used_params);
+                ref->lambda.definition = replace_lambda_params(ref.new_at(ref->lambda.definition), 
+                    params, used_params, options, lambda_param_offset);
             }
             else if (ref.type == MathType::lambda_param) {
                 if (ref.index >= params.size()) { 
@@ -385,8 +447,9 @@ namespace simp {
             return ref.typed_idx();
         } //replace_lambda_params
 
-        [[nodiscard]] TypedIdx BMATH_FORCE_INLINE eval_lambda(const MutRef ref)
+        [[nodiscard]] TypedIdx BMATH_FORCE_INLINE eval_lambda(const MutRef ref, Options options, const unsigned lambda_param_offset)
         {
+            options.recurse = false;
             assert(ref.type == MathType::call);
             const Call& call = *ref;
             const MutRef lambda = ref.new_at(call.function());
@@ -404,12 +467,14 @@ namespace simp {
             if (lambda_param_count == params.size()) {
                 const TypedIdx definition = lambda->lambda.definition;
                 ref.store->free_one(lambda.index);
-                return replace_lambda_params(ref.new_at(definition), params, used_params);
+                return replace_lambda_params(ref.new_at(definition), 
+                    params, used_params, options, lambda_param_offset);
             }
             else { //lambda is curried -> keep remaining lambda as lambda
                 assert(lambda_param_count > params.size());
                 lambda->lambda.definition = 
-                    replace_lambda_params(ref.new_at(lambda->lambda.definition), params, used_params);
+                    replace_lambda_params(ref.new_at(lambda->lambda.definition), 
+                        params, used_params, options, lambda_param_offset);
                 lambda->lambda.param_count -= params.size();
                 return lambda.typed_idx();
             }
@@ -454,6 +519,13 @@ namespace simp {
                     if (associative) {
                         merge_associative_calls(ref, function);
                     }
+                    if (buildin_type.is<fn::Comm>()) {
+                        const auto compare = [&](const TypedIdx fst, const TypedIdx snd) {
+                            return compare_tree(ref.new_at(fst), ref.new_at(snd)) == std::strong_ordering::less;
+                        };
+                        auto range = ref->call.parameters();
+                        std::sort(range.begin(), range.end(), compare);
+                    }
                     if (options.eval_values) {
                         //if the function could be fully evaluated, the following steps can no longer be executed -> return
                         const TypedIdx res = eval_buildin(ref, options, function);
@@ -469,17 +541,10 @@ namespace simp {
                             return single_param;
                         }
                     }
-                    if (options.sort && buildin_type.is<fn::Comm>()) {
-                        const auto compare = [&](const TypedIdx fst, const TypedIdx snd) {
-                            return compare_tree(ref.new_at(fst), ref.new_at(snd)) == std::strong_ordering::less;
-                        };
-                        auto range = ref->call.parameters();
-                        std::sort(range.begin(), range.end(), compare);
-                    }
                 } break;
                 case Type(MathType::lambda): {
                     if (options.eval_lambdas) {
-                        return eval_lambda(ref);
+                        return eval_lambda(ref, options, lambda_param_offset);
                     }
                 } break;
                 case Type(MathType::boolean): {
