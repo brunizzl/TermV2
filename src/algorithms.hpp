@@ -17,6 +17,7 @@ namespace simp {
             bool recurse = true; //true: first combines subterms of MathType (no recursion for any of PatternType!)
             bool eval_values = true; //true: sums, products... (and calls to true/ false) are evaluated as much as possible (e.g. "1 + a + 3 -> 4 + a")
             bool exact = true; //(only significant if eval_values) true: only exact operations are permitted
+            bool eval_equality = true; //fn::FixedArity::eq and ...neq can always be evaluated -> evaluate them (not intelligent for pattern restrictions)
             bool eval_lambdas = true; //seems to be self explanatory
             bool normalize_lambdas = true; //true: all nested lambdas become transparent & unessecary indirections are removed
             bool remove_unary_assoc = true; //true: "f(a) -> a" for all associative f (e.g. sum, product, and...)

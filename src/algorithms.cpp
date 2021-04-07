@@ -208,6 +208,14 @@ namespace simp {
                     Call::free(*ref.store, ref.index); //free call itself
                     return result_idx;
                 };
+                auto determine_real_order = [&](const std::strong_ordering od) {
+                    assert(call[1].get_type() == MathType::complex && call[2].get_type() == MathType::complex);
+                    const Complex& fst = *ref.new_at(call[1]);
+                    const Complex& snd = *ref.new_at(call[2]);
+                    const bool res = compare_complex(fst, snd) == od;
+                    free_tree(ref);
+                    return res;
+                };
                 //parameters are now guaranteed to meet restriction given in fn::fixed_arity_table
                 //also parameter cout is guaranteed to be correct
                 if (f_arity == 1u && input_space(f) == MathType::complex && result_space(f) == MathType::complex) {
@@ -253,6 +261,22 @@ namespace simp {
                     ref.store->free_one(ref.index);
                     return TypedIdx(!param.get_index(), MathType::boolean);
                 } break;
+                case FixedArity::eq:
+                case FixedArity::neq: {
+                    if (options.eval_equality) {
+                        const bool equal = compare_tree(ref.new_at(call[1]), ref.new_at(call[2]))
+                            == std::strong_ordering::equal;
+                        return TypedIdx(fixed_f == FixedArity::eq ? equal : !equal, MathType::boolean);
+                    }
+                } break;
+                case FixedArity::greater:
+                    return TypedIdx(determine_real_order(std::strong_ordering::greater), MathType::boolean);
+                case FixedArity::smaller:
+                    return TypedIdx(determine_real_order(std::strong_ordering::less), MathType::boolean);
+                case FixedArity::greater_eq:
+                    return TypedIdx(!determine_real_order(std::strong_ordering::less), MathType::boolean);
+                case FixedArity::smaller_eq: 
+                    return TypedIdx(!determine_real_order(std::strong_ordering::greater), MathType::boolean);
                 case FixedArity::fmap: {
                     const TypedIdx converter = call[1];
                     const TypedIdx convertee = call[2];

@@ -34,7 +34,7 @@ namespace simp {
 			this->rhs_head = rhs;
 		}
 		this->lhs_head = combine::combine_(this->lhs_mut_ref(), {}, 0);
-		this->rhs_head = combine::combine_(this->rhs_mut_ref(), { .eval_lambdas = false, .remove_unary_assoc = false }, 0);
+		this->rhs_head = combine::combine_(this->rhs_mut_ref(), { .remove_unary_assoc = false }, 0);
 	}
 
 	std::string RewriteRule::to_string() const noexcept

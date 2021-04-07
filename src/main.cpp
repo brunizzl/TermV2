@@ -13,9 +13,10 @@
 TODO:
 
 important:
- - write version of tree::combine only checking changed tree parts
+ - construct pattern: single match, mutli match / variadic, value match
  - improve multi-match capabilities of NonComm variadic patterns (allow multiple multis in one NonComm instance)
  - check for invalid tokens when parsing pattern and literal
+ - split FixedArity in Complex to complex, ... to boolean, etc.
 
 nice to have:
  - implement meta_pn::match function for variadic patterns
@@ -50,6 +51,8 @@ int main()
 {
 	{
 		const auto names = std::to_array<std::string>({
+			{ "list(3 != 4, 3 < 4, 3 <= 4, 3 >= 4, 3 > 4, 3 == 4)" },
+			{ "list(4 != 4, 4 < 4, 4 <= 4, 4 >= 4, 4 > 4, 4 == 4)" },
 			{ "\\f.(\\x.f(x(x)))(\\x.f(x(x)))" },
 			{ "\\x.\\y.\\z. x + y + z" },
 			{ "true(3, 4)" },
@@ -68,8 +71,9 @@ int main()
 			{ "max(1, 100, 40, 50 + 2 * 25, -20, 101, (\\x.2 x)(50))" },
 		});
 		for (const auto& name : names) {
+			std::cout << name << "\n";
 			auto term = simp::Literal(name);
-			std::cout << name << "\n  ->  " << term.to_string() << "\n";
+			std::cout << "  ->  " << term.to_string() << "\n";
 			term.establish_order();
 			std::cout << "  ->  " << term.to_string() << "\n\n";
 		}

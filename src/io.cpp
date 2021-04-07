@@ -51,7 +51,7 @@ namespace simp {
 					case '\\': return Head::Type::lambda;
 					case '|':  return Head::Type::or_;
 					case '&':  return Head::Type::and_;
-					case '!':  return Head::Type::not_;
+					case '!':  return operator_pos == 0u ? Head::Type::not_ : Head::Type::not_equals;
 					case '=':  return Head::Type::equals;
 					case '<':  return view.chars[operator_pos + 1u] == '=' ? Head::Type::smaller_eq : Head::Type::smaller;
 					case '>':  return view.chars[operator_pos + 1u] == '=' ? Head::Type::greater_eq : Head::Type::greater;
@@ -249,8 +249,8 @@ namespace simp {
 			case Head::Type::and_:       return to_buildin_call(2, fn::Comm::and_);
 			case Head::Type::equals:     return to_buildin_call(2, fn::FixedArity::eq);
 			case Head::Type::not_equals: return to_buildin_call(2, fn::FixedArity::neq);
-			case Head::Type::greater:    return to_buildin_call(2, fn::FixedArity::greater);
-			case Head::Type::smaller:    return to_buildin_call(2, fn::FixedArity::smaller);
+			case Head::Type::greater:    return to_buildin_call(1, fn::FixedArity::greater);
+			case Head::Type::smaller:    return to_buildin_call(1, fn::FixedArity::smaller);
 			case Head::Type::greater_eq: return to_buildin_call(2, fn::FixedArity::greater_eq);
 			case Head::Type::smaller_eq: return to_buildin_call(2, fn::FixedArity::smaller_eq);
 			case Head::Type::plus:       return to_buildin_call(1, fn::Comm::sum);
