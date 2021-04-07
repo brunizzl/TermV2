@@ -114,11 +114,20 @@ namespace bmath::intern {
 
 	constexpr std::strong_ordering compare_double(const double lhs, const double rhs)
 	{
-		if (lhs == 0.0 && rhs == 0.0) [[unlikely]] { //different zero signs are ignored
-			return std::strong_ordering::equal; 
+		const std::partial_ordering cmp = lhs <=> rhs;
+		if (cmp == std::partial_ordering::less) {
+			return std::strong_ordering::less;
 		}
-		static_assert(sizeof(double) == sizeof(std::uint64_t)); //bit_cast may cast to something of doubles size.
-		return std::bit_cast<std::uint64_t>(lhs) <=> std::bit_cast<std::uint64_t>(rhs);
+		else if (cmp == std::partial_ordering::greater) {
+			return std::strong_ordering::greater;
+		}
+		else if (cmp == std::partial_ordering::equivalent) {
+			return std::strong_ordering::equal;
+		}
+		else [[unlikely]] {
+			static_assert(sizeof(double) == sizeof(std::uint64_t)); //bit_cast may cast to something of doubles size.
+			return std::bit_cast<std::uint64_t>(lhs) <=> std::bit_cast<std::uint64_t>(rhs);
+		}
 	}
 
 	constexpr std::strong_ordering compare_complex(const std::complex<double>& lhs, const std::complex<double>& rhs)
