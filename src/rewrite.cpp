@@ -9,7 +9,7 @@
 
 namespace simp {
 
-	simp::Literal::Literal(std::string name)
+	simp::LiteralTerm::LiteralTerm(std::string name)
 	{
 		using namespace bmath::intern;
 		auto parse_str = ParseString(name);
@@ -19,7 +19,7 @@ namespace simp {
 		this->head = parse::build(this->store, lambda_params, parse_str);
 	}
 
-	std::string Literal::to_string() const noexcept
+	std::string LiteralTerm::to_string() const noexcept
 	{
 		std::string res;
 		print::append_to_string(this->ref(), res, 0);

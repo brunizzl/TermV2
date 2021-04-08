@@ -102,16 +102,6 @@ namespace simp {
 					name.find_first_of(' ') == std::string_view::npos;
 			}
 
-			TypedIdx to_keyword(std::string_view name)
-			{
-				constexpr auto keywords = std::to_array<std::pair<std::string_view, TypedIdx>>({
-					{ "true", TypedIdx(1, MathType::boolean) },
-					{ "false", TypedIdx(0, MathType::boolean) },
-					});
-				const auto iter = std::find_if(keywords.begin(), keywords.end(), [name](const auto& p) { return name == p.first; });
-				return iter != keywords.end() ? iter->second : TypedIdx();
-			}
-
 			TypedIdx find_name_in_infos(const std::vector<NameInfo>& infos, const std::string_view name)
 			{
 				const auto iter = std::find_if(infos.rbegin(), infos.rend(),
@@ -127,24 +117,18 @@ namespace simp {
 				if (!mundane_name(view)) [[unlikely]] {
 					throw bmath::ParseFailure{ view.offset, "ellipses or the dollar symbol are only expected when building a pattern" };
 				}
-				if (const TypedIdx res = to_keyword(name); res != TypedIdx()) {
-					return res;
-				}
 				if (const TypedIdx res = find_name_in_infos(infos.lambda_params, name); res != TypedIdx()) {
 					return res;
 				}
 				if (const fn::Buildin type = fn::type_of(name); type != fn::Buildin(fn::Buildin::COUNT)) {
 					return fn::to_typed_idx(type);
 				}
-				return TypedIdx(Symbol::build(store, name), MathType::symbol);
+				return TypedIdx(Symbol::build(store, name), Literal::symbol);
 			}
 
 			TypedIdx build_symbol(Store& store, PatternInfos& infos, bmath::intern::ParseView view)
 			{
 				std::string_view name = view.to_string_view();
-				if (const TypedIdx res = to_keyword(name); res != TypedIdx()) {
-					return res;
-				}
 				if (const TypedIdx res = find_name_in_infos(infos.lambda_params, name); res != TypedIdx()) {
 					return res;
 				}
@@ -152,7 +136,7 @@ namespace simp {
 					return res;
 				}
 				if (const fn::Buildin type = fn::type_of(name); type != fn::Buildin(fn::Buildin::COUNT)) {
-					return TypedIdx(static_cast<unsigned>(type), MathType::buildin);
+					return TypedIdx(static_cast<unsigned>(type), Literal::buildin);
 				}
 				if (name.starts_with('\'') && name.ends_with('\'')) {
 					name.remove_prefix(1u);
@@ -160,10 +144,7 @@ namespace simp {
 					if (!mundane_name(view)) [[unlikely]] { //tests not name, but the '\'' make no difference
 						throw bmath::ParseFailure{ view.offset, "please decide: this looks weird" };
 					}
-					if (const TypedIdx res = to_keyword(name); res != TypedIdx()) [[unlikely]] {
-						throw bmath::ParseFailure{ view.offset, "no sneaking in keywords, my dude." };
-					}
-					return TypedIdx(Symbol::build(store, name), MathType::symbol);
+					return TypedIdx(Symbol::build(store, name), Literal::symbol);
 				}
 				if (name.find_first_of(' ') != std::string_view::npos) [[unlikely]] {
 						throw bmath::ParseFailure{ view.offset, "leave me some space, but not like that" };
@@ -176,12 +157,12 @@ namespace simp {
 					return result;
 				};
 				if (name.starts_with('$')) {
-					return add_match_variable(ValueMatch::weak);
+					return add_match_variable(Match::value);
 				}
 				if (name.ends_with('.')) {
-					return add_match_variable(MultiMatch::fst);
+					return add_match_variable(Match::multi);
 				}
-				return add_match_variable(SingleMatch::weak);
+				return add_match_variable(Match::single_weak);
 			}
 
 			unsigned add_lambda_params(std::vector<NameInfo>& lambda_params, bmath::intern::ParseView params_view)
@@ -198,7 +179,7 @@ namespace simp {
 						throw bmath::ParseFailure{ params_view.offset, "we name lambda parameters less exiting around here" };
 					if (!param.size()) [[unlikely]]
 						throw bmath::ParseFailure{ params_view.offset, "there is no reason for nullary lambdas in a purely functional language" };
-					lambda_params.push_back({ param.to_string_view(), TypedIdx(lambda_params.size(), MathType::lambda_param) });
+					lambda_params.push_back({ param.to_string_view(), TypedIdx(lambda_params.size(), Literal::lambda_param) });
 					param_count++;
 				}
 				return param_count;
@@ -234,7 +215,7 @@ namespace simp {
 				const TypedIdx snd = parse::build(store, infos, view.substr(head.where + operator_length));
 				const std::size_t res_index = store.allocate_one();
 				store.at(res_index) = Call{ fn::to_typed_idx(type), fst, snd };
-				return TypedIdx(res_index, MathType::call);
+				return TypedIdx(res_index, Literal::call);
 			};
 			const auto to_inverse_buildin_call = [&](const fn::Buildin type, auto invert_term) {
 				const TypedIdx fst = parse::build(store, infos, view.substr(0, head.where));
@@ -242,28 +223,28 @@ namespace simp {
 				const TypedIdx snd = invert_term(store, snd_uninverted);
 				const std::size_t res_index = store.allocate_one();
 				store.at(res_index) = Call{ fn::to_typed_idx(type), fst, snd };
-				return TypedIdx(res_index, MathType::call);
+				return TypedIdx(res_index, Literal::call);
 			};
 			switch (head.type) {
 			case Head::Type::or_:        return to_buildin_call(2, fn::Comm::or_);
 			case Head::Type::and_:       return to_buildin_call(2, fn::Comm::and_);
-			case Head::Type::equals:     return to_buildin_call(2, fn::FixedArity::eq);
-			case Head::Type::not_equals: return to_buildin_call(2, fn::FixedArity::neq);
-			case Head::Type::greater:    return to_buildin_call(1, fn::FixedArity::greater);
-			case Head::Type::smaller:    return to_buildin_call(1, fn::FixedArity::smaller);
-			case Head::Type::greater_eq: return to_buildin_call(2, fn::FixedArity::greater_eq);
-			case Head::Type::smaller_eq: return to_buildin_call(2, fn::FixedArity::smaller_eq);
+			case Head::Type::equals:     return to_buildin_call(2, fn::ToBool::eq);
+			case Head::Type::not_equals: return to_buildin_call(2, fn::ToBool::neq);
+			case Head::Type::greater:    return to_buildin_call(1, fn::ToBool::greater);
+			case Head::Type::smaller:    return to_buildin_call(1, fn::ToBool::smaller);
+			case Head::Type::greater_eq: return to_buildin_call(2, fn::ToBool::greater_eq);
+			case Head::Type::smaller_eq: return to_buildin_call(2, fn::ToBool::smaller_eq);
 			case Head::Type::plus:       return to_buildin_call(1, fn::Comm::sum);
 			case Head::Type::minus:      return to_inverse_buildin_call(fn::Comm::sum, build_negated<Store>);
 			case Head::Type::times:      return to_buildin_call(1, fn::Comm::product);
 			case Head::Type::divided:    return to_inverse_buildin_call(fn::Comm::product, build_inverted<Store>);
-			case Head::Type::power:      return to_buildin_call(1, fn::FixedArity::pow);
+			case Head::Type::power:      return to_buildin_call(1, fn::CtoC::pow);
 			case Head::Type::not_: {
 				view.remove_prefix(1u);  //remove '!'
 				const TypedIdx to_negate = parse::build(store, infos, view);
 				const std::size_t res_index = store.allocate_one();
-				store.at(res_index) = Call{ fn::to_typed_idx(fn::FixedArity::not_), to_negate };
-				return TypedIdx(res_index, MathType::call);
+				store.at(res_index) = Call{ fn::to_typed_idx(fn::ToBool::not_), to_negate };
+				return TypedIdx(res_index, Literal::call);
 			} break;
 			case Head::Type::negate: {
 				view.remove_prefix(1u);  //remove minus sign
@@ -296,7 +277,7 @@ namespace simp {
 					const auto param_view = view.steal_prefix(comma);
 					subterms.push_back(parse::build(store, infos, param_view));
 				}
-				return TypedIdx(Call::build(store, subterms), MathType::call);
+				return TypedIdx(Call::build(store, subterms), Literal::call);
 			} break;
 			case Head::Type::lambda: {
 				const bool outermost_lambda = infos.lambda_params.size() == 0u;
@@ -310,7 +291,7 @@ namespace simp {
 				const std::size_t res_index = store.allocate_one();
 				store.at(res_index) = Lambda{ definition, param_count, !outermost_lambda };
 				infos.lambda_params.resize(infos.lambda_params.size() - param_count); //remove own names again
-				return TypedIdx(res_index, MathType::lambda);
+				return TypedIdx(res_index, Literal::lambda);
 			} break;
 			default:
 				assert(false);
@@ -382,65 +363,62 @@ namespace simp {
 		constexpr int default_infixr = 0;
 
 		constexpr int infixr(const TypedIdx f) {
-			if (f.get_type() != MathType::buildin) { return default_infixr; }
+			if (f.get_type() != Literal::buildin) { return default_infixr; }
 			using namespace fn;
 			switch (from_typed_idx(f)) {
-			case Buildin(FixedArity::pow):        return 3000;
-			case Buildin(Comm::product):          return 2001;
-			case Buildin(Comm::sum):              return 2000;
-			case Buildin(FixedArity::eq):         return 1000;
-			case Buildin(FixedArity::neq):        return 1000;
-			case Buildin(FixedArity::greater):    return 1000;
-			case Buildin(FixedArity::smaller):    return 1000;
-			case Buildin(FixedArity::greater_eq): return 1000;
-			case Buildin(FixedArity::smaller_eq): return 1000;
-			case Buildin(Comm::and_):             return 2;
-			case Buildin(Comm::or_):              return 1;
-			default:                              return default_infixr;
+			case Buildin(CtoC::pow):          return 3000;
+			case Buildin(Comm::product):      return 2001;
+			case Buildin(Comm::sum):          return 2000;
+			case Buildin(ToBool::eq):         return 1000;
+			case Buildin(ToBool::neq):        return 1000;
+			case Buildin(ToBool::greater):    return 1000;
+			case Buildin(ToBool::smaller):    return 1000;
+			case Buildin(ToBool::greater_eq): return 1000;
+			case Buildin(ToBool::smaller_eq): return 1000;
+			case Buildin(Comm::and_):         return 2;
+			case Buildin(Comm::or_):          return 1;
+			default:                          return default_infixr;
 			}
 		}
 
 		void append_to_string(const UnsaveRef ref, std::string& str, const int parent_infixr)
 		{
 			switch (ref.type) {
-			case Type(MathType::complex):
+			case Type(Literal::complex):
 				bmath::intern::print::append_complex(*ref, str, parent_infixr);
 				break;
-			case Type(MathType::boolean):
-				str.append(ref.index ? "true" : "false");
-				break;
-			case Type(MathType::symbol):
+			case Type(Literal::symbol):
 				str.append(ref->symbol);
 				break;
-			case Type(MathType::call): { 
+			case Type(Literal::call): { 
 				const Call& call = *ref;
 				const TypedIdx function = call.function();
 				const char* replacement_seperator = nullptr;
-				if (function.get_type() == MathType::buildin) {
+				if (function.get_type() == Literal::buildin) {
 					replacement_seperator = [function]() -> const char* {
 						using namespace fn;
 						switch (from_typed_idx(function)) {
-						case Buildin(Comm::sum):              return " + ";
-						case Buildin(Comm::product):          return " * ";
-						case Buildin(Comm::and_):             return " && ";
-						case Buildin(Comm::or_):              return " || ";
-						case Buildin(FixedArity::pow):        return " ^ ";
-						case Buildin(FixedArity::eq):         return " == ";
-						case Buildin(FixedArity::neq):        return " != ";
-						case Buildin(FixedArity::greater):    return " > ";
-						case Buildin(FixedArity::smaller):    return " < ";
-						case Buildin(FixedArity::greater_eq): return " >= ";
-						case Buildin(FixedArity::smaller_eq): return " <= ";
-						default:                              return nullptr;
+						case Buildin(Comm::sum):          return " + ";
+						case Buildin(Comm::product):      return " * ";
+						case Buildin(Comm::and_):         return " && ";
+						case Buildin(Comm::or_):          return " || ";
+						case Buildin(CtoC::pow):          return " ^ ";
+						case Buildin(ToBool::eq):         return " == ";
+						case Buildin(ToBool::neq):        return " != ";
+						case Buildin(ToBool::greater):    return " > ";
+						case Buildin(ToBool::smaller):    return " < ";
+						case Buildin(ToBool::greater_eq): return " >= ";
+						case Buildin(ToBool::smaller_eq): return " <= ";
+						default:                          return nullptr;
 						}
 					}();
 				}
-				else if (function.get_type() == PatternBuildin{}) {
+				else if (function.get_type() == PatternVariadic{}) {
 					const auto data = variadic_meta_data(ref);
 					str.append("[");
 					str.append(fn::name_of(fn::from_typed_idx(function)));
 					str.append(", ");
-					str.append(std::to_string(data.match_data_idx));
+					str.append(std::to_string(data.match_data_index));
 					str.append(", ");
 					str.append(std::bitset<32>(data.rematchable).to_string());
 					str.append(", ");
@@ -461,20 +439,20 @@ namespace simp {
 				}
 				if (own_infixr <= parent_infixr) { str.push_back(')'); }
 			} break;
-			case Type(MathType::buildin):
+			case Type(Literal::buildin):
 				str.append(fn::name_of(fn::Buildin(ref.index)));
 				break;
-			case Type(MathType::lambda): {
+			case Type(Literal::lambda): {
 				const Lambda& lambda = *ref;
 				str.append("(\\.");
 				append_to_string(ref.new_at(lambda.definition), str, max_infixr);
 				str.push_back(')');
 			} break;
-			case Type(MathType::lambda_param):
+			case Type(Literal::lambda_param):
 				str.push_back('%');
 				str.append(std::to_string(ref.index));
 				break;
-			case Type(SingleMatch::restricted): {
+			case Type(Match::single_restricted): {
 				const RestrictedSingleMatch& var = *ref;
 				str.append("_T");
 				str.append(std::to_string(var.match_data_index));
@@ -486,13 +464,13 @@ namespace simp {
 				}
 				str.append("]");
 			} break;				
-			case Type(SingleMatch::unrestricted):
-			case Type(SingleMatch::weak):
+			case Type(Match::single_unrestricted):
+			case Type(Match::single_weak):
 				str.append("_T");
 				str.append(std::to_string(ref.index));
-				str.append(ref.type == SingleMatch::weak ? "'" : "");
+				str.append(ref.type == Match::single_weak ? "'" : "");
 				break;
-			case Type(ValueMatch::strong): {
+			case Type(Match::value): {
 				const StrongValueMatch& var = *ref;
 				str.append("_V");
 				str.append(std::to_string(var.match_data_index));
@@ -500,14 +478,8 @@ namespace simp {
 				append_to_string(ref.new_at(var.match_index), str, default_infixr);
 				str.append("]");
 			} break;
-			case Type(ValueMatch::weak):
-				str.append("_V");
-				str.append(std::to_string(ref.index));
-				str.append("'");
-				break;
-			case Type(MultiMatch::fst):
-			case Type(MultiMatch::snd):
-				str.append(ref.type == MultiMatch::fst ? "_F" : "_S");
+			case Type(Match::multi):
+				str.append("_MM");
 				str.append(std::to_string(ref.index));
 				str.append("...");
 				break;

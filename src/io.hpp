@@ -82,7 +82,7 @@ namespace simp {
 		{
 			const std::size_t result_idx = store.allocate_one();
 			new (&store.at(result_idx)) TermNode(complex);
-			return TypedIdx(result_idx, MathType::complex);
+			return TypedIdx(result_idx, Literal::complex);
 		}
 
 		template<bmath::intern::StoreLike Store_T>
@@ -91,7 +91,7 @@ namespace simp {
 			const TypedIdx minus_1 = parse::build_value(store, -1.0);
 			const std::size_t result_idx = store.allocate_one();
 			new (&store.at(result_idx)) TermNode(Call{ fn::to_typed_idx(fn::Comm::product), minus_1, to_negate });
-			return TypedIdx(result_idx, MathType::call);
+			return TypedIdx(result_idx, Literal::call);
 		}
 
 		template<bmath::intern::StoreLike Store_T>
@@ -99,8 +99,8 @@ namespace simp {
 		{
 			const TypedIdx minus_1 = parse::build_value(store, -1.0);
 			const std::size_t result_idx = store.allocate_one();
-			new (&store.at(result_idx)) TermNode(Call{ fn::to_typed_idx(fn::FixedArity::pow), to_invert, minus_1 });
-			return TypedIdx(result_idx, MathType::call);
+			new (&store.at(result_idx)) TermNode(Call{ fn::to_typed_idx(fn::CtoC::pow), to_invert, minus_1 });
+			return TypedIdx(result_idx, Literal::call);
 		}
 
 		//returns the tree representation of view in store
@@ -112,7 +112,7 @@ namespace simp {
 		//has neighter activated multi match and variadic, nor value match
 		//build from a string of form "<match side> = <replace side>" 
 		//  or form "<match side> | <condition(s)> = <replace side>"
-		//   where <match side> and <replace side> are terms similar to Literal, but they may contain match variables
+		//   where <match side> and <replace side> are terms similar to LiteralTerm, but they may contain match variables
 		//         <condition(s)> is a comma separated listing of extra conditions and relations on single match variables
 		//note: <condition(s)> are incorporated into <match side> in constructor
 		std::pair<TypedIdx, TypedIdx> raw_rule(Store& store, std::string name);

@@ -6,7 +6,7 @@
 
 namespace simp {
 
-    bool in_domain(const Complex& nr, const Domain domain);
+    bool in_complex_subset(const Complex& nr, const ComplexSubset domain);
 
     //only interested in final results -> a function call guaranteed to return something meeting restr results in false
     bool meets_restriction(const UnsaveRef ref, const Restriction restr);
@@ -14,7 +14,7 @@ namespace simp {
     namespace combine {
         struct Options 
         {
-            bool recurse = true; //true: first combines subterms of MathType (no recursion for any of PatternType!)
+            bool recurse = true; //true: first combines subterms of Literal (no recursion for any of PatternType!)
             bool eval_values = true; //true: sums, products... (and calls to true/ false) are evaluated as much as possible (e.g. "1 + a + 3 -> 4 + a")
             bool exact = true; //(only significant if eval_values) true: only exact operations are permitted
             bool eval_equality = true; //fn::FixedArity::eq and ...neq can always be evaluated -> evaluate them (not intelligent for pattern restrictions)

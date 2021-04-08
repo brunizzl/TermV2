@@ -13,10 +13,11 @@
 TODO:
 
 important:
+ - fix pattern construction of value match in simp (value match is used like a proxy, but in reality owns a store node!)
  - construct pattern: single match, mutli match / variadic, value match
  - improve multi-match capabilities of NonComm variadic patterns (allow multiple multis in one NonComm instance)
  - check for invalid tokens when parsing pattern and literal
- - split FixedArity in Complex to complex, ... to boolean, etc.
+ - improve eval_buildin for min/max to remove values guaranteed to not be minimum / maximum without requiring full evaluation
 
 nice to have:
  - implement meta_pn::match function for variadic patterns
@@ -73,7 +74,7 @@ int main()
 		});
 		for (const auto& name : names) {
 			std::cout << name << "\n";
-			auto term = simp::Literal(name);
+			auto term = simp::LiteralTerm(name);
 			std::cout << "  ->  " << term.to_string() << "\n";
 			term.establish_order();
 			std::cout << "  ->  " << term.to_string() << "\n\n";

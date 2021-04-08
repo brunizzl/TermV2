@@ -6,12 +6,12 @@
 namespace simp {
 
 	//term without any pattern shenaniganz
-	struct Literal
+	struct LiteralTerm
 	{
 		Store store;
 		TypedIdx head;
 
-		Literal(std::string name);
+		LiteralTerm(std::string name);
 
 		std::string to_string() const noexcept;
 
@@ -20,7 +20,7 @@ namespace simp {
 		constexpr MutRef mut_ref() noexcept { return MutRef(this->store, this->head); }
 
 		void establish_order() { this->head = combine::combine_(this->mut_ref(), {}, 0); }
-	}; //struct Literal
+	}; //struct LiteralTerm
 
 	struct RewriteRule
 	{

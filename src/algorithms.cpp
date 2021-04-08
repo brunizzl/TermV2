@@ -15,32 +15,31 @@
 
 namespace simp {
 
-    bool in_domain(const Complex& nr, const Domain domain)
+    bool in_complex_subset(const Complex& nr, const ComplexSubset subset)
     {
-        constexpr double max_save_int = 9007199254740991; //== 2^53 - 1, largest integer explicitly stored in double
+        constexpr double max_save_int = bmath::intern::nat_pow(2ull, 53) - 1; //largest integer explicitly stored in double
 
         const double re = nr.real();
         const double im = nr.imag();
 
         bool accept = true;
-        switch (domain) {
-        case Domain::natural:   accept &= re > 0.0; [[fallthrough]];
-        case Domain::natural_0: accept &= re >= 0.0; [[fallthrough]];
-        case Domain::integer:   accept &= re - std::int64_t(re) == 0.0;
-            accept &= (std::abs(re) <= max_save_int); [[fallthrough]];
-        case Domain::real:      accept &= im == 0.0; [[fallthrough]];
-        case Domain::complex:
+        switch (subset) {
+        case ComplexSubset::natural:   accept &= re > 0.0;                       [[fallthrough]];
+        case ComplexSubset::natural_0: accept &= re >= 0.0;                      [[fallthrough]];
+        case ComplexSubset::integer:   accept &= re - std::int64_t(re) == 0.0;
+                                       accept &= (std::abs(re) <= max_save_int); [[fallthrough]];
+        case ComplexSubset::real:      accept &= im == 0.0;
             return accept;
 
-        case Domain::negative:      return re < 0.0 && im == 0.0;
-        case Domain::positive:      return re > 0.0 && im == 0.0;
-        case Domain::not_negative:  return re >= 0.0 && im == 0.0;
-        case Domain::not_positive:  return re <= 0.0 && im == 0.0;
+        case ComplexSubset::negative:      return re <  0.0 && im == 0.0;
+        case ComplexSubset::positive:      return re >  0.0 && im == 0.0;
+        case ComplexSubset::not_negative:  return re >= 0.0 && im == 0.0;
+        case ComplexSubset::not_positive:  return re <= 0.0 && im == 0.0;
         default:
             assert(false);
             BMATH_UNREACHABLE;
         }
-    } //in_domain
+    } //in_complex_subset
 
     bool meets_restriction(const UnsaveRef ref, const Restriction restr)
     {
@@ -52,18 +51,18 @@ namespace simp {
             return ref.type == restr;
         }
         else if (restr.is<fn::Buildin>()) {
-            if (ref.type != MathType::call) {
+            if (ref.type != Literal::call) {
                 return false;
             }
             const TypedIdx function = ref->call.function();
             return fn::to_typed_idx(restr.to<fn::Buildin>()) == function;
         }
         else {
-            assert(restr.is<Domain>());
-            if (ref.type != MathType::complex) {
+            assert(restr.is<ComplexSubset>());
+            if (ref.type != Literal::complex) {
                 return false;
             }
-            return in_domain(*ref, restr.to<Domain>());
+            return in_complex_subset(*ref, restr.to<ComplexSubset>());
         }
     } //meets_restriction
 
@@ -73,13 +72,13 @@ namespace simp {
 
         void BMATH_FORCE_INLINE merge_associative_calls(MutRef& ref, const TypedIdx function)
         {
-            assert(ref.type == MathType::call && function.get_type() == MathType::buildin && 
+            assert(ref.type == Literal::call && function.get_type() == Literal::buildin && 
                 fn::from_typed_idx(function).is<fn::Variadic>());
             bool found_nested = false;
             const Call& call = *ref;
             bmath::intern::StupidBufferVector<TypedIdx, 16> merged_calls = { function };
             for (const TypedIdx param : call.parameters()) {
-                if (param.get_type() == MathType::call) {
+                if (param.get_type() == Literal::call) {
                     const MutRef param_ref = ref.new_at(param);
                     if (param_ref->call.function() == function) {
                         found_nested = true;
@@ -105,63 +104,61 @@ namespace simp {
 
         constexpr bool is_unary_function(const UnsaveRef ref) 
         { 
-            if (ref.type == MathType::buildin) {
+            if (ref.type == Literal::buildin) {
                 const fn::Buildin f = fn::Buildin(ref.index);
                 return f.is<fn::Variadic>() || fn::arity(f.to<fn::FixedArity>()) == 1u;
             }
-            return ref.type == MathType::lambda;
+            return ref.type == Literal::lambda;
         }
 
-        Complex BMATH_FORCE_INLINE eval_unary_complex(fn::FixedArity f, const Complex param)
+        Complex BMATH_FORCE_INLINE eval_unary_complex(fn::CtoC f, const Complex param)
         {
             using namespace fn;
-            assert(input_space(f) == MathType::complex && result_space(f) == MathType::complex);
-            assert(arity(f) == 1u);
             if (param.imag() == 0.0) {
                 const double real_param = param.real();
                 switch (f) {
-                case FixedArity::asinh: return std::asinh(real_param);
-                case FixedArity::acosh: return (         real_param  >= 1.0 ? std::acosh(real_param) : std::acosh(param));
-                case FixedArity::atanh: return (std::abs(real_param) <= 1.0 ? std::atanh(real_param) : std::atanh(param));
-                case FixedArity::asin : return (std::abs(real_param) <= 1.0 ?  std::asin(real_param) :  std::asin(param));
-                case FixedArity::acos : return (std::abs(real_param) <= 1.0 ?  std::acos(real_param) :  std::acos(param));
-                case FixedArity::atan : return std::atan (real_param);
-                case FixedArity::sinh : return std::sinh (real_param);
-                case FixedArity::cosh : return std::cosh (real_param);
-                case FixedArity::tanh : return std::tanh (real_param);
-                case FixedArity::sqrt : return (         real_param  >= 0.0 ?  std::sqrt(real_param) :  std::sqrt(param));
-                case FixedArity::exp  : return std::exp  (real_param);
-                case FixedArity::sin  : return std::sin  (real_param);
-                case FixedArity::cos  : return std::cos  (real_param);
-                case FixedArity::tan  : return std::tan  (real_param);
-                case FixedArity::abs  : return std::abs  (real_param);
-                case FixedArity::arg  : return std::arg  (real_param);
-                case FixedArity::ln   : return std::log  (real_param);
-                case FixedArity::re   : return real_param;
-                case FixedArity::im   : return 0.0;
+                case CtoC::asinh: return std::asinh(real_param);
+                case CtoC::acosh: return (         real_param  >= 1.0 ? std::acosh(real_param) : std::acosh(param));
+                case CtoC::atanh: return (std::abs(real_param) <= 1.0 ? std::atanh(real_param) : std::atanh(param));
+                case CtoC::asin : return (std::abs(real_param) <= 1.0 ?  std::asin(real_param) :  std::asin(param));
+                case CtoC::acos : return (std::abs(real_param) <= 1.0 ?  std::acos(real_param) :  std::acos(param));
+                case CtoC::atan : return std::atan (real_param);
+                case CtoC::sinh : return std::sinh (real_param);
+                case CtoC::cosh : return std::cosh (real_param);
+                case CtoC::tanh : return std::tanh (real_param);
+                case CtoC::sqrt : return (         real_param  >= 0.0 ?  std::sqrt(real_param) :  std::sqrt(param));
+                case CtoC::exp  : return std::exp  (real_param);
+                case CtoC::sin  : return std::sin  (real_param);
+                case CtoC::cos  : return std::cos  (real_param);
+                case CtoC::tan  : return std::tan  (real_param);
+                case CtoC::abs  : return std::abs  (real_param);
+                case CtoC::arg  : return std::arg  (real_param);
+                case CtoC::ln   : return std::log  (real_param);
+                case CtoC::re   : return real_param;
+                case CtoC::im   : return 0.0;
                 }
             }
             else {
                 switch (f) {
-                case FixedArity::asinh: return std::asinh(param);
-                case FixedArity::acosh: return std::acosh(param);
-                case FixedArity::atanh: return std::atanh(param);
-                case FixedArity::asin : return std::asin (param);
-                case FixedArity::acos : return std::acos (param);
-                case FixedArity::atan : return std::atan (param);
-                case FixedArity::sinh : return std::sinh (param);
-                case FixedArity::cosh : return std::cosh (param);
-                case FixedArity::tanh : return std::tanh (param);
-                case FixedArity::sqrt : return std::sqrt (param);
-                case FixedArity::exp  : return std::exp  (param);
-                case FixedArity::sin  : return std::sin  (param);
-                case FixedArity::cos  : return std::cos  (param);
-                case FixedArity::tan  : return std::tan  (param);
-                case FixedArity::abs  : return std::abs  (param);
-                case FixedArity::arg  : return std::arg  (param);
-                case FixedArity::ln   : return std::log  (param);
-                case FixedArity::re   : return std::real (param);
-                case FixedArity::im   : return std::imag (param);
+                case CtoC::asinh: return std::asinh(param);
+                case CtoC::acosh: return std::acosh(param);
+                case CtoC::atanh: return std::atanh(param);
+                case CtoC::asin : return std::asin (param);
+                case CtoC::acos : return std::acos (param);
+                case CtoC::atan : return std::atan (param);
+                case CtoC::sinh : return std::sinh (param);
+                case CtoC::cosh : return std::cosh (param);
+                case CtoC::tanh : return std::tanh (param);
+                case CtoC::sqrt : return std::sqrt (param);
+                case CtoC::exp  : return std::exp  (param);
+                case CtoC::sin  : return std::sin  (param);
+                case CtoC::cos  : return std::cos  (param);
+                case CtoC::tan  : return std::tan  (param);
+                case CtoC::abs  : return std::abs  (param);
+                case CtoC::arg  : return std::arg  (param);
+                case CtoC::ln   : return std::log  (param);
+                case CtoC::re   : return std::real (param);
+                case CtoC::im   : return std::imag (param);
                 }
             }
             assert(false);
@@ -172,8 +169,8 @@ namespace simp {
         {
             using namespace fn;
             using namespace bmath::intern;
-            assert(function.get_type() == MathType::buildin);
-            assert(ref.type == MathType::call);
+            assert(function.get_type() == Literal::buildin);
+            assert(ref.type == Literal::call);
             Call& call = *ref;
             assert(call.function() == function);
             const Buildin f = from_typed_idx(function);
@@ -198,18 +195,18 @@ namespace simp {
                     }
                     //free all but last parameter of call
                     for (std::size_t i = 1; i < f_arity; i++) {
-                        assert(call[i].get_type() == MathType::complex);
+                        assert(call[i].get_type() == Literal::complex);
                         ref.store->free_one(call[i].get_index());
                     }
                     //store result in last parameter
                     const TypedIdx result_idx = call[f_arity];
-                    assert(result_idx.get_type() == MathType::complex);
+                    assert(result_idx.get_type() == Literal::complex);
                     ref.store->at(result_idx.get_index()) = result;
                     Call::free(*ref.store, ref.index); //free call itself
                     return result_idx;
                 };
-                auto determine_real_order = [&](const std::strong_ordering od) {
-                    assert(call[1].get_type() == MathType::complex && call[2].get_type() == MathType::complex);
+                auto is_ordered_as = [&](const std::strong_ordering od) {
+                    assert(call[1].get_type() == Literal::complex && call[2].get_type() == Literal::complex);
                     const Complex& fst = *ref.new_at(call[1]);
                     const Complex& snd = *ref.new_at(call[2]);
                     const bool res = compare_complex(fst, snd) == od;
@@ -218,16 +215,28 @@ namespace simp {
                 };
                 //parameters are now guaranteed to meet restriction given in fn::fixed_arity_table
                 //also parameter cout is guaranteed to be correct
-                if (f_arity == 1u && input_space(f) == MathType::complex && result_space(f) == MathType::complex) {
-                    return compute_and_replace([&] { return eval_unary_complex(fixed_f, *ref.new_at(call[1u])); });
+                if (fixed_f.is<CtoC>() && f_arity == 1u) {
+                    return compute_and_replace([&] { return eval_unary_complex(fixed_f.to<CtoC>(), *ref.new_at(call[1u])); });
                 }
                 switch (fixed_f) {
-                case FixedArity::id: {
+                case FixedArity(Bool::true_): {
+                    const TypedIdx res = call[1];
+                    free_tree(ref.new_at(call[2]));
+                    Call::free(*ref.store, ref.index);
+                    return res;
+                } break;
+                case FixedArity(Bool::false_): {
+                    const TypedIdx res = call[2];
+                    free_tree(ref.new_at(call[1]));
+                    Call::free(*ref.store, ref.index);
+                    return res;
+                } break;
+                case FixedArity(Misc::id): {
                     const TypedIdx res = call[1];
                     Call::free(*ref.store, ref.index);
                     return res;
                 } break;
-                case FixedArity::pow: {
+                case FixedArity(CtoC::pow): {
                     return compute_and_replace([&] {
                         const Complex& base = *ref.new_at(call[1]);
                         const Complex& expo = *ref.new_at(call[2]);
@@ -236,14 +245,14 @@ namespace simp {
                                 std::sqrt(base.real()) :
                                 std::sqrt(base);
                         }
-                        else if (in_domain(expo, Domain::natural_0)) {
+                        else if (in_complex_subset(expo, ComplexSubset::natural_0)) {
                             const std::size_t nat_expo = expo.real();
                             return nat_pow(base, nat_expo);
                         }
                         return std::pow(base, expo);
                     });
                 } break;
-                case FixedArity::log: {
+                case FixedArity(CtoC::log): {
                     return compute_and_replace([&] {
                         const Complex& base = *ref.new_at(call[1]);
                         const Complex& argu = *ref.new_at(call[2]);
@@ -256,33 +265,39 @@ namespace simp {
                         return num / denom;
                     });
                 } break;
-                case FixedArity::not_: {
+                case FixedArity(ToBool::not_): {
                     const TypedIdx param = call[1u];
-                    ref.store->free_one(ref.index);
-                    return TypedIdx(!param.get_index(), MathType::boolean);
+                    if (param == literal_false) {
+                        ref.store->free_one(ref.index);
+                        return literal_true;
+                    }
+                    if (param == literal_true) {
+                        ref.store->free_one(ref.index);
+                        return literal_false;
+                    }
                 } break;
-                case FixedArity::eq:
-                case FixedArity::neq: {
+                case FixedArity(ToBool::eq):
+                case FixedArity(ToBool::neq): {
                     if (options.eval_equality) {
                         const bool equal = compare_tree(ref.new_at(call[1]), ref.new_at(call[2]))
                             == std::strong_ordering::equal;
-                        return TypedIdx(fixed_f == FixedArity::eq ? equal : !equal, MathType::boolean);
+                        return ((fixed_f == ToBool::eq) ^ equal) ? literal_false : literal_true;
                     }
                 } break;
-                case FixedArity::greater:
-                    return TypedIdx(determine_real_order(std::strong_ordering::greater), MathType::boolean);
-                case FixedArity::smaller:
-                    return TypedIdx(determine_real_order(std::strong_ordering::less), MathType::boolean);
-                case FixedArity::greater_eq:
-                    return TypedIdx(!determine_real_order(std::strong_ordering::less), MathType::boolean);
-                case FixedArity::smaller_eq: 
-                    return TypedIdx(!determine_real_order(std::strong_ordering::greater), MathType::boolean);
-                case FixedArity::fmap: {
+                case FixedArity(ToBool::greater):
+                    return bool_to_typed_idx(is_ordered_as(std::strong_ordering::greater));
+                case FixedArity(ToBool::smaller):
+                    return bool_to_typed_idx(is_ordered_as(std::strong_ordering::less));
+                case FixedArity(ToBool::greater_eq):
+                    return bool_to_typed_idx(!is_ordered_as(std::strong_ordering::less));
+                case FixedArity(ToBool::smaller_eq):
+                    return bool_to_typed_idx(!is_ordered_as(std::strong_ordering::greater));
+                case FixedArity(Misc::fmap): {
                     const TypedIdx converter = call[1];
                     const TypedIdx convertee = call[2];
                     const MutRef converter_ref = ref.new_at(converter);
                     const MutRef convertee_ref = ref.new_at(convertee);
-                    if (!is_unary_function(converter_ref) || convertee_ref.type != MathType::call) {
+                    if (!is_unary_function(converter_ref) || convertee_ref.type != Literal::call) {
                         return TypedIdx();
                     }
                     const auto stop = end(convertee_ref);
@@ -302,7 +317,7 @@ namespace simp {
                             copy_tree(converter_ref, *ref.store) : 
                             converter;
                         ref.store->at(call_index) = Call({ converter_copy, *iter });
-                        const TypedIdx res = combine_(MutRef(*ref.store, call_index, MathType::call), 
+                        const TypedIdx res = combine_(MutRef(*ref.store, call_index, Literal::call), 
                             options, 0);
                         *iter = res;
                     }
@@ -350,10 +365,10 @@ namespace simp {
                     //sorted with complex at beginning: last is complex -> all values are complex
                     //it is assumed, that only values along the real axis are encountered
                     UnsaveRef extreme = ref.new_at(call[1]);
-                    assert(extreme.type == MathType::complex);
+                    assert(extreme.type == Literal::complex);
                     for (auto iter = &call[2]; iter != call.end(); ++iter) {
                         const UnsaveRef new_val = ref.new_at(*iter);
-                        assert(new_val.type == MathType::complex);
+                        assert(new_val.type == Literal::complex);
                         if (more_extreme(new_val->complex.real(), extreme->complex.real())) {
                             ref.store->free_one(extreme.index);
                             extreme = new_val;
@@ -364,19 +379,19 @@ namespace simp {
                 };
                 switch (f.to<Variadic>()) {
                 case Variadic(Comm::and_): 
-                    return eval_bool(TypedIdx(1, MathType::boolean), TypedIdx(0, MathType::boolean));
+                    return eval_bool(literal_true, literal_false);
                 case Variadic(Comm::or_):
-                    return eval_bool(TypedIdx(0, MathType::boolean), TypedIdx(1, MathType::boolean));
+                    return eval_bool(literal_false, literal_true);
                 case Variadic(Comm::sum): {
                     auto range = call.parameters();
                     const TypedIdx* const stop = range.end();
                     for (auto iter_1 = range.begin(); iter_1 != stop; ++iter_1) {
-                        if (iter_1->get_type() != MathType::complex) {
+                        if (iter_1->get_type() != Literal::complex) {
                             break; //complex are ordered in front and sum is sorted
                         }
                         Complex& acc = *ref.new_at(*iter_1);
                         for (auto iter_2 = std::next(iter_1); iter_2 != stop; ++iter_2) {
-                            if (iter_2->get_type() != MathType::complex) {
+                            if (iter_2->get_type() != Literal::complex) {
                                 break;
                             }
                             Complex& summand = *ref.new_at(*iter_2);
@@ -394,11 +409,11 @@ namespace simp {
                     const TypedIdx* const stop = range.end();
                     for (auto iter_1 = range.begin(); iter_1 != stop; ++iter_1) {
                         switch (iter_1->get_type()) {
-                        case Type(MathType::complex): {
+                        case Type(Literal::complex): {
                             Complex& acc = *ref.new_at(*iter_1);
                             for (auto iter_2 = std::next(iter_1); iter_2 != stop; ++iter_2) {
                                 switch (iter_2->get_type()) {
-                                case Type(MathType::complex): {
+                                case Type(Literal::complex): {
                                     Complex& factor = *ref.new_at(*iter_2);
                                     if (maybe_accumulate(acc, factor,
                                         [](const Complex& lhs, const Complex& rhs) { return lhs * rhs; })) 
@@ -427,12 +442,12 @@ namespace simp {
                     remove_shallow_value(TypedIdx());
                 } break;
                 case Variadic(Comm::min): {
-                    if (call.back().get_type() == MathType::complex) {
+                    if (call.back().get_type() == Literal::complex) {
                         return find_extreme([](double lhs, double rhs) { return lhs < rhs; });
                     }
                 } break;
                 case Variadic(Comm::max): {
-                    if (call.back().get_type() == MathType::complex) {
+                    if (call.back().get_type() == Literal::complex) {
                         return find_extreme([](double lhs, double rhs) { return lhs > rhs; });
                     }
                 } break;
@@ -444,21 +459,21 @@ namespace simp {
         [[nodiscard]] TypedIdx replace_lambda_params(const MutRef ref, const bmath::intern::StupidBufferVector<TypedIdx, 16>& params, 
             bmath::intern::BitVector& used_params, const Options options, const unsigned lambda_param_offset)
         {
-            if (ref.type == MathType::call) {
+            if (ref.type == Literal::call) {
                 const auto stop = end(ref);
                 for (auto iter = begin(ref); iter != stop; ++iter) {
                     *iter = replace_lambda_params(ref.new_at(*iter), params, used_params, options, lambda_param_offset);
                 }
                 return combine_(ref, options, lambda_param_offset);
             }
-            else if (ref.type == MathType::lambda) {
+            else if (ref.type == Literal::lambda) {
                 ref->lambda.definition = replace_lambda_params(ref.new_at(ref->lambda.definition), 
                     params, used_params, options, lambda_param_offset);
             }
-            else if (ref.type == MathType::lambda_param) {
+            else if (ref.type == Literal::lambda_param) {
                 if (ref.index >= params.size()) { 
                     //function is not fully evaluated but only curried -> new param index = old - (number evaluated)
-                    return TypedIdx(ref.index - params.size(), MathType::lambda_param);
+                    return TypedIdx(ref.index - params.size(), Literal::lambda_param);
                 }
                 else if (used_params.test(ref.index)) {
                     return copy_tree(ref.new_at(params[ref.index]), *ref.store);
@@ -474,10 +489,10 @@ namespace simp {
         [[nodiscard]] TypedIdx BMATH_FORCE_INLINE eval_lambda(const MutRef ref, Options options, const unsigned lambda_param_offset)
         {
             options.recurse = false;
-            assert(ref.type == MathType::call);
+            assert(ref.type == Literal::call);
             const Call& call = *ref;
             const MutRef lambda = ref.new_at(call.function());
-            assert(lambda.type == MathType::lambda);
+            assert(lambda.type == Literal::lambda);
             bmath::intern::StupidBufferVector<TypedIdx, 16> params;
             for (const TypedIdx param : call.parameters()) {
                 params.push_back(param);
@@ -507,27 +522,27 @@ namespace simp {
         
         [[nodiscard]] TypedIdx add_offset(const MutRef ref, const unsigned lambda_param_offset)
         {
-            if (ref.type == MathType::call) {
+            if (ref.type == Literal::call) {
                 for (TypedIdx& subterm : ref) {
                     subterm = add_offset(ref.new_at(subterm), lambda_param_offset);
                 }
             }
-            else if (ref.type == MathType::lambda) {
+            else if (ref.type == Literal::lambda) {
                 Lambda& lambda = *ref;
                 if (lambda.transparent) {
                     lambda.definition = add_offset(ref.new_at(lambda.definition), lambda_param_offset);
                 }
             }
-            else if (ref.type == MathType::lambda_param) {
+            else if (ref.type == Literal::lambda_param) {
                 const std::uint32_t new_index = ref.index + lambda_param_offset;
-                return TypedIdx(new_index, MathType::lambda_param);
+                return TypedIdx(new_index, Literal::lambda_param);
             }
             return ref.typed_idx();
         }
 
         TypedIdx combine_(MutRef ref, const Options options, const unsigned lambda_param_offset)
         {
-            if (ref.type == MathType::call) {                
+            if (ref.type == Literal::call) {                
                 if (options.recurse) {
                     const auto stop = end(ref);                    
                     for (auto iter = begin(ref); iter != stop; ++iter) {
@@ -536,7 +551,7 @@ namespace simp {
                 }
                 const TypedIdx function = ref->call.function();
                 switch (function.get_type()) {
-                case Type(MathType::buildin): {
+                case Type(Literal::buildin): {
                     const fn::Buildin buildin_type = fn::from_typed_idx(function);
                     const bool associative = buildin_type.is<fn::Variadic>() && 
                         fn::is_associative(buildin_type.to<fn::Variadic>());
@@ -566,34 +581,14 @@ namespace simp {
                         }
                     }
                 } break;
-                case Type(MathType::lambda): {
+                case Type(Literal::lambda): {
                     if (options.eval_lambdas) {
                         return eval_lambda(ref, options, lambda_param_offset);
                     }
                 } break;
-                case Type(MathType::boolean): {
-                    const Call& call = *ref;
-                    if (call.size() != 3u) [[unlikely]] {
-                        throw "boolean may only be called as binary function";
-                    }
-                    if (options.eval_values || options.eval_lambdas) {
-                        const TypedIdx res = [&]() {
-                            if (function.get_index()) {
-                                free_tree(ref.new_at(call[2]));
-                                return call[1];
-                            }
-                            else {
-                                free_tree(ref.new_at(call[1]));
-                                return call[2];
-                            }
-                        }();
-                        Call::free(*ref.store, ref.index);
-                        return res;
-                    }
-                } break;
                 }
-            } //end ref.type == MathType::call
-            else if (ref.type == MathType::lambda) {
+            } //end ref.type == Literal::call
+            else if (ref.type == Literal::lambda) {
                 assert(!ref->lambda.transparent || lambda_param_offset != 0u && 
                     "no top-level lambda may be transparent!"); 
                 if (options.recurse) {
@@ -609,7 +604,7 @@ namespace simp {
                         lambda.transparent = true;
                         lambda.definition = add_offset(ref.new_at(lambda.definition), lambda_param_offset);
                     }
-                    if (lambda.definition.get_type() == MathType::lambda) {
+                    if (lambda.definition.get_type() == Literal::lambda) {
                         //relies on this beeing transparent
                         const UnsaveRef nested = ref.new_at(lambda.definition);
                         lambda.definition = nested->lambda.definition;
@@ -618,7 +613,7 @@ namespace simp {
                         ref.store->free_one(nested.index);
                     }
                 }
-            } //end ref.type == MathType::lambda
+            } //end ref.type == Literal::lambda
             return ref.typed_idx();
         } //combine_
 
@@ -627,45 +622,39 @@ namespace simp {
     void free_tree(const MutRef ref)
     {
         switch (ref.type) {
-        case Type(MathType::complex):
-            ref.store->free_one(ref.index);
+        case Type(Literal::complex):
             break;
-        case Type(MathType::symbol):
+        case Type(Literal::symbol):
             Symbol::free(*ref.store, ref.index);
-            break;
-        case Type(MathType::call):
-            if (ref->call.function().get_type().is<PatternBuildin>()) {
+            return;
+        case Type(Literal::call):
+            if (ref->call.function().get_type().is<PatternVariadic>()) {
                 ref.store->free_one(ref.index - 1u);                
             }
             for (const TypedIdx subtree : ref) {
                 free_tree(ref.new_at(subtree));
             }
             Call::free(*ref.store, ref.index);
-            break;
-        case Type(MathType::lambda):
+            return;
+        case Type(Literal::lambda):
             free_tree(ref.new_at(ref->lambda.definition));
-            ref.store->free_one(ref.index);
             break;
-        case Type(SingleMatch::restricted):            
-            if (const TypedIdx condition = ref->single_match.condition; 
-                condition != TypedIdx()) 
-            {
-                free_tree(ref.new_at(condition));
-            }
-            ref.store->free_one(ref.index);
+        case Type(Match::single_restricted):   
+            free_tree(ref.new_at(ref->single_match.condition));
             break;
-        case Type(ValueMatch::strong):
+        case Type(Match::value):
             free_tree(ref.new_at(ref->value_match.match_index));
-            ref.store->free_one(ref.index);            
             break;
         default:
-            assert(!is_node(ref.type));
+            assert(!is_stored_node(ref.type));
+            return;
         }
+        ref.store->free_one(ref.index);
     } //free_tree
 
     TypedIdx copy_tree(const Ref src_ref, Store& dst_store)
     {
-        if (!is_node(src_ref.type)) {
+        if (!is_stored_node(src_ref.type)) {
             return src_ref.typed_idx();
         }
 
@@ -676,21 +665,21 @@ namespace simp {
         };
 
         switch (src_ref.type) {
-        case Type(MathType::complex):
+        case Type(Literal::complex):
             return insert_node(*src_ref, src_ref.type);
-        case Type(MathType::symbol): {
+        case Type(Literal::symbol): {
             const Symbol& src_var = *src_ref;
             const auto src_name = std::string(src_var.data(), src_var.size());
             const std::size_t dst_index = Symbol::build(dst_store, src_name);
             return TypedIdx(dst_index, src_ref.type);
         } break;
-        case Type(MathType::call): {
+        case Type(Literal::call): {
             bmath::intern::StupidBufferVector<TypedIdx, 16> dst_subterms;
             const auto stop = end(src_ref);
             for (auto iter = begin(src_ref); iter != stop; ++iter) {
                 dst_subterms.push_back(copy_tree(src_ref.new_at(*iter), dst_store));
             }
-            if (dst_subterms.front().get_type() == PatternBuildin{}) { //also copy variadic metadata
+            if (dst_subterms.front().get_type() == PatternVariadic{}) { //also copy variadic metadata
                 const std::size_t call_capacity = Call::smallest_fit_capacity(dst_subterms.size());
                 const std::size_t nr_call_nodes = Call::_node_count(call_capacity);
 
@@ -704,19 +693,17 @@ namespace simp {
                 return TypedIdx(dst_index, src_ref.type);
             }
         } break;
-        case Type(MathType::lambda): {
+        case Type(Literal::lambda): {
             Lambda lambda = *src_ref;
             lambda.definition = copy_tree(src_ref.new_at(lambda.definition), dst_store);
             return insert_node(lambda, src_ref.type);
         } break;
-        case Type(SingleMatch::restricted): {
+        case Type(Match::single_restricted): {
             RestrictedSingleMatch var = *src_ref;
-            if (var.condition != TypedIdx()) {
-                var.condition = copy_tree(src_ref.new_at(var.condition), dst_store);
-            }
+            var.condition = copy_tree(src_ref.new_at(var.condition), dst_store);
             return insert_node(var, src_ref.type);
         } break;
-        case Type(ValueMatch::strong): {
+        case Type(Match::value): {
             StrongValueMatch var = *src_ref;
             var.match_index = copy_tree(src_ref.new_at(var.match_index), dst_store);
             return insert_node(var, src_ref.type);
@@ -742,11 +729,11 @@ namespace simp {
             return fst.type <=> snd.type;
         }
         switch (fst.type) {
-        case Type(MathType::complex): 
+        case Type(Literal::complex): 
             return bmath::intern::compare_complex(*fst, *snd);
-        case Type(MathType::symbol):
+        case Type(Literal::symbol):
             return std::string_view(fst->symbol) <=> std::string_view(snd->symbol);
-        case Type(MathType::call): {
+        case Type(Literal::call): {
             const auto fst_end = fst->call.end();
             const auto snd_end = snd->call.end();
             auto fst_iter = fst->call.begin();
@@ -763,7 +750,7 @@ namespace simp {
             }
             return std::strong_ordering::equal;
         } break;
-        case Type(MathType::lambda): {
+        case Type(Literal::lambda): {
             const Lambda fst_lambda = *fst;
             const Lambda snd_lambda = *snd;
             if (fst_lambda.param_count != snd_lambda.param_count) {
@@ -774,12 +761,12 @@ namespace simp {
             }
             return compare_tree(fst.new_at(fst_lambda.definition), snd.new_at(snd_lambda.definition));
         } break;
-        case Type(SingleMatch::restricted): 
+        case Type(Match::single_restricted): 
             return fst->single_match.match_data_index <=> snd->single_match.match_data_index;
-        case Type(ValueMatch::strong):
+        case Type(Match::value):
             return fst->value_match.match_data_index <=> snd->value_match.match_data_index;
         default:
-            assert(!is_node(fst.type));
+            assert(!is_stored_node(fst.type));
             return fst.index <=> snd.index;
         }
     } //compare_tree
