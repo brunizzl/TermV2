@@ -144,6 +144,9 @@ namespace simp {
 					if (!mundane_name(view)) [[unlikely]] { //tests not name, but the '\'' make no difference
 						throw bmath::ParseFailure{ view.offset, "please decide: this looks weird" };
 					}
+					if (fn::type_of(name) != fn::Buildin(fn::Buildin::COUNT)) [[unlikely]] {
+						throw bmath::ParseFailure{ view.offset, "sneaking in keywords like that is forbidden" };
+					}
 					return TypedIdx(Symbol::build(store, name), Literal::symbol);
 				}
 				if (name.find_first_of(' ') != std::string_view::npos) [[unlikely]] {

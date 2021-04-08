@@ -89,7 +89,7 @@ int main()
 			{ "x*as... + x*bs... = x*(as... + bs...)" },
 			{ "x*as... + x*bs... = x*(as... + bs...)" },
 			{ "'Y' = \\f.(\\x.f(x(x)))(\\x.f(x(x)))" },
-			{ "'true_' = \\x y . x" }
+			{ "'true__' = \\x y . x" }
 		});
 		for (const auto& name : names) {
 			auto rule = simp::RewriteRule(name);
