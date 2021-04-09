@@ -21,7 +21,7 @@ namespace simp {
 
 		constexpr MutRef mut_ref() noexcept { return MutRef(this->store, this->head); }
 
-		bool establish_order(const combine::Options o = { .never_recurse = false }) 
+		bool establish_order(const combine::Options o = {}) 
 		{ 
 			const auto res = combine::lazy(this->mut_ref(), o, 0);
 			this->head = res.res;

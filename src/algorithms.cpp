@@ -17,11 +17,11 @@
 
 namespace simp {
 
-    void debug_print_ref(const UnsaveRef ref, const std::string& info = "")
+    std::string debug_name_ref(const UnsaveRef ref)
     {
         std::string name;
         print::append_to_string(ref, name, 0);
-        std::cout << info << name << "\n";
+        return name;
     } //debug_print_ref
 
     bool in_complex_subset(const Complex& nr, const ComplexSubset subset)
@@ -195,13 +195,6 @@ namespace simp {
             assert(function.get_type() == Literal::buildin);
             assert(ref.type == Literal::call);
             const Buildin f = from_typed_idx(function);
-            if (!options.never_recurse && !prefer_lazy_evaluation(f)) {
-                const auto stop = end(ref);
-                auto iter = begin(ref);
-                for (++iter; iter != stop; ++iter) {
-                    *iter = combine::outermost(ref.new_at(*iter), options, lambda_param_offset).res;
-                }
-            }
             Call& call = *ref;
             assert(call.function() == function);
             if (f.is<FixedArity>()) {
@@ -474,7 +467,8 @@ namespace simp {
                 for (auto iter = begin(ref); iter != stop; ++iter) {
                     *iter = replace_lambda_params(ref.new_at(*iter), params, options, lambda_param_offset);
                 }
-                return ref.typed_idx();
+                assert(!options.eval_lambdas);
+                return combine::outermost(ref, options, lambda_param_offset).res;
             }
             else if (ref.type == Literal::lambda && ref->lambda.transparent) {
                 ref->lambda.definition = replace_lambda_params(ref.new_at(ref->lambda.definition), 
@@ -497,7 +491,7 @@ namespace simp {
             return ref.typed_idx();
         } //replace_lambda_params
 
-        [[nodiscard]] TypedIdx BMATH_FORCE_INLINE eval_lambda(const MutRef ref, const Options options, const unsigned lambda_param_offset)
+        [[nodiscard]] TypedIdx BMATH_FORCE_INLINE eval_lambda(const MutRef ref, Options options, const unsigned lambda_param_offset)
         {
             assert(ref.type == Literal::call);
             const Call& call = *ref;
@@ -512,6 +506,7 @@ namespace simp {
                 throw "too many arguments for called lambda";
             }
             Call::free(*ref.store, ref.index); //only free call itself, neighter lambda nor lambda parameters
+            options.eval_lambdas = false;
             const TypedIdx evaluated = replace_lambda_params(
                 ref.new_at(lambda->lambda.definition), params, options, lambda_param_offset);
             for (const TypedIdx param : params) {

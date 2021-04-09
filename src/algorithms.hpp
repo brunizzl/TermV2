@@ -14,7 +14,6 @@ namespace simp {
     namespace combine {
         struct Options 
         {
-            bool never_recurse = true; //true: all functions are evaluated lazy, false: evaluation strategy is decided by fn::Eval for buildin
             bool eval_values = true; //true: sums, products... (and calls to true/ false) are evaluated as much as possible (e.g. "1 + a + 3 -> 4 + a")
             bool exact = true; //(only significant if eval_values) true: only exact operations are permitted
             bool eval_equality = true; //fn::FixedArity::eq and ...neq can always be evaluated -> evaluate them (not intelligent for pattern restrictions)

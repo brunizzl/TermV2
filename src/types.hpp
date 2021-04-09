@@ -386,8 +386,6 @@ namespace simp {
 
 
 	namespace fn {
-		enum class Eval { lazy, eager };
-
 		// a function of fixed arity may restrict the different parameters differently. 
 		//if more than four parameters are expected, all parameters beyond the third share the forth restriction
 		struct FixedInputSpace
@@ -417,12 +415,11 @@ namespace simp {
 			std::size_t arity;
 			FixedInputSpace input_space = {}; //assumes all parameters to have the same restriction
 			Restriction result_space = Restr::none;
-			Eval eval_strategy = Eval::eager;
 		};
 
 		constexpr auto fixed_arity_table = std::to_array<FixedArityProps>({
-			{ Bool::false_            , "false"     , 2u, { Restr::none         }, Restr::none                 , Eval::lazy },
-			{ Bool::true_             , "true"      , 2u, { Restr::none         }, Restr::none                 , Eval::lazy },
+			{ Bool::false_            , "false"     , 2u, { Restr::none         }, Restr::none                 },
+			{ Bool::true_             , "true"      , 2u, { Restr::none         }, Restr::none                 },
 			{ ToBool::not_            , "not"       , 1u, { Restr::boolean      }, Restr::boolean              },
 			{ ToBool::eq              , "eq"        , 2u, { Restr::none         }, Restr::boolean              },
 			{ ToBool::neq             , "neq"       , 2u, { Restr::none         }, Restr::boolean              },
@@ -548,15 +545,6 @@ namespace simp {
 		constexpr Restriction input_space(const Variadic f) { return variadic_table[static_cast<unsigned>(f)].input_space; }
 
 		constexpr const FixedInputSpace& input_space(const FixedArity f) { return fixed_arity_table[static_cast<unsigned>(f)].input_space; }
-
-		constexpr bool prefer_lazy_evaluation(const Buildin f)
-		{
-			if (f.is<FixedArity>()) {
-				return fixed_arity_table[static_cast<unsigned>(f.to<FixedArity>())].eval_strategy == Eval::lazy;
-			}
-			return false;
-		}
-
 	} //namespace fn
 
 
