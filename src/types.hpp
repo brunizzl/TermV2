@@ -34,9 +34,9 @@ namespace simp {
 	//acts exactly like Literal::buildin 
 	//  -> .get_index() of TypedIdx with .get_type() == PatternVariadic{} yields fn::Buildin value
 	//difference: if PatternVariadic is used, there is a VariadicMetaData allocated directly 
-	//  in front of call calling  PatternVariadic
-	//layout in store: [...][...][VariadicMetaData][Call][...][...] 
-	//  if the [Call] node has a .function() of .get_type() beeing PatternVariadic
+	//  after call calling PatternVariadic
+	//layout in store: [...][...][first call node][more call nodes...][last call node][VariadicMetaData][...] 
+	//  if the [first call node] node has a .function() of .get_type() beeing PatternVariadic
 	struct PatternVariadic :bmath::intern::SingleSumEnumEntry {}; 
 
 	//acts as unsigned integer type for pattern construction and as auxilliary pattern type
@@ -117,6 +117,8 @@ namespace simp {
 		//these functions take complex values as arguments (the arity may be greater than one) and return complex values
 		enum class CtoC
 		{
+			negate, //x -> -x
+			invert, //x -> 1/x
 			pow,    //params[0] := base      params[1] := expo    
 			log,	//params[0] := base      params[1] := argument
 			sqrt,	//params[0] := argument
@@ -225,6 +227,7 @@ namespace simp {
 		constexpr void remove_suffix(const std::size_t length) noexcept { stop -= std::min(length, stop - start); }
 		constexpr T* begin() const noexcept { return this->start; }
 		constexpr T* end() const noexcept { return this->stop; }
+		constexpr std::size_t size() const noexcept { return this->stop - this->start; }
 	};
 
 	struct Call :StoredVector<TypedIdx>
@@ -265,8 +268,15 @@ namespace simp {
 		COUNT
 	};
 
-	struct Unrestricted :bmath::intern::SingleSumEnumEntry {}; //used if SingleMatch is restricted only by a condition
-	using Restriction = SumEnum<Type, fn::Buildin, ComplexSubset, Unrestricted>; //fn::BUildin is more precise Literal::call
+	enum class Restr
+	{
+		none, //everything is possible
+		callable, 
+		boolean,
+		COUNT
+	};
+
+	using Restriction = SumEnum<Type, fn::Buildin, ComplexSubset, Restr>; //fn::Buildin is more precise Literal::call
 
 	struct RestrictedSingleMatch
 	{
@@ -284,7 +294,7 @@ namespace simp {
 	};
 
 	//in a valid pattern every commutatice Variadic and every 
-	//  non-commutative Variadic containing at least one MultiMatch is preceeded by an element of this
+	//  non-commutative Variadic containing at least one MultiMatch is suceeded by an element of this
 	struct VariadicMetaData
 	{
 		std::uint32_t match_data_index = -1u; //indexes in MatchData::variadic_match_data
@@ -359,66 +369,100 @@ namespace simp {
 	}
 
 
-	constexpr VariadicMetaData variadic_meta_data(const UnsaveRef ref)
+	constexpr const VariadicMetaData& variadic_meta_data(const UnsaveRef ref)
 	{
 		assert(ref.type == Literal::call);
 		assert(ref->call.function().get_type().is<PatternVariadic>());
-		return *(ref.ptr - 1);
+		return *(ref.ptr + ref->call.node_count());
+	}
+
+	constexpr VariadicMetaData& variadic_meta_data(const MutRef ref)
+	{
+		assert(ref.type == Literal::call);
+		assert(ref->call.function().get_type().is<PatternVariadic>());
+		return *(&ref.store->at(ref.index) + ref->call.node_count());
 	}
 
 
 
 	namespace fn {
+		enum class Eval { lazy, eager };
+
+		// a function of fixed arity may restrict the different parameters differently. 
+		//if more than four parameters are expected, all parameters beyond the third share the forth restriction
+		struct FixedInputSpace
+		{
+			static constexpr std::size_t max_different_count = 4;
+			Restriction param_spaces[max_different_count];
+
+			constexpr FixedInputSpace() noexcept :param_spaces{ Restr::none, Restr::none, Restr::none, Restr::none } {}
+
+			constexpr FixedInputSpace(Restriction p0)                                                 noexcept : param_spaces{ p0, p0, p0, p0 } {}
+			constexpr FixedInputSpace(Restriction p0, Restriction p1)                                 noexcept : param_spaces{ p0, p1, p1, p1 } {}
+			constexpr FixedInputSpace(Restriction p0, Restriction p1, Restriction p2)                 noexcept : param_spaces{ p0, p1, p2, p2 } {}
+			constexpr FixedInputSpace(Restriction p0, Restriction p1, Restriction p2, Restriction p3) noexcept : param_spaces{ p0, p1, p2, p3 } {}
+
+			constexpr Restriction operator[](const std::size_t idx) const noexcept 
+			{ 
+				return idx < max_different_count ? 
+					this->param_spaces[idx] : 
+					this->param_spaces[max_different_count - 1u]; 
+			}
+		};
+
 		struct FixedArityProps
 		{
 			FixedArity type;
 			std::string_view name;
 			std::size_t arity;
-			Restriction input_space = Unrestricted{}; //assumes all parameters to have the same restriction
-			Restriction result_space = Unrestricted{};
+			FixedInputSpace input_space = {}; //assumes all parameters to have the same restriction
+			Restriction result_space = Restr::none;
+			Eval eval_strategy = Eval::eager;
 		};
 
 		constexpr auto fixed_arity_table = std::to_array<FixedArityProps>({
-			{ Bool::false_            , "false"     , 2u, Unrestricted{}     , Unrestricted{}          },
-			{ Bool::true_             , "true"      , 2u, Unrestricted{}     , Unrestricted{}          },
-			{ ToBool::not_            , "not"       , 1u, Unrestricted{}     , Unrestricted{}          },	//true_ and false_ are different types :(
-			{ ToBool::eq              , "eq"        , 2u, Unrestricted{}     , Unrestricted{}          },	//true_ and false_ are different types :(
-			{ ToBool::neq             , "neq"       , 2u, Unrestricted{}     , Unrestricted{}          },	//true_ and false_ are different types :(
-			{ ToBool::greater         , "greater"   , 2u, ComplexSubset::real, Unrestricted{}          },	//true_ and false_ are different types :(
-			{ ToBool::smaller         , "smaller"   , 2u, ComplexSubset::real, Unrestricted{}          },	//true_ and false_ are different types :(
-			{ ToBool::greater_eq      , "greater_eq", 2u, ComplexSubset::real, Unrestricted{}          },	//true_ and false_ are different types :(
-			{ ToBool::smaller_eq      , "smaller_eq", 2u, ComplexSubset::real, Unrestricted{}          },	//true_ and false_ are different types :(
-			{ CtoC::pow               , "pow"       , 2u, Literal::complex   , Literal::complex        },
-			{ CtoC::log               , "log"       , 2u, Literal::complex   , Literal::complex        },
-			{ CtoC::sqrt              , "sqrt"      , 1u, Literal::complex   , Literal::complex        },
-			{ CtoC::exp               , "exp"       , 1u, Literal::complex   , Literal::complex        },
-			{ CtoC::ln                , "ln"        , 1u, Literal::complex   , Literal::complex        },
-			{ CtoC::sin               , "sin"       , 1u, Literal::complex   , Literal::complex        },
-			{ CtoC::cos               , "cos"       , 1u, Literal::complex   , Literal::complex        },
-			{ CtoC::tan               , "tan"       , 1u, Literal::complex   , Literal::complex        },
-			{ CtoC::sinh              , "sinh"      , 1u, Literal::complex   , Literal::complex        },
-			{ CtoC::cosh              , "cosh"      , 1u, Literal::complex   , Literal::complex        },
-			{ CtoC::tanh              , "tanh"      , 1u, Literal::complex   , Literal::complex        },
-			{ CtoC::asin              , "asin"      , 1u, Literal::complex   , Literal::complex        },
-			{ CtoC::acos              , "acos"      , 1u, Literal::complex   , Literal::complex        },
-			{ CtoC::atan              , "atan"      , 1u, Literal::complex   , Literal::complex        },
-			{ CtoC::asinh             , "asinh"     , 1u, Literal::complex   , Literal::complex        },
-			{ CtoC::acosh             , "acosh"     , 1u, Literal::complex   , Literal::complex        },
-			{ CtoC::atanh             , "atanh"     , 1u, Literal::complex   , Literal::complex        },
-			{ CtoC::abs               , "abs"       , 1u, Literal::complex   , Literal::complex        },
-			{ CtoC::arg               , "arg"       , 1u, Literal::complex   , Literal::complex        },
-			{ CtoC::re                , "re"        , 1u, Literal::complex   , Literal::complex        },
-			{ CtoC::im                , "im"        , 1u, Literal::complex   , Literal::complex        },
-			{ Misc::id                , "id"        , 1u, Unrestricted{}     , Unrestricted{}          },
-			{ Misc::force             , "force"     , 1u, Literal::complex   , Literal::complex        },
-			{ Misc::diff              , "diff"      , 2u, Unrestricted{}     , Unrestricted{}          },
-			{ Misc::pair              , "pair"      , 2u, Unrestricted{}     , Misc::pair              },
-			{ Misc::triple            , "triple"    , 3u, Unrestricted{}     , Misc::triple            },
-			{ Misc::fmap              , "fmap"      , 2u, Unrestricted{}     , Unrestricted{}          },
-			{ PatternAux::single_match, "_SM"       , 2u, Unrestricted{}     , Unrestricted{}          },
-			{ PatternAux::value_match , "_VM"       , 2u, Unrestricted{}     , Unrestricted{}          },
-			{ PatternAux::value_proxy , "_VP"       , 0u, Unrestricted{}     , PatternAux::value_proxy },
-			{ PatternAux::multi_match , "_MM"       , 2u, Unrestricted{}     , Unrestricted{}          },
+			{ Bool::false_            , "false"     , 2u, { Restr::none         }, Restr::none                 , Eval::lazy },
+			{ Bool::true_             , "true"      , 2u, { Restr::none         }, Restr::none                 , Eval::lazy },
+			{ ToBool::not_            , "not"       , 1u, { Restr::boolean      }, Restr::boolean              },
+			{ ToBool::eq              , "eq"        , 2u, { Restr::none         }, Restr::boolean              },
+			{ ToBool::neq             , "neq"       , 2u, { Restr::none         }, Restr::boolean              },
+			{ ToBool::greater         , "greater"   , 2u, { ComplexSubset::real }, Restr::boolean              },
+			{ ToBool::smaller         , "smaller"   , 2u, { ComplexSubset::real }, Restr::boolean              },
+			{ ToBool::greater_eq      , "greater_eq", 2u, { ComplexSubset::real }, Restr::boolean              },
+			{ ToBool::smaller_eq      , "smaller_eq", 2u, { ComplexSubset::real }, Restr::boolean              },
+			{ CtoC::negate            , "negate"    , 1u, { Literal::complex    }, Literal::complex            },
+			{ CtoC::invert            , "invert"    , 1u, { Literal::complex    }, Literal::complex            },
+			{ CtoC::pow               , "pow"       , 2u, { Literal::complex    }, Literal::complex            },
+			{ CtoC::log               , "log"       , 2u, { Literal::complex    }, Literal::complex            },
+			{ CtoC::sqrt              , "sqrt"      , 1u, { Literal::complex    }, Literal::complex            },
+			{ CtoC::exp               , "exp"       , 1u, { Literal::complex    }, Literal::complex            },
+			{ CtoC::ln                , "ln"        , 1u, { Literal::complex    }, Literal::complex            },
+			{ CtoC::sin               , "sin"       , 1u, { Literal::complex    }, Literal::complex            },
+			{ CtoC::cos               , "cos"       , 1u, { Literal::complex    }, Literal::complex            },
+			{ CtoC::tan               , "tan"       , 1u, { Literal::complex    }, Literal::complex            },
+			{ CtoC::sinh              , "sinh"      , 1u, { Literal::complex    }, Literal::complex            },
+			{ CtoC::cosh              , "cosh"      , 1u, { Literal::complex    }, Literal::complex            },
+			{ CtoC::tanh              , "tanh"      , 1u, { Literal::complex    }, Literal::complex            },
+			{ CtoC::asin              , "asin"      , 1u, { Literal::complex    }, Literal::complex            },
+			{ CtoC::acos              , "acos"      , 1u, { Literal::complex    }, Literal::complex            },
+			{ CtoC::atan              , "atan"      , 1u, { Literal::complex    }, Literal::complex            },
+			{ CtoC::asinh             , "asinh"     , 1u, { Literal::complex    }, Literal::complex            },
+			{ CtoC::acosh             , "acosh"     , 1u, { Literal::complex    }, Literal::complex            },
+			{ CtoC::atanh             , "atanh"     , 1u, { Literal::complex    }, Literal::complex            },
+			{ CtoC::abs               , "abs"       , 1u, { Literal::complex    }, ComplexSubset::not_negative },
+			{ CtoC::arg               , "arg"       , 1u, { Literal::complex    }, ComplexSubset::not_negative },
+			{ CtoC::re                , "re"        , 1u, { Literal::complex    }, ComplexSubset::real         },
+			{ CtoC::im                , "im"        , 1u, { Literal::complex    }, ComplexSubset::real         },
+			{ Misc::id                , "id"        , 1u, { Restr::none         }, Restr::none                 },
+			{ Misc::force             , "force"     , 1u, { Literal::complex    }, Literal::complex            },
+			{ Misc::diff              , "diff"      , 2u, { Restr::none, Literal::symbol }, Restr::none },
+			{ Misc::pair              , "pair"      , 2u, {}, Misc::pair },
+			{ Misc::triple            , "triple"    , 3u, {}, Misc::triple },
+			{ Misc::fmap              , "fmap"      , 2u, { Restr::none, Literal::call }, Literal::call },
+			{ PatternAux::single_match, "_SM"       , 2u, { Restr::none         }, Restr::none                 },
+			{ PatternAux::value_match , "_VM"       , 2u, { Restr::none         }, Restr::none                 },
+			{ PatternAux::value_proxy , "_VP"       , 0u, { Restr::none         }, PatternAux::value_proxy     },
+			{ PatternAux::multi_match , "_MM"       , 2u, { Restr::none         }, Restr::none                 },
 		});
 		static_assert(static_cast<unsigned>(fixed_arity_table.front().type) == 0u);
 		static_assert(std::is_sorted(fixed_arity_table.begin(), fixed_arity_table.end(),
@@ -436,20 +480,20 @@ namespace simp {
 			Variadic type;
 			std::string_view name;
 			bool associative; //allows to flatten nested instances if true
-			Restriction input_space = Unrestricted{}; //assumes all parameters to have the same restriction
-			Restriction result_space = Unrestricted{};
+			Restriction input_space = Restr::none; //assumes all parameters to have the same restriction
+			Restriction result_space = Restr::none;
 		};
 
 		constexpr auto variadic_table = std::to_array<VariadicProps>({
-			{ NonComm::list           , "list"        , false, Unrestricted{}     , NonComm::list       },
-			{ NonComm::ordered_sum    , "sum'"        , true , Unrestricted{}     , Unrestricted{}      },
-			{ NonComm::ordered_product, "product'"    , true , Unrestricted{}     , Unrestricted{}      },
+			{ NonComm::list           , "list"        , false, Restr::none        , NonComm::list       },
+			{ NonComm::ordered_sum    , "sum'"        , true , Restr::none        , Restr::none         },
+			{ NonComm::ordered_product, "product'"    , true , Restr::none        , Restr::none         },
 			{ Comm::sum               , "sum"         , true , Literal::complex   , Literal::complex    },
 			{ Comm::product           , "product"     , true , Literal::complex   , Literal::complex    },
-			{ Comm::and_              , "and"         , true , Unrestricted{}     , Unrestricted{}      }, //true_ and false_ are different types :(
-			{ Comm::or_               , "or"          , true , Unrestricted{}     , Unrestricted{}      }, //true_ and false_ are different types :(
-			{ Comm::multiset          , "multiset"    , false, Unrestricted{}     , Comm::multiset      },
-			{ Comm::set               , "set"         , false, Unrestricted{}     , Comm::set           },
+			{ Comm::and_              , "and"         , true , Restr::boolean     , Restr::boolean      },
+			{ Comm::or_               , "or"          , true , Restr::boolean     , Restr::boolean      },
+			{ Comm::multiset          , "multiset"    , false, Restr::none        , Comm::multiset      },
+			{ Comm::set               , "set"         , false, Restr::none        , Comm::set           },
 			{ Comm::union_            , "union"       , true , Comm::set          , Comm::set           },
 			{ Comm::intersection      , "intersection", true , Comm::set          , Comm::set           },
 			{ Comm::min               , "min"         , true , ComplexSubset::real, ComplexSubset::real },
@@ -501,14 +545,18 @@ namespace simp {
 			return fixed_arity_table[static_cast<unsigned>(f.to<FixedArity>())].result_space;
 		}
 
-		constexpr Restriction input_space(const Buildin f)
+		constexpr Restriction input_space(const Variadic f) { return variadic_table[static_cast<unsigned>(f)].input_space; }
+
+		constexpr const FixedInputSpace& input_space(const FixedArity f) { return fixed_arity_table[static_cast<unsigned>(f)].input_space; }
+
+		constexpr bool prefer_lazy_evaluation(const Buildin f)
 		{
-			if (f.is<Variadic>()) {
-				return variadic_table[static_cast<unsigned>(f.to<Variadic>())].input_space;
+			if (f.is<FixedArity>()) {
+				return fixed_arity_table[static_cast<unsigned>(f.to<FixedArity>())].eval_strategy == Eval::lazy;
 			}
-			assert(f.is<FixedArity>());
-			return fixed_arity_table[static_cast<unsigned>(f.to<FixedArity>())].input_space;
+			return false;
 		}
+
 	} //namespace fn
 
 

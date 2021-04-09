@@ -447,9 +447,9 @@ namespace simp {
 				break;
 			case Type(Literal::lambda): {
 				const Lambda& lambda = *ref;
-				str.append("(\\.");
+				str.append(lambda.transparent ? "(\\." : "{\\.");
 				append_to_string(ref.new_at(lambda.definition), str, max_infixr);
-				str.push_back(')');
+				str.push_back(lambda.transparent ? ')' : '}');
 			} break;
 			case Type(Literal::lambda_param):
 				str.push_back('%');
@@ -491,6 +491,112 @@ namespace simp {
 				assert(false);
 			}
 		} //append_to_string
+
+
+		void append_memory_row(const Ref ref, std::vector<std::string>& rows)
+		{
+			const auto show_string_nodes = [&ref, &rows](std::uint32_t idx, bool show_first) {
+				const Symbol& s = ref.store->at(idx);
+				const std::size_t end = idx + s.node_count();
+				if (!show_first) {
+					idx++;
+				}
+				while (idx < end) {
+					rows[idx++] += "...";
+				}
+			};
+			if (!is_stored_node(ref.type)) {
+				return;
+			}
+
+			std::string& current_str = rows[ref.index];
+			switch (ref.type) {
+			case Type(Literal::complex): {
+				current_str += "value      : ";
+			} break;
+			case Type(Literal::symbol): {
+				current_str += "symbol     : ";
+				show_string_nodes(ref.index, false);
+			} break;
+			case Type(Literal::call): {
+				//parameters:
+				current_str += "call:      { ";
+				const char* separator = "";
+				const Call& vec = *ref;
+				std::string* current_line = &current_str; //as we never add a new string to rows, this pointer will not dangle
+				std::size_t vec_idx = 0u;
+				const auto maybe_start_new_line = [&] {
+					if ((vec_idx - Call::min_capacity) % Call::values_per_node == 0) {
+						*(++current_line) += "  ...        ";
+					}
+				};
+				for (; vec_idx < vec.size(); vec_idx++) {
+					*current_line += std::exchange(separator, ", ");
+					maybe_start_new_line();
+					const std::size_t elem_idx = vec[vec_idx].get_index();
+					if (elem_idx < 10) {
+						*current_line += ' '; //pleeeaaasee std::format, where are you? :(
+					}
+					if (elem_idx < 100) {
+						*current_line += ' '; //pleeeaaasee std::format, where are you? :(
+					}
+					*current_line += std::to_string(elem_idx);
+					print::append_memory_row(ref.new_at(vec[vec_idx]), rows);
+				}
+				*current_line += " }";
+				for (; vec_idx < vec.capacity(); vec_idx++) {
+					maybe_start_new_line();
+				}
+			} break;
+			case Type(Literal::lambda): {
+				const Lambda& lam= *ref;
+				current_str += "lambda     : ";
+				print::append_memory_row(ref.new_at(lam.definition), rows);
+			} break;
+			default:
+				current_str += "unknown...";
+			}
+
+			//append name of subterm to line
+			current_str.append(std::max(0, 38 - (int)current_str.size()), ' ');
+			print::append_to_string(ref, current_str, 0);
+		} //append_memory_row
+
+		std::string to_memory_layout(const Store& store, const std::initializer_list<const TypedIdx> heads)
+		{
+			std::vector<std::string> rows(std::max(store.size(), bmath::intern::pattern::match::MatchData::max_variadic_count), "");
+
+			std::string result((heads.size() == 1u) ? "  head at index: " : "  heads at indices: ");
+			result.reserve(store.size() * 15);
+			{
+				const char* separator = "";
+				for (const auto head : heads) {
+					result += std::exchange(separator, ", ");
+					result += std::to_string(head.get_index());
+					print::append_memory_row(Ref(store, head), rows);
+				}
+				result += "\n";
+			}
+			{
+				const bmath::intern::BitVector used_positions = store.storage_occupancy();
+				for (int i = 0; i < store.size(); i++) {
+					if (i < 10) { //please std::format, i need you :(
+						result += "  ";
+					}
+					else if (i < 100) {
+						result += " ";
+					}
+					result += std::to_string(i);
+					result += " | ";
+					result += rows[i];
+					if (!used_positions.test(i)) {
+						result += "-----free slot-----";
+					}
+					result += "\n";
+				}
+			}
+			return result;
+		} //to_memory_layout
 
 	} //namespace print
 

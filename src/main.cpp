@@ -13,6 +13,7 @@
 TODO:
 
 important:
+ - fix lambda evaluation (error unknown)
  - fix pattern construction of value match in simp (value match is used like a proxy, but in reality owns a store node!)
  - construct pattern: single match, mutli match / variadic, value match
  - improve multi-match capabilities of NonComm variadic patterns (allow multiple multis in one NonComm instance)
@@ -52,10 +53,11 @@ int main()
 {
 	{
 		const auto names = std::to_array<std::string>({
-			{ "list(3 != 4, 3 < 4, 3 <= 4, 3 >= 4, 3 > 4, 3 == 4)" },
-			{ "list(4 != 4, 4 < 4, 4 <= 4, 4 >= 4, 4 > 4, 4 == 4)" },
+			{ "(\\f n. f(f, n))(\\f n.(n <= 1)(1, n * f(f, -1 + n)), 5)" },
+			{ "list(3 == 4, 3 != 4, 3 < 4, 3 <= 4, 3 >= 4, 3 > 4)" },
+			{ "list(4 == 4, 4 != 4, 4 < 4, 4 <= 4, 4 >= 4, 4 > 4)" },
+			{ "list(x == 4, x != 4, x < 4, x <= 4, x >= 4, x > 4)" },
 			{ "set(1, -4, 5, a, 12, 13+3i, 13+4i, 13-1i, 13, 13+1i, b, -10)" },
-			{ "\\f.(\\x.f(x(x)))(\\x.f(x(x)))" },
 			{ "\\x.\\y.\\z. x + y + z" },
 			{ "true(3, 4)" },
 			{ "false(3, 4^2)" },
@@ -69,15 +71,15 @@ int main()
 			{ "berb && frobbl && true && (false || !false || schmenck) && true && !alf" },
 			{ "10/5" },
 			{ "set(1, 100, a, b, 50 + 2 * 25, a, (\\x.2 x)(50))" },
-			{ "min(1, 100, 40, 50 + 2 * 25, -20, 101, (\\x.2 x)(50))" },
-			{ "max(1, 100, 40, 50 + 2 * 25, -20, 101, (\\x.2 x)(50))" },
 		});
 		for (const auto& name : names) {
 			std::cout << name << "\n";
 			auto term = simp::LiteralTerm(name);
 			std::cout << "  ->  " << term.to_string() << "\n";
+			std::cout << term.to_memory_layout() << "\n";
 			term.establish_order();
-			std::cout << "  ->  " << term.to_string() << "\n\n";
+			std::cout << "  ->  " << term.to_string() << "\n";
+			std::cout << term.to_memory_layout() << "\n\n";
 		}
 		std::cout << "\n";
 	}

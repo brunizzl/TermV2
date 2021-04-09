@@ -88,18 +88,16 @@ namespace simp {
 		template<bmath::intern::StoreLike Store_T>
 		[[nodiscard]] TypedIdx build_negated(Store_T& store, const TypedIdx to_negate) noexcept
 		{
-			const TypedIdx minus_1 = parse::build_value(store, -1.0);
 			const std::size_t result_idx = store.allocate_one();
-			new (&store.at(result_idx)) TermNode(Call{ fn::to_typed_idx(fn::Comm::product), minus_1, to_negate });
+			new (&store.at(result_idx)) TermNode(Call{ fn::to_typed_idx(fn::CtoC::negate), to_negate });
 			return TypedIdx(result_idx, Literal::call);
 		}
 
 		template<bmath::intern::StoreLike Store_T>
 		[[nodiscard]] TypedIdx build_inverted(Store_T& store, const TypedIdx to_invert) noexcept
 		{
-			const TypedIdx minus_1 = parse::build_value(store, -1.0);
 			const std::size_t result_idx = store.allocate_one();
-			new (&store.at(result_idx)) TermNode(Call{ fn::to_typed_idx(fn::CtoC::pow), to_invert, minus_1 });
+			new (&store.at(result_idx)) TermNode(Call{ fn::to_typed_idx(fn::CtoC::invert), to_invert });
 			return TypedIdx(result_idx, Literal::call);
 		}
 
@@ -122,6 +120,7 @@ namespace simp {
 
 		void append_to_string(const UnsaveRef ref, std::string& str, const int parent_infixr);
 
+		std::string to_memory_layout(const Store& store, const std::initializer_list<const TypedIdx> heads);
 	} //namespace print
 
 } //namespace simp

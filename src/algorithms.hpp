@@ -14,7 +14,7 @@ namespace simp {
     namespace combine {
         struct Options 
         {
-            bool recurse = true; //true: first combines subterms of Literal (no recursion for any of PatternType!)
+            bool never_recurse = true; //true: all functions are evaluated lazy, false: evaluation strategy is decided by fn::Eval for buildin
             bool eval_values = true; //true: sums, products... (and calls to true/ false) are evaluated as much as possible (e.g. "1 + a + 3 -> 4 + a")
             bool exact = true; //(only significant if eval_values) true: only exact operations are permitted
             bool eval_equality = true; //fn::FixedArity::eq and ...neq can always be evaluated -> evaluate them (not intelligent for pattern restrictions)
@@ -23,13 +23,21 @@ namespace simp {
             bool remove_unary_assoc = true; //true: "f(a) -> a" for all associative f (e.g. sum, product, and...)
         };
 
+        struct CombineRes
+        {
+            TypedIdx res;
+            bool change;
+        };
+
         //will always evaluate exact operations and merge nested calls of an associative operation
-        //  (meaning "f(as, f(bs...), cs...) -> f(as..., bs..., cs...)" for associative f)
+        //  (meaning "f(as..., f(bs...), cs...) -> f(as..., bs..., cs...)" for associative f)
         //lambda_param_offset counts how many parameters all parent lambdas hold together 
         //  example: if subterm "a" would be combined in term "\x.\y z. (a + 7)", lambda_param_offset == 3
         //returns combined ref, might invalidate old one
         //may throw if: a lambda is called with to many parameters or something not callable is called
-        [[nodiscard]] TypedIdx combine_(MutRef ref, const Options options, const unsigned lambda_param_offset);
+        [[nodiscard]] CombineRes outermost(MutRef ref, const Options options, const unsigned lambda_param_offset);
+
+        [[nodiscard]] CombineRes lazy(MutRef ref, const Options options, const unsigned lambda_param_offset);
     } //namespace combine
 
 

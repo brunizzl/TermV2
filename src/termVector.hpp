@@ -96,7 +96,7 @@ namespace bmath::intern {
 		template<typename Store_T, typename Init_T>
 		static constexpr [[nodiscard]] std::size_t build(Store_T& store, const Init_T& init) noexcept
 		{
-			const std::size_t alloc_capacity = smallest_fit_capacity(std::bit_ceil(init.size()));
+			const std::size_t alloc_capacity = smallest_fit_capacity(init.size());
 			const std::size_t alloc_idx = store.allocate_n(_node_count(alloc_capacity));
 			emplace(store.at(alloc_idx), init, alloc_capacity);
 			return alloc_idx;

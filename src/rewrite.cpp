@@ -26,6 +26,11 @@ namespace simp {
 		return res;
 	}
 
+	std::string LiteralTerm::to_memory_layout() const noexcept
+	{
+		return print::to_memory_layout(this->store, {this->head});
+	}
+
 	RewriteRule::RewriteRule(std::string name)
 	{
 		{
@@ -33,8 +38,8 @@ namespace simp {
 			this->lhs_head = lhs;
 			this->rhs_head = rhs;
 		}
-		this->lhs_head = combine::combine_(this->lhs_mut_ref(), {}, 0);
-		this->rhs_head = combine::combine_(this->rhs_mut_ref(), { .remove_unary_assoc = false }, 0);
+		this->lhs_head = combine::lazy(this->lhs_mut_ref(), {}, 0).res;
+		this->rhs_head = combine::lazy(this->rhs_mut_ref(), { .remove_unary_assoc = false }, 0).res;
 	}
 
 	std::string RewriteRule::to_string() const noexcept

@@ -15,11 +15,18 @@ namespace simp {
 
 		std::string to_string() const noexcept;
 
+		std::string to_memory_layout() const noexcept;
+
 		constexpr Ref ref() const noexcept { return Ref(this->store, this->head); }
 
 		constexpr MutRef mut_ref() noexcept { return MutRef(this->store, this->head); }
 
-		void establish_order() { this->head = combine::combine_(this->mut_ref(), {}, 0); }
+		bool establish_order(const combine::Options o = { .never_recurse = false }) 
+		{ 
+			const auto res = combine::lazy(this->mut_ref(), o, 0);
+			this->head = res.res;
+			return res.change;
+		}
 	}; //struct LiteralTerm
 
 	struct RewriteRule
