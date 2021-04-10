@@ -17,13 +17,6 @@
 
 namespace simp {
 
-    std::string debug_name_ref(const UnsaveRef ref)
-    {
-        std::string name;
-        print::append_to_string(ref, name, 0);
-        return name;
-    } //debug_print_ref
-
     bool in_complex_subset(const Complex& nr, const ComplexSubset subset)
     {
         constexpr double max_save_int = bmath::intern::nat_pow(2ull, 53) - 1; //largest integer explicitly stored in double
@@ -37,7 +30,8 @@ namespace simp {
         case ComplexSubset::natural_0: accept &= re >= 0.0;                      [[fallthrough]];
         case ComplexSubset::integer:   accept &= re - std::int64_t(re) == 0.0;
                                        accept &= (std::abs(re) <= max_save_int); [[fallthrough]];
-        case ComplexSubset::real:      accept &= im == 0.0;
+        case ComplexSubset::real:      accept &= im == 0.0;                      [[fallthrough]];
+        case ComplexSubset::complex:
             return accept;
 
         case ComplexSubset::negative:      return re <  0.0 && im == 0.0;
@@ -305,12 +299,12 @@ namespace simp {
                 } break;
                 case FixedArity(ToBool::eq):
                 case FixedArity(ToBool::neq): {
-                    if (options.eval_equality) {
-                        const bool equal = compare_tree(ref.new_at(call[1]), ref.new_at(call[2]))
-                            == std::strong_ordering::equal;
-                        free_tree(ref);
-                        return ((fixed_f == ToBool::eq) ^ equal) ? literal_false : literal_true;
+                    const std::partial_ordering ord = partial_compare_tree(ref.new_at(call[1]), ref.new_at(call[2]));
+                    if (ord == std::partial_ordering::unordered) {
+                        return TypedIdx();
                     }
+                    free_tree(ref);
+                    return bool_to_typed_idx((fixed_f == ToBool::eq) ^ (ord != std::partial_ordering::equivalent));
                 } break;
                 case FixedArity(ToBool::greater):
                     return bool_to_typed_idx(is_ordered_as(std::strong_ordering::greater));
@@ -326,9 +320,7 @@ namespace simp {
                     const MutRef converter_ref = ref.new_at(converter);
                     const MutRef convertee_ref = ref.new_at(convertee);
                     assert(convertee_ref.type == Literal::call);
-                    if (!is_unary_function(converter_ref)) {
-                        return TypedIdx();
-                    }
+                    assert(is_unary_function(converter_ref));
                     const auto stop = end(convertee_ref);
                     auto iter = begin(convertee_ref);
                     std::size_t remaining_parameters = convertee_ref->call.size() - 1u;
@@ -359,6 +351,7 @@ namespace simp {
                     const auto range = call.parameters();
                     const auto new_end = std::remove(range.begin(), range.end(), to_remove);
                     const std::size_t new_size = new_end - range.begin();
+                    static_assert(Call::values_per_node - Call::min_capacity == 1u);
                     call.size() = new_size + 1u; //+1 for function info itself
                     return new_size;
                 };
@@ -816,5 +809,58 @@ namespace simp {
             return fst.index <=> snd.index;
         }
     } //compare_tree
+
+    std::partial_ordering partial_compare_tree(const UnsaveRef fst, const UnsaveRef snd)
+    {
+        if (fst.type != snd.type) {
+            if (fst.type.is<PatternType>() || fst.type == Literal::lambda_param ||
+                snd.type.is<PatternType>() || snd.type == Literal::lambda_param)
+            {
+                return std::partial_ordering::unordered;
+            }
+            return fst.type <=> snd.type;
+        }
+        switch (fst.type) {
+        case Type(Literal::complex):
+            return bmath::intern::compare_complex(*fst, *snd);
+        case Type(Literal::symbol):
+            return std::string_view(fst->symbol) <=> std::string_view(snd->symbol);
+        case Type(Literal::call): {
+            const auto fst_end = fst->call.end();
+            const auto snd_end = snd->call.end();
+            auto fst_iter = fst->call.begin();
+            auto snd_iter = snd->call.begin();
+            for (; fst_iter != fst_end && snd_iter != snd_end; ++fst_iter, ++snd_iter) {
+                const std::partial_ordering cmp =
+                    partial_compare_tree(fst.new_at(*fst_iter), snd.new_at(*snd_iter));
+                if (cmp != std::partial_ordering::equivalent) {
+                    return cmp;
+                }
+            }
+            if (fst_iter != fst_end || snd_iter != snd_end) {
+                return fst->call.size() <=> snd->call.size();
+            }
+            return std::partial_ordering::equivalent;
+        } break;
+        case Type(Literal::lambda): {
+            const Lambda fst_lambda = *fst;
+            const Lambda snd_lambda = *snd;
+            if (fst_lambda.param_count != snd_lambda.param_count) {
+                return fst_lambda.param_count <=> snd_lambda.param_count;
+            }
+            if (fst_lambda.transparent != snd_lambda.transparent) {
+                return fst_lambda.transparent <=> snd_lambda.transparent;
+            }
+            return partial_compare_tree(fst.new_at(fst_lambda.definition), snd.new_at(snd_lambda.definition));
+        } break;
+        case Type(Match::single_restricted):
+            return fst->single_match.match_data_index <=> snd->single_match.match_data_index;
+        case Type(Match::value):
+            return fst->value_match.match_data_index <=> snd->value_match.match_data_index;
+        default:
+            assert(!is_stored_node(fst.type));
+            return fst.index <=> snd.index;
+        }
+    } //partial_compare_tree
  
 } //namespace simp

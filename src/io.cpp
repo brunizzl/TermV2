@@ -369,6 +369,8 @@ namespace simp {
 			if (f.get_type() != Literal::buildin) { return default_infixr; }
 			using namespace fn;
 			switch (from_typed_idx(f)) {
+			case Buildin(CtoC::negate):       return 4001;
+			case Buildin(ToBool::not_):       return 4000;
 			case Buildin(CtoC::pow):          return 3000;
 			case Buildin(Comm::product):      return 2001;
 			case Buildin(Comm::sum):          return 2000;
@@ -397,47 +399,46 @@ namespace simp {
 				const Call& call = *ref;
 				const TypedIdx function = call.function();
 				const char* replacement_seperator = nullptr;
-				if (function.get_type() == Literal::buildin) {
-					replacement_seperator = [function]() -> const char* {
-						using namespace fn;
+				const auto [init, seperator] = [&]() -> std::pair<const char*, const char*> {
+					using namespace fn;
+					if (function.get_type() == PatternVariadic{}) {
+						const auto data = variadic_meta_data(ref);
+						str.append("[");
+						str.append(fn::name_of(fn::from_typed_idx(function)));
+						str.append(", ");
+						str.append(std::to_string(data.match_data_index));
+						str.append(", ");
+						str.append(std::bitset<32>(data.rematchable).to_string());
+						str.append(", ");
+						str.append(std::bitset<32>(data.always_after_prev).to_string());
+						str.append("]");
+						return { "", ", " };
+					}
+					else if (function.get_type() == Literal::buildin) {
 						switch (from_typed_idx(function)) {
-						case Buildin(Comm::sum):          return " + ";
-						case Buildin(Comm::product):      return " * ";
-						case Buildin(Comm::and_):         return " && ";
-						case Buildin(Comm::or_):          return " || ";
-						case Buildin(CtoC::pow):          return " ^ ";
-						case Buildin(ToBool::eq):         return " == ";
-						case Buildin(ToBool::neq):        return " != ";
-						case Buildin(ToBool::greater):    return " > ";
-						case Buildin(ToBool::smaller):    return " < ";
-						case Buildin(ToBool::greater_eq): return " >= ";
-						case Buildin(ToBool::smaller_eq): return " <= ";
-						default:                          return nullptr;
+						case Buildin(Comm::sum):          return { "" , " + "  };
+						case Buildin(Comm::product):      return { "" , " * "  };
+						case Buildin(Comm::and_):         return { "" , " && " };
+						case Buildin(Comm::or_):          return { "" , " || " };
+						case Buildin(CtoC::pow):          return { "" , " ^ "  };
+						case Buildin(CtoC::negate):       return { "-", ""     };
+						case Buildin(ToBool::eq):         return { "" , " == " };
+						case Buildin(ToBool::neq):        return { "" , " != " };
+						case Buildin(ToBool::greater):    return { "" , " > "  };
+						case Buildin(ToBool::smaller):    return { "" , " < "  };
+						case Buildin(ToBool::greater_eq): return { "" , " >= " };
+						case Buildin(ToBool::smaller_eq): return { "" , " <= " };
+						case Buildin(ToBool::not_):       return { "!", ""     };
 						}
-					}();
-				}
-				else if (function.get_type() == PatternVariadic{}) {
-					const auto data = variadic_meta_data(ref);
-					str.append("[");
-					str.append(fn::name_of(fn::from_typed_idx(function)));
-					str.append(", ");
-					str.append(std::to_string(data.match_data_index));
-					str.append(", ");
-					str.append(std::bitset<32>(data.rematchable).to_string());
-					str.append(", ");
-					str.append(std::bitset<32>(data.always_after_prev).to_string());
-					str.append("]");
-					replacement_seperator = ", ";
-				}
-				if (!replacement_seperator) {
+					}
 					append_to_string(ref.new_at(function), str, max_infixr);
-					replacement_seperator = ", ";
-				}
+					return { "", ", " };
+				}();
 				const int own_infixr = infixr(function);
 				if (own_infixr <= parent_infixr) { str.push_back('('); }				
-				const char* seperator = "";
+				const char* spacer = init;
 				for (const TypedIdx param : call.parameters()) {
-					str.append(std::exchange(seperator, replacement_seperator));
+					str.append(std::exchange(spacer, seperator));
 					append_to_string(ref.new_at(param), str, own_infixr);
 				}
 				if (own_infixr <= parent_infixr) { str.push_back(')'); }
@@ -520,7 +521,7 @@ namespace simp {
 			} break;
 			case Type(Literal::call): {
 				//parameters:
-				current_str += "call:      { ";
+				current_str += "call       :    { ";
 				const char* separator = "";
 				const Call& vec = *ref;
 				std::string* current_line = &current_str; //as we never add a new string to rows, this pointer will not dangle

@@ -206,9 +206,9 @@ namespace simp {
 		}
 	} //namespace fn
 
+	constexpr TypedIdx literal_nullptr = TypedIdx();
 	constexpr TypedIdx literal_false   = fn::to_typed_idx(fn::Bool::false_);
 	constexpr TypedIdx literal_true    = fn::to_typed_idx(fn::Bool::true_);
-	constexpr TypedIdx literal_nullptr = TypedIdx();
 	constexpr TypedIdx value_proxy     = fn::to_typed_idx(fn::PatternAux::value_proxy);
 
 	constexpr TypedIdx bool_to_typed_idx(const bool b) { return b ? literal_true : literal_false; }
@@ -260,11 +260,12 @@ namespace simp {
 		natural,   //{ 1, 2, 3, ... }
 		natural_0, //{ 0, 1, 2, ... }
 		integer,
+		real,
+		complex,
 		negative,     //implies real   
 		positive,     //implies real     	
 		not_negative, //implies real  
 		not_positive, //implies real 
-		real,
 		COUNT
 	};
 
@@ -280,20 +281,20 @@ namespace simp {
 
 	struct RestrictedSingleMatch
 	{
-		std::uint32_t match_data_index; //indexes in MatchData::value_match_data
-		Restriction restriction;
-		TypedIdx condition; //may be TypedIdx(), then there is no extra condition (else indexes in pattern)
+		std::uint32_t match_data_index; //indexes in MatchData::single_match_data
+		Restriction restriction = Restr::none;
+		TypedIdx condition = literal_true;
 	};
 
 	struct StrongValueMatch
 	{
 		std::uint32_t match_data_index; //indexes in MatchData::value_match_data
 		ComplexSubset domain; //ComplexSubset::COUNT acts as no restriction
-		TypedIdx match_index; //indexes in pattern
+		TypedIdx match_index;
 		bool owner;
 	};
 
-	//in a valid pattern every commutatice Variadic and every 
+	//in a valid pattern every commutative Variadic and every 
 	//  non-commutative Variadic containing at least one MultiMatch is suceeded by an element of this
 	struct VariadicMetaData
 	{
@@ -391,22 +392,22 @@ namespace simp {
 		struct FixedInputSpace
 		{
 			static constexpr std::size_t max_different_count = 4;
-			Restriction param_spaces[max_different_count];
+			Restriction spaces[max_different_count];
 
-			constexpr FixedInputSpace() noexcept :param_spaces{ Restr::none, Restr::none, Restr::none, Restr::none } {}
+			constexpr FixedInputSpace() noexcept :spaces{ Restr::none, Restr::none, Restr::none, Restr::none } {}
 
-			constexpr FixedInputSpace(Restriction p0)                                                 noexcept : param_spaces{ p0, p0, p0, p0 } {}
-			constexpr FixedInputSpace(Restriction p0, Restriction p1)                                 noexcept : param_spaces{ p0, p1, p1, p1 } {}
-			constexpr FixedInputSpace(Restriction p0, Restriction p1, Restriction p2)                 noexcept : param_spaces{ p0, p1, p2, p2 } {}
-			constexpr FixedInputSpace(Restriction p0, Restriction p1, Restriction p2, Restriction p3) noexcept : param_spaces{ p0, p1, p2, p3 } {}
+			constexpr FixedInputSpace(Restriction a)                                              noexcept : spaces{ a, a, a, a } {}
+			constexpr FixedInputSpace(Restriction a, Restriction b)                               noexcept : spaces{ a, b, b, b } {}
+			constexpr FixedInputSpace(Restriction a, Restriction b, Restriction c)                noexcept : spaces{ a, b, c, c } {}
+			constexpr FixedInputSpace(Restriction a, Restriction b, Restriction c, Restriction d) noexcept : spaces{ a, b, c, d } {}
 
 			constexpr Restriction operator[](const std::size_t idx) const noexcept 
 			{ 
 				return idx < max_different_count ? 
-					this->param_spaces[idx] : 
-					this->param_spaces[max_different_count - 1u]; 
+					this->spaces[idx] :
+					this->spaces[max_different_count - 1u];
 			}
-		};
+		}; //struct FixedInputSpace
 
 		struct FixedArityProps
 		{
@@ -455,7 +456,7 @@ namespace simp {
 			{ Misc::diff              , "diff"      , 2u, { Restr::none, Literal::symbol }, Restr::none },
 			{ Misc::pair              , "pair"      , 2u, {}, Misc::pair },
 			{ Misc::triple            , "triple"    , 3u, {}, Misc::triple },
-			{ Misc::fmap              , "fmap"      , 2u, { Restr::none, Literal::call }, Literal::call },
+			{ Misc::fmap              , "fmap"      , 2u, { Restr::callable, Literal::call }, Literal::call },
 			{ PatternAux::single_match, "_SM"       , 2u, { Restr::none         }, Restr::none                 },
 			{ PatternAux::value_match , "_VM"       , 2u, { Restr::none         }, Restr::none                 },
 			{ PatternAux::value_proxy , "_VP"       , 0u, { Restr::none         }, PatternAux::value_proxy     },

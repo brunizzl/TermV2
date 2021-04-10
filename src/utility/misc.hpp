@@ -62,6 +62,14 @@ namespace bmath::intern {
 		else                           { return x == y && equivalent(x, xs...); }
 	}
 
+	template<typename T, typename U>
+	constexpr T change_field(const T& original, U T::* field, const U& replacement)
+	{
+		T result = original;
+		original.*field = replacement;
+		return result;
+	}
+
     
 	template <typename Struct_T, std::size_t Size, typename SearchMemberPtr_T, typename Search_T>
 	[[nodiscard]] constexpr const Struct_T& find(

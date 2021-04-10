@@ -16,7 +16,6 @@ namespace simp {
         {
             bool eval_values = true; //true: sums, products... (and calls to true/ false) are evaluated as much as possible (e.g. "1 + a + 3 -> 4 + a")
             bool exact = true; //(only significant if eval_values) true: only exact operations are permitted
-            bool eval_equality = true; //fn::FixedArity::eq and ...neq can always be evaluated -> evaluate them (not intelligent for pattern restrictions)
             bool eval_lambdas = true; //seems to be self explanatory
             bool normalize_lambdas = true; //true: all nested lambdas become transparent & unessecary indirections are removed
             bool remove_unary_assoc = true; //true: "f(a) -> a" for all associative f (e.g. sum, product, and...)
@@ -48,5 +47,9 @@ namespace simp {
 
     //lexicographic ordering, not meaningful in a math context
     std::strong_ordering compare_tree(const UnsaveRef fst, const UnsaveRef snd);
+
+    //returns std::partial_ordering::unordered if eighter fst or snd is some sort of placeholder 
+    //(lambda_param or PatternType) and fst and snd are not the same type of placeholder
+    std::partial_ordering partial_compare_tree(const UnsaveRef fst, const UnsaveRef snd);
     
 } //namespace simp

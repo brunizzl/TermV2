@@ -120,6 +120,13 @@ namespace simp {
 
 		void append_to_string(const UnsaveRef ref, std::string& str, const int parent_infixr);
 
+		inline std::string to_string(const UnsaveRef ref)
+		{
+			std::string name;
+			print::append_to_string(ref, name, 0);
+			return name;
+		}
+
 		std::string to_memory_layout(const Store& store, const std::initializer_list<const TypedIdx> heads);
 	} //namespace print
 
