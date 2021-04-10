@@ -71,18 +71,18 @@ namespace bmath::intern {
 	}
 
     
-	template <typename Struct_T, std::size_t Size, typename SearchMemberPtr_T, typename Search_T>
+	template <typename Struct_T, std::size_t Size, typename Search_T>
 	[[nodiscard]] constexpr const Struct_T& find(
-		const std::array<Struct_T, Size>& data, const SearchMemberPtr_T ptr, const Search_T key) noexcept
+		const std::array<Struct_T, Size>& data, const Search_T Struct_T::* ptr, const Search_T key) noexcept
 	{
 		const auto itr = std::find_if(begin(data), end(data), [key, ptr](const auto &v) { return v.*ptr == key; });
 		assert(itr != end(data));
 		return *itr;
 	}
 
-	template <typename Struct_T, std::size_t Size, typename SearchMemberPtr_T, typename Search_T>
+	template <typename Struct_T, std::size_t Size, typename Search_T>
 	[[nodiscard]] constexpr const Struct_T& search(
-		const std::array<Struct_T, Size>& data, const SearchMemberPtr_T ptr, const Search_T key, 
+		const std::array<Struct_T, Size>& data, const Search_T Struct_T::* ptr, const Search_T key,
         const Struct_T& null_val = {}) noexcept
 	{
 		const auto itr = std::find_if(begin(data), end(data), [key, ptr](const auto &v) { return v.*ptr == key; });

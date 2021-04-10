@@ -469,7 +469,7 @@ namespace simp {
 
 		constexpr std::size_t arity(const FixedArity f) noexcept
 		{
-			assert(f < FixedArity(FixedArity::COUNT));
+			assert(f < FixedArity::COUNT);
 			return fixed_arity_table[static_cast<unsigned>(f)].arity;
 		}
 
@@ -504,48 +504,58 @@ namespace simp {
 
 		constexpr bool is_associative(const Variadic v) noexcept
 		{
+			assert(f < Variadic::COUNT);
 			return variadic_table[static_cast<unsigned>(v)].associative;
 		}
+
+		//properties shared by variadic and FixedArity are stored in a single table below for convinience
+		struct CommonProps 
+		{ 
+			Buildin type = Buildin::COUNT; 
+			std::string_view name = ""; 
+			Restriction result_space = Restr::none; 
+		};
+
+		constexpr auto common_table = [] {
+			std::array<CommonProps, (unsigned)Buildin::COUNT> res;
+			std::size_t i = 0;
+			for (const auto& elem : fixed_arity_table) { res[i++] = { elem.type, elem.name, elem.result_space }; }
+			for (const auto& elem : variadic_table)    { res[i++] = { elem.type, elem.name, elem.result_space }; }
+			assert(i == res.size());
+			return res;
+		}();
+		static_assert(std::is_sorted(common_table.begin(), common_table.end(), 
+			[](auto& a, auto& b) { return a.type < b.type; }), "order elements in table the same way as in buildin");
 
 		//returns Buildin::COUNT if no name was found
 		constexpr Buildin type_of(std::string_view name_) noexcept
 		{
-			if (const auto iter = std::find_if(fixed_arity_table.begin(), fixed_arity_table.end(),
-				[name_](const FixedArityProps& p) { return p.name == name_; });
-				iter != fixed_arity_table.end())
-			{
-				return iter->type;
-			}
-			if (const auto iter = std::find_if(variadic_table.begin(), variadic_table.end(),
-				[name_](const VariadicProps& p) { return p.name == name_; });
-				iter != variadic_table.end())
-			{
-				return iter->type;
-			}
-			return Buildin::COUNT;
+			return bmath::intern::search(common_table, &CommonProps::name, name_).type;
 		}
 
 		constexpr std::string_view name_of(const Buildin f)
 		{
-			if (f.is<Variadic>()) {
-				return variadic_table[static_cast<unsigned>(f.to<Variadic>())].name;
-			}
-			assert(f.is<FixedArity>());
-			return fixed_arity_table[static_cast<unsigned>(f.to<FixedArity>())].name;
+			assert(f < Buildin::COUNT);
+			return common_table[static_cast<unsigned>(f)].name;
 		}
 
 		constexpr Restriction result_space(const Buildin f)
 		{
-			if (f.is<Variadic>()) {
-				return variadic_table[static_cast<unsigned>(f.to<Variadic>())].result_space;
-			}
-			assert(f.is<FixedArity>());
-			return fixed_arity_table[static_cast<unsigned>(f.to<FixedArity>())].result_space;
+			assert(f < Buildin::COUNT);
+			return common_table[static_cast<unsigned>(f)].result_space;
 		}
 
-		constexpr Restriction input_space(const Variadic f) { return variadic_table[static_cast<unsigned>(f)].input_space; }
+		constexpr Restriction input_space(const Variadic f) 
+		{ 
+			assert(f < Variadic::COUNT);
+			return variadic_table[static_cast<unsigned>(f)].input_space; 
+		}
 
-		constexpr const FixedInputSpace& input_space(const FixedArity f) { return fixed_arity_table[static_cast<unsigned>(f)].input_space; }
+		constexpr const FixedInputSpace& input_space(const FixedArity f) 
+		{
+			assert(f < FixedArity::COUNT);
+			return fixed_arity_table[static_cast<unsigned>(f)].input_space; 
+		}
 	} //namespace fn
 
 
