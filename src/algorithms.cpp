@@ -152,6 +152,8 @@ namespace simp {
                 case CtoC::ln   :  return std::log  (real_param);
                 case CtoC::re   :  return real_param;
                 case CtoC::im   :  return 0.0;
+                case CtoC::floor:  return std::floor(real_param);
+                case CtoC::ceil :  return std::ceil (real_param);
                 }
             }
             else {
@@ -177,6 +179,8 @@ namespace simp {
                 case CtoC::ln   :  return std::log  (param);
                 case CtoC::re   :  return std::real (param);
                 case CtoC::im   :  return std::imag (param);
+                case CtoC::floor:  return std::floor(param.real()); //not expected to happen
+                case CtoC::ceil:   return std::ceil (param.real()); //not expected to happen
                 }
             }
             assert(false);

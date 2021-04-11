@@ -259,7 +259,9 @@ namespace simp {
 			} break;
 			case Head::Type::imag_value: {
 				view.remove_suffix(1u); //remove token::imag_unit
-				return parse::build_value(store, Complex(0.0, parse_value(view)));
+				return view.size() ?
+					parse::build_value(store, Complex(0.0, parse_value(view))):
+					parse::build_value(store, Complex(0.0, 1.0));
 			} break;
 			case Head::Type::symbol: {
 				return name_lookup::build_symbol(store, infos, view);

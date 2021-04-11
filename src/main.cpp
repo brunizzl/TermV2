@@ -67,15 +67,16 @@ int main()
 			{ "berb && frobbl && true && (false || !false || schmenck) && true && !alf" },
 			{ "10/5" },
 			{ "set(1, 100, a, b, 50 + 2 * 25, a, (\\x.2 x)(50))" },
+			{ "list(floor(4.2), floor(3.9), floor(2-i), ceil(3.9), ceil(4), ceil(4+i))" },
 		});
 		for (const auto& name : names) {
 			std::cout << name << "\n";
 			auto term = simp::LiteralTerm(name);
 			std::cout << "  ->  " << term.to_string() << "\n";
-			std::cout << term.to_memory_layout() << "\n";
+			//std::cout << term.to_memory_layout() << "\n";
 			term.establish_order();
-			std::cout << "  ->  " << term.to_string() << "\n";
-			std::cout << term.to_memory_layout() << "\n\n";
+			std::cout << "  ->  " << term.to_string() << "\n\n";
+			//std::cout << term.to_memory_layout() << "\n\n";
 		}
 		std::cout << "\n";
 	}

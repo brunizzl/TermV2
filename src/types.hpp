@@ -140,6 +140,8 @@ namespace simp {
 			arg,	//params[0] := argument
 			re,		//params[0] := argument
 			im,		//params[0] := argument
+			floor,  //round down
+			ceil,   //round up
 			COUNT
 		};
 
@@ -451,6 +453,8 @@ namespace simp {
 			{ CtoC::arg               , "arg"       , 1u, { Literal::complex    }, ComplexSubset::not_negative },
 			{ CtoC::re                , "re"        , 1u, { Literal::complex    }, ComplexSubset::real         },
 			{ CtoC::im                , "im"        , 1u, { Literal::complex    }, ComplexSubset::real         },
+			{ CtoC::floor             , "floor"     , 1u, { ComplexSubset::real }, ComplexSubset::integer      },
+			{ CtoC::ceil              , "ceil"      , 1u, { ComplexSubset::real }, ComplexSubset::integer      },
 			{ Misc::id                , "id"        , 1u, { Restr::none         }, Restr::none                 },
 			{ Misc::force             , "force"     , 1u, { Literal::complex    }, Literal::complex            },
 			{ Misc::diff              , "diff"      , 2u, { Restr::none, Literal::symbol }, Restr::none },
@@ -469,8 +473,14 @@ namespace simp {
 
 		constexpr std::size_t arity(const FixedArity f) noexcept
 		{
-			assert(f < FixedArity::COUNT);
+			assert(f < FixedArity(FixedArity::COUNT));
 			return fixed_arity_table[static_cast<unsigned>(f)].arity;
+		}
+
+		constexpr const FixedInputSpace& input_space(const FixedArity f)
+		{
+			assert(f < FixedArity(FixedArity::COUNT));
+			return fixed_arity_table[static_cast<unsigned>(f)].input_space;
 		}
 
 		struct VariadicProps
@@ -502,10 +512,16 @@ namespace simp {
 			[](auto lhs, auto rhs) { return lhs.type < rhs.type; }));
 		static_assert(variadic_table.size() == static_cast<unsigned>(Variadic::COUNT));
 
-		constexpr bool is_associative(const Variadic v) noexcept
+		constexpr bool is_associative(const Variadic f) noexcept
 		{
-			assert(f < Variadic::COUNT);
-			return variadic_table[static_cast<unsigned>(v)].associative;
+			assert(f < Variadic(Variadic::COUNT));
+			return variadic_table[static_cast<unsigned>(f)].associative;
+		}
+
+		constexpr Restriction input_space(const Variadic f)
+		{
+			assert(f < Variadic(Variadic::COUNT));
+			return variadic_table[static_cast<unsigned>(f)].input_space;
 		}
 
 		//properties shared by variadic and FixedArity are stored in a single table below for convinience
@@ -535,26 +551,14 @@ namespace simp {
 
 		constexpr std::string_view name_of(const Buildin f)
 		{
-			assert(f < Buildin::COUNT);
+			assert(f < Buildin(Buildin::COUNT));
 			return common_table[static_cast<unsigned>(f)].name;
 		}
 
 		constexpr Restriction result_space(const Buildin f)
 		{
-			assert(f < Buildin::COUNT);
+			assert(f < Buildin(Buildin::COUNT));
 			return common_table[static_cast<unsigned>(f)].result_space;
-		}
-
-		constexpr Restriction input_space(const Variadic f) 
-		{ 
-			assert(f < Variadic::COUNT);
-			return variadic_table[static_cast<unsigned>(f)].input_space; 
-		}
-
-		constexpr const FixedInputSpace& input_space(const FixedArity f) 
-		{
-			assert(f < FixedArity::COUNT);
-			return fixed_arity_table[static_cast<unsigned>(f)].input_space; 
 		}
 	} //namespace fn
 
