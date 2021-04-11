@@ -89,6 +89,13 @@ namespace bmath::intern {
 		return itr != end(data) ? *itr : null_val;
 	}
 
+	template<typename T, std::size_t N, typename U>
+	constexpr bool is_sorted_by(const std::array<T, N>& arr, const U T::* by)
+	{
+		return std::is_sorted(arr.begin(), arr.end(), 
+			[&](const T& a, const T& b) { return a.*by < b.*by; });
+	}
+
 	template<MinimalNum T>
 	constexpr T nat_pow(T base, const unsigned long long expo) noexcept
 	{

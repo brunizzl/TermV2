@@ -306,7 +306,7 @@ namespace bmath::intern {
 		static constexpr auto COUNT = Enum::COUNT;
 	}; //struct OpaqueEnum
 
-	//in semantics quite close to buildin unsigned integer types but may only hold values smaller than COUNT
+	//in semantics quite close to native unsigned integer types but may only hold values smaller than COUNT
 	template<unsigned COUNT_>
 	struct FiniteUnsignedInt
 	{

@@ -6,10 +6,10 @@
 
 namespace simp {
 
-    bool in_complex_subset(const Complex& nr, const ComplexSubset domain);
+    bool in_complex_subset(const Complex& nr, const nv::ComplexSubset domain);
 
     //only interested in final results -> a function call guaranteed to return something meeting restr results in false
-    bool meets_restriction(const UnsaveRef ref, const Restriction restr);
+    bool meets_restriction(const UnsaveRef ref, const nv::Native restr);
 
     namespace combine {
         struct Options 
@@ -23,7 +23,7 @@ namespace simp {
 
         struct CombineRes
         {
-            TypedIdx res;
+            NodeIdx res;
             bool change;
         };
 
@@ -43,13 +43,13 @@ namespace simp {
     void free_tree(const MutRef ref);
 
     //copies tree starting at src_ref into dst_store
-    [[nodiscard]] TypedIdx copy_tree(const Ref src_ref, Store& dst_store);
+    [[nodiscard]] NodeIdx copy_tree(const Ref src_ref, Store& dst_store);
 
     //lexicographic ordering, not meaningful in a math context
     std::strong_ordering compare_tree(const UnsaveRef fst, const UnsaveRef snd);
 
     //returns std::partial_ordering::unordered if eighter fst or snd is some sort of placeholder 
-    //(lambda_param or PatternType) and fst and snd are not the same type of placeholder
+    //(lambda_param or PatternNodeType) and fst and snd are not the same type of placeholder
     std::partial_ordering partial_compare_tree(const UnsaveRef fst, const UnsaveRef snd);
     
 } //namespace simp

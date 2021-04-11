@@ -133,7 +133,6 @@
     <ClCompile Include="src\pattern.cpp" />
     <ClCompile Include="src\transform.cpp" />
     <ClCompile Include="src\rewrite.cpp" />
-    <ClCompile Include="src\utility\typeDebug.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\algorithms.hpp" />

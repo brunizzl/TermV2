@@ -2,8 +2,8 @@
 #include <array>
 
 
-#include "stupidTests.hpp"
 #include "utility/typeDebug.hpp"
+#include "stupidTests.hpp"
 
 #include "types.hpp"
 #include "io.hpp"
@@ -75,8 +75,9 @@ int main()
 			std::cout << "  ->  " << term.to_string() << "\n";
 			//std::cout << term.to_memory_layout() << "\n";
 			term.establish_order();
-			std::cout << "  ->  " << term.to_string() << "\n\n";
-			//std::cout << term.to_memory_layout() << "\n\n";
+			std::cout << "  ->  " << term.to_string() << "\n";
+			//std::cout << term.to_memory_layout() << "\n";
+			std::cout << "\n";
 		}
 		std::cout << "\n";
 	}
@@ -97,7 +98,7 @@ int main()
 	}
 	std::cin.get();
 	//debug::enumerate_type();
-	//debug::test_rechner();
+	bmath::intern::debug::test_rechner();
 	//test::stable_sort();
 	//test::meta_pattern();
 	//test::meta_pattern_2();

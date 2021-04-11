@@ -3,6 +3,7 @@
 #include <string_view>
 #include <string>
 #include <concepts>
+#include <tuple>
 
 #include "types.hpp"
 #include "parseTerm.hpp"
@@ -44,12 +45,12 @@ namespace simp {
 
 		namespace name_lookup {
 
-			//all names that can be looked up will result in a "shallow" TypedIdx, meaning no node in the Store is attatched.
+			//all names that can be looked up will result in a "shallow" NodeIdx, meaning no node in the Store is attatched.
 			//thus this simple structure is permitted.
 			struct NameInfo
 			{
 				std::string_view name;
-				TypedIdx value;
+				NodeIdx value;
 			};
 
 			struct PatternInfos
@@ -67,10 +68,10 @@ namespace simp {
 
 			//looks up global function names and the names contained in info (expected to refer to lambda parameters)
 			//unknown names are returned as symbols
-			TypedIdx build_symbol(Store& store, const LiteralInfos& lambda_params, bmath::intern::ParseView view);
+			NodeIdx build_symbol(Store& store, const LiteralInfos& lambda_params, bmath::intern::ParseView view);
 
 			//same as above, but unwraps unknown beginning and ending in single quotes
-			TypedIdx build_symbol(Store& store, PatternInfos& infos, bmath::intern::ParseView view);
+			NodeIdx build_symbol(Store& store, PatternInfos& infos, bmath::intern::ParseView view);
 
 			//expects params_view to be argument list of lambda starting with '\\', adds names to lambda_params
 			//returns number of parameters added
@@ -78,42 +79,45 @@ namespace simp {
 		} //namespace name_lookup
 
 		template<bmath::intern::StoreLike Store_T>
-		[[nodiscard]] TypedIdx build_value(Store_T& store, const std::complex<double> complex) noexcept
+		[[nodiscard]] NodeIdx build_value(Store_T& store, const std::complex<double> complex) noexcept
 		{
 			const std::size_t result_idx = store.allocate_one();
 			new (&store.at(result_idx)) TermNode(complex);
-			return TypedIdx(result_idx, Literal::complex);
+			return NodeIdx(result_idx, Literal::complex);
 		}
 
 		template<bmath::intern::StoreLike Store_T>
-		[[nodiscard]] TypedIdx build_negated(Store_T& store, const TypedIdx to_negate) noexcept
+		[[nodiscard]] NodeIdx build_negated(Store_T& store, const NodeIdx to_negate) noexcept
 		{
 			const std::size_t result_idx = store.allocate_one();
-			new (&store.at(result_idx)) TermNode(Call{ fn::to_typed_idx(fn::CtoC::negate), to_negate });
-			return TypedIdx(result_idx, Literal::call);
+			new (&store.at(result_idx)) TermNode(Call{ nv::to_typed_idx(nv::CtoC::negate), to_negate });
+			return NodeIdx(result_idx, Literal::call);
 		}
 
 		template<bmath::intern::StoreLike Store_T>
-		[[nodiscard]] TypedIdx build_inverted(Store_T& store, const TypedIdx to_invert) noexcept
+		[[nodiscard]] NodeIdx build_inverted(Store_T& store, const NodeIdx to_invert) noexcept
 		{
 			const std::size_t result_idx = store.allocate_one();
-			new (&store.at(result_idx)) TermNode(Call{ fn::to_typed_idx(fn::CtoC::invert), to_invert });
-			return TypedIdx(result_idx, Literal::call);
+			new (&store.at(result_idx)) TermNode(Call{ nv::to_typed_idx(nv::CtoC::invert), to_invert });
+			return NodeIdx(result_idx, Literal::call);
 		}
 
 		//returns the tree representation of view in store
 		//lambda_offset is the sum of all parameter counts of all parent lambdas 
 		//  (no outside lambdas -> lambda_offset == 0)
 		template<name_lookup::InfoLike Infos>
-		[[nodiscard]] TypedIdx build(Store& store, Infos& infos, bmath::intern::ParseView view);
+		[[nodiscard]] NodeIdx build(Store& store, Infos& infos, bmath::intern::ParseView view);
 
-		//has neighter activated multi match and variadic, nor value match
+		//has only activated SingleMatch!
 		//build from a string of form "<match side> = <replace side>" 
 		//  or form "<match side> | <condition(s)> = <replace side>"
 		//   where <match side> and <replace side> are terms similar to LiteralTerm, but they may contain match variables
 		//         <condition(s)> is a comma separated listing of extra conditions and relations on single match variables
-		//note: <condition(s)> are incorporated into <match side> in constructor
-		std::pair<TypedIdx, TypedIdx> raw_rule(Store& store, std::string name);
+		//note: conditions are incorporated into match_side
+		//returns (match side, repacement side)
+		std::pair<NodeIdx, NodeIdx> raw_rule(Store& store, std::string name);
+
+
 	} //namespace parse
 
 	namespace print {
@@ -127,7 +131,7 @@ namespace simp {
 			return name;
 		}
 
-		std::string to_memory_layout(const Store& store, const std::initializer_list<const TypedIdx> heads);
+		std::string to_memory_layout(const Store& store, const std::initializer_list<const NodeIdx> heads);
 	} //namespace print
 
 } //namespace simp

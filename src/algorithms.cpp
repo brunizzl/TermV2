@@ -17,8 +17,9 @@
 
 namespace simp {
 
-    bool in_complex_subset(const Complex& nr, const ComplexSubset subset)
+    bool in_complex_subset(const Complex& nr, const nv::ComplexSubset subset)
     {
+        using namespace nv;
         constexpr double max_save_int = bmath::intern::nat_pow(2ull, 53) - 1; //largest integer explicitly stored in double
 
         const double re = nr.real();
@@ -44,38 +45,38 @@ namespace simp {
         }
     } //in_complex_subset
 
-    bool meets_restriction(const UnsaveRef ref, const Restriction restr)
+    bool meets_restriction(const UnsaveRef ref, const nv::Native restr)
     {
         using namespace bmath::intern;
-        if (restr.is<Restr>()) {
+        if (restr.is<nv::Restr>()) {
             switch (restr) {
-            case Restriction(Restr::none):
+            case nv::Native(nv::Restr::any):
                 return true;
-            case Restriction(Restr::boolean):
-                return ref.type == Literal::buildin && fn::Buildin(ref.index).is<fn::Bool>();
-            case Restriction(Restr::callable):
-                return ref.type == Literal::buildin || ref.type == Literal::lambda;
+            case nv::Native(nv::Restr::boolean):
+                return ref.type == Literal::native && nv::Native(ref.index).is<nv::Bool>();
+            case nv::Native(nv::Restr::callable):
+                return ref.type == Literal::native || ref.type == Literal::lambda;
             default:
                 assert(false);
                 BMATH_UNREACHABLE;
             }
         }
-        else if (restr.is<Type>()) {
+        else if (restr.is<NodeType>()) {
             return ref.type == restr;
         }
-        else if (restr.is<fn::Buildin>()) {
+        else if (restr.is<nv::Function_>()) {
             if (ref.type != Literal::call) {
                 return false;
             }
-            const TypedIdx function = ref->call.function();
-            return fn::to_typed_idx(restr.to<fn::Buildin>()) == function;
+            const NodeIdx function = ref->call.function();
+            return nv::to_typed_idx(restr) == function;
         }
         else {
-            assert(restr.is<ComplexSubset>());
+            assert(restr.is<nv::ComplexSubset>());
             if (ref.type != Literal::complex) {
                 return false;
             }
-            return in_complex_subset(*ref, restr.to<ComplexSubset>());
+            return in_complex_subset(*ref, restr.to<nv::ComplexSubset>());
         }
     } //meets_restriction
 
@@ -83,19 +84,19 @@ namespace simp {
 
     namespace combine {
 
-        bool BMATH_FORCE_INLINE merge_associative_calls(MutRef& ref, const TypedIdx function)
+        bool BMATH_FORCE_INLINE merge_associative_calls(MutRef& ref, const NodeIdx function)
         {
-            assert(ref.type == Literal::call && function.get_type() == Literal::buildin && 
-                fn::from_typed_idx(function).is<fn::Variadic>());
+            assert(ref.type == Literal::call && function.get_type() == Literal::native && 
+                nv::from_typed_idx(function).is<nv::Variadic>());
             bool found_nested = false;
             const Call& call = *ref;
-            bmath::intern::StupidBufferVector<TypedIdx, 16> merged_calls = { function };
-            for (const TypedIdx param : call.parameters()) {
+            bmath::intern::StupidBufferVector<NodeIdx, 16> merged_calls = { function };
+            for (const NodeIdx param : call.parameters()) {
                 if (param.get_type() == Literal::call) {
                     const MutRef param_ref = ref.new_at(param);
                     if (param_ref->call.function() == function) {
                         found_nested = true;
-                        for (const TypedIdx param_param : param_ref->call.parameters()) {
+                        for (const NodeIdx param_param : param_ref->call.parameters()) {
                             merged_calls.push_back(param_param);
                         }
                         Call::free(*ref.store, param_ref.index); //only free call itself not the (now copied) params
@@ -118,16 +119,16 @@ namespace simp {
 
         constexpr bool is_unary_function(const UnsaveRef ref) 
         { 
-            if (ref.type == Literal::buildin) {
-                const fn::Buildin f = fn::Buildin(ref.index);
-                return f.is<fn::Variadic>() || fn::arity(f.to<fn::FixedArity>()) == 1u;
+            if (ref.type == Literal::native) {
+                const nv::Native f = nv::Native(ref.index);
+                return f.is<nv::Variadic>() || nv::arity(f.to<nv::FixedArity>()) == 1u;
             }
             return ref.type == Literal::lambda;
         }
 
-        Complex BMATH_FORCE_INLINE eval_unary_complex(fn::CtoC f, const Complex param)
+        Complex BMATH_FORCE_INLINE eval_unary_complex(nv::CtoC f, const Complex param)
         {
-            using namespace fn;
+            using namespace nv;
             if (param.imag() == 0.0) {
                 const double real_param = param.real();
                 switch (f) {
@@ -187,12 +188,12 @@ namespace simp {
             return {};
         } //eval_unary_complex
 
-        TypedIdx BMATH_FORCE_INLINE eval_buildin(const MutRef ref, const Options options, const TypedIdx function, const unsigned lambda_param_offset)
+        NodeIdx BMATH_FORCE_INLINE eval_buildin(const MutRef ref, const Options options, const NodeIdx function, const unsigned lambda_param_offset)
         {
-            using namespace fn;
-            assert(function.get_type() == Literal::buildin);
+            using namespace nv;
+            assert(function.get_type() == Literal::native);
             assert(ref.type == Literal::call);
-            const Buildin f = from_typed_idx(function);
+            const Native f = from_typed_idx(function);
             Call& call = *ref;
             assert(call.function() == function);
             if (f.is<FixedArity>()) {
@@ -202,9 +203,9 @@ namespace simp {
                     const auto params = call.parameters();
                     const std::size_t params_size = params.size();
                     for (std::size_t i = 0; i < params_size; i++) {
-                        const Restriction param_space = param_spaces[i];
-                        if (param_space != Restr::none && !meets_restriction(ref.new_at(params[i]), param_space)) {
-                            return TypedIdx();
+                        const nv::Native param_space = param_spaces[i];
+                        if (param_space != Restr::any && !meets_restriction(ref.new_at(params[i]), param_space)) {
+                            return NodeIdx();
                         }
                     }
                 }
@@ -212,11 +213,11 @@ namespace simp {
                 if (f_arity + 1u != call.size()) [[unlikely]]
                     throw "wrong number of parameters in function call";
 
-                const auto compute_and_replace = [&](auto compute) -> TypedIdx {
+                const auto compute_and_replace = [&](auto compute) -> NodeIdx {
                     std::feclearexcept(FE_ALL_EXCEPT);
                     const Complex result = compute();
                     if (options.exact && std::fetestexcept(FE_ALL_EXCEPT)) { //operation failed to be exact
-                        return TypedIdx();
+                        return NodeIdx();
                     }
                     //free all but last parameter of call
                     for (std::size_t i = 1; i < f_arity; i++) {
@@ -224,7 +225,7 @@ namespace simp {
                         ref.store->free_one(call[i].get_index());
                     }
                     //store result in last parameter
-                    const TypedIdx result_idx = call[f_arity];
+                    const NodeIdx result_idx = call[f_arity];
                     assert(result_idx.get_type() == Literal::complex);
                     ref.store->at(result_idx.get_index()) = result;
                     Call::free(*ref.store, ref.index); //free call itself
@@ -238,26 +239,26 @@ namespace simp {
                     free_tree(ref);
                     return res;
                 };
-                //parameters are now guaranteed to meet restriction given in fn::fixed_arity_table
+                //parameters are now guaranteed to meet restriction given in nv::fixed_arity_table
                 //also parameter cout is guaranteed to be correct
                 if (fixed_f.is<CtoC>() && f_arity == 1u) {
                     return compute_and_replace([&] { return eval_unary_complex(fixed_f.to<CtoC>(), *ref.new_at(call[1u])); });
                 }
                 switch (fixed_f) {
                 case FixedArity(Bool::true_): {
-                    const TypedIdx res = call[1];
+                    const NodeIdx res = call[1];
                     free_tree(ref.new_at(call[2]));
                     Call::free(*ref.store, ref.index);
                     return res;
                 } break;
                 case FixedArity(Bool::false_): {
-                    const TypedIdx res = call[2];
+                    const NodeIdx res = call[2];
                     free_tree(ref.new_at(call[1]));
                     Call::free(*ref.store, ref.index);
                     return res;
                 } break;
-                case FixedArity(Misc::id): {
-                    const TypedIdx res = call[1];
+                case FixedArity(MiscFn::id): {
+                    const NodeIdx res = call[1];
                     Call::free(*ref.store, ref.index);
                     return res;
                 } break;
@@ -291,7 +292,7 @@ namespace simp {
                     });
                 } break;
                 case FixedArity(ToBool::not_): {
-                    const TypedIdx param = call[1u];
+                    const NodeIdx param = call[1u];
                     if (param == literal_false) {
                         ref.store->free_one(ref.index);
                         return literal_true;
@@ -305,7 +306,7 @@ namespace simp {
                 case FixedArity(ToBool::neq): {
                     const std::partial_ordering ord = partial_compare_tree(ref.new_at(call[1]), ref.new_at(call[2]));
                     if (ord == std::partial_ordering::unordered) {
-                        return TypedIdx();
+                        return NodeIdx();
                     }
                     free_tree(ref);
                     return bool_to_typed_idx((fixed_f == ToBool::eq) ^ (ord != std::partial_ordering::equivalent));
@@ -318,9 +319,9 @@ namespace simp {
                     return bool_to_typed_idx(!is_ordered_as(std::strong_ordering::less));
                 case FixedArity(ToBool::smaller_eq):
                     return bool_to_typed_idx(!is_ordered_as(std::strong_ordering::greater));
-                case FixedArity(Misc::fmap): {
-                    const TypedIdx converter = call[1];
-                    const TypedIdx convertee = call[2];
+                case FixedArity(MiscFn::fmap): {
+                    const NodeIdx converter = call[1];
+                    const NodeIdx convertee = call[2];
                     const MutRef converter_ref = ref.new_at(converter);
                     const MutRef convertee_ref = ref.new_at(convertee);
                     assert(convertee_ref.type == Literal::call);
@@ -337,11 +338,11 @@ namespace simp {
                     for (++iter; iter != stop; ++iter) {
                         static_assert(Call::min_capacity >= 2u, "assumes call to only use one store slot");
                         const std::size_t call_index = ref.store->allocate_one();
-                        const TypedIdx converter_copy = --remaining_parameters ? 
+                        const NodeIdx converter_copy = --remaining_parameters ? 
                             copy_tree(converter_ref, *ref.store) : 
                             converter;
                         ref.store->at(call_index) = Call({ converter_copy, *iter });
-                        *iter = TypedIdx(call_index, Literal::call);
+                        *iter = NodeIdx(call_index, Literal::call);
                     }
                     static_assert(Call::min_capacity >= 3u, "assumes fmap call to only use one store slot");
                     ref.store->free_one(ref.index); //free call to fmap
@@ -351,7 +352,7 @@ namespace simp {
             } //end fixed arity
             else {
                 assert(f.is<Variadic>());
-                const auto remove_shallow_value = [&](const TypedIdx to_remove) {
+                const auto remove_shallow_value = [&](const NodeIdx to_remove) {
                     const auto range = call.parameters();
                     const auto new_end = std::remove(range.begin(), range.end(), to_remove);
                     const std::size_t new_size = new_end - range.begin();
@@ -359,7 +360,7 @@ namespace simp {
                     call.size() = new_size + 1u; //+1 for function info itself
                     return new_size;
                 };
-                const auto eval_bool = [&](const TypedIdx neutral_value, const TypedIdx short_circuit_value) {
+                const auto eval_bool = [&](const NodeIdx neutral_value, const NodeIdx short_circuit_value) {
                     if (!remove_shallow_value(neutral_value)) { //remove values not changing outcome (true for and, false for or)
                         free_tree(ref);
                         return neutral_value;
@@ -371,7 +372,7 @@ namespace simp {
                             free_tree(ref);
                             return short_circuit_value;
                         }
-                        return TypedIdx();
+                        return NodeIdx();
                     }
                 };
                 const auto maybe_accumulate = [&](Complex& acc, const Complex& new_, auto operation) -> bool {
@@ -391,7 +392,7 @@ namespace simp {
                     return eval_bool(literal_false, literal_true);
                 case Variadic(Comm::sum): {
                     auto range = call.parameters();
-                    const TypedIdx* const stop = range.end();
+                    const NodeIdx* const stop = range.end();
                     for (auto iter_1 = range.begin(); iter_1 != stop; ++iter_1) {
                         if (iter_1->get_type() != Literal::complex) {
                             break; //complex are ordered in front and sum is sorted
@@ -406,28 +407,28 @@ namespace simp {
                                 [](const Complex& lhs, const Complex& rhs) { return lhs + rhs; })) 
                             {
                                 ref.store->free_one(iter_2->get_index());
-                                *iter_2 = TypedIdx();
+                                *iter_2 = NodeIdx();
                             }
                         }
                     }
-                    remove_shallow_value(TypedIdx());
+                    remove_shallow_value(NodeIdx());
                 } break;
                 case Variadic(Comm::product): { //TODO: evaluate exact division / combine two divisions
                     auto range = call.parameters();
-                    const TypedIdx* const stop = range.end();
+                    const NodeIdx* const stop = range.end();
                     for (auto iter_1 = range.begin(); iter_1 != stop; ++iter_1) {
                         switch (iter_1->get_type()) {
-                        case Type(Literal::complex): {
+                        case NodeType(Literal::complex): {
                             Complex& acc = *ref.new_at(*iter_1);
                             for (auto iter_2 = std::next(iter_1); iter_2 != stop; ++iter_2) {
                                 switch (iter_2->get_type()) {
-                                case Type(Literal::complex): {
+                                case NodeType(Literal::complex): {
                                     Complex& factor = *ref.new_at(*iter_2);
                                     if (maybe_accumulate(acc, factor,
                                         [](const Complex& lhs, const Complex& rhs) { return lhs * rhs; })) 
                                     {
                                         ref.store->free_one(iter_2->get_index());
-                                        *iter_2 = TypedIdx();
+                                        *iter_2 = NodeIdx();
                                     }
                                 } break;
                                 } //switch iter_2
@@ -435,7 +436,7 @@ namespace simp {
                         } break;
                         } //switch iter_1
                     }
-                    remove_shallow_value(TypedIdx());
+                    remove_shallow_value(NodeIdx());
                 } break;
                 case Variadic(Comm::set): if (call.size() >= 3) { 
                     auto range = call.parameters();
@@ -445,18 +446,18 @@ namespace simp {
                         UnsaveRef snd = ref.new_at(*iter); //remove duplicates (remember: already sorted)
                         if (compare_tree(fst, snd) == std::strong_ordering::equal) {
                             ref.store->free_one(iter->get_index());
-                            *iter = TypedIdx();
+                            *iter = NodeIdx();
                         }
                         fst = snd;
                     }
-                    remove_shallow_value(TypedIdx());
+                    remove_shallow_value(NodeIdx());
                 } break;
                 }
             } //end variadic
-            return TypedIdx();
+            return NodeIdx();
         } //eval_buildin
 
-        [[nodiscard]] TypedIdx replace_lambda_params(const MutRef ref, const bmath::intern::StupidBufferVector<TypedIdx, 16>& params, 
+        [[nodiscard]] NodeIdx replace_lambda_params(const MutRef ref, const bmath::intern::StupidBufferVector<NodeIdx, 16>& params, 
             const Options options, const unsigned lambda_param_offset)
         {
             if (ref.type == Literal::call) {
@@ -479,7 +480,7 @@ namespace simp {
                 if (real_index >= params.size()) {
                     //function is not fully evaluated but only curried -> new param index = old - (number evaluated)
                     //note: as that means this function will be called again, the offset will not be undone now.
-                    return TypedIdx(ref.index - params.size(), Literal::lambda_param);
+                    return NodeIdx(ref.index - params.size(), Literal::lambda_param);
                 }
                 else {
                     return copy_tree(ref.new_at(params[real_index]), *ref.store);
@@ -488,14 +489,14 @@ namespace simp {
             return ref.typed_idx();
         } //replace_lambda_params
 
-        [[nodiscard]] TypedIdx BMATH_FORCE_INLINE eval_lambda(const MutRef ref, Options options, const unsigned lambda_param_offset)
+        [[nodiscard]] NodeIdx BMATH_FORCE_INLINE eval_lambda(const MutRef ref, Options options, const unsigned lambda_param_offset)
         {
             assert(ref.type == Literal::call);
             const Call& call = *ref;
             const MutRef lambda = ref.new_at(call.function());
             assert(lambda.type == Literal::lambda);
-            bmath::intern::StupidBufferVector<TypedIdx, 16> params;
-            for (const TypedIdx param : call.parameters()) {
+            bmath::intern::StupidBufferVector<NodeIdx, 16> params;
+            for (const NodeIdx param : call.parameters()) {
                 params.push_back(param);
             }
             const std::uint32_t lambda_param_count = lambda->lambda.param_count;
@@ -504,9 +505,9 @@ namespace simp {
             }
             Call::free(*ref.store, ref.index); //only free call itself, neighter lambda nor lambda parameters
             options.eval_lambdas = false;
-            const TypedIdx evaluated = replace_lambda_params(
+            const NodeIdx evaluated = replace_lambda_params(
                 ref.new_at(lambda->lambda.definition), params, options, lambda_param_offset);
-            for (const TypedIdx param : params) {
+            for (const NodeIdx param : params) {
                 free_tree(ref.new_at(param));
             }
             if (lambda_param_count == params.size()) {
@@ -522,10 +523,10 @@ namespace simp {
         } //eval_lambda
 
         
-        [[nodiscard]] TypedIdx add_offset(const MutRef ref, const unsigned lambda_param_offset)
+        [[nodiscard]] NodeIdx add_offset(const MutRef ref, const unsigned lambda_param_offset)
         {
             if (ref.type == Literal::call) {
-                for (TypedIdx& subterm : ref) {
+                for (NodeIdx& subterm : ref) {
                     subterm = add_offset(ref.new_at(subterm), lambda_param_offset);
                 }
             }
@@ -537,7 +538,7 @@ namespace simp {
             }
             else if (ref.type == Literal::lambda_param) {
                 const std::uint32_t new_index = ref.index + lambda_param_offset;
-                return TypedIdx(new_index, Literal::lambda_param);
+                return NodeIdx(new_index, Literal::lambda_param);
             }
             return ref.typed_idx();
         }
@@ -546,42 +547,42 @@ namespace simp {
         {
             bool change = false;
             if (ref.type == Literal::call) {  
-                const TypedIdx function = ref->call.function();
+                const NodeIdx function = ref->call.function();
                 switch (function.get_type()) {
-                case Type(Literal::buildin): {
-                    const fn::Buildin buildin_type = fn::from_typed_idx(function);
-                    const bool associative = buildin_type.is<fn::Variadic>() && 
-                        fn::is_associative(buildin_type.to<fn::Variadic>());
+                case NodeType(Literal::native): {
+                    const nv::Native buildin_type = nv::from_typed_idx(function);
+                    const bool associative = buildin_type.is<nv::Variadic>() && 
+                        nv::is_associative(buildin_type.to<nv::Variadic>());
                     if (associative) {
                         change |= merge_associative_calls(ref, function);
                     }
-                    if (buildin_type.is<fn::Comm>()) {
+                    if (buildin_type.is<nv::Comm>()) {
                         auto range = ref->call.parameters();
                         std::sort(range.begin(), range.end(), 
-                            [&](const TypedIdx fst, const TypedIdx snd) {
+                            [&](const NodeIdx fst, const NodeIdx snd) {
                                 return compare_tree(ref.new_at(fst), ref.new_at(snd)) == std::strong_ordering::less;
                             });
                     }
                     if (options.eval_values) {
                         //if the function could be fully evaluated, the following step(s) can no longer be executed -> return
-                        const TypedIdx res = eval_buildin(ref, options, function, lambda_param_offset);
-                        if (res != TypedIdx()) {
+                        const NodeIdx res = eval_buildin(ref, options, function, lambda_param_offset);
+                        if (res != NodeIdx()) {
                             return CombineRes{ res, true };
                         }
                     }
                     if (associative && options.remove_unary_assoc) {
                         const Call& call = *ref;
                         if (call.size() == 2u) { //only contains function type and single parameter
-                            const TypedIdx single_param = call[1u];
+                            const NodeIdx single_param = call[1u];
                             Call::free(*ref.store, ref.index);
                             return CombineRes{ single_param, true };
                         }
                     }
                 } break;
-                case Type(Literal::lambda): {
+                case NodeType(Literal::lambda): {
                     //evaluate outermost lambda first
                     if (options.eval_lambdas && lambda_param_offset == 0u) {
-                        const TypedIdx evaluated = eval_lambda(ref, options, lambda_param_offset);
+                        const NodeIdx evaluated = eval_lambda(ref, options, lambda_param_offset);
                         return CombineRes{ evaluated, true };
                     }
                 } break;
@@ -632,7 +633,7 @@ namespace simp {
                 } while (change.try_again);
                 change.try_again = false;
                 switch (ref.type) {
-                case Type(Literal::call): {
+                case NodeType(Literal::call): {
                     const auto stop = end(ref);
                     auto iter = begin(ref);
                     {//combine function call
@@ -649,7 +650,7 @@ namespace simp {
                         *iter = subterm_res.res;
                     }
                 } break;
-                case Type(Literal::lambda): {
+                case NodeType(Literal::lambda): {
                     const Lambda lambda = *ref;
                     const CombineRes subterm_res = lazy(
                         ref.new_at(lambda.definition), options, lambda_param_offset + lambda.param_count);
@@ -666,13 +667,13 @@ namespace simp {
     void free_tree(const MutRef ref)
     {
         switch (ref.type) {
-        case Type(Literal::complex):
+        case NodeType(Literal::complex):
             break;
-        case Type(Literal::symbol):
+        case NodeType(Literal::symbol):
             Symbol::free(*ref.store, ref.index);
             return;
-        case Type(Literal::call):
-            for (const TypedIdx subtree : ref) {
+        case NodeType(Literal::call):
+            for (const NodeIdx subtree : ref) {
                 free_tree(ref.new_at(subtree));
             }
             if (ref->call.function().get_type().is<PatternVariadic>()) {
@@ -683,13 +684,13 @@ namespace simp {
                 Call::free(*ref.store, ref.index);
             }
             return;
-        case Type(Literal::lambda):
+        case NodeType(Literal::lambda):
             free_tree(ref.new_at(ref->lambda.definition));
             break;
-        case Type(Match::single_restricted):   
+        case NodeType(Match::single_restricted):   
             free_tree(ref.new_at(ref->single_match.condition));
             break;
-        case Type(Match::value):
+        case NodeType(Match::value):
             free_tree(ref.new_at(ref->value_match.match_index));
             break;
         default:
@@ -699,26 +700,26 @@ namespace simp {
         ref.store->free_one(ref.index);
     } //free_tree
 
-    TypedIdx copy_tree(const Ref src_ref, Store& dst_store)
+    NodeIdx copy_tree(const Ref src_ref, Store& dst_store)
     {
-        const auto insert_node = [&](const TermNode n, Type type) {
+        const auto insert_node = [&](const TermNode n, NodeType type) {
             const std::size_t dst_index = dst_store.allocate_one();
             dst_store.at(dst_index) = n; 
-            return TypedIdx(dst_index, type);            
+            return NodeIdx(dst_index, type);            
         };
 
         switch (src_ref.type) {
-        case Type(Literal::complex):
+        case NodeType(Literal::complex):
             if (src_ref->complex.real() < -1000) __debugbreak();
             return insert_node(*src_ref, src_ref.type);
-        case Type(Literal::symbol): {
+        case NodeType(Literal::symbol): {
             const Symbol& src_var = *src_ref;
             const auto src_name = std::string(src_var.data(), src_var.size());
             const std::size_t dst_index = Symbol::build(dst_store, src_name);
-            return TypedIdx(dst_index, src_ref.type);
+            return NodeIdx(dst_index, src_ref.type);
         } break;
-        case Type(Literal::call): {
-            bmath::intern::StupidBufferVector<TypedIdx, 16> dst_subterms;
+        case NodeType(Literal::call): {
+            bmath::intern::StupidBufferVector<NodeIdx, 16> dst_subterms;
             const auto stop = end(src_ref);
             for (auto iter = begin(src_ref); iter != stop; ++iter) {
                 dst_subterms.push_back(copy_tree(src_ref.new_at(*iter), dst_store));
@@ -730,25 +731,25 @@ namespace simp {
                 const std::size_t dst_index = dst_store.allocate_n(nr_call_nodes + 1u);
                 dst_store.at(dst_index + call_capacity) = variadic_meta_data(src_ref);
                 Call::emplace(dst_store.at(dst_index), dst_subterms, call_capacity);
-                return TypedIdx(dst_index, src_ref.type);
+                return NodeIdx(dst_index, src_ref.type);
             }
             else {
                 const std::size_t dst_index = Call::build(dst_store, dst_subterms);
-                return TypedIdx(dst_index, src_ref.type);
+                return NodeIdx(dst_index, src_ref.type);
             }
         } break;
-        case Type(Literal::lambda): {
+        case NodeType(Literal::lambda): {
             Lambda lambda = *src_ref;
             lambda.definition = copy_tree(src_ref.new_at(lambda.definition), dst_store);
             return insert_node(lambda, src_ref.type);
         } break;
-        case Type(Match::single_restricted): {
+        case NodeType(Match::single_restricted): {
             RestrictedSingleMatch var = *src_ref;
             var.condition = copy_tree(src_ref.new_at(var.condition), dst_store);
             return insert_node(var, src_ref.type);
         } break;
-        case Type(Match::value): {
-            StrongValueMatch var = *src_ref;
+        case NodeType(Match::value): {
+            ValueMatch var = *src_ref;
             var.match_index = copy_tree(src_ref.new_at(var.match_index), dst_store);
             return insert_node(var, src_ref.type);
         } break;
@@ -772,11 +773,11 @@ namespace simp {
             return fst.type <=> snd.type;
         }
         switch (fst.type) {
-        case Type(Literal::complex): 
+        case NodeType(Literal::complex): 
             return bmath::intern::compare_complex(*fst, *snd);
-        case Type(Literal::symbol):
+        case NodeType(Literal::symbol):
             return std::string_view(fst->symbol) <=> std::string_view(snd->symbol);
-        case Type(Literal::call): {
+        case NodeType(Literal::call): {
             const auto fst_end = fst->call.end();
             const auto snd_end = snd->call.end();
             auto fst_iter = fst->call.begin();
@@ -793,7 +794,7 @@ namespace simp {
             }
             return std::strong_ordering::equal;
         } break;
-        case Type(Literal::lambda): {
+        case NodeType(Literal::lambda): {
             const Lambda fst_lambda = *fst;
             const Lambda snd_lambda = *snd;
             if (fst_lambda.param_count != snd_lambda.param_count) {
@@ -804,9 +805,9 @@ namespace simp {
             }
             return compare_tree(fst.new_at(fst_lambda.definition), snd.new_at(snd_lambda.definition));
         } break;
-        case Type(Match::single_restricted): 
+        case NodeType(Match::single_restricted): 
             return fst->single_match.match_data_index <=> snd->single_match.match_data_index;
-        case Type(Match::value):
+        case NodeType(Match::value):
             return fst->value_match.match_data_index <=> snd->value_match.match_data_index;
         default:
             assert(!is_stored_node(fst.type));
@@ -817,19 +818,19 @@ namespace simp {
     std::partial_ordering partial_compare_tree(const UnsaveRef fst, const UnsaveRef snd)
     {
         if (fst.type != snd.type) {
-            if (fst.type.is<PatternType>() || fst.type == Literal::lambda_param ||
-                snd.type.is<PatternType>() || snd.type == Literal::lambda_param)
+            if (fst.type.is<PatternNodeType>() || fst.type == Literal::lambda_param ||
+                snd.type.is<PatternNodeType>() || snd.type == Literal::lambda_param)
             {
                 return std::partial_ordering::unordered;
             }
             return fst.type <=> snd.type;
         }
         switch (fst.type) {
-        case Type(Literal::complex):
+        case NodeType(Literal::complex):
             return bmath::intern::compare_complex(*fst, *snd);
-        case Type(Literal::symbol):
+        case NodeType(Literal::symbol):
             return std::string_view(fst->symbol) <=> std::string_view(snd->symbol);
-        case Type(Literal::call): {
+        case NodeType(Literal::call): {
             const auto fst_end = fst->call.end();
             const auto snd_end = snd->call.end();
             auto fst_iter = fst->call.begin();
@@ -846,7 +847,7 @@ namespace simp {
             }
             return std::partial_ordering::equivalent;
         } break;
-        case Type(Literal::lambda): {
+        case NodeType(Literal::lambda): {
             const Lambda fst_lambda = *fst;
             const Lambda snd_lambda = *snd;
             if (fst_lambda.param_count != snd_lambda.param_count) {
@@ -857,9 +858,9 @@ namespace simp {
             }
             return partial_compare_tree(fst.new_at(fst_lambda.definition), snd.new_at(snd_lambda.definition));
         } break;
-        case Type(Match::single_restricted):
+        case NodeType(Match::single_restricted):
             return fst->single_match.match_data_index <=> snd->single_match.match_data_index;
-        case Type(Match::value):
+        case NodeType(Match::value):
             return fst->value_match.match_data_index <=> snd->value_match.match_data_index;
         default:
             assert(!is_stored_node(fst.type));

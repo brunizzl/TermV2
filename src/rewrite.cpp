@@ -38,8 +38,6 @@ namespace simp {
 			this->lhs_head = lhs;
 			this->rhs_head = rhs;
 		}
-		this->lhs_head = combine::lazy(this->lhs_mut_ref(), {}, 0).res;
-		this->rhs_head = combine::lazy(this->rhs_mut_ref(), { .remove_unary_assoc = false }, 0).res;
 	}
 
 	std::string RewriteRule::to_string() const noexcept
