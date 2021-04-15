@@ -409,6 +409,17 @@ namespace simp {
 			}
 		}
 
+		void append_variadic_meta_data(const VariadicMetaData& data, std::string& str)
+		{
+			str.append("[");
+			str.append(std::to_string(data.match_data_index));
+			str.append(", ");
+			str.append(std::bitset<32>(data.rematchable).to_string());
+			str.append(", ");
+			str.append(std::bitset<32>(data.always_after_prev).to_string());
+			str.append("]");
+		}
+
 		void append_to_string(const UnsaveRef ref, std::string& str, const int parent_infixr)
 		{
 			switch (ref.type) {
@@ -418,26 +429,16 @@ namespace simp {
 			case NodeType(Literal::symbol):
 				str.append(ref->symbol);
 				break;
+			case NodeType(PatternCall{}): {
+				append_variadic_meta_data(variadic_meta_data(ref), str);
+			} [[fallthrough]];				
 			case NodeType(Literal::call): { 
 				const Call& call = *ref;
 				const NodeIdx function = call.function();
 				const char* replacement_seperator = nullptr;
 				const auto [init, seperator] = [&]() -> std::pair<const char*, const char*> {
 					using namespace nv;
-					if (function.get_type() == PatternVariadic{}) {
-						const auto data = variadic_meta_data(ref);
-						str.append("[");
-						str.append(nv::name_of(nv::from_typed_idx(function)));
-						str.append(", ");
-						str.append(std::to_string(data.match_data_index));
-						str.append(", ");
-						str.append(std::bitset<32>(data.rematchable).to_string());
-						str.append(", ");
-						str.append(std::bitset<32>(data.always_after_prev).to_string());
-						str.append("]");
-						return { "", ", " };
-					}
-					else if (function.get_type() == Literal::native) {
+					if (function.get_type() == Literal::native) {
 						switch (from_typed_idx(function)) {
 						case Native(Comm::sum):          return { "" , " + "  };
 						case Native(Comm::product):      return { "" , " * "  };
@@ -542,6 +543,11 @@ namespace simp {
 				current_str += "symbol     : ";
 				show_string_nodes(ref.index, false);
 			} break;
+			case NodeType(PatternCall{}): {
+				std::string& prev_str = rows[ref.index - 1u];
+				prev_str += "meta data  : ";
+				append_variadic_meta_data(variadic_meta_data(ref), prev_str);
+			} [[fallthrough]];
 			case NodeType(Literal::call): {
 				//parameters:
 				current_str += "call       :    { ";

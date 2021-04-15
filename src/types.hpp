@@ -5,6 +5,7 @@
 #include <array>
 #include <algorithm>
 #include <string>
+#include <span>
 
 #include "utility/sumEnum.hpp"
 
@@ -30,16 +31,17 @@ namespace simp {
 		COUNT
 	};
 
-	//is present instead of Literal::native in a match side pattern node representing a Variadic
-	//acts exactly like Literal::native 
-	//  -> .get_index() of NodeIdx with .get_type() == PatternVariadic{} yields nv::Native value
-	//difference: if PatternVariadic is used, there is a VariadicMetaData allocated directly 
-	//  after call calling PatternVariadic
-	//layout in store: [...][...][first call node][more call nodes...][last call node][VariadicMetaData][...] 
-	//  if the [first call node] node has a .function() of .get_type() beeing PatternVariadic
-	struct PatternVariadic :bmath::intern::SingleSumEnumEntry {}; 
+	//is present instead of Literal::call in a match side pattern node representing a call to a Variadic function
+	//acts exactly like Literal::call, only that at .get_index() - 1u an extra VariadicMetaData node is allocated in term
+	//layout in store: [...][...][VariadicMetaData][first call node][more call nodes...][last call node][...] 
+	//                                             ^.get_index() points here
+	//note 1: the layout is chosen to enable handling of PattenCall and Literal::call as one in most cases 
+	//  and to enable access to VariadicMetaData without first determining how many nodes the call owns.
+	//note 2: a PatternCall may only occur once the appearance of a pattern is finalized, e.g. it should have already been combined...
+	//  and it may only occur on the match side of a rule
+	struct PatternCall :bmath::intern::SingleSumEnumEntry {}; 
 
-	//acts as unsigned integer type for pattern construction and as auxilliary pattern type
+	//acts as unsigned integer type for pattern construction and as auxilliary type
 	struct PatternUnsigned :bmath::intern::SingleSumEnumEntry {};
 
 	//these act as different placeholders in a pattern
@@ -54,7 +56,7 @@ namespace simp {
 		multi, //(shallow), can match an arbitrary amount of subtrees, every instance may only be encountered once -> always owning
 		COUNT
 	};
-	using PatternNodeType = SumEnum<PatternUnsigned, PatternVariadic, Match>;
+	using PatternNodeType = SumEnum<Match, PatternUnsigned, PatternCall>; //(made so that PatternCall directly follows Literal::call
 
 	using NodeType = SumEnum<PatternNodeType, Literal>;
 
@@ -69,20 +71,21 @@ namespace simp {
 		switch (type) {
 		case NodeType(Literal::complex):           return true;
 		case NodeType(Literal::symbol):            return true;
-		case NodeType(Literal::call):              return true;
-		case NodeType(Literal::native):           return false;
+		case NodeType(Literal::native):            return false;
 		case NodeType(Literal::lambda):            return true;
 		case NodeType(Literal::lambda_param):      return false;
+		case NodeType(Literal::call):              return true;
+		case NodeType(PatternCall{}):	           return true;
+		case NodeType(PatternUnsigned{}):          return false;
 		case NodeType(Match::single_restricted):   return true;
 		case NodeType(Match::single_unrestricted): return false;
 		case NodeType(Match::single_weak):         return false;
 		case NodeType(Match::value):               return true;
 		case NodeType(Match::multi):               return false;
-		case NodeType(PatternUnsigned{}):          return false;
-		case NodeType(PatternVariadic{}):          return true;
 		case NodeType(NodeType::COUNT):            return false; //.get_type() of literal_nullptr
 		default:
 			assert(false);
+			BMATH_UNREACHABLE;
 			return false;
 		}
 	}
@@ -237,7 +240,7 @@ namespace simp {
 
 		inline constexpr Native from_typed_idx(const NodeIdx idx) noexcept 
 		{
-			assert(idx.get_type() == Literal::native || idx.get_type() == PatternVariadic{});
+			assert(idx.get_type() == Literal::native);
 			return Native(idx.get_index());
 		}
 	} //namespace nv
@@ -253,19 +256,6 @@ namespace simp {
 	using Complex = std::complex<double>;
 	using Symbol = StoredVector<char>;
 
-	template<typename T>
-	struct Range
-	{ 
-		T* start = nullptr; 
-		T* stop = nullptr;
-		constexpr T& operator[](const std::size_t offset) const noexcept { return *(start + offset); }
-		constexpr void remove_prefix(const std::size_t length) noexcept { start += std::min(length, stop - start); }
-		constexpr void remove_suffix(const std::size_t length) noexcept { stop -= std::min(length, stop - start); }
-		constexpr T* begin() const noexcept { return this->start; }
-		constexpr T* end() const noexcept { return this->stop; }
-		constexpr std::size_t size() const noexcept { return this->stop - this->start; }
-	};
-
 	struct Call :StoredVector<NodeIdx>
 	{
 		using StoredVector<NodeIdx>::StoredVector;
@@ -275,8 +265,8 @@ namespace simp {
 		constexpr const NodeIdx& function() const noexcept { return this->front(); }
 
 		//iterate over all but function
-		constexpr Range<NodeIdx> parameters() noexcept { return { this->begin() + 1u, this->end() }; }
-		constexpr Range<const NodeIdx> parameters() const noexcept { return { this->begin() + 1u, this->end() }; }
+		constexpr std::span<NodeIdx> parameters() noexcept { return { this->begin() + 1u, this->end() }; }
+		constexpr std::span<const NodeIdx> parameters() const noexcept { return { this->begin() + 1u, this->end() }; }
 	};
 
 	struct Lambda
@@ -289,6 +279,7 @@ namespace simp {
 		//in the normal form, all lambdas but the outermost one are transparent, otherwise matching in such lambdas
 		//  is undefined behavior.
 		bool transparent; //note: an intransparent lambda is a combinator
+		bool lazy = false; //currently unused
 	}; 	
 
 	struct RestrictedSingleMatch
@@ -335,7 +326,7 @@ namespace simp {
 		constexpr TermNode(const Call                 & val) noexcept :call(val)          {}
 		constexpr TermNode(const Lambda               & val) noexcept :lambda(val)        {}
 		constexpr TermNode(const RestrictedSingleMatch& val) noexcept :single_match(val)  {}
-		constexpr TermNode(const ValueMatch     & val) noexcept :value_match(val)   {}
+		constexpr TermNode(const ValueMatch           & val) noexcept :value_match(val)   {}
 		constexpr TermNode(const VariadicMetaData     & val) noexcept :variadic_data(val) {}
 
 		constexpr operator const Complex              & () const noexcept { return this->complex;       }
@@ -343,7 +334,7 @@ namespace simp {
 		constexpr operator const Call                 & () const noexcept { return this->call;          }
 		constexpr operator const Lambda               & () const noexcept { return this->lambda;        }
 		constexpr operator const RestrictedSingleMatch& () const noexcept { return this->single_match;  }
-		constexpr operator const ValueMatch     & () const noexcept { return this->value_match;   }
+		constexpr operator const ValueMatch           & () const noexcept { return this->value_match;   }
 		constexpr operator const VariadicMetaData     & () const noexcept { return this->variadic_data; }
 
 		constexpr operator Complex              & () noexcept { return this->complex;       }
@@ -351,11 +342,11 @@ namespace simp {
 		constexpr operator Call                 & () noexcept { return this->call;          }
 		constexpr operator Lambda               & () noexcept { return this->lambda;        }
 		constexpr operator RestrictedSingleMatch& () noexcept { return this->single_match;  }
-		constexpr operator ValueMatch     & () noexcept { return this->value_match;   }
+		constexpr operator ValueMatch           & () noexcept { return this->value_match;   }
 		constexpr operator VariadicMetaData     & () noexcept { return this->variadic_data; }
-	};
-
+	}; //TermNode
 	static_assert(sizeof(TermNode) == sizeof(Complex));
+
 	using Store = bmath::intern::BasicStore<TermNode>;
 
 	using Ref = bmath::intern::BasicSaveRef<NodeType, const Store>;
@@ -366,7 +357,7 @@ namespace simp {
 	template<bmath::intern::Reference R> requires (requires { R::store; })
 	constexpr auto begin(const R& ref) noexcept
 	{
-		assert(ref.type == Literal::call);
+		assert(ref.type == Literal::call || ref.type == PatternCall{});
 		using TypedIdx_T = std::conditional_t<R::is_const, const NodeIdx, NodeIdx>;
 		using Store_T = std::remove_reference_t<decltype(*ref.store)>;
 		using Iter = bmath::intern::detail_vector::SaveIterator<TypedIdx_T, sizeof(TermNode), Store_T>;
@@ -377,23 +368,21 @@ namespace simp {
 	template<bmath::intern::Reference R> requires (requires { R::store; })
 	constexpr auto end(const R& ref) noexcept
 	{
-		assert(ref.type == Literal::call);
+		assert(ref.type == Literal::call || ref.type == PatternCall{});
 		return bmath::intern::detail_vector::SaveEndIndicator{ (std::uint32_t)ref->call.size() };
 	}
 
 
 	constexpr const VariadicMetaData& variadic_meta_data(const UnsaveRef ref)
 	{
-		assert(ref.type == Literal::call);
-		assert(ref->call.function().get_type().is<PatternVariadic>());
-		return *(ref.ptr + ref->call.node_count());
+		assert(ref.type == PatternCall{});
+		return *(ref.ptr - 1u);
 	}
 
 	constexpr VariadicMetaData& variadic_meta_data(const MutRef ref)
 	{
-		assert(ref.type == Literal::call);
-		assert(ref->call.function().get_type().is<PatternVariadic>());
-		return *(&ref.store->at(ref.index) + ref->call.node_count());
+		assert(ref.type == PatternCall{});
+		return *(&ref.store->at(ref.index) - 1u);
 	}
 
 
@@ -404,16 +393,16 @@ namespace simp {
 		struct FixedInputSpace
 		{
 			static constexpr std::size_t max_different_count = 4;
-			nv::Native spaces[max_different_count];
+			Native spaces[max_different_count];
 
 			constexpr FixedInputSpace() noexcept :spaces{ Restr::any, Restr::any, Restr::any, Restr::any } {}
 
-			constexpr FixedInputSpace(nv::Native a)                                           noexcept : spaces{ a, a, a, a } {}
-			constexpr FixedInputSpace(nv::Native a, nv::Native b)                             noexcept : spaces{ a, b, b, b } {}
-			constexpr FixedInputSpace(nv::Native a, nv::Native b, nv::Native c)               noexcept : spaces{ a, b, c, c } {}
-			constexpr FixedInputSpace(nv::Native a, nv::Native b, nv::Native c, nv::Native d) noexcept : spaces{ a, b, c, d } {}
+			constexpr FixedInputSpace(Native a)                               noexcept : spaces{ a, a, a, a } {}
+			constexpr FixedInputSpace(Native a, Native b)                     noexcept : spaces{ a, b, b, b } {}
+			constexpr FixedInputSpace(Native a, Native b, Native c)           noexcept : spaces{ a, b, c, c } {}
+			constexpr FixedInputSpace(Native a, Native b, Native c, Native d) noexcept : spaces{ a, b, c, d } {}
 
-			constexpr nv::Native operator[](const std::size_t idx) const noexcept
+			constexpr Native operator[](const std::size_t idx) const noexcept
 			{ 
 				return idx < max_different_count ? 
 					this->spaces[idx] :
@@ -427,7 +416,7 @@ namespace simp {
 			std::string_view name;
 			std::size_t arity;
 			FixedInputSpace input_space = {}; //assumes all parameters to have the same restriction
-			nv::Native result_space = Restr::any;
+			Native result_space = Restr::any;
 		};
 
 		constexpr auto fixed_arity_table = std::to_array<FixedArityProps>({
@@ -497,8 +486,8 @@ namespace simp {
 			Variadic type;
 			std::string_view name;
 			bool associative; //allows to flatten nested instances if true
-			nv::Native input_space = Restr::any; //assumes all parameters to have the same restriction
-			nv::Native result_space = Restr::any;
+			Native input_space = Restr::any; //assumes all parameters to have the same restriction
+			Native result_space = Restr::any;
 		};
 
 		constexpr auto variadic_table = std::to_array<VariadicProps>({
@@ -535,13 +524,13 @@ namespace simp {
 		//properties shared by variadic and FixedArity are stored in a single table below for convinience
 		struct CommonProps 
 		{ 
-			nv::Native type = Native::COUNT; 
+			Native type = Native::COUNT; 
 			std::string_view name = ""; 
-			nv::Native result_space = Restr::any;
+			Native result_space = Restr::any;
 		};
 
 		constexpr auto constant_table = std::to_array<CommonProps>({
-			{ Restr::any                , "any"          , Literal::native },
+			{ Restr::any                 , "any"         , Literal::native },
 			{ Restr::callable            , "callable"    , Literal::native },
 			{ Restr::boolean             , "bool"        , Literal::native },
 			{ ComplexSubset::natural     , "nat"         , Literal::native },
@@ -559,14 +548,15 @@ namespace simp {
 			{ Literal::lambda            , "lambda"      , Literal::native },
 			{ Literal::lambda_param      , "lambda_param", Literal::native },
 			{ Literal::call              , "call"        , Literal::native },
+			{ PatternCall{}              , "\\"          , Literal::native }, //can not be constructed from a string
+			{ PatternUnsigned{}          , "_UInt"       , Literal::native },
 			{ Match::single_restricted   , "\\"          , Literal::native }, //can not be constructed from a string
 			{ Match::single_unrestricted , "\\"          , Literal::native }, //can not be constructed from a string
 			{ Match::single_weak         , "\\"          , Literal::native }, //can not be constructed from a string
 			{ Match::value               , "\\"          , Literal::native }, //can not be constructed from a string
 			{ Match::multi               , "\\"          , Literal::native }, //can not be constructed from a string
-			{ PatternVariadic{}          , "\\"          , Literal::native }, //can not be constructed from a string
-			{ PatternUnsigned{}          , "_UInt"       , Literal::native },
 		});
+		static_assert(constant_table.size() == (unsigned)Constant::COUNT);
 		static_assert(bmath::intern::is_sorted_by(constant_table, &CommonProps::type));
 
 		constexpr auto common_table = [] {
@@ -621,7 +611,7 @@ namespace simp {
 	struct SharedVariadicEntry
 	{
 		//no call to nv::Variadic in a pattern may have more parameters than max_pn_variadic_params_count many
-		static constexpr std::size_t max_pn_variadic_params_count = 6u;
+		static constexpr std::size_t max_pn_variadic_params_count = 10u;
 
 		using MatchPos_T = decltype(Call::Info::size);
 
@@ -640,7 +630,7 @@ namespace simp {
 			const auto stop = this->match_positions.end();
 			return std::find(this->match_positions.begin(), stop, needle) != stop;
 		}
-	};
+	}; //SharedVariadicEntry
 
 	//to allow a constant RewriteRule to be matched against, all match info is stored here
 	struct MatchData
@@ -657,24 +647,20 @@ namespace simp {
 		std::array<SharedSingleMatchEntry, max_value_match_count> value_match_data = {};
 
 		constexpr auto& value_info(const ValueMatch& var) noexcept
-		{
-			return this->value_match_data[var.match_data_index];
+		{	return this->value_match_data[var.match_data_index];
 		}
 
 		constexpr auto& value_info(const ValueMatch& var) const noexcept
-		{
-			return this->value_match_data[var.match_data_index];
+		{	return this->value_match_data[var.match_data_index];
 		}
 
 		constexpr auto& single_info(const RestrictedSingleMatch& var) noexcept
-		{
-			return this->single_match_data[var.match_data_index];
+		{	return this->single_match_data[var.match_data_index];
 		}
 
 		constexpr auto& single_info(const RestrictedSingleMatch& var) const noexcept
-		{
-			return this->single_match_data[var.match_data_index];
+		{	return this->single_match_data[var.match_data_index];
 		}
-	};
+	}; //MatchData
 
 } //namespace simp

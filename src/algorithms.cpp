@@ -65,7 +65,7 @@ namespace simp {
             return ref.type == restr;
         }
         else if (restr.is<nv::Function_>()) {
-            if (ref.type != Literal::call) {
+            if (ref.type != Literal::call && ref.type != PatternCall{}) {
                 return false;
             }
             const NodeIdx function = ref->call.function();
@@ -86,7 +86,8 @@ namespace simp {
 
         bool BMATH_FORCE_INLINE merge_associative_calls(MutRef& ref, const NodeIdx function)
         {
-            assert(ref.type == Literal::call && function.get_type() == Literal::native && 
+            assert(ref.type == Literal::call && //PatternCall is not wanted here!
+                function.get_type() == Literal::native &&
                 nv::from_typed_idx(function).is<nv::Variadic>());
             bool found_nested = false;
             const Call& call = *ref;
@@ -192,7 +193,7 @@ namespace simp {
         {
             using namespace nv;
             assert(function.get_type() == Literal::native);
-            assert(ref.type == Literal::call);
+            assert(ref.type == Literal::call); //PatternCall is not expected here!
             const Native f = from_typed_idx(function);
             Call& call = *ref;
             assert(call.function() == function);
@@ -392,7 +393,7 @@ namespace simp {
                     return eval_bool(literal_false, literal_true);
                 case Variadic(Comm::sum): {
                     auto range = call.parameters();
-                    const NodeIdx* const stop = range.end();
+                    const auto stop = range.end();
                     for (auto iter_1 = range.begin(); iter_1 != stop; ++iter_1) {
                         if (iter_1->get_type() != Literal::complex) {
                             break; //complex are ordered in front and sum is sorted
@@ -415,7 +416,7 @@ namespace simp {
                 } break;
                 case Variadic(Comm::product): { //TODO: evaluate exact division / combine two divisions
                     auto range = call.parameters();
-                    const NodeIdx* const stop = range.end();
+                    const auto stop = range.end();
                     for (auto iter_1 = range.begin(); iter_1 != stop; ++iter_1) {
                         switch (iter_1->get_type()) {
                         case NodeType(Literal::complex): {
@@ -460,6 +461,7 @@ namespace simp {
         [[nodiscard]] NodeIdx replace_lambda_params(const MutRef ref, const bmath::intern::StupidBufferVector<NodeIdx, 16>& params, 
             const Options options, const unsigned lambda_param_offset)
         {
+            assert(ref.type != PatternCall{});
             if (ref.type == Literal::call) {
                 const auto stop = end(ref);
                 for (auto iter = begin(ref); iter != stop; ++iter) {
@@ -491,7 +493,7 @@ namespace simp {
 
         [[nodiscard]] NodeIdx BMATH_FORCE_INLINE eval_lambda(const MutRef ref, Options options, const unsigned lambda_param_offset)
         {
-            assert(ref.type == Literal::call);
+            assert(ref.type == Literal::call); //PatternCall is not expected here!
             const Call& call = *ref;
             const MutRef lambda = ref.new_at(call.function());
             assert(lambda.type == Literal::lambda);
@@ -525,6 +527,7 @@ namespace simp {
         
         [[nodiscard]] NodeIdx add_offset(const MutRef ref, const unsigned lambda_param_offset)
         {
+            assert(ref.type != PatternCall{});
             if (ref.type == Literal::call) {
                 for (NodeIdx& subterm : ref) {
                     subterm = add_offset(ref.new_at(subterm), lambda_param_offset);
@@ -545,6 +548,7 @@ namespace simp {
 
         CombineRes outermost(MutRef ref, const Options options, const unsigned lambda_param_offset)
         {
+            assert(ref.type != PatternCall{});
             bool change = false;
             if (ref.type == Literal::call) {  
                 const NodeIdx function = ref->call.function();
@@ -563,12 +567,11 @@ namespace simp {
                                 return compare_tree(ref.new_at(fst), ref.new_at(snd)) == std::strong_ordering::less;
                             });
                     }
-                    if (options.eval_values) {
+                    if (const NodeIdx res = eval_buildin(ref, options, function, lambda_param_offset);
+                        res != NodeIdx()) 
+                    {
                         //if the function could be fully evaluated, the following step(s) can no longer be executed -> return
-                        const NodeIdx res = eval_buildin(ref, options, function, lambda_param_offset);
-                        if (res != NodeIdx()) {
-                            return CombineRes{ res, true };
-                        }
+                        return CombineRes{ res, true };
                     }
                     if (associative && options.remove_unary_assoc) {
                         const Call& call = *ref;
@@ -623,6 +626,7 @@ namespace simp {
                     this->try_again |= b; 
                 }
             } change = {};
+
             do {
                 do {
                     change.try_again = false;
@@ -672,21 +676,22 @@ namespace simp {
         case NodeType(Literal::symbol):
             Symbol::free(*ref.store, ref.index);
             return;
-        case NodeType(Literal::call):
-            for (const NodeIdx subtree : ref) {
-                free_tree(ref.new_at(subtree));
-            }
-            if (ref->call.function().get_type().is<PatternVariadic>()) {
-                const std::size_t node_count = ref->call.node_count() + 1u;
-                ref.store->free_n(ref.index, node_count);
-            }
-            else {
-                Call::free(*ref.store, ref.index);
-            }
-            return;
         case NodeType(Literal::lambda):
             free_tree(ref.new_at(ref->lambda.definition));
             break;
+        case NodeType(Literal::call):
+        case NodeType(PatternCall{}):
+            for (const NodeIdx subtree : ref) {
+                free_tree(ref.new_at(subtree));
+            }
+            if (ref.type == Literal::call) {
+                Call::free(*ref.store, ref.index);
+            }
+            else {
+                const std::size_t node_count_with_meta_data = 1u + ref->call.node_count();
+                ref.store->free_n(ref.index - 1u, node_count_with_meta_data);
+            }
+            return;
         case NodeType(Match::single_restricted):   
             free_tree(ref.new_at(ref->single_match.condition));
             break;
@@ -718,18 +723,24 @@ namespace simp {
             const std::size_t dst_index = Symbol::build(dst_store, src_name);
             return NodeIdx(dst_index, src_ref.type);
         } break;
-        case NodeType(Literal::call): {
+        case NodeType(Literal::lambda): {
+            Lambda lambda = *src_ref;
+            lambda.definition = copy_tree(src_ref.new_at(lambda.definition), dst_store);
+            return insert_node(lambda, src_ref.type);
+        } break;
+        case NodeType(Literal::call):
+        case NodeType(PatternCall{}): {
             bmath::intern::StupidBufferVector<NodeIdx, 16> dst_subterms;
             const auto stop = end(src_ref);
             for (auto iter = begin(src_ref); iter != stop; ++iter) {
                 dst_subterms.push_back(copy_tree(src_ref.new_at(*iter), dst_store));
             }
-            if (dst_subterms.front().get_type() == PatternVariadic{}) { //also copy variadic metadata
+            if (src_ref.type == PatternCall{}) { //also copy variadic metadata
                 const std::size_t call_capacity = Call::smallest_fit_capacity(dst_subterms.size());
                 const std::size_t nr_call_nodes = Call::_node_count(call_capacity);
 
-                const std::size_t dst_index = dst_store.allocate_n(nr_call_nodes + 1u);
-                dst_store.at(dst_index + call_capacity) = variadic_meta_data(src_ref);
+                const std::size_t dst_index = dst_store.allocate_n(1u + nr_call_nodes) + 1u;
+                dst_store.at(dst_index - 1u) = variadic_meta_data(src_ref);
                 Call::emplace(dst_store.at(dst_index), dst_subterms, call_capacity);
                 return NodeIdx(dst_index, src_ref.type);
             }
@@ -737,11 +748,6 @@ namespace simp {
                 const std::size_t dst_index = Call::build(dst_store, dst_subterms);
                 return NodeIdx(dst_index, src_ref.type);
             }
-        } break;
-        case NodeType(Literal::lambda): {
-            Lambda lambda = *src_ref;
-            lambda.definition = copy_tree(src_ref.new_at(lambda.definition), dst_store);
-            return insert_node(lambda, src_ref.type);
         } break;
         case NodeType(Match::single_restricted): {
             RestrictedSingleMatch var = *src_ref;
@@ -769,6 +775,7 @@ namespace simp {
 
     std::strong_ordering compare_tree(const UnsaveRef fst, const UnsaveRef snd)
     {
+        assert(fst.type != PatternCall{} && snd.type != PatternCall{});
         if (fst.type != snd.type) {
             return fst.type <=> snd.type;
         }
@@ -817,6 +824,7 @@ namespace simp {
 
     std::partial_ordering partial_compare_tree(const UnsaveRef fst, const UnsaveRef snd)
     {
+        assert(fst.type != PatternCall{} && snd.type != PatternCall{});
         if (fst.type != snd.type) {
             if (fst.type.is<PatternNodeType>() || fst.type == Literal::lambda_param ||
                 snd.type.is<PatternNodeType>() || snd.type == Literal::lambda_param)

@@ -82,7 +82,7 @@ namespace bmath::intern {
 
 	template <typename Struct_T, std::size_t Size, typename Search_T>
 	[[nodiscard]] constexpr const Struct_T& search(
-		const std::array<Struct_T, Size>& data, const Search_T Struct_T::* ptr, const Search_T key,
+		const std::array<Struct_T, Size>& data, Search_T Struct_T::* const ptr, const Search_T key,
         const Struct_T& null_val = {}) noexcept
 	{
 		const auto itr = std::find_if(begin(data), end(data), [key, ptr](const auto &v) { return v.*ptr == key; });
@@ -90,10 +90,10 @@ namespace bmath::intern {
 	}
 
 	template<typename T, std::size_t N, typename U>
-	constexpr bool is_sorted_by(const std::array<T, N>& arr, const U T::* by)
+	constexpr bool is_sorted_by(const std::array<T, N>& arr, U T::* const by)
 	{
 		return std::is_sorted(arr.begin(), arr.end(), 
-			[&](const T& a, const T& b) { return a.*by < b.*by; });
+			[by](const T& a, const T& b) { return a.*by < b.*by; });
 	}
 
 	template<MinimalNum T>

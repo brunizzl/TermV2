@@ -13,6 +13,7 @@
 TODO:
 
 important:
+ - add option to combine::Options to only evaluate no-lazy lambdas (perhaps rebrand current .eval_lambda option?)
  - fix pattern construction of value match in simp (value match is used like a proxy, but in reality owns a store node!)
  - construct pattern: single match, mutli match / variadic, value match
  - improve multi-match capabilities of NonComm variadic patterns (allow multiple multis in one NonComm instance)
@@ -96,7 +97,6 @@ int main()
 		}
 		std::cout << "\n";
 	}
-	std::cin.get();
 	//debug::enumerate_type();
 	bmath::intern::debug::test_rechner();
 	//test::stable_sort();
