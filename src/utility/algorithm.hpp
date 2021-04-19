@@ -7,6 +7,7 @@
 #include <array>
 
 #include "meta.hpp"
+#include "vector.hpp"
 
 namespace bmath::intern {
 
@@ -79,6 +80,14 @@ namespace bmath::intern {
 	{
 		std::array<T, N / 2> buffer;
 		detail_sort::stable_sort_in_place(buffer.data(), arr.data(), N, smaller);
+	}
+
+	template<typename T, std::strict_weak_order<T, T> Smaller>
+	constexpr void stable_sort(T* const start, T* const stop, Smaller smaller)
+	{
+		StupidBufferVector<T, 64> buffer;
+		buffer.expand_to_size((stop - start) / 2);
+		detail_sort::stable_sort_in_place(buffer.data(), start, stop - start, smaller);
 	}
 
 

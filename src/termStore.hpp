@@ -138,7 +138,7 @@ namespace bmath::intern {
 
 
 		//unsave, because if new_capacity is smaller than current this->size_, the last elements are lost and size_ is not shrunk -> possible to access invalid memory
-		void unsave_change_capacity(const std::size_t new_capacity) noexcept
+		constexpr void unsave_change_capacity(const std::size_t new_capacity) noexcept
 		{
 			assert(new_capacity > this->capacity);
 
@@ -164,7 +164,7 @@ namespace bmath::intern {
 
 		//appends spacer_size + n uninitialized VecElems at end of payload_data, returns index of first of n new VecElem's
 		//the spacer_size may elems in front of returned index are still free (duh.)
-		[[nodiscard]] std::size_t at_back_allocate_alligned(std::size_t n) noexcept
+		constexpr[[nodiscard]] std::size_t at_back_allocate_alligned(std::size_t n) noexcept
 		{
 			const std::size_t alligned_n_size = std::min(std::bit_ceil(n), 64ull);
 			const std::size_t spacer_size  = alligned_n_size - ((this->size_ - 1u) % alligned_n_size) - 1u;
@@ -202,7 +202,7 @@ namespace bmath::intern {
 		template<typename MemoryRecource>
 		constexpr BasicStore(MemoryRecource r) noexcept :memory(r) {}
 
-		BasicStore(const BasicStore& snd) noexcept
+		constexpr BasicStore(const BasicStore& snd) noexcept
 		{
 			this->unsave_change_capacity(snd.capacity);
 			std::copy_n(snd.memory.combined_data, 
@@ -221,13 +221,13 @@ namespace bmath::intern {
 		BasicStore& operator=(const BasicStore& snd) = delete;
 		BasicStore& operator=(BasicStore&& snd) = delete;
 
-		~BasicStore() noexcept 
+		constexpr ~BasicStore() noexcept 
 		{ 
 			this->memory.deallocate(this->memory.combined_data, 
 				required_element_count(this->capacity)); 
 		}
 
-		void reserve(const std::size_t new_capacity) noexcept 
+		constexpr void reserve(const std::size_t new_capacity) noexcept 
 		{ 
 			if (new_capacity > this->capacity) {
 				this->unsave_change_capacity(std::bit_ceil(new_capacity));
@@ -247,7 +247,7 @@ namespace bmath::intern {
 		}
 
 		//unlike unsave_change_capacity, this allocates space for a (single) Payload_T for the user, instead of (always) resizing the underlying array
-		[[nodiscard]] std::size_t allocate_one() noexcept
+		constexpr [[nodiscard]] std::size_t allocate_one() noexcept
 		{
 			const auto find_first_free_index = [this]() -> std::size_t {
 				const std::size_t bitset_end_index = (this->size_ + 63u) / 64u;
@@ -283,7 +283,7 @@ namespace bmath::intern {
 			this->occupancy_data()[bitset_idx].reset(idx % 64u);
 		}
 
-		[[nodiscard]] std::size_t allocate_n(const std::size_t n) noexcept
+		constexpr [[nodiscard]] std::size_t allocate_n(const std::size_t n) noexcept
 		{
 			assert(n != 0u);
 			if (n == 1u) { //quite a lot faster for that case
@@ -354,15 +354,24 @@ namespace bmath::intern {
 			}
 		} //free_n()
 
+		constexpr void free_all() noexcept
+		{
+			BitSet64* iter = this->occupancy_data();
+			BitSet64* const stop = iter + required_bitset_count(this->capacity);
+			for (; iter != stop; ++iter) {
+				*iter = 0ull;
+			}
+		}
+
 		//returns copy of BitSets managing storage (bit is set -> position is currently in use) 
-		[[nodiscard]] BitVector storage_occupancy() const noexcept
+		constexpr [[nodiscard]] BitVector storage_occupancy() const noexcept
 		{
 			const auto begin = this->occupancy_data();
 			const auto end = begin + required_bitset_count(this->size_);
 			return BitVector(begin, end, this->size_);
 		}
 
-		[[nodiscard]] std::size_t nr_used_slots() const noexcept
+		constexpr [[nodiscard]] std::size_t nr_used_slots() const noexcept
 		{
 			std::size_t pop_count = 0u; 
 			for (std::size_t bitset_index = 0u; bitset_index < (this->size_ + 63u) / 64u; bitset_index++) {
@@ -371,7 +380,7 @@ namespace bmath::intern {
 			return pop_count;
 		} //nr_used_slots
 
-		[[nodiscard]] std::size_t nr_free_slots() const noexcept
+		constexpr [[nodiscard]] std::size_t nr_free_slots() const noexcept
 		{
 			return this->size() - this->nr_used_slots();
 		} //nr_free_slots
@@ -413,7 +422,6 @@ namespace bmath::intern {
 
 			Payload_T* const new_data = this->memory.allocate(new_capacity);
 			std::copy_n(this->memory.data_, this->capacity, new_data); 
-
 
 			if (this->memory.data_ != nullptr) [[likely]] {
 				this->memory.deallocate(this->memory.data_, this->capacity);

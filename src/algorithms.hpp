@@ -12,7 +12,7 @@ namespace simp {
     //only interested in final results -> a function call guaranteed to return something meeting restr results in false
     bool meets_restriction(const UnsaveRef ref, const nv::Native restr);
 
-    namespace combine {
+    namespace normalize {
         struct Options 
         {
             bool exact = true; //(only significant if eval_values) true: only exact operations are permitted
@@ -35,8 +35,8 @@ namespace simp {
         //may throw if: a lambda is called with to many parameters or something not callable is called
         [[nodiscard]] CombineRes outermost(MutRef ref, const Options options, const unsigned lambda_param_offset);
 
-        [[nodiscard]] CombineRes lazy(MutRef ref, const Options options, const unsigned lambda_param_offset);
-    } //namespace combine
+        [[nodiscard]] NodeIndex recursive(MutRef ref, const Options options, const unsigned lambda_param_offset);
+    } //namespace normalize
 
 
     //frees subtree starting at ref

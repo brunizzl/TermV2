@@ -13,7 +13,7 @@
 TODO:
 
 important:
- - add option to combine::Options to only evaluate no-lazy lambdas (perhaps rebrand current .eval_lambda option?)
+ - add option to normalize::Options to only evaluate no-lazy lambdas (perhaps rebrand current .eval_lambda option?)
  - fix pattern construction of value match in simp (value match is used like a proxy, but in reality owns a store node!)
  - construct pattern: single match, mutli match / variadic, value match
  - improve multi-match capabilities of NonComm variadic patterns (allow multiple multis in one NonComm instance)
@@ -75,7 +75,7 @@ int main()
 			auto term = simp::LiteralTerm(name);
 			std::cout << "  ->  " << term.to_string() << "\n";
 			//std::cout << term.to_memory_layout() << "\n";
-			term.establish_order();
+			term.normalize();
 			std::cout << "  ->  " << term.to_string() << "\n";
 			//std::cout << term.to_memory_layout() << "\n";
 			std::cout << "\n";

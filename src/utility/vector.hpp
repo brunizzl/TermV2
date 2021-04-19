@@ -61,7 +61,7 @@ namespace bmath::intern {
 			std::copy(init.begin(), init.end(), this->data_);
 		}
 
-		~StupidBufferVector() noexcept
+		constexpr ~StupidBufferVector() noexcept
 		{
 			if (this->data_ != this->u.local_data) {
 				delete[] this->data_; //only works for trivially destructible Value_T
@@ -80,7 +80,7 @@ namespace bmath::intern {
 		StupidBufferVector(const StupidBufferVector&) = delete;
 
 		template<std::size_t SndBuffer>
-		StupidBufferVector& operator=(const StupidBufferVector<Value_T, SndBuffer>& snd) noexcept
+		constexpr StupidBufferVector& operator=(const StupidBufferVector<Value_T, SndBuffer>& snd) noexcept
 		{
 			assert(false && "please be aware this function is not yet tested");
 			this->clear();
@@ -89,7 +89,7 @@ namespace bmath::intern {
 		}
 
 		template<std::size_t SndBuffer>
-		StupidBufferVector& operator=(StupidBufferVector<Value_T, SndBuffer>&& snd) noexcept
+		constexpr StupidBufferVector& operator=(StupidBufferVector<Value_T, SndBuffer>&& snd) noexcept
 		{
 			assert(false && "please be aware this function is not yet tested");
 			if (snd.data_ != snd.u.local_data) { //only works for trivially destructible Value_T

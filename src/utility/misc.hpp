@@ -39,31 +39,29 @@
 namespace bmath::intern {
     
     
-	constexpr void throw_if(bool cond, const char* const msg)
+	constexpr BMATH_FORCE_INLINE void throw_if(bool cond, const char* const msg)
 	{
 		if (cond) [[unlikely]] {
 			throw std::exception(msg);
 		}
 	}
 
-
 	template<const auto x, const auto... xs, typename T>
-	constexpr bool is_one_of(const T y) noexcept
+	constexpr BMATH_FORCE_INLINE bool is_one_of(const T y) noexcept
 	{ 
-		static_assert(sizeof(T) <= 8, "this function copies the values, ya dummie!"); //although i assume this to be inlined.
 		if constexpr (!sizeof...(xs)) { return x == y; }
 		else                          { return x == y || is_one_of<xs...>(y); }
 	}	
 
 	template<typename... Bool>
-	constexpr bool equivalent(const bool x, const bool y, const Bool... xs)
+	constexpr BMATH_FORCE_INLINE bool equivalent(const bool x, const bool y, const Bool... xs)
 	{
 		if  constexpr (!sizeof...(xs)) { return x == y; }
 		else                           { return x == y && equivalent(x, xs...); }
 	}
 
 	template<typename T, typename U>
-	constexpr T change_field(const T& original, U T::* field, const U& replacement)
+	constexpr BMATH_FORCE_INLINE T change_field(const T& original, U T::* field, const U& replacement)
 	{
 		T result = original;
 		original.*field = replacement;

@@ -21,11 +21,9 @@ namespace simp {
 
 		constexpr MutRef mut_ref() noexcept { return MutRef(this->store, this->head); }
 
-		bool establish_order(const combine::Options o = {}) 
-		{ 
-			const auto res = combine::lazy(this->mut_ref(), o, 0);
-			this->head = res.res;
-			return res.change;
+		void normalize(const normalize::Options o = {})
+		{
+			this->head = normalize::recursive(this->mut_ref(), o, 0);
 		}
 	}; //struct LiteralTerm
 

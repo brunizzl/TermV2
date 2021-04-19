@@ -8,6 +8,7 @@
 #include <span>
 
 #include "utility/sumEnum.hpp"
+#include "utility/misc.hpp"
 
 #include "typedIndex.hpp"
 #include "termVector.hpp"
@@ -280,7 +281,6 @@ namespace simp {
 		//in the normal form, all lambdas but the outermost one are transparent, otherwise matching in such lambdas
 		//  is undefined behavior.
 		bool transparent; //note: an intransparent lambda is a combinator
-		bool lazy = false; //currently unused
 	}; 	
 
 	struct RestrictedSingleMatch
@@ -590,6 +590,13 @@ namespace simp {
 			assert(f < Native(Native::COUNT));
 			return common_table[static_cast<unsigned>(f)].result_space;
 		}
+
+		constexpr bool is_lazy(const NodeIndex f)
+		{
+			return 
+				f == literal_true || 
+				f == literal_false;
+		} //is_lazy
 	} //namespace nv
 
 

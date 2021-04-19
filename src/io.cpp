@@ -343,8 +343,8 @@ namespace simp {
 			parse::name_lookup::PatternInfos infos;
 			NodeIndex lhs_head = parse::build(store, infos, lhs_view);
 			NodeIndex rhs_head = parse::build(store, infos, rhs_view);
-			lhs_head = combine::lazy(MutRef(store, lhs_head), {}, 0).res;
-			rhs_head = combine::lazy(MutRef(store, rhs_head), { .remove_unary_assoc = false }, 0).res;
+			lhs_head = normalize::recursive(MutRef(store, lhs_head), {}, 0);
+			rhs_head = normalize::recursive(MutRef(store, rhs_head), { .remove_unary_assoc = false }, 0);
 
 			//extra condition concerning single match variables (might set multiple in relation)
 			struct SingleCondition
@@ -362,8 +362,8 @@ namespace simp {
 				conditions_view.remove_prefix(1u); //remove bar / comma
 				const std::size_t comma = find_first_of_skip_pars(conditions_view.tokens, token::comma);
 				const auto condition_view = conditions_view.steal_prefix(comma);
-				const NodeIndex condition_head = combine::lazy(
-					MutRef(store, parse::build(store, infos, condition_view)), {}, 0).res;
+				const NodeIndex condition_head = normalize::recursive(
+					MutRef(store, parse::build(store, infos, condition_view)), {}, 0);
 				if (condition_head.get_type() != Literal::call) [[unlikely]] {
 					throw ParseFailure{ conditions_view.offset, "please make this condition look a bit more conditiony." };
 				}

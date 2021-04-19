@@ -82,7 +82,89 @@ namespace simp {
 
 
 
-    namespace combine {
+    namespace normalize {
+
+        [[nodiscard]] NodeIndex replace_lambda_params(const MutRef ref, const bmath::intern::StupidBufferVector<NodeIndex, 16>& params)
+        {
+            assert(ref.type != PatternCall{});
+            if (ref.type == Literal::call) {
+                const auto stop = end(ref);
+                for (auto iter = begin(ref); iter != stop; ++iter) {
+                    *iter = replace_lambda_params(ref.new_at(*iter), params);
+                }
+                //assert(!options.eval_lambdas);
+                //return normalize::outermost(ref, options, lambda_param_offset).res;
+            }
+            else if (ref.type == Literal::lambda && ref->lambda.transparent) {
+                ref->lambda.definition = 
+                    replace_lambda_params(ref.new_at(ref->lambda.definition), params);
+            }
+            else if (ref.type == Literal::lambda_param) { 
+                if (ref.index >= params.size()) {
+                    //function is not fully evaluated but only curried -> new param index = old - (number evaluated)
+                    return NodeIndex(ref.index - params.size(), Literal::lambda_param);
+                }
+                else {
+                    return copy_tree(ref.new_at(params[ref.index]), *ref.store);
+                }
+            }
+            return ref.typed_idx();
+        } //replace_lambda_params
+
+        [[nodiscard]] NodeIndex eval_lambda(const MutRef ref, const Options options)
+        {
+            assert(ref.type == Literal::call); //PatternCall is not expected here!
+            const Call& call = *ref;
+            const MutRef lambda = ref.new_at(call.function());
+            assert(lambda.type == Literal::lambda);
+            assert(!lambda->lambda.transparent);
+            bmath::intern::StupidBufferVector<NodeIndex, 16> params;
+            for (const NodeIndex param : call.parameters()) {
+                params.push_back(param);
+            }
+            const std::uint32_t lambda_param_count = lambda->lambda.param_count;
+            if (lambda_param_count < params.size()) [[unlikely]] {
+                throw "too many arguments for called lambda";
+            }
+            Call::free(*ref.store, ref.index); //only free call itself, neighter lambda nor lambda parameters
+            const NodeIndex evaluated = replace_lambda_params(
+                ref.new_at(lambda->lambda.definition), params);
+            for (const NodeIndex param : params) {
+                free_tree(ref.new_at(param));
+            }
+            if (lambda_param_count == params.size()) {
+                ref.store->free_one(lambda.index);
+                return normalize::recursive(ref.new_at(evaluated), options, 0);
+            }
+            else { //lambda is curried -> keep remaining lambda as lambda
+                assert(lambda_param_count > params.size());
+                lambda->lambda.definition = evaluated;
+                lambda->lambda.param_count -= params.size();
+                return lambda.typed_idx();
+            }           
+        } //eval_lambda
+
+
+        [[nodiscard]] NodeIndex add_offset(const MutRef ref, const unsigned lambda_param_offset)
+        {
+            assert(ref.type != PatternCall{});
+            if (ref.type == Literal::call) {
+                for (NodeIndex& subterm : ref) {
+                    subterm = add_offset(ref.new_at(subterm), lambda_param_offset);
+                }
+            }
+            else if (ref.type == Literal::lambda) {
+                Lambda& lambda = *ref;
+                if (lambda.transparent) {
+                    lambda.definition = add_offset(ref.new_at(lambda.definition), lambda_param_offset);
+                }
+            }
+            else if (ref.type == Literal::lambda_param) {
+                const std::uint32_t new_index = ref.index + lambda_param_offset;
+                return NodeIndex(new_index, Literal::lambda_param);
+            }
+            return ref.typed_idx();
+        } //add_offset
 
         bool BMATH_FORCE_INLINE merge_associative_calls(MutRef& ref, const NodeIndex function)
         {
@@ -329,24 +411,16 @@ namespace simp {
                     assert(is_unary_function(converter_ref));
                     const auto stop = end(convertee_ref);
                     auto iter = begin(convertee_ref);
-                    std::size_t remaining_parameters = convertee_ref->call.size() - 1u;
-                    if (remaining_parameters == 0u) [[unlikely]] {
-                        static_assert(Call::min_capacity >= 3u, "assumes fmap call to only use one store slot");
-                        ref.store->free_one(ref.index); //free call to fmap
-                        free_tree(converter_ref);
-                        return convertee;
-                    }
                     for (++iter; iter != stop; ++iter) {
                         static_assert(Call::min_capacity >= 2u, "assumes call to only use one store slot");
                         const std::size_t call_index = ref.store->allocate_one();
-                        const NodeIndex converter_copy = --remaining_parameters ? 
-                            copy_tree(converter_ref, *ref.store) : 
-                            converter;
+                        const NodeIndex converter_copy = copy_tree(converter_ref, *ref.store);
                         ref.store->at(call_index) = Call({ converter_copy, *iter });
-                        *iter = NodeIndex(call_index, Literal::call);
+                        *iter = eval_lambda(ref.new_at(NodeIndex(call_index, Literal::call)), options);
                     }
                     static_assert(Call::min_capacity >= 3u, "assumes fmap call to only use one store slot");
                     ref.store->free_one(ref.index); //free call to fmap
+                    free_tree(converter_ref); //free function to map
                     return convertee_ref.typed_idx();
                 } break;
                 }
@@ -414,7 +488,7 @@ namespace simp {
                     }
                     remove_shallow_value(NodeIndex());
                 } break;
-                case Variadic(Comm::product): { //TODO: evaluate exact division / combine two divisions
+                case Variadic(Comm::product): { //TODO: evaluate exact division / normalize two divisions
                     auto range = call.parameters();
                     const auto stop = range.end();
                     for (auto iter_1 = range.begin(); iter_1 != stop; ++iter_1) {
@@ -458,94 +532,6 @@ namespace simp {
             return NodeIndex();
         } //eval_buildin
 
-        [[nodiscard]] NodeIndex replace_lambda_params(const MutRef ref, const bmath::intern::StupidBufferVector<NodeIndex, 16>& params, 
-            const Options options, const unsigned lambda_param_offset)
-        {
-            assert(ref.type != PatternCall{});
-            if (ref.type == Literal::call) {
-                const auto stop = end(ref);
-                for (auto iter = begin(ref); iter != stop; ++iter) {
-                    *iter = replace_lambda_params(ref.new_at(*iter), params, options, lambda_param_offset);
-                }
-                assert(!options.eval_lambdas);
-                return combine::outermost(ref, options, lambda_param_offset).res;
-            }
-            else if (ref.type == Literal::lambda && ref->lambda.transparent) {
-                ref->lambda.definition = replace_lambda_params(ref.new_at(ref->lambda.definition), 
-                    params, options, lambda_param_offset);
-            }
-            //only if index is not smaller than offset, this parameter is actually owned by calling lambda
-            else if (ref.type == Literal::lambda_param && ref.index >= lambda_param_offset) { 
-                //lambda may be nested and transparent -> the own parameters are 
-                //  currently offset by the cumulative number of parameters of ancestor lambdas -> undo that offset
-                const unsigned real_index = ref.index - lambda_param_offset; 
-                if (real_index >= params.size()) {
-                    //function is not fully evaluated but only curried -> new param index = old - (number evaluated)
-                    //note: as that means this function will be called again, the offset will not be undone now.
-                    return NodeIndex(ref.index - params.size(), Literal::lambda_param);
-                }
-                else {
-                    return copy_tree(ref.new_at(params[real_index]), *ref.store);
-                }
-            }
-            return ref.typed_idx();
-        } //replace_lambda_params
-
-        [[nodiscard]] NodeIndex BMATH_FORCE_INLINE eval_lambda(const MutRef ref, Options options, const unsigned lambda_param_offset)
-        {
-            assert(ref.type == Literal::call); //PatternCall is not expected here!
-            const Call& call = *ref;
-            const MutRef lambda = ref.new_at(call.function());
-            assert(lambda.type == Literal::lambda);
-            bmath::intern::StupidBufferVector<NodeIndex, 16> params;
-            for (const NodeIndex param : call.parameters()) {
-                params.push_back(param);
-            }
-            const std::uint32_t lambda_param_count = lambda->lambda.param_count;
-            if (lambda_param_count < params.size()) [[unlikely]] {
-                throw "too many arguments for called lambda";
-            }
-            Call::free(*ref.store, ref.index); //only free call itself, neighter lambda nor lambda parameters
-            options.eval_lambdas = false;
-            const NodeIndex evaluated = replace_lambda_params(
-                ref.new_at(lambda->lambda.definition), params, options, lambda_param_offset);
-            for (const NodeIndex param : params) {
-                free_tree(ref.new_at(param));
-            }
-            if (lambda_param_count == params.size()) {
-                ref.store->free_one(lambda.index);
-                return evaluated;
-            }
-            else { //lambda is curried -> keep remaining lambda as lambda
-                assert(lambda_param_count > params.size());
-                lambda->lambda.definition = evaluated;
-                lambda->lambda.param_count -= params.size();
-                return lambda.typed_idx();
-            }           
-        } //eval_lambda
-
-        
-        [[nodiscard]] NodeIndex add_offset(const MutRef ref, const unsigned lambda_param_offset)
-        {
-            assert(ref.type != PatternCall{});
-            if (ref.type == Literal::call) {
-                for (NodeIndex& subterm : ref) {
-                    subterm = add_offset(ref.new_at(subterm), lambda_param_offset);
-                }
-            }
-            else if (ref.type == Literal::lambda) {
-                Lambda& lambda = *ref;
-                if (lambda.transparent) {
-                    lambda.definition = add_offset(ref.new_at(lambda.definition), lambda_param_offset);
-                }
-            }
-            else if (ref.type == Literal::lambda_param) {
-                const std::uint32_t new_index = ref.index + lambda_param_offset;
-                return NodeIndex(new_index, Literal::lambda_param);
-            }
-            return ref.typed_idx();
-        }
-
         CombineRes outermost(MutRef ref, const Options options, const unsigned lambda_param_offset)
         {
             assert(ref.type != PatternCall{});
@@ -583,9 +569,8 @@ namespace simp {
                     }
                 } break;
                 case NodeType(Literal::lambda): {
-                    //evaluate outermost lambda first
                     if (options.eval_lambdas && lambda_param_offset == 0u) {
-                        const NodeIndex evaluated = eval_lambda(ref, options, lambda_param_offset);
+                        const NodeIndex evaluated = eval_lambda(ref, options);
                         return CombineRes{ evaluated, true };
                     }
                 } break;
@@ -614,59 +599,32 @@ namespace simp {
             return CombineRes{ ref.typed_idx(), change };
         } //outermost
 
-        CombineRes lazy(MutRef ref, const Options options, const unsigned lambda_param_offset)
+        NodeIndex recursive(MutRef ref, const Options options, const unsigned lambda_param_offset)
         {
-            struct Change 
-            {
-                bool changed_anytime = false;
-                bool try_again = false;
-                void operator|=(const bool b) noexcept 
-                { 
-                    this->changed_anytime |= b; 
-                    this->try_again |= b; 
+            assert(ref.type != PatternCall{});
+            if (ref.type == Literal::call) {
+                auto iter = begin(ref);
+                *iter = normalize::recursive(ref.new_at(*iter), options, lambda_param_offset);
+                if (nv::is_lazy(*iter)) [[unlikely]] {
+                    const NodeIndex result = normalize::outermost(ref, options, lambda_param_offset).res;
+                    return normalize::recursive(ref.new_at(result), options, lambda_param_offset);
                 }
-            } change = {};
-
-            do {
-                do {
-                    change.try_again = false;
-                    const CombineRes combined = outermost(ref, options, lambda_param_offset);
-                    change |= combined.change;
-                    ref.index = combined.res.get_index();
-                    ref.type = combined.res.get_type();
-                } while (change.try_again);
-                change.try_again = false;
-                switch (ref.type) {
-                case NodeType(Literal::call): {
+                else {
                     const auto stop = end(ref);
-                    auto iter = begin(ref);
-                    {//combine function call
-                        const CombineRes subterm_res = lazy(ref.new_at(*iter), options, lambda_param_offset);
-                        change |= subterm_res.change;
-                        *iter = subterm_res.res;
-                        if (subterm_res.change) {
-                            break;
-                        }
+                    for (++iter; iter != stop; ++iter) {
+                        *iter = normalize::recursive(ref.new_at(*iter), options, lambda_param_offset);
                     }
-                    for (++iter; iter != stop; ++iter) { //combine parameters
-                        const CombineRes subterm_res = lazy(ref.new_at(*iter), options, lambda_param_offset);
-                        change |= subterm_res.change;
-                        *iter = subterm_res.res;
-                    }
-                } break;
-                case NodeType(Literal::lambda): {
-                    const Lambda lambda = *ref;
-                    const CombineRes subterm_res = lazy(
-                        ref.new_at(lambda.definition), options, lambda_param_offset + lambda.param_count);
-                    ref->lambda.definition = subterm_res.res;
-                    change |= subterm_res.change;
-                } break;
                 }
-            } while (change.try_again);
-            return CombineRes{ ref.typed_idx(), change.changed_anytime };
-        } //lazy
+            }
+            if (ref.type == Literal::lambda) {
+                const Lambda lambda = *ref;
+                ref->lambda.definition = normalize::recursive(
+                    ref.new_at(lambda.definition), options, lambda_param_offset + lambda.param_count);
+            }
+            return normalize::outermost(ref, options, lambda_param_offset).res;
+        } //recursive
 
-    } //namespace combine
+    } //namespace normalize
 
     void free_tree(const MutRef ref)
     {
@@ -715,7 +673,6 @@ namespace simp {
 
         switch (src_ref.type) {
         case NodeType(Literal::complex):
-            if (src_ref->complex.real() < -1000) __debugbreak();
             return insert_node(*src_ref, src_ref.type);
         case NodeType(Literal::symbol): {
             const Symbol& src_var = *src_ref;
