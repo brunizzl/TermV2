@@ -45,12 +45,12 @@ namespace simp {
 
 		namespace name_lookup {
 
-			//all names that can be looked up will result in a "shallow" NodeIdx, meaning no node in the Store is attatched.
+			//all names that can be looked up will result in a "shallow" NodeIndex, meaning no node in the Store is attatched.
 			//thus this simple structure is permitted.
 			struct NameInfo
 			{
 				std::string_view name;
-				NodeIdx value;
+				NodeIndex value;
 			};
 
 			struct PatternInfos
@@ -68,10 +68,10 @@ namespace simp {
 
 			//looks up global function names and the names contained in info (expected to refer to lambda parameters)
 			//unknown names are returned as symbols
-			NodeIdx build_symbol(Store& store, const LiteralInfos& lambda_params, bmath::intern::ParseView view);
+			NodeIndex build_symbol(Store& store, const LiteralInfos& lambda_params, bmath::intern::ParseView view);
 
 			//same as above, but unwraps unknown beginning and ending in single quotes
-			NodeIdx build_symbol(Store& store, PatternInfos& infos, bmath::intern::ParseView view);
+			NodeIndex build_symbol(Store& store, PatternInfos& infos, bmath::intern::ParseView view);
 
 			//expects params_view to be argument list of lambda starting with '\\', adds names to lambda_params
 			//returns number of parameters added
@@ -79,34 +79,34 @@ namespace simp {
 		} //namespace name_lookup
 
 		template<bmath::intern::StoreLike Store_T>
-		[[nodiscard]] NodeIdx build_value(Store_T& store, const std::complex<double> complex) noexcept
+		[[nodiscard]] NodeIndex build_value(Store_T& store, const std::complex<double> complex) noexcept
 		{
 			const std::size_t result_idx = store.allocate_one();
 			new (&store.at(result_idx)) TermNode(complex);
-			return NodeIdx(result_idx, Literal::complex);
+			return NodeIndex(result_idx, Literal::complex);
 		}
 
 		template<bmath::intern::StoreLike Store_T>
-		[[nodiscard]] NodeIdx build_negated(Store_T& store, const NodeIdx to_negate) noexcept
+		[[nodiscard]] NodeIndex build_negated(Store_T& store, const NodeIndex to_negate) noexcept
 		{
 			const std::size_t result_idx = store.allocate_one();
 			new (&store.at(result_idx)) TermNode(Call{ nv::to_typed_idx(nv::CtoC::negate), to_negate });
-			return NodeIdx(result_idx, Literal::call);
+			return NodeIndex(result_idx, Literal::call);
 		}
 
 		template<bmath::intern::StoreLike Store_T>
-		[[nodiscard]] NodeIdx build_inverted(Store_T& store, const NodeIdx to_invert) noexcept
+		[[nodiscard]] NodeIndex build_inverted(Store_T& store, const NodeIndex to_invert) noexcept
 		{
 			const std::size_t result_idx = store.allocate_one();
 			new (&store.at(result_idx)) TermNode(Call{ nv::to_typed_idx(nv::CtoC::invert), to_invert });
-			return NodeIdx(result_idx, Literal::call);
+			return NodeIndex(result_idx, Literal::call);
 		}
 
 		//returns the tree representation of view in store
 		//lambda_offset is the sum of all parameter counts of all parent lambdas 
 		//  (no outside lambdas -> lambda_offset == 0)
 		template<name_lookup::InfoLike Infos>
-		[[nodiscard]] NodeIdx build(Store& store, Infos& infos, bmath::intern::ParseView view);
+		[[nodiscard]] NodeIndex build(Store& store, Infos& infos, bmath::intern::ParseView view);
 
 		//has only activated SingleMatch!
 		//build from a string of form "<match side> = <replace side>" 
@@ -115,7 +115,7 @@ namespace simp {
 		//         <condition(s)> is a comma separated listing of extra conditions and relations on single match variables
 		//note: conditions are incorporated into match_side
 		//returns (match side, repacement side)
-		std::pair<NodeIdx, NodeIdx> raw_rule(Store& store, std::string name);
+		std::pair<NodeIndex, NodeIndex> raw_rule(Store& store, std::string name);
 
 
 	} //namespace parse
@@ -131,7 +131,7 @@ namespace simp {
 			return name;
 		}
 
-		std::string to_memory_layout(const Store& store, const std::initializer_list<const NodeIdx> heads);
+		std::string to_memory_layout(const Store& store, const std::initializer_list<const NodeIndex> heads);
 	} //namespace print
 
 } //namespace simp

@@ -104,41 +104,41 @@ namespace simp {
 					name.find_first_of(' ') == std::string_view::npos;
 			}
 
-			NodeIdx find_name_in_infos(const std::vector<NameInfo>& infos, const std::string_view name)
+			NodeIndex find_name_in_infos(const std::vector<NameInfo>& infos, const std::string_view name)
 			{
 				const auto iter = std::find_if(infos.rbegin(), infos.rend(),
 					[name](const NameInfo& i) { return i.name == name; });
 				return iter != infos.rend() ?
 					iter->value :
-					NodeIdx();
+					NodeIndex();
 			}
 
-			NodeIdx build_symbol(Store& store, const LiteralInfos& infos, bmath::intern::ParseView view)
+			NodeIndex build_symbol(Store& store, const LiteralInfos& infos, bmath::intern::ParseView view)
 			{
 				const std::string_view name = view.to_string_view();
 				if (!mundane_name(view)) [[unlikely]] {
 					throw bmath::ParseFailure{ view.offset, "ellipses or the dollar symbol are only expected when building a pattern" };
 				}
-				if (const NodeIdx res = find_name_in_infos(infos.lambda_params, name); res != NodeIdx()) {
+				if (const NodeIndex res = find_name_in_infos(infos.lambda_params, name); res != NodeIndex()) {
 					return res;
 				}
 				if (const nv::Native type = nv::type_of(name); type != nv::Native(nv::Native::COUNT)) {
 					return nv::to_typed_idx(type);
 				}
-				return NodeIdx(Symbol::build(store, name), Literal::symbol);
+				return NodeIndex(Symbol::build(store, name), Literal::symbol);
 			}
 
-			NodeIdx build_symbol(Store& store, PatternInfos& infos, bmath::intern::ParseView view)
+			NodeIndex build_symbol(Store& store, PatternInfos& infos, bmath::intern::ParseView view)
 			{
 				std::string_view name = view.to_string_view();
-				if (const NodeIdx res = find_name_in_infos(infos.lambda_params, name); res != NodeIdx()) {
+				if (const NodeIndex res = find_name_in_infos(infos.lambda_params, name); res != NodeIndex()) {
 					return res;
 				}
-				if (const NodeIdx res = find_name_in_infos(infos.match_variables, name); res != NodeIdx()) {
+				if (const NodeIndex res = find_name_in_infos(infos.match_variables, name); res != NodeIndex()) {
 					return res;
 				}
 				if (const nv::Native type = nv::type_of(name); type != nv::Native(nv::Native::COUNT)) {
-					return NodeIdx(static_cast<unsigned>(type), Literal::native);
+					return NodeIndex(static_cast<unsigned>(type), Literal::native);
 				}
 				if (name.starts_with('\'') && name.ends_with('\'')) {
 					name.remove_prefix(1u);
@@ -149,15 +149,15 @@ namespace simp {
 					if (nv::type_of(name) != nv::Native(nv::Native::COUNT)) [[unlikely]] {
 						throw bmath::ParseFailure{ view.offset, "sneaking in keywords like that is forbidden" };
 					}
-					return NodeIdx(Symbol::build(store, name), Literal::symbol);
+					return NodeIndex(Symbol::build(store, name), Literal::symbol);
 				}
 				if (name.find_first_of(' ') != std::string_view::npos) [[unlikely]] {
 						throw bmath::ParseFailure{ view.offset, "leave me some space, but not like that" };
 				}
-					const auto add_match_variable = [&](const NodeType type) {
+				const auto add_match_variable = [&](const NodeType type) {
 					const std::size_t id = std::count_if(infos.match_variables.begin(), infos.match_variables.end(),
 						[type](const NameInfo& i) { return i.value.get_type() == type; });
-					const NodeIdx result = NodeIdx(id, type);
+					const NodeIndex result = NodeIndex(id, type);
 					infos.match_variables.emplace_back(name, result);
 					return result;
 				};
@@ -184,7 +184,7 @@ namespace simp {
 						throw bmath::ParseFailure{ params_view.offset, "we name lambda parameters less exiting around here" };
 					if (!param.size()) [[unlikely]]
 						throw bmath::ParseFailure{ params_view.offset, "there is no reason for nullary lambdas in a purely functional language" };
-					lambda_params.push_back({ param.to_string_view(), NodeIdx(lambda_params.size(), Literal::lambda_param) });
+					lambda_params.push_back({ param.to_string_view(), NodeIndex(lambda_params.size(), Literal::lambda_param) });
 					param_count++;
 				}
 				return param_count;
@@ -203,7 +203,7 @@ namespace simp {
 		} //parse_value
 
 		template<name_lookup::InfoLike Infos>
-		NodeIdx build(Store& store, Infos& infos, bmath::intern::ParseView view)
+		NodeIndex build(Store& store, Infos& infos, bmath::intern::ParseView view)
 		{
 			using namespace bmath;
 			using namespace bmath::intern;
@@ -216,19 +216,19 @@ namespace simp {
 				head = parse::find_head_type(view);
 			}
 			const auto to_buildin_call = [&](const std::size_t operator_length, const nv::Native type) {
-				const NodeIdx fst = parse::build(store, infos, view.substr(0, head.where));
-				const NodeIdx snd = parse::build(store, infos, view.substr(head.where + operator_length));
+				const NodeIndex fst = parse::build(store, infos, view.substr(0, head.where));
+				const NodeIndex snd = parse::build(store, infos, view.substr(head.where + operator_length));
 				const std::size_t res_index = store.allocate_one();
 				store.at(res_index) = Call{ nv::to_typed_idx(type), fst, snd };
-				return NodeIdx(res_index, Literal::call);
+				return NodeIndex(res_index, Literal::call);
 			};
 			const auto to_inverse_buildin_call = [&](const nv::Native type, auto invert_term) {
-				const NodeIdx fst = parse::build(store, infos, view.substr(0, head.where));
-				const NodeIdx snd_uninverted = build(store, infos, view.substr(head.where + 1));
-				const NodeIdx snd = invert_term(store, snd_uninverted);
+				const NodeIndex fst = parse::build(store, infos, view.substr(0, head.where));
+				const NodeIndex snd_uninverted = build(store, infos, view.substr(head.where + 1));
+				const NodeIndex snd = invert_term(store, snd_uninverted);
 				const std::size_t res_index = store.allocate_one();
 				store.at(res_index) = Call{ nv::to_typed_idx(type), fst, snd };
-				return NodeIdx(res_index, Literal::call);
+				return NodeIndex(res_index, Literal::call);
 			};
 			switch (head.type) {
 			case Head::Type::or_:        return to_buildin_call(2, nv::Comm::or_);
@@ -246,14 +246,14 @@ namespace simp {
 			case Head::Type::power:      return to_buildin_call(1, nv::CtoC::pow);
 			case Head::Type::not_: {
 				view.remove_prefix(1u);  //remove '!'
-				const NodeIdx to_negate = parse::build(store, infos, view);
+				const NodeIndex to_negate = parse::build(store, infos, view);
 				const std::size_t res_index = store.allocate_one();
 				store.at(res_index) = Call{ nv::to_typed_idx(nv::ToBool::not_), to_negate };
-				return NodeIdx(res_index, Literal::call);
+				return NodeIndex(res_index, Literal::call);
 			} break;
 			case Head::Type::negate: {
 				view.remove_prefix(1u);  //remove minus sign
-				const NodeIdx to_negate = parse::build(store, infos, view);
+				const NodeIndex to_negate = parse::build(store, infos, view);
 				return build_negated(store, to_negate);
 			} break;
 			case Head::Type::real_value: {
@@ -269,7 +269,7 @@ namespace simp {
 				return name_lookup::build_symbol(store, infos, view);
 			} break;
 			case Head::Type::call: {
-				bmath::intern::StupidBufferVector<NodeIdx, 12> subterms;
+				bmath::intern::StupidBufferVector<NodeIndex, 12> subterms;
 				subterms.push_back(parse::build(store, infos, view.steal_prefix(head.where)));
 				view.remove_prefix(1u); //remove '('
 				view.remove_suffix(1u); //remove ')'
@@ -284,7 +284,7 @@ namespace simp {
 					const auto param_view = view.steal_prefix(comma);
 					subterms.push_back(parse::build(store, infos, param_view));
 				}
-				return NodeIdx(Call::build(store, subterms), Literal::call);
+				return NodeIndex(Call::build(store, subterms), Literal::call);
 			} break;
 			case Head::Type::lambda: {
 				const bool outermost_lambda = infos.lambda_params.size() == 0u;
@@ -294,21 +294,21 @@ namespace simp {
 				}
 				const unsigned param_count = name_lookup::add_lambda_params(infos.lambda_params, view.steal_prefix(dot_pos));
 				view.remove_prefix(1u); //remove dot
-				const NodeIdx definition = parse::build(store, infos, view);
+				const NodeIndex definition = parse::build(store, infos, view);
 				const std::size_t res_index = store.allocate_one();
 				store.at(res_index) = Lambda{ definition, param_count, !outermost_lambda };
 				infos.lambda_params.resize(infos.lambda_params.size() - param_count); //remove own names again
-				return NodeIdx(res_index, Literal::lambda);
+				return NodeIndex(res_index, Literal::lambda);
 			} break;
 			default:
 				assert(false);
-				return NodeIdx();
+				return NodeIndex();
 			}
 		} //build
-		template NodeIdx build(Store&, name_lookup::LiteralInfos&, bmath::intern::ParseView);
-		template NodeIdx build(Store&, name_lookup::PatternInfos&, bmath::intern::ParseView);
+		template NodeIndex build(Store&, name_lookup::LiteralInfos&, bmath::intern::ParseView);
+		template NodeIndex build(Store&, name_lookup::PatternInfos&, bmath::intern::ParseView);
 
-		std::pair<NodeIdx, NodeIdx> raw_rule(Store& store, std::string name)
+		std::pair<NodeIndex, NodeIndex> raw_rule(Store& store, std::string name)
 		{
 			using namespace bmath;
 			using namespace bmath::intern;
@@ -341,18 +341,18 @@ namespace simp {
 			}(parse_str);
 
 			parse::name_lookup::PatternInfos infos;
-			NodeIdx lhs_head = parse::build(store, infos, lhs_view);
-			NodeIdx rhs_head = parse::build(store, infos, rhs_view);
+			NodeIndex lhs_head = parse::build(store, infos, lhs_view);
+			NodeIndex rhs_head = parse::build(store, infos, rhs_view);
 			lhs_head = combine::lazy(MutRef(store, lhs_head), {}, 0).res;
 			rhs_head = combine::lazy(MutRef(store, rhs_head), { .remove_unary_assoc = false }, 0).res;
 
 			//extra condition concerning single match variables (might set multiple in relation)
 			struct SingleCondition
 			{
-				NodeIdx head = NodeIdx();
+				NodeIndex head = NodeIndex();
 				std::bitset<MatchData::max_single_match_count> dependencies = 0; //dependencies[i] is set iff single match i occurs in the condition
 			};
-			std::vector<NodeIdx> single_conditions;
+			std::vector<NodeIndex> single_conditions;
 
 			std::array<nv::ComplexSubset, MatchData::max_value_match_count> value_conditions;
 			value_conditions.fill(nv::ComplexSubset::complex);
@@ -362,17 +362,57 @@ namespace simp {
 				conditions_view.remove_prefix(1u); //remove bar / comma
 				const std::size_t comma = find_first_of_skip_pars(conditions_view.tokens, token::comma);
 				const auto condition_view = conditions_view.steal_prefix(comma);
-				const NodeIdx condition_head = combine::lazy(
+				const NodeIndex condition_head = combine::lazy(
 					MutRef(store, parse::build(store, infos, condition_view)), {}, 0).res;
 				if (condition_head.get_type() != Literal::call) [[unlikely]] {
 					throw ParseFailure{ conditions_view.offset, "please make this condition look a bit more conditiony." };
 				}
-				const Call& cond_call = *Ref(store, condition_head);
-
+				const auto cond_ref = MutRef(store, condition_head);
+				const bool contains_single = simp::search(cond_ref, 
+					[](const UnsaveRef r) { return r.type == Match::single_weak; }) != NodeIndex();
+				const bool contains_value = simp::search(cond_ref,
+					[](const UnsaveRef r) { return r.type == Match::value; }) != NodeIndex();
+				const bool contains_multi = simp::search(cond_ref,
+					[](const UnsaveRef r) { return r.type == Match::multi; }) != NodeIndex(); 
+				if (contains_multi) [[unlikely]] {
+					throw ParseFailure{ conditions_view.offset, "sorry, but i am too lazy to check that" };
+				}
+				if (contains_single && contains_value) [[unlikely]] {
+					throw ParseFailure{ conditions_view.offset, "single match and value match may not depend on each other" };
+				}
+				if (contains_single) {
+					//TODO: 
+					//- find out which single variable indices are contained for SingleCondition instance
+					//- add entry to single_conditions
+				}
+				if (contains_value) {
+					//TODO:
+					//condition may only be of form "type($<value match>, <complex subset>)"
+					//if so: adjust value_conditions at right index
+				}
 			}
+			{
+				//TODO:
+				//go through lhs in preorder, adjust single match using single_conditions
+				//idea: keep track which variable has aleady been encountered. if a new single variable instance is met do the following:
+				//if its index has already been encountered: done
+				//if not: check of congle_conditions contains conditions depending only on already encountered indices and the current one
+				//           yes: combine these conditions into an and condition, append it at a RestrictedSingleMatch node (or convert to .restriction)
+				//           no: turn Instance to Match::single_unrestricted
+			}
+			{
+				//TODO:
+				//clear owner situation of value match in lhs, maybe add value restriction
+			}
+			{ 
+				//TODO (likely own function, as otherwise value match reordering will fail):
+				//change call to PatternCall where a subtree contains some pattern stuff in lhs
+			}
+
+			//the following will be done in different functions:
 			//TODO (mostly in lhs):
-			//verify only one occurence of each muti match
-			//verify only one occurence of multi match in one Comm, two occurences in one NonComm, no occurences elsewhere
+			//verify only one occurence of each multi match
+			//verify only one occurence of multi match in one Comm, any number of occurences in one NonComm, no occurences elsewhere
 			//adjust muti match indices to equal corresponding call + add management field to call
 			//check variadics to each not exceed maximal length and to have not more than is allowed 
 			//sort Comm, flatten associative variadics (do not remove indirection via variadic in rhs!)
@@ -388,7 +428,7 @@ namespace simp {
 		constexpr int max_infixr = std::numeric_limits<int>::max();
 		constexpr int default_infixr = 0;
 
-		constexpr int infixr(const NodeIdx f) {
+		constexpr int infixr(const NodeIndex f) {
 			if (f.get_type() != Literal::native) { return default_infixr; }
 			using namespace nv;
 			switch (from_typed_idx(f)) {
@@ -434,7 +474,7 @@ namespace simp {
 			} [[fallthrough]];				
 			case NodeType(Literal::call): { 
 				const Call& call = *ref;
-				const NodeIdx function = call.function();
+				const NodeIndex function = call.function();
 				const char* replacement_seperator = nullptr;
 				const auto [init, seperator] = [&]() -> std::pair<const char*, const char*> {
 					using namespace nv;
@@ -461,7 +501,7 @@ namespace simp {
 				const int own_infixr = infixr(function);
 				if (own_infixr <= parent_infixr) { str.push_back('('); }				
 				const char* spacer = init;
-				for (const NodeIdx param : call.parameters()) {
+				for (const NodeIndex param : call.parameters()) {
 					str.append(std::exchange(spacer, seperator));
 					append_to_string(ref.new_at(param), str, own_infixr);
 				}
@@ -486,7 +526,7 @@ namespace simp {
 				str.append(std::to_string(var.match_data_index));
 				str.append("[");
 				str.append(std::to_string(static_cast<unsigned>(var.restriction)));
-				if (var.condition != NodeIdx()) {
+				if (var.condition != NodeIndex()) {
 					str.append(", ");
 					append_to_string(ref.new_at(var.condition), str, default_infixr);
 				}
@@ -592,7 +632,7 @@ namespace simp {
 			print::append_to_string(ref, current_str, 0);
 		} //append_memory_row
 
-		std::string to_memory_layout(const Store& store, const std::initializer_list<const NodeIdx> heads)
+		std::string to_memory_layout(const Store& store, const std::initializer_list<const NodeIndex> heads)
 		{
 			std::vector<std::string> rows(std::max(store.size(), bmath::intern::pattern::match::MatchData::max_variadic_count), "");
 

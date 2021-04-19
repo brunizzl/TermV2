@@ -65,7 +65,7 @@ namespace bmath::intern {
 
 
 	//as most algorithms accessing an element of a term need also access to its other elements, both the pointer to the element
-	//  and NodeIdx info are neatly bundled as a package here
+	//  and NodeIndex info are neatly bundled as a package here
 	template<typename Type_T, typename Union_T>
 	struct BasicUnsaveRef
 	{

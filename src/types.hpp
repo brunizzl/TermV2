@@ -49,7 +49,7 @@ namespace simp {
 	{
 		//these two own their entry in MatchData::single_match, meaning they set a new subterm to match the given index.
 		single_restricted, //.get_index() points at RestrictedSingleMatch node in store
-		single_unrestricted, //shallow NodeIdx, .get_index() specifies position in MatchData::single_match
+		single_unrestricted, //shallow NodeIndex, .get_index() specifies position in MatchData::single_match
 		//does not own MatchData entry
 		single_weak, //(shallow) is expected to only be encountered after the .get_index() in MatchData::single_match has already been set
 		value, //ownership is decided in ValueMatch
@@ -60,11 +60,11 @@ namespace simp {
 
 	using NodeType = SumEnum<PatternNodeType, Literal>;
 
-	using NodeIdx = BasicTypedIdx<NodeType>;
+	using NodeIndex = BasicTypedIdx<NodeType>;
 
 	//only some types correspond to actual allocated storage in the term tree.
 	//other types can represent all information defining a value of this type in a single unsigned integer,
-	//thus NodeIdx can represent them locally without any need for indirection.
+	//thus NodeIndex can represent them locally without any need for indirection.
 	//(also: the union TermNode is more managable with fewer types contained.)
 	constexpr bool is_stored_node(const NodeType type) noexcept
 	{
@@ -191,6 +191,7 @@ namespace simp {
 			value_match, //used to represent all of ValueMatch during build process and final ValueMatch in rhs
 			value_proxy, //not used in function call, but to indicate end of subtree in ValueMatch::match_index
 			multi_match, //differentiates between multiple MultiMatch instances in a single NonComm call
+			type, //returns true if fst is element of snd
 			COUNT
 		};
 
@@ -230,48 +231,48 @@ namespace simp {
 		//  note: NodeType also appears here, but only as restriction, not as indicator of possible indirection
 		using Constant = SumEnum<NodeType, ComplexSubset, Restr>;
 
-		//values of this type are stored in .get_index() of a NodeIdx if .get_type() is Literal::native
+		//values of this type are stored in .get_index() of a NodeIndex if .get_type() is Literal::native
 		using Native = SumEnum<Constant, Function_>;
 
-		inline constexpr NodeIdx to_typed_idx(const Native type) noexcept 
+		inline constexpr NodeIndex to_typed_idx(const Native type) noexcept 
 		{ 
-			return NodeIdx(static_cast<unsigned>(type), Literal::native); 
+			return NodeIndex(static_cast<unsigned>(type), Literal::native); 
 		}
 
-		inline constexpr Native from_typed_idx(const NodeIdx idx) noexcept 
+		inline constexpr Native from_typed_idx(const NodeIndex idx) noexcept 
 		{
 			assert(idx.get_type() == Literal::native);
 			return Native(idx.get_index());
 		}
 	} //namespace nv
 
-	constexpr NodeIdx literal_nullptr = NodeIdx();
-	constexpr NodeIdx literal_false   = nv::to_typed_idx(nv::Bool::false_);
-	constexpr NodeIdx literal_true    = nv::to_typed_idx(nv::Bool::true_);
-	constexpr NodeIdx value_proxy     = nv::to_typed_idx(nv::PatternAuxFn::value_proxy);
+	constexpr NodeIndex literal_nullptr = NodeIndex();
+	constexpr NodeIndex literal_false   = nv::to_typed_idx(nv::Bool::false_);
+	constexpr NodeIndex literal_true    = nv::to_typed_idx(nv::Bool::true_);
+	constexpr NodeIndex value_proxy     = nv::to_typed_idx(nv::PatternAuxFn::value_proxy);
 
-	constexpr NodeIdx bool_to_typed_idx(const bool b) { return b ? literal_true : literal_false; }
+	constexpr NodeIndex bool_to_typed_idx(const bool b) { return b ? literal_true : literal_false; }
 
 
 	using Complex = std::complex<double>;
 	using Symbol = StoredVector<char>;
 
-	struct Call :StoredVector<NodeIdx>
+	struct Call :StoredVector<NodeIndex>
 	{
-		using StoredVector<NodeIdx>::StoredVector;
+		using StoredVector<NodeIndex>::StoredVector;
 
 		//first in array is assumed to be callable
-		constexpr NodeIdx& function() noexcept { return this->front(); }
-		constexpr const NodeIdx& function() const noexcept { return this->front(); }
+		constexpr NodeIndex& function() noexcept { return this->front(); }
+		constexpr const NodeIndex& function() const noexcept { return this->front(); }
 
 		//iterate over all but function
-		constexpr std::span<NodeIdx> parameters() noexcept { return { this->begin() + 1u, this->end() }; }
-		constexpr std::span<const NodeIdx> parameters() const noexcept { return { this->begin() + 1u, this->end() }; }
+		constexpr std::span<NodeIndex> parameters() noexcept { return { this->begin() + 1u, this->end() }; }
+		constexpr std::span<const NodeIndex> parameters() const noexcept { return { this->begin() + 1u, this->end() }; }
 	};
 
 	struct Lambda
 	{
-		NodeIdx definition;
+		NodeIndex definition;
 		std::uint32_t param_count;
 		//if a lambda is transparent, there is the possibility, that lambdas in the ancestry
 		//  own variables in this definition.
@@ -286,14 +287,14 @@ namespace simp {
 	{
 		std::uint32_t match_data_index; //indexes in MatchData::single_match_data
 		nv::Native restriction = nv::Restr::any;
-		NodeIdx condition = literal_true;
+		NodeIndex condition = literal_true;
 	};
 
 	struct ValueMatch
 	{
 		std::uint32_t match_data_index; //indexes in MatchData::value_match_data
 		nv::ComplexSubset domain = nv::ComplexSubset::complex; //ComplexSubset::complex acts as no restriction
-		NodeIdx match_index;
+		NodeIndex match_index;
 		bool owner;
 	};
 
@@ -358,7 +359,7 @@ namespace simp {
 	constexpr auto begin(const R& ref) noexcept
 	{
 		assert(ref.type == Literal::call || ref.type == PatternCall{});
-		using TypedIdx_T = std::conditional_t<R::is_const, const NodeIdx, NodeIdx>;
+		using TypedIdx_T = std::conditional_t<R::is_const, const NodeIndex, NodeIndex>;
 		using Store_T = std::remove_reference_t<decltype(*ref.store)>;
 		using Iter = bmath::intern::detail_vector::SaveIterator<TypedIdx_T, sizeof(TermNode), Store_T>;
 		return Iter{ *ref.store, ref.index, 0u };
@@ -456,14 +457,15 @@ namespace simp {
 			{ CtoC::ceil                , "ceil"      , 1u, { ComplexSubset::real }, ComplexSubset::integer      },
 			{ MiscFn::id                , "id"        , 1u, { Restr::any          }, Restr::any                  },
 			{ MiscFn::force             , "force"     , 1u, { Literal::complex    }, Literal::complex            },
-			{ MiscFn::diff              , "diff"      , 2u, { Restr::any, Literal::symbol }, Restr::any },
-			{ MiscFn::pair              , "pair"      , 2u, {}, MiscFn::pair },
-			{ MiscFn::triple            , "triple"    , 3u, {}, MiscFn::triple },
-			{ MiscFn::fmap              , "fmap"      , 2u, { Restr::callable, Literal::call }, Literal::call },
-			{ PatternAuxFn::single_match, "_SM"       , 2u, { Restr::any         }, Restr::any                 },
-			{ PatternAuxFn::value_match , "_VM"       , 2u, { Restr::any         }, Restr::any                 },
-			{ PatternAuxFn::value_proxy , "\\"        , 0u, { Restr::any         }, PatternAuxFn::value_proxy     },//can not be constructed from a string
-			{ PatternAuxFn::multi_match , "_MM"       , 2u, { Restr::any         }, Restr::any                 },
+			{ MiscFn::diff              , "diff"      , 2u, { Restr::any, Literal::symbol }, Restr::any          },
+			{ MiscFn::pair              , "pair"      , 2u, {}                     , MiscFn::pair                },
+			{ MiscFn::triple            , "triple"    , 3u, {}                     , MiscFn::triple              },
+			{ MiscFn::fmap              , "fmap"      , 2u, { Restr::callable, Literal::call }, Literal::call    },
+			{ PatternAuxFn::single_match, "_SM"       , 2u, { Restr::any          }, Restr::any                  },
+			{ PatternAuxFn::value_match , "_VM"       , 2u, { Restr::any          }, Restr::any                  },
+			{ PatternAuxFn::value_proxy , "\\"        , 0u, { Restr::any          }, PatternAuxFn::value_proxy   },//can not be constructed from a string
+			{ PatternAuxFn::multi_match , "_MM"       , 2u, { Restr::any          }, Restr::any                  },
+			{ PatternAuxFn::type        , "type"      , 2u, { Restr::any, Literal::native }, Restr::boolean      },
 		});
 		static_assert(static_cast<unsigned>(fixed_arity_table.front().type) == 0u);
 		static_assert(bmath::intern::is_sorted_by(fixed_arity_table, &FixedArityProps::type));
@@ -598,8 +600,8 @@ namespace simp {
 	//whitch actually matched, and if the name "a" is already matched, even if the current instance is not.
 	struct SharedSingleMatchEntry
 	{
-		NodeIdx match_idx = NodeIdx{}; //indexes in Term to simplify
-		bool is_set() const noexcept { return this->match_idx != NodeIdx(); } //debugging
+		NodeIndex match_idx = NodeIndex{}; //indexes in Term to simplify
+		bool is_set() const noexcept { return this->match_idx != NodeIndex(); } //debugging
 	};
 
 	struct SharedValueMatchEntry
@@ -619,7 +621,7 @@ namespace simp {
 		//  with which element in term to match it currently is associated with.
 		std::array<MatchPos_T, max_pn_variadic_params_count> match_positions = {};
 
-		NodeIdx match_idx = NodeIdx(); //indexes in Term to simplify (the haystack)
+		NodeIndex match_idx = NodeIndex(); //indexes in Term to simplify (the haystack)
 
 		constexpr SharedVariadicEntry() noexcept { this->match_positions.fill(-1u); }
 

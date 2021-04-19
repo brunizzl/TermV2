@@ -3,6 +3,7 @@
 #include "types.hpp"
 
 #include <compare>
+#include <concepts>
 
 namespace simp {
 
@@ -22,7 +23,7 @@ namespace simp {
 
         struct CombineRes
         {
-            NodeIdx res;
+            NodeIndex res;
             bool change;
         };
 
@@ -42,7 +43,7 @@ namespace simp {
     void free_tree(const MutRef ref);
 
     //copies tree starting at src_ref into dst_store
-    [[nodiscard]] NodeIdx copy_tree(const Ref src_ref, Store& dst_store);
+    [[nodiscard]] NodeIndex copy_tree(const Ref src_ref, Store& dst_store);
 
     //lexicographic ordering, not meaningful in a math context
     std::strong_ordering compare_tree(const UnsaveRef fst, const UnsaveRef snd);
@@ -50,5 +51,30 @@ namespace simp {
     //returns std::partial_ordering::unordered if eighter fst or snd is some sort of placeholder 
     //(lambda_param or PatternNodeType) and fst and snd are not the same type of placeholder
     std::partial_ordering partial_compare_tree(const UnsaveRef fst, const UnsaveRef snd);
+
+    //returns first subterm where pred is true, tested in pre-order
+    template<std::predicate<UnsaveRef> Pred>
+    NodeIndex search(const UnsaveRef ref, Pred pred)
+    {
+        if (pred(ref)) {
+            return ref.typed_idx();
+        }
+        switch (ref.type) {
+        case NodeType(Literal::lambda): {
+            return search(ref.new_at(ref->lambda.definition), pred);
+        } break;
+        case NodeType(Literal::call):
+        case NodeType(PatternCall{}): {
+            for (const NodeIndex subterm : ref->call) {
+                const NodeIndex sub_res = search(ref.new_at(subterm), pred);
+                if (sub_res != NodeIndex()) {
+                    return sub_res;
+                }
+            }
+        } [[fallthrough]];
+        default:
+            return NodeIndex();
+        }
+    } //search
     
 } //namespace simp

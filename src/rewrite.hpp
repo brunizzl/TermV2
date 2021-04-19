@@ -9,7 +9,7 @@ namespace simp {
 	struct LiteralTerm
 	{
 		Store store;
-		NodeIdx head;
+		NodeIndex head;
 
 		LiteralTerm(std::string name);
 
@@ -32,8 +32,8 @@ namespace simp {
 	struct RewriteRule
 	{
 		Store store;
-		NodeIdx lhs_head; //start of match side
-		NodeIdx rhs_head; //start of replace side
+		NodeIndex lhs_head; //start of match side
+		NodeIndex rhs_head; //start of replace side
 
 		RewriteRule(std::string name);
 
