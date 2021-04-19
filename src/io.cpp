@@ -110,7 +110,7 @@ namespace simp {
 					[name](const NameInfo& i) { return i.name == name; });
 				return iter != infos.rend() ?
 					iter->value :
-					NodeIndex();
+					literal_nullptr;
 			}
 
 			NodeIndex build_symbol(Store& store, const LiteralInfos& infos, bmath::intern::ParseView view)
@@ -119,7 +119,7 @@ namespace simp {
 				if (!mundane_name(view)) [[unlikely]] {
 					throw bmath::ParseFailure{ view.offset, "ellipses or the dollar symbol are only expected when building a pattern" };
 				}
-				if (const NodeIndex res = find_name_in_infos(infos.lambda_params, name); res != NodeIndex()) {
+				if (const NodeIndex res = find_name_in_infos(infos.lambda_params, name); res != literal_nullptr) {
 					return res;
 				}
 				if (const nv::Native type = nv::type_of(name); type != nv::Native(nv::Native::COUNT)) {
@@ -131,10 +131,10 @@ namespace simp {
 			NodeIndex build_symbol(Store& store, PatternInfos& infos, bmath::intern::ParseView view)
 			{
 				std::string_view name = view.to_string_view();
-				if (const NodeIndex res = find_name_in_infos(infos.lambda_params, name); res != NodeIndex()) {
+				if (const NodeIndex res = find_name_in_infos(infos.lambda_params, name); res != literal_nullptr) {
 					return res;
 				}
-				if (const NodeIndex res = find_name_in_infos(infos.match_variables, name); res != NodeIndex()) {
+				if (const NodeIndex res = find_name_in_infos(infos.match_variables, name); res != literal_nullptr) {
 					return res;
 				}
 				if (const nv::Native type = nv::type_of(name); type != nv::Native(nv::Native::COUNT)) {
@@ -302,11 +302,12 @@ namespace simp {
 			} break;
 			default:
 				assert(false);
-				return NodeIndex();
+				return literal_nullptr;
 			}
 		} //build
 		template NodeIndex build(Store&, name_lookup::LiteralInfos&, bmath::intern::ParseView);
 		template NodeIndex build(Store&, name_lookup::PatternInfos&, bmath::intern::ParseView);
+
 
 		std::pair<NodeIndex, NodeIndex> raw_rule(Store& store, std::string name)
 		{
@@ -349,10 +350,10 @@ namespace simp {
 			//extra condition concerning single match variables (might set multiple in relation)
 			struct SingleCondition
 			{
-				NodeIndex head = NodeIndex();
+				NodeIndex head = literal_nullptr;
 				std::bitset<MatchData::max_single_match_count> dependencies = 0; //dependencies[i] is set iff single match i occurs in the condition
 			};
-			std::vector<NodeIndex> single_conditions;
+			std::vector<SingleCondition> single_conditions;
 
 			std::array<nv::ComplexSubset, MatchData::max_value_match_count> value_conditions;
 			value_conditions.fill(nv::ComplexSubset::complex);
@@ -369,26 +370,54 @@ namespace simp {
 				}
 				const auto cond_ref = MutRef(store, condition_head);
 				const bool contains_single = simp::search(cond_ref, 
-					[](const UnsaveRef r) { return r.type == Match::single_weak; }) != NodeIndex();
+					[](const UnsaveRef r) { return r.type == Match::single_weak; }) != literal_nullptr;
 				const bool contains_value = simp::search(cond_ref,
-					[](const UnsaveRef r) { return r.type == Match::value; }) != NodeIndex();
+					[](const UnsaveRef r) { return r.type == Match::value; }) != literal_nullptr;
 				const bool contains_multi = simp::search(cond_ref,
-					[](const UnsaveRef r) { return r.type == Match::multi; }) != NodeIndex(); 
-				if (contains_multi) [[unlikely]] {
+					[](const UnsaveRef r) { return r.type == Match::multi; }) != literal_nullptr; 
+				const bool contains_lambda = simp::search(cond_ref,
+						[](const UnsaveRef r) { return r.type == Literal::lambda; }) != literal_nullptr; 
+				if (contains_multi || contains_lambda) [[unlikely]] {
 					throw ParseFailure{ conditions_view.offset, "sorry, but i am too lazy to check that" };
 				}
 				if (contains_single && contains_value) [[unlikely]] {
 					throw ParseFailure{ conditions_view.offset, "single match and value match may not depend on each other" };
 				}
 				if (contains_single) {
-					//TODO: 
-					//- find out which single variable indices are contained for SingleCondition instance
-					//- add entry to single_conditions
+					struct {
+						using Res = decltype(SingleCondition::dependencies);
+						Res operator()(const UnsaveRef ref) {
+							Res res = 0u;
+							if (ref.type == Literal::call) {
+								for (const NodeIndex sub : ref->call) {
+									res |= (*this)(ref.new_at(sub));
+								}
+							}
+							if (ref.type == Match::single_weak) {
+								res.set(ref.index);
+							}
+							return res;
+						}
+					} list_singles;
+					single_conditions.emplace_back(condition_head, list_singles(cond_ref));
 				}
 				if (contains_value) {
-					//TODO:
 					//condition may only be of form "type($<value match>, <complex subset>)"
 					//if so: adjust value_conditions at right index
+					if (cond_ref.type != Literal::call ||
+						cond_ref->call.function() != nv::to_typed_idx(nv::PatternAuxFn::type)) 
+					{
+						throw ParseFailure{ conditions_view.offset, "value match may only have its type restricted" };
+					}
+					const NodeIndex value_match = cond_ref->call[1];
+					const NodeIndex subset = cond_ref->call[2];
+					if (value_match.get_type() != Match::value || 
+						!nv::from_typed_idx(subset).is<nv::ComplexSubset>()) 
+					{
+						throw ParseFailure{ conditions_view.offset, "value match may only have its type as real, nat etc." };
+					}
+					value_conditions[value_match.get_index()] = nv::from_typed_idx(subset).to<nv::ComplexSubset>();
+					free_tree(cond_ref);
 				}
 			}
 			{
@@ -469,9 +498,9 @@ namespace simp {
 			case NodeType(Literal::symbol):
 				str.append(ref->symbol);
 				break;
-			case NodeType(PatternCall{}): {
+			case NodeType(PatternCall{}): 
 				append_variadic_meta_data(variadic_meta_data(ref), str);
-			} [[fallthrough]];				
+				[[fallthrough]];				
 			case NodeType(Literal::call): { 
 				const Call& call = *ref;
 				const NodeIndex function = call.function();
@@ -526,7 +555,7 @@ namespace simp {
 				str.append(std::to_string(var.match_data_index));
 				str.append("[");
 				str.append(std::to_string(static_cast<unsigned>(var.restriction)));
-				if (var.condition != NodeIndex()) {
+				if (var.condition != literal_nullptr) {
 					str.append(", ");
 					append_to_string(ref.new_at(var.condition), str, default_infixr);
 				}
@@ -550,6 +579,10 @@ namespace simp {
 				str.append("_MM");
 				str.append(std::to_string(ref.index));
 				str.append("...");
+				break;
+			case NodeType(PatternUnsigned{}):
+				str.append(std::to_string(ref.index));
+				str.append("_U");
 				break;
 			default:
 				BMATH_UNREACHABLE;

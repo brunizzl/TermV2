@@ -288,7 +288,7 @@ namespace simp {
                     for (std::size_t i = 0; i < params_size; i++) {
                         const nv::Native param_space = param_spaces[i];
                         if (param_space != Restr::any && !meets_restriction(ref.new_at(params[i]), param_space)) {
-                            return NodeIndex();
+                            return literal_nullptr;
                         }
                     }
                 }
@@ -300,7 +300,7 @@ namespace simp {
                     std::feclearexcept(FE_ALL_EXCEPT);
                     const Complex result = compute();
                     if (options.exact && std::fetestexcept(FE_ALL_EXCEPT)) { //operation failed to be exact
-                        return NodeIndex();
+                        return literal_nullptr;
                     }
                     //free all but last parameter of call
                     for (std::size_t i = 1; i < f_arity; i++) {
@@ -389,7 +389,7 @@ namespace simp {
                 case FixedArity(ToBool::neq): {
                     const std::partial_ordering ord = partial_compare_tree(ref.new_at(call[1]), ref.new_at(call[2]));
                     if (ord == std::partial_ordering::unordered) {
-                        return NodeIndex();
+                        return literal_nullptr;
                     }
                     free_tree(ref);
                     return bool_to_typed_idx((fixed_f == ToBool::eq) ^ (ord != std::partial_ordering::equivalent));
@@ -447,7 +447,7 @@ namespace simp {
                             free_tree(ref);
                             return short_circuit_value;
                         }
-                        return NodeIndex();
+                        return literal_nullptr;
                     }
                 };
                 const auto maybe_accumulate = [&](Complex& acc, const Complex& new_, auto operation) -> bool {
@@ -482,11 +482,11 @@ namespace simp {
                                 [](const Complex& lhs, const Complex& rhs) { return lhs + rhs; })) 
                             {
                                 ref.store->free_one(iter_2->get_index());
-                                *iter_2 = NodeIndex();
+                                *iter_2 = literal_nullptr;
                             }
                         }
                     }
-                    remove_shallow_value(NodeIndex());
+                    remove_shallow_value(literal_nullptr);
                 } break;
                 case Variadic(Comm::product): { //TODO: evaluate exact division / normalize two divisions
                     auto range = call.parameters();
@@ -503,7 +503,7 @@ namespace simp {
                                         [](const Complex& lhs, const Complex& rhs) { return lhs * rhs; })) 
                                     {
                                         ref.store->free_one(iter_2->get_index());
-                                        *iter_2 = NodeIndex();
+                                        *iter_2 = literal_nullptr;
                                     }
                                 } break;
                                 } //switch iter_2
@@ -511,7 +511,7 @@ namespace simp {
                         } break;
                         } //switch iter_1
                     }
-                    remove_shallow_value(NodeIndex());
+                    remove_shallow_value(literal_nullptr);
                 } break;
                 case Variadic(Comm::set): if (call.size() >= 3) { 
                     auto range = call.parameters();
@@ -521,21 +521,20 @@ namespace simp {
                         UnsaveRef snd = ref.new_at(*iter); //remove duplicates (remember: already sorted)
                         if (compare_tree(fst, snd) == std::strong_ordering::equal) {
                             ref.store->free_one(iter->get_index());
-                            *iter = NodeIndex();
+                            *iter = literal_nullptr;
                         }
                         fst = snd;
                     }
-                    remove_shallow_value(NodeIndex());
+                    remove_shallow_value(literal_nullptr);
                 } break;
                 }
             } //end variadic
-            return NodeIndex();
+            return literal_nullptr;
         } //eval_buildin
 
-        CombineRes outermost(MutRef ref, const Options options, const unsigned lambda_param_offset)
+        NodeIndex outermost(MutRef ref, const Options options, const unsigned lambda_param_offset)
         {
             assert(ref.type != PatternCall{});
-            bool change = false;
             if (ref.type == Literal::call) {  
                 const NodeIndex function = ref->call.function();
                 switch (function.get_type()) {
@@ -544,7 +543,7 @@ namespace simp {
                     const bool associative = buildin_type.is<nv::Variadic>() && 
                         nv::is_associative(buildin_type.to<nv::Variadic>());
                     if (associative) {
-                        change |= merge_associative_calls(ref, function);
+                        merge_associative_calls(ref, function);
                     }
                     if (buildin_type.is<nv::Comm>()) {
                         auto range = ref->call.parameters();
@@ -554,24 +553,24 @@ namespace simp {
                             });
                     }
                     if (const NodeIndex res = eval_buildin(ref, options, function, lambda_param_offset);
-                        res != NodeIndex()) 
+                        res != literal_nullptr) 
                     {
                         //if the function could be fully evaluated, the following step(s) can no longer be executed -> return
-                        return CombineRes{ res, true };
+                        return res;
                     }
                     if (associative && options.remove_unary_assoc) {
                         const Call& call = *ref;
                         if (call.size() == 2u) { //only contains function type and single parameter
                             const NodeIndex single_param = call[1u];
                             Call::free(*ref.store, ref.index);
-                            return CombineRes{ single_param, true };
+                            return single_param;
                         }
                     }
                 } break;
                 case NodeType(Literal::lambda): {
                     if (options.eval_lambdas && lambda_param_offset == 0u) {
                         const NodeIndex evaluated = eval_lambda(ref, options);
-                        return CombineRes{ evaluated, true };
+                        return evaluated;
                     }
                 } break;
                 }
@@ -584,7 +583,6 @@ namespace simp {
                     if (!lambda.transparent && lambda_param_offset != 0u) {
                         lambda.transparent = true;
                         lambda.definition = add_offset(ref.new_at(lambda.definition), lambda_param_offset);
-                        change = true;
                     }
                     if (lambda.definition.get_type() == Literal::lambda) {
                         const UnsaveRef nested = ref.new_at(lambda.definition);
@@ -592,11 +590,10 @@ namespace simp {
                         lambda.definition = nested->lambda.definition;
                         lambda.param_count += nested->lambda.param_count;
                         ref.store->free_one(nested.index);
-                        change = true;
                     }
                 }
             } //end ref.type == Literal::lambda
-            return CombineRes{ ref.typed_idx(), change };
+            return ref.typed_idx();
         } //outermost
 
         NodeIndex recursive(MutRef ref, const Options options, const unsigned lambda_param_offset)
@@ -605,11 +602,11 @@ namespace simp {
             if (ref.type == Literal::call) {
                 auto iter = begin(ref);
                 *iter = normalize::recursive(ref.new_at(*iter), options, lambda_param_offset);
-                if (nv::is_lazy(*iter)) [[unlikely]] {
-                    const NodeIndex result = normalize::outermost(ref, options, lambda_param_offset).res;
+                if (nv::is_lazy(*iter)) {
+                    const NodeIndex result = normalize::outermost(ref, options, lambda_param_offset);
                     return normalize::recursive(ref.new_at(result), options, lambda_param_offset);
                 }
-                else {
+                else [[likely]] {
                     const auto stop = end(ref);
                     for (++iter; iter != stop; ++iter) {
                         *iter = normalize::recursive(ref.new_at(*iter), options, lambda_param_offset);
@@ -621,7 +618,7 @@ namespace simp {
                 ref->lambda.definition = normalize::recursive(
                     ref.new_at(lambda.definition), options, lambda_param_offset + lambda.param_count);
             }
-            return normalize::outermost(ref, options, lambda_param_offset).res;
+            return normalize::outermost(ref, options, lambda_param_offset);
         } //recursive
 
     } //namespace normalize

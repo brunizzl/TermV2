@@ -74,10 +74,10 @@ int main()
 			std::cout << name << "\n";
 			auto term = simp::LiteralTerm(name);
 			std::cout << "  ->  " << term.to_string() << "\n";
-			//std::cout << term.to_memory_layout() << "\n";
+			std::cout << term.to_memory_layout() << "\n";
 			term.normalize();
 			std::cout << "  ->  " << term.to_string() << "\n";
-			//std::cout << term.to_memory_layout() << "\n";
+			std::cout << term.to_memory_layout() << "\n";
 			std::cout << "\n";
 		}
 		std::cout << "\n";

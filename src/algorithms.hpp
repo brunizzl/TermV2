@@ -21,20 +21,16 @@ namespace simp {
             bool remove_unary_assoc = true; //true: "f(a) -> a" for all associative f (e.g. sum, product, and...)
         };
 
-        struct CombineRes
-        {
-            NodeIndex res;
-            bool change;
-        };
-
         //will always evaluate exact operations and merge nested calls of an associative operation
         //  (meaning "f(as..., f(bs...), cs...) -> f(as..., bs..., cs...)" for associative f)
         //lambda_param_offset counts how many parameters all parent lambdas hold together 
         //  example: if subterm "a" would be combined in term "\x.\y z. (a + 7)", lambda_param_offset == 3
         //returns combined ref, might invalidate old one
         //may throw if: a lambda is called with to many parameters or something not callable is called
-        [[nodiscard]] CombineRes outermost(MutRef ref, const Options options, const unsigned lambda_param_offset);
+        [[nodiscard]] NodeIndex outermost(MutRef ref, const Options options, const unsigned lambda_param_offset);
 
+        //applies outermost first to children then to itself
+        //as an exception, calls to fn if nv::is_lazy(fn) are lazily evaluated 
         [[nodiscard]] NodeIndex recursive(MutRef ref, const Options options, const unsigned lambda_param_offset);
     } //namespace normalize
 
@@ -67,13 +63,13 @@ namespace simp {
         case NodeType(PatternCall{}): {
             for (const NodeIndex subterm : ref->call) {
                 const NodeIndex sub_res = search(ref.new_at(subterm), pred);
-                if (sub_res != NodeIndex()) {
+                if (sub_res != literal_nullptr) {
                     return sub_res;
                 }
             }
         } [[fallthrough]];
         default:
-            return NodeIndex();
+            return literal_nullptr;
         }
     } //search
     

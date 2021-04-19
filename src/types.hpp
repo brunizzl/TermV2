@@ -188,7 +188,6 @@ namespace simp {
 		//helpers for pattern construction and less important pattern parts
 		enum class PatternAuxFn
 		{
-			single_match,
 			value_match, //used to represent all of ValueMatch during build process and final ValueMatch in rhs
 			value_proxy, //not used in function call, but to indicate end of subtree in ValueMatch::match_index
 			multi_match, //differentiates between multiple MultiMatch instances in a single NonComm call
@@ -461,10 +460,9 @@ namespace simp {
 			{ MiscFn::pair              , "pair"      , 2u, {}                     , MiscFn::pair                },
 			{ MiscFn::triple            , "triple"    , 3u, {}                     , MiscFn::triple              },
 			{ MiscFn::fmap              , "fmap"      , 2u, { Restr::callable, Literal::call }, Literal::call    },
-			{ PatternAuxFn::single_match, "_SM"       , 2u, { Restr::any          }, Restr::any                  },
-			{ PatternAuxFn::value_match , "_VM"       , 2u, { Restr::any          }, Restr::any                  },
-			{ PatternAuxFn::value_proxy , "\\"        , 0u, { Restr::any          }, PatternAuxFn::value_proxy   },//can not be constructed from a string
-			{ PatternAuxFn::multi_match , "_MM"       , 2u, { Restr::any          }, Restr::any                  },
+			{ PatternAuxFn::value_match , "_VM"       , 4u, { PatternUnsigned{}, Literal::native, Restr::any }, Restr::any }, //layout as in ValueMatch (minus .owner)
+			{ PatternAuxFn::value_proxy , "\\"        , 0u, {}                     , PatternAuxFn::value_proxy   },//can not be constructed from a string
+			{ PatternAuxFn::multi_match , "_MM"       , 2u, { PatternUnsigned{}, PatternUnsigned{} }, Restr::any }, //match_data_idx, nr. in index
 			{ PatternAuxFn::type        , "type"      , 2u, { Restr::any, Literal::native }, Restr::boolean      },
 		});
 		static_assert(static_cast<unsigned>(fixed_arity_table.front().type) == 0u);
@@ -532,7 +530,7 @@ namespace simp {
 		};
 
 		constexpr auto constant_table = std::to_array<CommonProps>({
-			{ Restr::any                 , "any"         , Literal::native },
+			{ Restr::any                 , "\\"          , Literal::native }, //can not be constructed from a string
 			{ Restr::callable            , "callable"    , Literal::native },
 			{ Restr::boolean             , "bool"        , Literal::native },
 			{ ComplexSubset::natural     , "nat"         , Literal::native },
@@ -608,7 +606,7 @@ namespace simp {
 	struct SharedSingleMatchEntry
 	{
 		NodeIndex match_idx = NodeIndex{}; //indexes in Term to simplify
-		bool is_set() const noexcept { return this->match_idx != NodeIndex(); } //debugging
+		bool is_set() const noexcept { return this->match_idx != literal_nullptr; } //debugging
 	};
 
 	struct SharedValueMatchEntry
@@ -628,7 +626,7 @@ namespace simp {
 		//  with which element in term to match it currently is associated with.
 		std::array<MatchPos_T, max_pn_variadic_params_count> match_positions = {};
 
-		NodeIndex match_idx = NodeIndex(); //indexes in Term to simplify (the haystack)
+		NodeIndex match_idx = literal_nullptr; //indexes in Term to simplify (the haystack)
 
 		constexpr SharedVariadicEntry() noexcept { this->match_positions.fill(-1u); }
 
