@@ -85,6 +85,7 @@ int main()
 	}
 	{
 		const auto names = std::to_array<std::string>({
+			{ "a_sqr + two_a b + b^2 | (sqrt(a_sqr) == 0.5 two_a) = (0.5 two_a + b)^2" },
 			{ "a^2 + 2 a b + b^2 = (a + b)^2" },
 			{ "$a^2 + 2 $a b + b^2 = ($a + b)^2" },
 			{ "list(x, xs...) = list(xs..., x)" },
@@ -92,6 +93,7 @@ int main()
 			{ "x as... + x bs... = x (as... + bs...)" },
 			{ "'Y' = \\f n. f(f, n)" },
 			{ "a + _VM(idx, dom, match) | type(a, complex) = _VM(idx, dom, match - a)" },
+			{ "list(x, y, z, zs...) | x == y + z = 'huebsch'" },
 		});
 		for (const auto& name : names) {
 			auto rule = simp::RewriteRule(name);

@@ -227,7 +227,7 @@ namespace simp {
 		enum class PatternConst
 		{
 			value_proxy, //found as offspring of .match_index of ValueMatch
-			muli_marker, //found in match side of pattern as child of Variadic
+			multi_marker, //found in match side of pattern as child of Variadic
 			COUNT
 		};
 
@@ -256,7 +256,7 @@ namespace simp {
 	constexpr NodeIndex literal_false   = from_native(nv::Bool::false_);
 	constexpr NodeIndex literal_true    = from_native(nv::Bool::true_);
 	constexpr NodeIndex value_proxy     = from_native(nv::PatternConst::value_proxy);
-	constexpr NodeIndex multi_marker    = from_native(nv::PatternConst::muli_marker);
+	constexpr NodeIndex multi_marker    = from_native(nv::PatternConst::multi_marker);
 
 	constexpr NodeIndex bool_to_typed_idx(const bool b) { return b ? literal_true : literal_false; }
 
@@ -536,7 +536,7 @@ namespace simp {
 
 		constexpr auto constant_table = std::to_array<CommonProps>({
 			{ PatternConst::value_proxy  , "_VP"         , PatternConst::value_proxy },
-			{ PatternConst::muli_marker  , "_MM"         , PatternConst::muli_marker },
+			{ PatternConst::multi_marker  , "_MM"         , PatternConst::multi_marker },
 			{ Restr::any                 , "\\"          , Literal::native }, //can not be constructed from a string
 			{ Restr::callable            , "callable"    , Literal::native },
 			{ Restr::boolean             , "bool"        , Literal::native },

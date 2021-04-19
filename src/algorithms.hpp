@@ -41,12 +41,36 @@ namespace simp {
     //copies tree starting at src_ref into dst_store
     [[nodiscard]] NodeIndex copy_tree(const Ref src_ref, Store& dst_store);
 
-    //lexicographic ordering, not meaningful in a math context
-    std::strong_ordering compare_tree(const UnsaveRef fst, const UnsaveRef snd);
+    //orders node types by their "specificity", meaning that types potentially matching more things are generally sorted to the back
+    constexpr int shallow_order(const UnsaveRef ref) {
+        switch (ref.type) {
+        case NodeType(Literal::complex):           return 0;
+        case NodeType(Match::value):               return 2;
+        case NodeType(PatternUnsigned{}):          return 4;
+        case NodeType(Literal::lambda):            return 8;
+        case NodeType(Literal::lambda_param):      return 10;
+        case NodeType(Literal::symbol):            return 2000;
+        case NodeType(Literal::call):              return 2002;
+        case NodeType(PatternCall{}):	           return 2002;
+        case NodeType(Match::single_restricted):   return 2100;
+        case NodeType(Match::single_unrestricted): return 2100;
+        case NodeType(Match::single_weak):         return 2100;
+        case NodeType(Literal::native):
+            using namespace nv;
+            static_assert((unsigned)Native::COUNT < 1000, "adjust values >= 2000 to circumvent overlap");
+            switch (Native(ref.index)) {
+            default:                                 return ref.index + 1000;
+            case Native(PatternConst::multi_marker): return 3000;
+            }
+        default:
+            assert(false);
+            BMATH_UNREACHABLE;
+            return false;
+        }
+    } //shallow_order
 
-    //returns std::partial_ordering::unordered if eighter fst or snd is some sort of placeholder 
-    //(lambda_param or PatternNodeType) and fst and snd are not the same type of placeholder
-    std::partial_ordering partial_compare_tree(const UnsaveRef fst, const UnsaveRef snd);
+    //lexicographic ordering edtending shallow_order, not meaningful in a math context
+    std::strong_ordering compare_tree(const UnsaveRef fst, const UnsaveRef snd);
 
     //returns first subterm where pred is true, tested in pre-order
     template<std::predicate<UnsaveRef> Pred>

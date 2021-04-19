@@ -446,9 +446,10 @@ namespace simp {
 					NodeIndex operator()(const MutRef ref) {
 						if (ref.type == Literal::call) {
 							if (ref->call.function() == from_native(nv::PatternAuxFn::value_match) && //call to _VM
-								//if call contains no match variables itself it is assumed to stem from name_lookup::build_symbol
+								//if call contains no match variables itself and holds only shallow parameters, 
+								//  it is assumed to stem from name_lookup::build_symbol
 								std::none_of(ref->call.begin(), ref->call.end(), 
-									[](auto idx) { return idx.get_type().is<Match>(); })) 
+									[](auto idx) { return idx.get_type().is<Match>() || is_stored_node(idx.get_type()); })) 
 							{
 								const std::size_t value_index = ref->call[1].get_index();
 								ref->call[2] = from_native(this->domains[value_index]);
@@ -463,7 +464,6 @@ namespace simp {
 					}
 				} build_value_matches = { value_conditions, store };
 				lhs_head = build_value_matches(MutRef(store, lhs_head));
-				rhs_head = build_value_matches(MutRef(store, rhs_head));
 			}
 			{
 				//go through lhs in preorder, adjust single match using single_conditions

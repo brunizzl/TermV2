@@ -387,12 +387,16 @@ namespace simp {
                 } break;
                 case FixedArity(ToBool::eq):
                 case FixedArity(ToBool::neq): {
-                    const std::partial_ordering ord = partial_compare_tree(ref.new_at(call[1]), ref.new_at(call[2]));
-                    if (ord == std::partial_ordering::unordered) {
+                    const auto is_placeholder = [](const UnsaveRef r) { 
+                        return r.type.is<PatternNodeType>() || r.type == Literal::lambda_param; 
+                    };
+                    //only evaluate if no placeholders of some sort remain
+                    if (search(ref, is_placeholder) != literal_nullptr) {
                         return literal_nullptr;
                     }
+                    const std::strong_ordering ord = compare_tree(ref.new_at(call[1]), ref.new_at(call[2]));
                     free_tree(ref);
-                    return bool_to_typed_idx((fixed_f == ToBool::eq) ^ (ord != std::partial_ordering::equivalent));
+                    return bool_to_typed_idx((fixed_f == ToBool::eq) ^ (ord != std::strong_ordering::equal));
                 } break;
                 case FixedArity(ToBool::greater):
                     return bool_to_typed_idx(is_ordered_as(std::strong_ordering::greater));
@@ -730,8 +734,11 @@ namespace simp {
     std::strong_ordering compare_tree(const UnsaveRef fst, const UnsaveRef snd)
     {
         assert(fst.type != PatternCall{} && snd.type != PatternCall{});
-        if (fst.type != snd.type) {
-            return fst.type <=> snd.type;
+        if (const int fst_order = shallow_order(fst), 
+                      snd_order = shallow_order(snd); 
+            fst_order != snd_order) 
+        {
+            return fst_order <=> snd_order;
         }
         switch (fst.type) {
         case NodeType(Literal::complex): 
@@ -775,59 +782,5 @@ namespace simp {
             return fst.index <=> snd.index;
         }
     } //compare_tree
-
-    std::partial_ordering partial_compare_tree(const UnsaveRef fst, const UnsaveRef snd)
-    {
-        assert(fst.type != PatternCall{} && snd.type != PatternCall{});
-        if (fst.type != snd.type) {
-            if (fst.type.is<PatternNodeType>() || fst.type == Literal::lambda_param ||
-                snd.type.is<PatternNodeType>() || snd.type == Literal::lambda_param)
-            {
-                return std::partial_ordering::unordered;
-            }
-            return fst.type <=> snd.type;
-        }
-        switch (fst.type) {
-        case NodeType(Literal::complex):
-            return bmath::intern::compare_complex(*fst, *snd);
-        case NodeType(Literal::symbol):
-            return std::string_view(fst->symbol) <=> std::string_view(snd->symbol);
-        case NodeType(Literal::call): {
-            const auto fst_end = fst->call.end();
-            const auto snd_end = snd->call.end();
-            auto fst_iter = fst->call.begin();
-            auto snd_iter = snd->call.begin();
-            for (; fst_iter != fst_end && snd_iter != snd_end; ++fst_iter, ++snd_iter) {
-                const std::partial_ordering cmp =
-                    partial_compare_tree(fst.new_at(*fst_iter), snd.new_at(*snd_iter));
-                if (cmp != std::partial_ordering::equivalent) {
-                    return cmp;
-                }
-            }
-            if (fst_iter != fst_end || snd_iter != snd_end) {
-                return fst->call.size() <=> snd->call.size();
-            }
-            return std::partial_ordering::equivalent;
-        } break;
-        case NodeType(Literal::lambda): {
-            const Lambda fst_lambda = *fst;
-            const Lambda snd_lambda = *snd;
-            if (fst_lambda.param_count != snd_lambda.param_count) {
-                return fst_lambda.param_count <=> snd_lambda.param_count;
-            }
-            if (fst_lambda.transparent != snd_lambda.transparent) {
-                return fst_lambda.transparent <=> snd_lambda.transparent;
-            }
-            return partial_compare_tree(fst.new_at(fst_lambda.definition), snd.new_at(snd_lambda.definition));
-        } break;
-        case NodeType(Match::single_restricted):
-            return fst->single_match.match_data_index <=> snd->single_match.match_data_index;
-        case NodeType(Match::value):
-            return fst->value_match.match_data_index <=> snd->value_match.match_data_index;
-        default:
-            assert(!is_stored_node(fst.type));
-            return fst.index <=> snd.index;
-        }
-    } //partial_compare_tree
  
 } //namespace simp
