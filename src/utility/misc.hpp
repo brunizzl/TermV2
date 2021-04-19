@@ -68,6 +68,11 @@ namespace bmath::intern {
 		return result;
 	}
 
+	template<typename F, typename... Args>
+	constexpr auto y_combinator(F f, Args... args) {
+		return f(f, std::forward(args)...);
+	}
+
     
 	template <typename Struct_T, std::size_t Size, typename Search_T>
 	[[nodiscard]] constexpr const Struct_T& find(

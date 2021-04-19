@@ -782,5 +782,63 @@ namespace simp {
             return fst.index <=> snd.index;
         }
     } //compare_tree
+
+
+    namespace build_pattern {
+
+        //mulit match variables are primed and
+        //function calls to nv::NonComm with at least one multi match are converted to PatternCall
+        //every function call to nv::Comm is converted to PatternCall
+        PatternPair prime_variadic(Store& store, PatternPair heads) 
+        {
+            struct MultiChange
+            {
+                std::uint32_t identifier; //original creation index
+                std::uint32_t parent_match_data_index; //parent is the one in match side
+                std::uint32_t pos_in_parent; //counts how many multi match variables occured bevore this in parent call in match side
+            };
+            std::vector<MultiChange> multi_changes;
+            unsigned variadic_index = 0; //keeps track of how many conversions to PatternCall have already been made 
+
+            struct {
+                std::vector<MultiChange>& changes;
+                unsigned& index;
+
+                NodeIndex operator()(const MutRef ref) {
+                    const auto get_multi = [ref](const NodeIndex param) -> Call* {
+                        if (param.get_type() == Literal::call) {
+                            Call& call = *ref.new_at(param);
+                            if (call.function() == from_native(nv::PatternAuxFn::multi_match)) {
+                                return &call;
+                            }
+                        }
+                        return nullptr;
+                    };
+
+                    if (ref.type == Literal::call) {
+                        const std::size_t this_multi_count = std::count_if(ref->call.begin(), ref->call.end(), get_multi);
+                        Call& call = *ref;
+                        const NodeIndex f = call.function();
+                        //TODO
+                    }
+                    return NodeIndex(); //TODO
+                }
+            } change_lhs = { multi_changes, variadic_index };
+            heads.lhs = change_lhs(MutRef(store, heads.lhs));
+
+            struct {
+                const std::vector<MultiChange>& changes;
+
+                NodeIndex operator()(const MutRef ref) {
+                    return NodeIndex(); //TODO
+                }
+            } change_rhs = { multi_changes };
+            heads.rhs = change_rhs(MutRef(store, heads.rhs));
+
+            //TODO: check if both sides are well formed
+            return heads;
+        }
+
+    } //namespace build_pattern
  
 } //namespace simp

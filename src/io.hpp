@@ -108,6 +108,7 @@ namespace simp {
 		template<name_lookup::InfoLike Infos>
 		[[nodiscard]] NodeIndex build(Store& store, Infos& infos, bmath::intern::ParseView view);
 
+		struct PatternPair { NodeIndex lhs, rhs; };
 		//has only activated SingleMatch!
 		//build from a string of form "<match side> = <replace side>" 
 		//  or form "<match side> | <condition(s)> = <replace side>"
@@ -115,7 +116,7 @@ namespace simp {
 		//         <condition(s)> is a comma separated listing of extra conditions and relations on single match variables
 		//note: conditions are incorporated into match_side
 		//returns (match side, repacement side)
-		std::pair<NodeIndex, NodeIndex> raw_rule(Store& store, std::string name);
+		PatternPair raw_rule(Store& store, std::string name);
 
 
 	} //namespace parse

@@ -23,7 +23,7 @@ namespace simp {
 	//everything that is not exclusively affiliated with patterns
 	enum class Literal
 	{
-		complex, //(besides call itself) only of Literal never expected as .function() in call
+		complex, //only of Literal never expected as .function() in call
 		symbol, 
 		native,
 		lambda,
@@ -38,7 +38,7 @@ namespace simp {
 	//                                             ^.get_index() points here
 	//note 1: the layout is chosen to enable handling of PattenCall and Literal::call as one in most cases 
 	//  and to enable access to VariadicMetaData without first determining how many nodes the call owns.
-	//note 2: a PatternCall may only occur once the appearance of a pattern is finalized, e.g. it should have already been combined...
+	//note 2: a PatternCall may only occur once the appearance of a pattern is finalized, e.g. it should have already been combined
 	//  and it may only occur on the match side of a rule
 	struct PatternCall :bmath::intern::SingleSumEnumEntry {}; 
 

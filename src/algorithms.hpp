@@ -1,6 +1,7 @@
 #pragma once
 
 #include "types.hpp"
+#include "io.hpp"
 
 #include <compare>
 #include <concepts>
@@ -93,5 +94,15 @@ namespace simp {
         }
         return literal_nullptr;
     } //search
+
+    namespace build_pattern {
+        using parse::PatternPair;
+
+        // - multi match variables are primed
+        // - function calls to nv::NonComm with at least one multi match are converted to PatternCall
+        // - every function call to nv::Comm is converted to PatternCall
+        PatternPair prime_variadic(Store& store, PatternPair heads);
+
+    } //namespace build_pattern
     
 } //namespace simp

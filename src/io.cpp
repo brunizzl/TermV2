@@ -327,17 +327,20 @@ namespace simp {
 		template NodeIndex build(Store&, name_lookup::LiteralInfos&, bmath::intern::ParseView);
 		template NodeIndex build(Store&, name_lookup::PatternInfos&, bmath::intern::ParseView);
 
-		std::pair<NodeIndex, NodeIndex> raw_rule(Store& store, std::string name)
+		PatternPair raw_rule(Store& store, std::string name)
 		{
 			using namespace bmath;
 			using namespace bmath::intern;
 			auto parse_str = ParseString(name);
-			constexpr char allowed[] = { token::character, token::number, token::open_grouping, 
-				token::clse_grouping, token::unary_minus, token::sum, token::product, token::comma, 
-				token::hat, token::equals, token::bar, token::bang, token::space, token::imag_unit, 
-				token::backslash, token::dot, token::relation, token::and_, token::or_, '\0' };
-			if (const std::size_t pos = parse_str.tokens.find_first_not_of(allowed); pos != TokenString::npos) [[unlikely]] {
-				throw ParseFailure{ pos, "unexpected character" };
+			{
+				constexpr char allowed[] = { token::character, token::number, token::open_grouping,
+					token::clse_grouping, token::unary_minus, token::sum, token::product, token::comma,
+					token::hat, token::equals, token::bar, token::bang, token::space, token::imag_unit,
+					token::backslash, token::dot, token::relation, token::and_, token::or_, '\0' };
+
+				if (const std::size_t pos = parse_str.tokens.find_first_not_of(allowed); pos != TokenString::npos) [[unlikely]] {
+					throw ParseFailure{ pos, "unexpected character" };
+				}
 			}
 			parse_str.allow_implicit_product(token::sticky_space, ' ');
 			parse_str.remove_space();
@@ -360,10 +363,12 @@ namespace simp {
 			}(parse_str);
 
 			parse::name_lookup::PatternInfos infos;
-			NodeIndex lhs_head = parse::build(store, infos, lhs_view);
-			NodeIndex rhs_head = parse::build(store, infos, rhs_view);
-			lhs_head = normalize::recursive(MutRef(store, lhs_head), {}, 0);
-			rhs_head = normalize::recursive(MutRef(store, rhs_head), { .remove_unary_assoc = false }, 0);
+			PatternPair heads = {
+				parse::build(store, infos, lhs_view),
+				parse::build(store, infos, rhs_view)
+			};
+			heads.lhs = normalize::recursive(MutRef(store, heads.lhs), {}, 0);
+			heads.rhs = normalize::recursive(MutRef(store, heads.rhs), { .remove_unary_assoc = false }, 0);
 
 			//extra condition concerning single match variables (might set multiple in relation)
 			struct SingleCondition
@@ -463,14 +468,14 @@ namespace simp {
 						return ref.typed_idx();
 					}
 				} build_value_matches = { value_conditions, store };
-				lhs_head = build_value_matches(MutRef(store, lhs_head));
+				heads.lhs = build_value_matches(MutRef(store, heads.lhs));
 			}
 			{
 				//go through lhs in preorder, adjust single match using single_conditions
 				//idea: keep track which variable has aleady been encountered. if a new single variable instance is met do the following:
 				//if its index has already been encountered: done
 				//if not: check if single_conditions contains conditions depending only on already encountered indices and the current one
-				//           yes: combine these conditions into an "and" condition, append it at a RestrictedSingleMatch node (or convert to .restriction)
+				//           yes: combine these conditions into an "and" condition, append it at a RestrictedSingleMatch node
 				//           no: turn Instance to Match::single_unrestricted
 				decltype(SingleCondition::dependencies) encountered_singles = 0;
 				struct {
@@ -503,32 +508,33 @@ namespace simp {
 							}
 							else { //more than one condition -> "and" them
 								relevant_conditions.emplace(relevant_conditions.begin(), from_native(nv::Comm::and_));
-								const std::size_t res_index = Call::build(this->store_, relevant_conditions);
-								return NodeIndex(res_index, Literal::call);
+								const std::size_t and_index = Call::build(this->store_, relevant_conditions);
+								const std::size_t res_index = this->store_.allocate_one();
+								this->store_.at(res_index) = RestrictedSingleMatch{ ref.index, NodeIndex(and_index, Literal::call) };
+								return NodeIndex(res_index, Match::single_restricted);
 							}
 						}
 						return ref.typed_idx();
 					}
 				} build_single_matches = { encountered_singles, single_conditions, store };
-				lhs_head = build_single_matches(MutRef(store, lhs_head));
-			}
-			{ 
-				//TODO (likely own function, as otherwise value match reordering will fail):
-				//change call to PatternCall where a subtree contains some pattern stuff in lhs
-			}
+				heads.lhs = build_single_matches(MutRef(store, heads.lhs));
 
-			//the following will be done in different functions:
-			//TODO (mostly in lhs):
-			//verify only one occurence of each multi match
-			//verify only one occurence of multi match in one Comm, any number of occurences in one NonComm, no occurences elsewhere
-			//adjust muti match indices to equal corresponding call + add management field to call
-			//check variadics to each not exceed maximal length and to have not more than is allowed 
-			//sort Comm, flatten associative variadics (do not remove indirection via variadic in rhs!)
-			//make the first single match of each index strong, give belonging conditions to each
-			//bubble value match variables up as high as possible, make first occurence strong
-
-			return std::pair{ lhs_head, rhs_head };
+				//ensure every single match variable also appears in match side
+				for (const auto cond : single_conditions) {
+					if ((cond.dependencies & ~encountered_singles).any()) {
+						throw ParseFailure{ conditions_view.offset, "some condition contains a variable not present in the match" };
+					}
+				}
+				const NodeIndex undefined_in_rhs = search(Ref(store, heads.rhs), [encountered_singles](const UnsaveRef r) {
+					return r.type == Match::single_weak && !encountered_singles.test(r.index);
+				});
+				if (undefined_in_rhs != literal_nullptr) {
+					throw ParseFailure{ rhs_view.offset, "some variable in rhs is not present in lhs" };
+				}
+			}
+			return heads;
 		} //raw_rule
+
 	} //namespace parse
 
 	namespace print {

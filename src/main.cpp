@@ -20,6 +20,12 @@ important:
  - improve multi-match capabilities of NonComm variadic patterns (allow multiple multis in one NonComm instance)
  - check for invalid tokens when parsing pattern and literal
  - add eval_buildin for min/max to remove values guaranteed to not be minimum / maximum without requiring full evaluation
+ - finnish building / verifying pattern:
+      - verify only one occurence of each multi match
+      - verify only one occurence of multi match in one Comm, any number of occurences in one NonComm, no occurences elsewhere
+      - adjust muti match indices to equal corresponding call + add management field to call
+      - check variadics to each not exceed maximal length and to have not parameters more than is allowed 
+      - bubble value match variables up as high as possible, make first occurence strong
 
 nice to have:
  - implement meta_pn::match function for variadic patterns
@@ -85,15 +91,15 @@ int main()
 	}
 	{
 		const auto names = std::to_array<std::string>({
-			{ "a_sqr + two_a b + b^2 | (sqrt(a_sqr) == 0.5 two_a) = (0.5 two_a + b)^2" },
 			{ "a^2 + 2 a b + b^2 = (a + b)^2" },
 			{ "$a^2 + 2 $a b + b^2 = ($a + b)^2" },
+			{ "a_sqr + two_a b + b^2 | (sqrt(a_sqr) == 0.5 two_a) = (0.5 two_a + b)^2" },
 			{ "list(x, xs...) = list(xs..., x)" },
 			{ "x as... + x bs... = x (as... + bs...)" },
 			{ "x as... + x bs... = x (as... + bs...)" },
 			{ "'Y' = \\f n. f(f, n)" },
 			{ "a + _VM(idx, dom, match) | type(a, complex) = _VM(idx, dom, match - a)" },
-			{ "list(x, y, z, zs...) | x == y + z = 'huebsch'" },
+			{ "list(x, y, z, zs...) | x == y + z, x != y, type(y, complex) = 'huebsch'" },
 		});
 		for (const auto& name : names) {
 			auto rule = simp::RewriteRule(name);
