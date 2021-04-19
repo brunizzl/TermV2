@@ -69,7 +69,7 @@ namespace simp {
                 return false;
             }
             const NodeIndex function = ref->call.function();
-            return nv::to_typed_idx(restr) == function;
+            return from_native(restr) == function;
         }
         else {
             assert(restr.is<nv::ComplexSubset>());
@@ -170,7 +170,7 @@ namespace simp {
         {
             assert(ref.type == Literal::call && //PatternCall is not wanted here!
                 function.get_type() == Literal::native &&
-                nv::from_typed_idx(function).is<nv::Variadic>());
+                to_native(function).is<nv::Variadic>());
             bool found_nested = false;
             const Call& call = *ref;
             bmath::intern::StupidBufferVector<NodeIndex, 16> merged_calls = { function };
@@ -276,7 +276,7 @@ namespace simp {
             using namespace nv;
             assert(function.get_type() == Literal::native);
             assert(ref.type == Literal::call); //PatternCall is not expected here!
-            const Native f = from_typed_idx(function);
+            const Native f = to_native(function);
             Call& call = *ref;
             assert(call.function() == function);
             if (f.is<FixedArity>()) {
@@ -539,7 +539,7 @@ namespace simp {
                 const NodeIndex function = ref->call.function();
                 switch (function.get_type()) {
                 case NodeType(Literal::native): {
-                    const nv::Native buildin_type = nv::from_typed_idx(function);
+                    const nv::Native buildin_type = to_native(function);
                     const bool associative = buildin_type.is<nv::Variadic>() && 
                         nv::is_associative(buildin_type.to<nv::Variadic>());
                     if (associative) {

@@ -123,7 +123,7 @@ namespace simp {
 					return res;
 				}
 				if (const nv::Native type = nv::type_of(name); type != nv::Native(nv::Native::COUNT)) {
-					return nv::to_typed_idx(type);
+					return from_native(type);
 				}
 				return NodeIndex(Symbol::build(store, name), Literal::symbol);
 			}
@@ -134,8 +134,14 @@ namespace simp {
 				if (const NodeIndex res = find_name_in_infos(infos.lambda_params, name); res != literal_nullptr) {
 					return res;
 				}
-				if (const NodeIndex res = find_name_in_infos(infos.match_variables, name); res != literal_nullptr) {
+				if (const NodeIndex res = find_name_in_infos(infos.single_matches, name); res != literal_nullptr) {
 					return res;
+				}
+				if (const NodeIndex res = find_name_in_infos(infos.multi_matches, name); res != literal_nullptr) {
+					return copy_tree(Ref(store, res), store);
+				}
+				if (const NodeIndex res = find_name_in_infos(infos.value_matches, name); res != literal_nullptr) {
+					return copy_tree(Ref(store, res), store);
 				}
 				if (const nv::Native type = nv::type_of(name); type != nv::Native(nv::Native::COUNT)) {
 					return NodeIndex(static_cast<unsigned>(type), Literal::native);
@@ -154,20 +160,33 @@ namespace simp {
 				if (name.find_first_of(' ') != std::string_view::npos) [[unlikely]] {
 						throw bmath::ParseFailure{ view.offset, "leave me some space, but not like that" };
 				}
-				const auto add_match_variable = [&](const NodeType type) {
-					const std::size_t id = std::count_if(infos.match_variables.begin(), infos.match_variables.end(),
-						[type](const NameInfo& i) { return i.value.get_type() == type; });
-					const NodeIndex result = NodeIndex(id, type);
-					infos.match_variables.emplace_back(name, result);
-					return result;
-				};
-				if (name.starts_with('$')) {
-					return add_match_variable(Match::value);
-				}
+
 				if (name.ends_with('.')) {
-					return add_match_variable(Match::multi);
+					const std::size_t res_index = Call::build(store, std::to_array({
+						from_native(nv::PatternAuxFn::multi_match),           //function type
+						NodeIndex(infos.multi_matches.size(), PatternUnsigned{}), 
+						NodeIndex(0, PatternUnsigned{})
+					}));
+					const NodeIndex result = NodeIndex(res_index, Literal::call);
+					infos.multi_matches.emplace_back(name, result);
+					return result;
 				}
-				return add_match_variable(Match::single_weak);
+				else if (name.starts_with('$')) {
+					const std::size_t res_index = Call::build(store, std::to_array({
+						from_native(nv::PatternAuxFn::value_match),               //function type
+						NodeIndex(infos.value_matches.size(), PatternUnsigned{}), //.match_data_index
+						from_native(nv::ComplexSubset::complex),                  //.domain
+						value_proxy                                               //.match_index
+					}));
+					const NodeIndex result = NodeIndex(res_index, Literal::call);
+					infos.value_matches.emplace_back(name, result);
+					return result;
+				}
+				else {
+					const NodeIndex result = NodeIndex(infos.single_matches.size(), Match::single_weak);
+					infos.single_matches.emplace_back(name, result);
+					return result;
+				}
 			}
 
 			unsigned add_lambda_params(std::vector<NameInfo>& lambda_params, bmath::intern::ParseView params_view)
@@ -219,7 +238,7 @@ namespace simp {
 				const NodeIndex fst = parse::build(store, infos, view.substr(0, head.where));
 				const NodeIndex snd = parse::build(store, infos, view.substr(head.where + operator_length));
 				const std::size_t res_index = store.allocate_one();
-				store.at(res_index) = Call{ nv::to_typed_idx(type), fst, snd };
+				store.at(res_index) = Call{ from_native(type), fst, snd };
 				return NodeIndex(res_index, Literal::call);
 			};
 			const auto to_inverse_buildin_call = [&](const nv::Native type, auto invert_term) {
@@ -227,7 +246,7 @@ namespace simp {
 				const NodeIndex snd_uninverted = build(store, infos, view.substr(head.where + 1));
 				const NodeIndex snd = invert_term(store, snd_uninverted);
 				const std::size_t res_index = store.allocate_one();
-				store.at(res_index) = Call{ nv::to_typed_idx(type), fst, snd };
+				store.at(res_index) = Call{ from_native(type), fst, snd };
 				return NodeIndex(res_index, Literal::call);
 			};
 			switch (head.type) {
@@ -248,7 +267,7 @@ namespace simp {
 				view.remove_prefix(1u);  //remove '!'
 				const NodeIndex to_negate = parse::build(store, infos, view);
 				const std::size_t res_index = store.allocate_one();
-				store.at(res_index) = Call{ nv::to_typed_idx(nv::ToBool::not_), to_negate };
+				store.at(res_index) = Call{ from_native(nv::ToBool::not_), to_negate };
 				return NodeIndex(res_index, Literal::call);
 			} break;
 			case Head::Type::negate: {
@@ -307,7 +326,6 @@ namespace simp {
 		} //build
 		template NodeIndex build(Store&, name_lookup::LiteralInfos&, bmath::intern::ParseView);
 		template NodeIndex build(Store&, name_lookup::PatternInfos&, bmath::intern::ParseView);
-
 
 		std::pair<NodeIndex, NodeIndex> raw_rule(Store& store, std::string name)
 		{
@@ -372,9 +390,9 @@ namespace simp {
 				const bool contains_single = simp::search(cond_ref, 
 					[](const UnsaveRef r) { return r.type == Match::single_weak; }) != literal_nullptr;
 				const bool contains_value = simp::search(cond_ref,
-					[](const UnsaveRef r) { return r.type == Match::value; }) != literal_nullptr;
+					[](const UnsaveRef r) { return r.typed_idx() == from_native(nv::PatternAuxFn::value_match); }) != literal_nullptr;
 				const bool contains_multi = simp::search(cond_ref,
-					[](const UnsaveRef r) { return r.type == Match::multi; }) != literal_nullptr; 
+					[](const UnsaveRef r) { return r.typed_idx() == from_native(nv::PatternAuxFn::multi_match); }) != literal_nullptr; 
 				const bool contains_lambda = simp::search(cond_ref,
 						[](const UnsaveRef r) { return r.type == Literal::lambda; }) != literal_nullptr; 
 				if (contains_multi || contains_lambda) [[unlikely]] {
@@ -405,33 +423,94 @@ namespace simp {
 					//condition may only be of form "type($<value match>, <complex subset>)"
 					//if so: adjust value_conditions at right index
 					if (cond_ref.type != Literal::call ||
-						cond_ref->call.function() != nv::to_typed_idx(nv::PatternAuxFn::type)) 
+						cond_ref->call.function() != from_native(nv::PatternAuxFn::type)) 
 					{
 						throw ParseFailure{ conditions_view.offset, "value match may only have its type restricted" };
 					}
 					const NodeIndex value_match = cond_ref->call[1];
 					const NodeIndex subset = cond_ref->call[2];
-					if (value_match.get_type() != Match::value || 
-						!nv::from_typed_idx(subset).is<nv::ComplexSubset>()) 
+					if (value_match.get_type() != PatternUnsigned{} || 
+						!to_native(subset).is<nv::ComplexSubset>()) 
 					{
 						throw ParseFailure{ conditions_view.offset, "value match may only have its type as real, nat etc." };
 					}
-					value_conditions[value_match.get_index()] = nv::from_typed_idx(subset).to<nv::ComplexSubset>();
+					value_conditions[value_match.get_index()] = to_native(subset).to<nv::ComplexSubset>();
 					free_tree(cond_ref);
 				}
 			}
 			{
-				//TODO:
+				struct {
+					decltype(value_conditions) const& domains;
+					Store& store_;
+
+					NodeIndex operator()(const MutRef ref) {
+						if (ref.type == Literal::call) {
+							if (ref->call.function() == from_native(nv::PatternAuxFn::value_match) && //call to _VM
+								//if call contains no match variables itself it is assumed to stem from name_lookup::build_symbol
+								std::none_of(ref->call.begin(), ref->call.end(), 
+									[](auto idx) { return idx.get_type().is<Match>(); })) 
+							{
+								const std::size_t value_index = ref->call[1].get_index();
+								ref->call[2] = from_native(this->domains[value_index]);
+							}
+							else {
+								for (NodeIndex& sub : ref) {
+									sub = (*this)(ref.new_at(sub));
+								}
+							}
+						}
+						return ref.typed_idx();
+					}
+				} build_value_matches = { value_conditions, store };
+				lhs_head = build_value_matches(MutRef(store, lhs_head));
+				rhs_head = build_value_matches(MutRef(store, rhs_head));
+			}
+			{
 				//go through lhs in preorder, adjust single match using single_conditions
 				//idea: keep track which variable has aleady been encountered. if a new single variable instance is met do the following:
 				//if its index has already been encountered: done
-				//if not: check of congle_conditions contains conditions depending only on already encountered indices and the current one
-				//           yes: combine these conditions into an and condition, append it at a RestrictedSingleMatch node (or convert to .restriction)
+				//if not: check if single_conditions contains conditions depending only on already encountered indices and the current one
+				//           yes: combine these conditions into an "and" condition, append it at a RestrictedSingleMatch node (or convert to .restriction)
 				//           no: turn Instance to Match::single_unrestricted
-			}
-			{
-				//TODO:
-				//clear owner situation of value match in lhs, maybe add value restriction
+				decltype(SingleCondition::dependencies) encountered_singles = 0;
+				struct {
+					decltype(SingleCondition::dependencies)& encountered;
+					const std::vector<SingleCondition>& conditions;
+					Store& store_;
+
+					NodeIndex operator()(const MutRef ref) {
+						if (ref.type == Literal::call) {
+							const auto stop = end(ref);
+							for (auto iter = begin(ref); iter != stop; ++iter) { //important: dont skip function!
+								*iter = (*this)(ref.new_at(*iter));
+							}
+						}
+						if (ref.type == Match::single_weak && !this->encountered.test(ref.index)) {
+							this->encountered.set(ref.index);
+							std::vector<NodeIndex> relevant_conditions = {};
+							for (const SingleCondition cond : this->conditions) {
+								if (cond.dependencies.test(ref.index) && (cond.dependencies & ~encountered).none()) {
+									relevant_conditions.push_back(cond.head);
+								}
+							}
+							if (relevant_conditions.size() == 0u) {
+								return NodeIndex(ref.index, Match::single_unrestricted);
+							}
+							if (relevant_conditions.size() == 1u) {
+								const std::size_t res_index = this->store_.allocate_one();
+								this->store_.at(res_index) = RestrictedSingleMatch{ ref.index, relevant_conditions.front() };
+								return NodeIndex(res_index, Match::single_restricted);
+							}
+							else { //more than one condition -> "and" them
+								relevant_conditions.emplace(relevant_conditions.begin(), from_native(nv::Comm::and_));
+								const std::size_t res_index = Call::build(this->store_, relevant_conditions);
+								return NodeIndex(res_index, Literal::call);
+							}
+						}
+						return ref.typed_idx();
+					}
+				} build_single_matches = { encountered_singles, single_conditions, store };
+				lhs_head = build_single_matches(MutRef(store, lhs_head));
 			}
 			{ 
 				//TODO (likely own function, as otherwise value match reordering will fail):
@@ -460,7 +539,7 @@ namespace simp {
 		constexpr int infixr(const NodeIndex f) {
 			if (f.get_type() != Literal::native) { return default_infixr; }
 			using namespace nv;
-			switch (from_typed_idx(f)) {
+			switch (to_native(f)) {
 			case Native(CtoC::negate):       return 4001;
 			case Native(ToBool::not_):       return 4000;
 			case Native(CtoC::pow):          return 3000;
@@ -508,7 +587,7 @@ namespace simp {
 				const auto [init, seperator] = [&]() -> std::pair<const char*, const char*> {
 					using namespace nv;
 					if (function.get_type() == Literal::native) {
-						switch (from_typed_idx(function)) {
+						switch (to_native(function)) {
 						case Native(Comm::sum):          return { "" , " + "  };
 						case Native(Comm::product):      return { "" , " * "  };
 						case Native(Comm::and_):         return { "" , " && " };
@@ -554,11 +633,7 @@ namespace simp {
 				str.append("_T");
 				str.append(std::to_string(var.match_data_index));
 				str.append("[");
-				str.append(std::to_string(static_cast<unsigned>(var.restriction)));
-				if (var.condition != literal_nullptr) {
-					str.append(", ");
-					append_to_string(ref.new_at(var.condition), str, default_infixr);
-				}
+				append_to_string(ref.new_at(var.condition), str, default_infixr);
 				str.append("]");
 			} break;				
 			case NodeType(Match::single_unrestricted):
@@ -575,14 +650,9 @@ namespace simp {
 				append_to_string(ref.new_at(var.match_index), str, default_infixr);
 				str.append("]");
 			} break;
-			case NodeType(Match::multi):
-				str.append("_MM");
-				str.append(std::to_string(ref.index));
-				str.append("...");
-				break;
 			case NodeType(PatternUnsigned{}):
 				str.append(std::to_string(ref.index));
-				str.append("_U");
+				str.append("U");
 				break;
 			default:
 				BMATH_UNREACHABLE;

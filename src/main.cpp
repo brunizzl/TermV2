@@ -13,6 +13,7 @@
 TODO:
 
 important:
+ - type checking
  - add option to normalize::Options to only evaluate no-lazy lambdas (perhaps rebrand current .eval_lambda option?)
  - fix pattern construction of value match in simp (value match is used like a proxy, but in reality owns a store node!)
  - construct pattern: single match, mutli match / variadic, value match
@@ -90,6 +91,7 @@ int main()
 			{ "x as... + x bs... = x (as... + bs...)" },
 			{ "x as... + x bs... = x (as... + bs...)" },
 			{ "'Y' = \\f n. f(f, n)" },
+			{ "a + _VM(idx, dom, match) | type(a, complex) = _VM(idx, dom, match - a)" },
 		});
 		for (const auto& name : names) {
 			auto rule = simp::RewriteRule(name);

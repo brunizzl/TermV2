@@ -54,7 +54,6 @@ namespace simp {
 		//does not own MatchData entry
 		single_weak, //(shallow) is expected to only be encountered after the .get_index() in MatchData::single_match has already been set
 		value, //ownership is decided in ValueMatch
-		multi, //(shallow), can match an arbitrary amount of subtrees, every instance may only be encountered once -> always owning
 		COUNT
 	};
 	using PatternNodeType = SumEnum<Match, PatternUnsigned, PatternCall>; //(made so that PatternCall directly follows Literal::call
@@ -82,7 +81,6 @@ namespace simp {
 		case NodeType(Match::single_unrestricted): return false;
 		case NodeType(Match::single_weak):         return false;
 		case NodeType(Match::value):               return true;
-		case NodeType(Match::multi):               return false;
 		case NodeType(NodeType::COUNT):            return false; //.get_type() of literal_nullptr
 		default:
 			assert(false);
@@ -188,9 +186,8 @@ namespace simp {
 		//helpers for pattern construction and less important pattern parts
 		enum class PatternAuxFn
 		{
-			value_match, //used to represent all of ValueMatch during build process and final ValueMatch in rhs
-			value_proxy, //not used in function call, but to indicate end of subtree in ValueMatch::match_index
 			multi_match, //differentiates between multiple MultiMatch instances in a single NonComm call
+			value_match, //used to represent all of ValueMatch during build process and final ValueMatch in rhs
 			type, //returns true if fst is element of snd
 			COUNT
 		};
@@ -227,29 +224,39 @@ namespace simp {
 			COUNT
 		};
 
+		enum class PatternConst
+		{
+			value_proxy, //found as offspring of .match_index of ValueMatch
+			muli_marker, //found in match side of pattern as child of Variadic
+			COUNT
+		};
+
 		//mostly used to denote restrictions on allowed types 
 		//  note: NodeType also appears here, but only as restriction, not as indicator of possible indirection
-		using Constant = SumEnum<NodeType, ComplexSubset, Restr>;
+		//this SumEnum contains everything in Native not callable, although also everything callable is a constant.
+		//in particular: Bool is not part of Constant, as it can be called
+		using Constant = SumEnum<NodeType, ComplexSubset, Restr, PatternConst>;
 
 		//values of this type are stored in .get_index() of a NodeIndex if .get_type() is Literal::native
 		using Native = SumEnum<Constant, Function_>;
-
-		inline constexpr NodeIndex to_typed_idx(const Native type) noexcept 
-		{ 
-			return NodeIndex(static_cast<unsigned>(type), Literal::native); 
-		}
-
-		inline constexpr Native from_typed_idx(const NodeIndex idx) noexcept 
-		{
-			assert(idx.get_type() == Literal::native);
-			return Native(idx.get_index());
-		}
 	} //namespace nv
 
+	inline constexpr NodeIndex from_native(const nv::Native type) noexcept
+	{
+		return NodeIndex(static_cast<unsigned>(type), Literal::native);
+	}
+
+	inline constexpr nv::Native to_native(const NodeIndex idx) noexcept
+	{
+		assert(idx.get_type() == Literal::native);
+		return nv::Native(idx.get_index());
+	}
+
 	constexpr NodeIndex literal_nullptr = NodeIndex();
-	constexpr NodeIndex literal_false   = nv::to_typed_idx(nv::Bool::false_);
-	constexpr NodeIndex literal_true    = nv::to_typed_idx(nv::Bool::true_);
-	constexpr NodeIndex value_proxy     = nv::to_typed_idx(nv::PatternAuxFn::value_proxy);
+	constexpr NodeIndex literal_false   = from_native(nv::Bool::false_);
+	constexpr NodeIndex literal_true    = from_native(nv::Bool::true_);
+	constexpr NodeIndex value_proxy     = from_native(nv::PatternConst::value_proxy);
+	constexpr NodeIndex multi_marker    = from_native(nv::PatternConst::muli_marker);
 
 	constexpr NodeIndex bool_to_typed_idx(const bool b) { return b ? literal_true : literal_false; }
 
@@ -285,8 +292,7 @@ namespace simp {
 	struct RestrictedSingleMatch
 	{
 		std::uint32_t match_data_index; //indexes in MatchData::single_match_data
-		nv::Native restriction = nv::Restr::any;
-		NodeIndex condition = literal_true;
+		NodeIndex condition; //eighter Literal::native, then assumed to be some subset or call to some testable expression
 	};
 
 	struct ValueMatch
@@ -460,9 +466,8 @@ namespace simp {
 			{ MiscFn::pair              , "pair"      , 2u, {}                     , MiscFn::pair                },
 			{ MiscFn::triple            , "triple"    , 3u, {}                     , MiscFn::triple              },
 			{ MiscFn::fmap              , "fmap"      , 2u, { Restr::callable, Literal::call }, Literal::call    },
-			{ PatternAuxFn::value_match , "_VM"       , 4u, { PatternUnsigned{}, Literal::native, Restr::any }, Restr::any }, //layout as in ValueMatch (minus .owner)
-			{ PatternAuxFn::value_proxy , "\\"        , 0u, {}                     , PatternAuxFn::value_proxy   },//can not be constructed from a string
-			{ PatternAuxFn::multi_match , "_MM"       , 2u, { PatternUnsigned{}, PatternUnsigned{} }, Restr::any }, //match_data_idx, nr. in index
+			{ PatternAuxFn::multi_match , "\\MM"      , 2u, { PatternUnsigned{}, PatternUnsigned{} }, Restr::any }, //match_data_idx, nr. in index
+			{ PatternAuxFn::value_match , "_VM"       , 3u, { PatternUnsigned{}, Literal::native, Restr::any }, Restr::any }, //layout as in ValueMatch (minus .owner)
 			{ PatternAuxFn::type        , "type"      , 2u, { Restr::any, Literal::native }, Restr::boolean      },
 		});
 		static_assert(static_cast<unsigned>(fixed_arity_table.front().type) == 0u);
@@ -530,6 +535,8 @@ namespace simp {
 		};
 
 		constexpr auto constant_table = std::to_array<CommonProps>({
+			{ PatternConst::value_proxy  , "_VP"         , PatternConst::value_proxy },
+			{ PatternConst::muli_marker  , "_MM"         , PatternConst::muli_marker },
 			{ Restr::any                 , "\\"          , Literal::native }, //can not be constructed from a string
 			{ Restr::callable            , "callable"    , Literal::native },
 			{ Restr::boolean             , "bool"        , Literal::native },
@@ -537,7 +544,7 @@ namespace simp {
 			{ ComplexSubset::natural_0   , "nat_0"       , Literal::native },
 			{ ComplexSubset::integer     , "int"         , Literal::native },
 			{ ComplexSubset::real        , "real"        , Literal::native },
-			{ ComplexSubset::complex     , "\\"          , Literal::native }, //can not be constructed from a string
+			{ ComplexSubset::complex     , "_Complex"    , Literal::native }, 
 			{ ComplexSubset::negative    , "\\"          , Literal::native }, //can not be constructed from a string
 			{ ComplexSubset::positive    , "\\"          , Literal::native }, //can not be constructed from a string
 			{ ComplexSubset::not_negative, "\\"          , Literal::native }, //can not be constructed from a string
@@ -554,7 +561,6 @@ namespace simp {
 			{ Match::single_unrestricted , "\\"          , Literal::native }, //can not be constructed from a string
 			{ Match::single_weak         , "\\"          , Literal::native }, //can not be constructed from a string
 			{ Match::value               , "\\"          , Literal::native }, //can not be constructed from a string
-			{ Match::multi               , "\\"          , Literal::native }, //can not be constructed from a string
 		});
 		static_assert(constant_table.size() == (unsigned)Constant::COUNT);
 		static_assert(bmath::intern::is_sorted_by(constant_table, &CommonProps::type));

@@ -45,8 +45,6 @@ namespace simp {
 
 		namespace name_lookup {
 
-			//all names that can be looked up will result in a "shallow" NodeIndex, meaning no node in the Store is attatched.
-			//thus this simple structure is permitted.
 			struct NameInfo
 			{
 				std::string_view name;
@@ -55,12 +53,14 @@ namespace simp {
 
 			struct PatternInfos
 			{
-				std::vector<NameInfo> lambda_params = {};
-				std::vector<NameInfo> match_variables = {};
+				std::vector<NameInfo> lambda_params = {}; //only contains instances of Literal::lambda_param -> always shallow
+				std::vector<NameInfo> single_matches = {}; //stored as Match::single_weak
+				std::vector<NameInfo> multi_matches = {}; //stored as call to nv::PatternAuxFn::multi_match
+				std::vector<NameInfo> value_matches = {}; //stored as call to nv::PatternAuxFn::value_match
 			};
 			struct LiteralInfos
 			{
-				std::vector<NameInfo> lambda_params = {};
+				std::vector<NameInfo> lambda_params = {}; //only contains instances of Literal::lambda_param -> always shallow
 			};
 			template<typename I>
 			concept InfoLike = requires (I i) { {i.lambda_params} -> std::same_as<std::vector<NameInfo>&>; };
@@ -90,7 +90,7 @@ namespace simp {
 		[[nodiscard]] NodeIndex build_negated(Store_T& store, const NodeIndex to_negate) noexcept
 		{
 			const std::size_t result_idx = store.allocate_one();
-			new (&store.at(result_idx)) TermNode(Call{ nv::to_typed_idx(nv::CtoC::negate), to_negate });
+			new (&store.at(result_idx)) TermNode(Call{ from_native(nv::CtoC::negate), to_negate });
 			return NodeIndex(result_idx, Literal::call);
 		}
 
@@ -98,7 +98,7 @@ namespace simp {
 		[[nodiscard]] NodeIndex build_inverted(Store_T& store, const NodeIndex to_invert) noexcept
 		{
 			const std::size_t result_idx = store.allocate_one();
-			new (&store.at(result_idx)) TermNode(Call{ nv::to_typed_idx(nv::CtoC::invert), to_invert });
+			new (&store.at(result_idx)) TermNode(Call{ from_native(nv::CtoC::invert), to_invert });
 			return NodeIndex(result_idx, Literal::call);
 		}
 

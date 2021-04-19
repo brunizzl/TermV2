@@ -52,25 +52,22 @@ namespace simp {
     template<std::predicate<UnsaveRef> Pred>
     NodeIndex search(const UnsaveRef ref, Pred pred)
     {
+        assert(ref.type != PatternCall{});
         if (pred(ref)) {
             return ref.typed_idx();
         }
-        switch (ref.type) {
-        case NodeType(Literal::lambda): {
+        else if (ref.type == Literal::lambda) {
             return search(ref.new_at(ref->lambda.definition), pred);
-        } break;
-        case NodeType(Literal::call):
-        case NodeType(PatternCall{}): {
+        }
+        else if (ref.type == Literal::call) {
             for (const NodeIndex subterm : ref->call) {
                 const NodeIndex sub_res = search(ref.new_at(subterm), pred);
                 if (sub_res != literal_nullptr) {
                     return sub_res;
                 }
             }
-        } [[fallthrough]];
-        default:
-            return literal_nullptr;
         }
+        return literal_nullptr;
     } //search
     
 } //namespace simp
