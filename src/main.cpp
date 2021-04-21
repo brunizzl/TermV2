@@ -80,7 +80,7 @@ int main()
 		std::cout << "\n";
 	}
 	{
-		const auto names = std::to_array<std::string>({
+		const simp::RuleSet rules = {
 			{ "a^2 + 2 a b + b^2 + cs... = (a + b)^2 + cs..." },
 			{ "$a^2 + 2 $a b + b^2 + cs... = ($a + b)^2 + cs..." },
 			{ "a_sqr + two_a b + b^2 + cs... | (sqrt(a_sqr) == 0.5 two_a) = (0.5 two_a + b)^2 + cs..." },
@@ -89,10 +89,10 @@ int main()
 			{ "'Y' = \\f n. f(f, n)" },
 			{ "a + _VM(idx, dom, match) | type(a, complex) = _VM(idx, dom, match - a)" },
 			{ "list(x, y, z, zs...) | x == y + z, x != y, type(y, complex) = 'huebsch'" },
-		});
-		for (const auto& name : names) {
-			auto rule = simp::RewriteRule(name);
-			std::cout << name << "\n  ->  " << rule.to_string() << "\n\n";
+			{ "fmap(f, g(x, xs...)) = 'concat'(g(f(x)), fmap(f, g(xs...)))" }
+		};
+		for (const simp::RuleRef rule : rules) {
+			std::cout << rule.to_string() << "\n\n";
 		}
 		std::cout << "\n";
 	}

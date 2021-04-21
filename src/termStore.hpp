@@ -36,6 +36,7 @@ namespace bmath::intern {
 		{a.allocate_n(n)} -> std::convertible_to<std::size_t>;
 		{a.free_one(idx)};
 		{a.free_n(idx, n)};
+		{a.free_all()};
 	});
 
 
@@ -520,6 +521,8 @@ namespace bmath::intern {
 		}
 
 		constexpr void free_n(const std::size_t idx, const std::size_t n) noexcept { assert(this->valid_idx(idx)); }
+
+		constexpr void free_all() noexcept { this->size_ = 0u; }
 
 	}; //class BasicMonotonicStore
 

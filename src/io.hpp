@@ -53,11 +53,11 @@ namespace simp {
 
 			struct PatternInfos
 			{
-				std::vector<NameInfo> lambda_params = {}; //only contains instances of Literal::lambda_param -> always shallow
-				std::vector<NameInfo> single_matches = {}; //stored as Match::single_weak
-				std::vector<NameInfo> multi_matches = {}; //stored as call to nv::PatternAuxFn::multi_match
-				std::vector<NameInfo> value_matches = {}; //stored as call to nv::PatternAuxFn::value_match
-				bool parse_match = true; //set to false, after match is parsed
+				std::vector<NameInfo> lambda_params = {};  //only contains instances of Literal::lambda_param -> always shallow
+				std::vector<NameInfo> single_matches = {}; //stored as SingleMatch::weak
+				std::vector<NameInfo> multi_matches = {};  //stored as MultiMatch node with .match_data_index currently holding the identification number
+				std::vector<NameInfo> value_matches = {};  //stored as call to nv::PatternAuxFn::value_match
+				bool parse_match = true; //set to false after match is parsed
 			};
 			struct LiteralInfos
 			{
@@ -111,7 +111,7 @@ namespace simp {
 		template<name_lookup::InfoLike Infos>
 		[[nodiscard]] NodeIndex build(Store& store, Infos& infos, bmath::intern::ParseView view);
 
-		struct PatternPair { NodeIndex lhs, rhs; };
+		struct IAmInformedThisRuleIsNotUsableYet {};
 		//has only activated SingleMatch!
 		//build from a string of form "<match side> = <replace side>" 
 		//  or form "<match side> | <condition(s)> = <replace side>"
@@ -119,19 +119,19 @@ namespace simp {
 		//         <condition(s)> is a comma separated listing of extra conditions and relations on single match variables
 		//note: conditions are incorporated into match_side
 		//returns (match side, repacement side)
-		PatternPair raw_rule(Store& store, std::string name);
-
+		//the last parameter is only there to make the function type different from that passed into RuleSet
+		RuleHeads raw_rule(Store& store, std::string& name, IAmInformedThisRuleIsNotUsableYet);
 
 	} //namespace parse
 
 	namespace print {
 
-		void append_to_string(const UnsaveRef ref, std::string& str, const int parent_infixr);
+		void append_to_string(const UnsaveRef ref, std::string& str, const int parent_infixr, const bool print_operators);
 
 		inline std::string to_string(const UnsaveRef ref)
 		{
 			std::string name;
-			print::append_to_string(ref, name, 0);
+			print::append_to_string(ref, name, 0, true);
 			return name;
 		}
 

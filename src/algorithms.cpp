@@ -126,7 +126,7 @@ namespace simp {
             }
             const std::uint32_t lambda_param_count = lambda->lambda.param_count;
             if (lambda_param_count < params.size()) [[unlikely]] {
-                throw "too many arguments for called lambda";
+                throw TypeError{ "too many arguments for called lambda", ref };
             }
             Call::free(*ref.store, ref.index); //only free call itself, neighter lambda nor lambda parameters
             const NodeIndex evaluated = replace_lambda_params(
@@ -292,7 +292,7 @@ namespace simp {
                 }
                 const std::size_t f_arity = arity(fixed_f);
                 if (f_arity + 1u != call.size()) [[unlikely]]
-                    throw "wrong number of parameters in function call";
+                    throw TypeError{ "wrong number of parameters in function call", ref };
 
                 const auto compute_and_replace = [&](auto compute) -> NodeIndex {
                     std::feclearexcept(FE_ALL_EXCEPT);
@@ -649,12 +649,12 @@ namespace simp {
                 ref.store->free_n(ref.index - 1u, node_count_with_meta_data);
             }
             return;
-        case NodeType(Match::single_restricted):   
+        case NodeType(SingleMatch::restricted):   
             free_tree(ref.new_at(ref->single_match.condition));
             break;
-        case NodeType(Match::multi):
+        case NodeType(SpecialMatch::multi):
             break;
-        case NodeType(Match::value):
+        case NodeType(SpecialMatch::value):
             free_tree(ref.new_at(ref->value_match.match_index));
             break;
         default:
@@ -664,7 +664,8 @@ namespace simp {
         ref.store->free_one(ref.index);
     } //free_tree
 
-    NodeIndex copy_tree(const Ref src_ref, Store& dst_store)
+    template<bmath::intern::Reference R, bmath::intern::StoreLike S>
+    NodeIndex copy_tree(const R src_ref, S& dst_store)
     {
         const auto insert_node = [&](const TermNode n, NodeType type) {
             const std::size_t dst_index = dst_store.allocate_one();
@@ -707,14 +708,14 @@ namespace simp {
                 return NodeIndex(dst_index, src_ref.type);
             }
         } break;
-        case NodeType(Match::single_restricted): {
+        case NodeType(SingleMatch::restricted): {
             RestrictedSingleMatch var = *src_ref;
             var.condition = copy_tree(src_ref.new_at(var.condition), dst_store);
             return insert_node(var, src_ref.type);
         } break;
-        case NodeType(Match::multi):
+        case NodeType(SpecialMatch::multi):
             return insert_node(*src_ref, src_ref.type);
-        case NodeType(Match::value): {
+        case NodeType(SpecialMatch::value): {
             ValueMatch var = *src_ref;
             var.match_index = copy_tree(src_ref.new_at(var.match_index), dst_store);
             return insert_node(var, src_ref.type);
@@ -724,6 +725,10 @@ namespace simp {
             return src_ref.typed_idx();
         }
     } //copy_tree
+    template NodeIndex copy_tree(const Ref, Store&);
+    template NodeIndex copy_tree(const Ref, MonotonicStore&);
+    template NodeIndex copy_tree(const UnsaveRef, Store&);
+    template NodeIndex copy_tree(const UnsaveRef, MonotonicStore&);
 
     //remove if c++20 catches up
     constexpr std::strong_ordering operator<=>(std::string_view fst, std::string_view snd)
@@ -733,8 +738,15 @@ namespace simp {
         return std::strong_ordering::equal;
     } //makeshift operator<=>
 
+
     std::strong_ordering compare_tree(const UnsaveRef fst, const UnsaveRef snd)
     {
+        const auto single_match_index = [](const UnsaveRef ref) {
+            assert(!is_stored_node(ref.type) || ref.type == SingleMatch::restricted);
+            return ref.type == SingleMatch::restricted ?
+                ref->single_match.match_data_index :
+                ref.index;
+        };
         assert(fst.type != PatternCall{} && snd.type != PatternCall{});
         if (const int fst_order = shallow_order(fst), 
                       snd_order = shallow_order(snd); 
@@ -775,20 +787,61 @@ namespace simp {
             }
             return compare_tree(fst.new_at(fst_lambda.definition), snd.new_at(snd_lambda.definition));
         } break;
-        case NodeType(Match::single_restricted): 
-            return fst->single_match.match_data_index <=> snd->single_match.match_data_index;
-        case NodeType(Match::multi):
+        case NodeType(SingleMatch::restricted): 
+            return fst->single_match.match_data_index <=> single_match_index(snd);
+        case NodeType(SpecialMatch::multi):
             return fst->multi_match.match_data_index <=> snd->multi_match.match_data_index;
-        case NodeType(Match::value):
+        case NodeType(SpecialMatch::value):
             return fst->value_match.match_data_index <=> snd->value_match.match_data_index;
         default:
             assert(!is_stored_node(fst.type));
-            return fst.index <=> snd.index;
+            return fst.index <=> single_match_index(snd);
         }
     } //compare_tree
 
+    std::partial_ordering unsure_compare_tree(const UnsaveRef fst, const UnsaveRef snd)
+    {
+        if (fst.type.is<MatchVariableType>() || snd.type.is<MatchVariableType>()) {
+            return std::partial_ordering::unordered;
+        }
+        if (const int fst_order = shallow_order(fst),
+                      snd_order = shallow_order(snd);
+            fst_order != snd_order)
+        {
+            return fst_order <=> snd_order;
+        }
+        switch (fst.type) {
+        case NodeType(Literal::complex):
+            return bmath::intern::compare_complex(*fst, *snd);
+        case NodeType(Literal::symbol):
+            return std::string_view(fst->symbol) <=> std::string_view(snd->symbol);
+        case NodeType(PatternCall{}):
+        case NodeType(Literal::call): {
+            const std::partial_ordering cmp_functions = 
+                unsure_compare_tree(fst.new_at(fst->call.function()), snd.new_at(snd->call.function()));
+            return cmp_functions == std::partial_ordering::equivalent ?
+                std::partial_ordering::unordered :
+                cmp_functions;
+        } break;
+        case NodeType(Literal::lambda): {
+            const Lambda fst_lambda = *fst;
+            const Lambda snd_lambda = *snd;
+            if (fst_lambda.param_count != snd_lambda.param_count) {
+                return fst_lambda.param_count <=> snd_lambda.param_count;
+            }
+            if (fst_lambda.transparent != snd_lambda.transparent) {
+                return fst_lambda.transparent <=> snd_lambda.transparent;
+            }
+            return unsure_compare_tree(fst.new_at(fst_lambda.definition), snd.new_at(snd_lambda.definition));
+        } break;
+        default:
+            assert(!is_stored_node(fst.type) && !is_stored_node(snd.type));
+            return fst.index <=> snd.index;
+        }
+    } //unsure_compare_tree
 
-    namespace build_pattern {
+
+    namespace build_rule {
 
         struct MultiChange
         {
@@ -803,7 +856,7 @@ namespace simp {
                 const unsigned this_pattern_index = pattern_call_index++;
                 { //change multis in call
                     for (NodeIndex& param : ref->call.parameters()) {
-                        if (param.get_type() == Match::multi) {
+                        if (param.get_type() == SpecialMatch::multi) {
                             const unsigned identifier = ref.new_at(param)->multi_match.match_data_index;
                             multi_changes.emplace_back(identifier, MultiMatch{ this_pattern_index, encountered_multis++ });
                             free_tree(ref.new_at(param));
@@ -829,17 +882,17 @@ namespace simp {
             if (ref.type == Literal::call) {
                 //build current
                 const std::size_t this_multi_count = std::count_if(ref->call.begin(), ref->call.end(), 
-                    [](const NodeIndex i) { return i.get_type() == Match::multi; });
+                    [](const NodeIndex i) { return i.get_type() == SpecialMatch::multi; });
                 const NodeIndex f = ref->call.function();
                 if (f.get_type() == Literal::native) {
                     using namespace nv;
                     const Native native_f = to_native(f);
                     if (native_f.is<Comm>()) {
-                        if (this_multi_count > 1) throw "too many multis in commutative";
+                        if (this_multi_count > 1) throw TypeError{ "too many multis in commutative", ref };
                         make_ref_pattern_call(-1u);
                     }
                     if (native_f.is<FixedArity>() && this_multi_count > 0) {
-                        throw "multi match illegal in fixed arity";
+                        throw TypeError{ "multi match illegal in fixed arity", ref };
                     }
                     else if (native_f.is<NonComm>() && this_multi_count > 0) {
                         make_ref_pattern_call(0);
@@ -858,7 +911,7 @@ namespace simp {
             return ref.typed_idx();
         } //build_lhs_multis_and_pattern_calls
 
-        PatternPair prime_multi(Store& store, PatternPair heads)
+        RuleHeads prime_multi(Store& store, RuleHeads heads)
         {
             std::vector<MultiChange> multi_changes;
             unsigned pattern_call_index = 0; //keeps track of how many conversions to PatternCall have already been made 
@@ -875,13 +928,11 @@ namespace simp {
                             (*this)(ref.new_at(param));
                         }
                     }
-                    if (ref.type == Match::multi) {
+                    if (ref.type == SpecialMatch::multi) {
                         const unsigned identifier = ref->multi_match.match_data_index; 
                         const auto data = std::find_if(this->changes.begin(), this->changes.end(),
                             [identifier](const MultiChange& c) { return c.identifier == identifier; });
-                        if (data == this->changes.end()) {
-                            throw std::exception("match variables may not only appear in rhs");
-                        }
+                        assert(data != this->changes.end());
                         ref->multi_match = data->new_;
                     }
                 }
@@ -892,6 +943,14 @@ namespace simp {
             return heads;
         } //prime_multi
 
-    } //namespace build_pattern
+        RuleHeads build_everything(Store& store, std::string& name)
+        {
+            RuleHeads heads = parse::raw_rule(store, name, parse::IAmInformedThisRuleIsNotUsableYet{});
+            //TODO: build value match
+            heads = build_rule::prime_multi(store, heads);
+            return heads;
+        } //build_everything
+
+    } //namespace build_rule
  
 } //namespace simp

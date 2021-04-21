@@ -5,6 +5,7 @@
 
 #include <compare>
 #include <concepts>
+#include <string>
 
 namespace simp {
 
@@ -40,29 +41,30 @@ namespace simp {
     void free_tree(const MutRef ref);
 
     //copies tree starting at src_ref into dst_store
-    [[nodiscard]] NodeIndex copy_tree(const Ref src_ref, Store& dst_store);
+    template<bmath::intern::Reference R, bmath::intern::StoreLike S>
+    [[nodiscard]] NodeIndex copy_tree(const R src_ref, S& dst_store);
 
     //orders node types by their "specificity", meaning that types potentially matching more things are generally sorted to the back
     constexpr int shallow_order(const UnsaveRef ref) {
         switch (ref.type) {
         case NodeType(Literal::complex):           return 0;
-        case NodeType(Match::value):               return 2;
+        case NodeType(SpecialMatch::value):        return 2;
         case NodeType(PatternUnsigned{}):          return 4;
         case NodeType(Literal::lambda):            return 8;
         case NodeType(Literal::lambda_param):      return 10;
         case NodeType(Literal::symbol):            return 2000;
         case NodeType(Literal::call):              return 2002;
         case NodeType(PatternCall{}):	           return 2002;
-        case NodeType(Match::single_restricted):   return 2100;
-        case NodeType(Match::single_unrestricted): return 2100;
-        case NodeType(Match::single_weak):         return 2100;
-        case NodeType(Match::multi):               return 3000;
+        case NodeType(SingleMatch::restricted):    return 2100;  //caution: these will compare equal, despite having a different structure in store
+        case NodeType(SingleMatch::unrestricted):  return 2100;  //caution: these will compare equal, despite having a different structure in store
+        case NodeType(SingleMatch::weak):          return 2100;  //caution: these will compare equal, despite having a different structure in store
+        case NodeType(SpecialMatch::multi):        return 3000;
         case NodeType(Literal::native):
             using namespace nv;
             static_assert((unsigned)Native::COUNT < 1000, "adjust values >= 2000 to circumvent overlap");
             switch (Native(ref.index)) {
             default:                                 return ref.index + 1000;
-            case Native(PatternConst::multi_marker): return 3000;
+            case Native(PatternConst::multi_marker): return 3001;
             }
         default:
             assert(false);
@@ -73,6 +75,9 @@ namespace simp {
 
     //lexicographic ordering edtending shallow_order, not meaningful in a math context
     std::strong_ordering compare_tree(const UnsaveRef fst, const UnsaveRef snd);
+
+    //can not differentiate calls to same function and can not differentiate match variables from anything
+    std::partial_ordering unsure_compare_tree(const UnsaveRef fst, const UnsaveRef snd);
 
     //returns first subterm where pred is true, tested in pre-order
     template<std::predicate<UnsaveRef> Pred>
@@ -96,14 +101,16 @@ namespace simp {
         return literal_nullptr;
     } //search
 
-    namespace build_pattern {
-        using parse::PatternPair;
+    namespace build_rule {
 
         // - multi match variables are primed
         // - every function call to nv::Comm in lhs is converted to PatternCall
         // - if a call in lhs contains at least one multi match, the call is converted to PatternCall
-        PatternPair prime_multi(Store& store, PatternPair heads);
+        RuleHeads prime_multi(Store& store, RuleHeads heads);
 
-    } //namespace build_pattern
+        //returns a fully assembled rule
+        RuleHeads build_everything(Store& store, std::string& name);
+
+    } //namespace build_rule
     
 } //namespace simp

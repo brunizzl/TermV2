@@ -2,6 +2,8 @@
 
 #include <string>
 #include <tuple>
+#include <iostream>
+#include <algorithm>
 
 #include "algorithms.hpp"
 #include "parseTerm.hpp"
@@ -22,7 +24,7 @@ namespace simp {
 	std::string LiteralTerm::to_string() const noexcept
 	{
 		std::string res;
-		print::append_to_string(this->ref(), res, 0);
+		print::append_to_string(this->ref(), res, 0, true);
 		return res;
 	}
 
@@ -31,21 +33,70 @@ namespace simp {
 		return print::to_memory_layout(this->store, {this->head});
 	}
 
-	RewriteRule::RewriteRule(std::string name)
-	{
-		parse::PatternPair heads = parse::raw_rule(this->store, std::move(name));
-		heads = build_pattern::prime_multi(this->store, heads);
-		this->lhs_head = heads.lhs;
-		this->rhs_head = heads.rhs;
-	}
-
-	std::string RewriteRule::to_string() const noexcept
+	std::string RuleRef::to_string() const noexcept
 	{
 		std::string res;
-		print::append_to_string(this->lhs_ref(), res, 0);
+		print::append_to_string(this->lhs, res, 0, false);
 		res.append(" = ");
-		print::append_to_string(this->rhs_ref(), res, 0);
+		print::append_to_string(this->rhs, res, 0, false);
 		return res;
 	}
+
+	RuleSet::RuleSet(std::initializer_list<std::string_view> names, RuleHeads(*build)(Store&, std::string&))
+	{
+		Store temp_store;
+		for (const std::string_view name_view : names) {
+			std::string name = std::string(name_view.data(), name_view.size());
+			try {
+				this->rules.push_back(build(temp_store, name));
+			}
+			catch (bmath::ParseFailure failure) {
+				std::cerr << "parse failure: " << failure.what << "\n";
+				std::cerr << name << "\n";
+				std::cerr << std::string(failure.where, ' ') << "^\n";
+				throw failure;
+			}
+			catch (TypeError error) {
+				std::cerr << "type error: " << error.what << "\n";
+				std::cerr << print::to_string(error.occurence) << "\n";
+				throw error;
+			}
+		}
+		this->migrate_rules(temp_store);
+	} //RuleSet::RuleSet
+
+	void RuleSet::add(std::initializer_list<const RuleSet*> sets)
+	{
+		Store temp_store;
+		for (RuleHeads& rule : this->rules) {
+			rule.lhs = copy_tree(UnsaveRef(&this->store.at(rule.lhs.get_index()), rule.lhs.get_index(), rule.lhs.get_type()), temp_store);
+			rule.rhs = copy_tree(UnsaveRef(&this->store.at(rule.rhs.get_index()), rule.rhs.get_index(), rule.rhs.get_type()), temp_store);
+		}
+		for (const RuleSet* set : sets) {
+			for (const RuleHeads rule : set->rules) {
+				this->rules.emplace_back(
+					copy_tree(UnsaveRef(&set->store.at(rule.lhs.get_index()), rule.lhs.get_index(), rule.lhs.get_type()), temp_store),
+					copy_tree(UnsaveRef(&set->store.at(rule.rhs.get_index()), rule.rhs.get_index(), rule.rhs.get_type()), temp_store));
+			}
+		}
+		this->migrate_rules(temp_store);
+	} //RuleSet::add
+
+	void RuleSet::migrate_rules(const Store& temp_store)
+	{
+		this->store.free_all();
+		std::stable_sort(this->rules.begin(), this->rules.end(),
+			[&temp_store](const RuleHeads fst, const RuleHeads snd) {
+				return unsure_compare_tree(Ref(temp_store, fst.lhs), Ref(temp_store, snd.lhs))
+					== std::partial_ordering::less;
+			});
+		//first insert all match sides -> direct succession of those
+		for (std::size_t i = 0u; i < this->rules.size(); i++) {
+			this->rules[i].lhs = copy_tree(Ref(temp_store, this->rules[i].lhs), this->store);
+		}
+		for (std::size_t i = 0u; i < this->rules.size(); i++) {
+			this->rules[i].rhs = copy_tree(Ref(temp_store, this->rules[i].rhs), this->store);
+		}
+	} //RuleSet::migrate_rules
 
 } //namespace simp

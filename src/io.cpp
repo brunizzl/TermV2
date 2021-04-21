@@ -169,7 +169,7 @@ namespace simp {
 				if (name.ends_with('.')) {
 					const std::size_t res_index = store.allocate_one();
 					store.at(res_index) = MultiMatch{ (unsigned)infos.multi_matches.size(), 0 };
-					const NodeIndex result = NodeIndex(res_index, Match::multi);
+					const NodeIndex result = NodeIndex(res_index, SpecialMatch::multi);
 					infos.multi_matches.emplace_back(name, result);
 					return result;
 				}
@@ -185,7 +185,7 @@ namespace simp {
 					return result;
 				}
 				else {
-					const NodeIndex result = NodeIndex(infos.single_matches.size(), Match::single_weak);
+					const NodeIndex result = NodeIndex(infos.single_matches.size(), SingleMatch::weak);
 					infos.single_matches.emplace_back(name, result);
 					return result;
 				}
@@ -329,7 +329,7 @@ namespace simp {
 		template NodeIndex build(Store&, name_lookup::LiteralInfos&, bmath::intern::ParseView);
 		template NodeIndex build(Store&, name_lookup::PatternInfos&, bmath::intern::ParseView);
 
-		PatternPair raw_rule(Store& store, std::string name)
+		RuleHeads raw_rule(Store& store, std::string& name, IAmInformedThisRuleIsNotUsableYet)
 		{
 			using namespace bmath;
 			using namespace bmath::intern;
@@ -365,7 +365,7 @@ namespace simp {
 			}(parse_str);
 
 			parse::name_lookup::PatternInfos infos;
-			PatternPair heads;
+			RuleHeads heads;
 			heads.lhs = parse::build(store, infos, lhs_view);
 			infos.parse_match = false;
 			heads.rhs = parse::build(store, infos, rhs_view); 
@@ -396,11 +396,11 @@ namespace simp {
 				}
 				const auto cond_ref = MutRef(store, condition_head);
 				const bool contains_single = simp::search(cond_ref, 
-					[](const UnsaveRef r) { return r.type == Match::single_weak; }) != literal_nullptr;
+					[](const UnsaveRef r) { return r.type == SingleMatch::weak; }) != literal_nullptr;
 				const bool contains_value = simp::search(cond_ref,
 					[](const UnsaveRef r) { return r.typed_idx() == from_native(nv::PatternAuxFn::value_match); }) != literal_nullptr;
 				const bool contains_multi = simp::search(cond_ref,
-					[](const UnsaveRef r) { return r.type == Match::multi; }) != literal_nullptr; 
+					[](const UnsaveRef r) { return r.type == SpecialMatch::multi; }) != literal_nullptr; 
 				const bool contains_lambda = simp::search(cond_ref,
 						[](const UnsaveRef r) { return r.type == Literal::lambda; }) != literal_nullptr; 
 				if (contains_multi || contains_lambda) [[unlikely]] {
@@ -419,7 +419,7 @@ namespace simp {
 									res |= (*this)(ref.new_at(sub));
 								}
 							}
-							if (ref.type == Match::single_weak) {
+							if (ref.type == SingleMatch::weak) {
 								res.set(ref.index);
 							}
 							return res;
@@ -457,7 +457,7 @@ namespace simp {
 								//if call contains no match variables itself and holds only shallow parameters, 
 								//  it is assumed to stem from name_lookup::build_symbol
 								std::none_of(ref->call.begin(), ref->call.end(), 
-									[](auto idx) { return idx.get_type().is<Match>() || is_stored_node(idx.get_type()); })) 
+									[](auto idx) { return idx.get_type().is<MatchVariableType>() || is_stored_node(idx.get_type()); }))
 							{
 								const std::size_t value_index = ref->call[1].get_index();
 								ref->call[2] = from_native(this->domains[value_index]);
@@ -479,7 +479,7 @@ namespace simp {
 				//if its index has already been encountered: done
 				//if not: check if single_conditions contains conditions depending only on already encountered indices and the current one
 				//           yes: combine these conditions into an "and" condition, append it at a RestrictedSingleMatch node
-				//           no: turn Instance to Match::single_unrestricted
+				//           no: turn Instance to SingleMatch::unrestricted
 				decltype(SingleCondition::dependencies) encountered_singles = 0;
 				struct {
 					decltype(SingleCondition::dependencies)& encountered;
@@ -493,7 +493,7 @@ namespace simp {
 								*iter = (*this)(ref.new_at(*iter));
 							}
 						}
-						if (ref.type == Match::single_weak && !this->encountered.test(ref.index)) {
+						if (ref.type == SingleMatch::weak && !this->encountered.test(ref.index)) {
 							this->encountered.set(ref.index);
 							std::vector<NodeIndex> relevant_conditions = {};
 							for (const SingleCondition cond : this->conditions) {
@@ -502,19 +502,19 @@ namespace simp {
 								}
 							}
 							if (relevant_conditions.size() == 0u) {
-								return NodeIndex(ref.index, Match::single_unrestricted);
+								return NodeIndex(ref.index, SingleMatch::unrestricted);
 							}
 							if (relevant_conditions.size() == 1u) {
 								const std::size_t res_index = this->store_.allocate_one();
 								this->store_.at(res_index) = RestrictedSingleMatch{ ref.index, relevant_conditions.front() };
-								return NodeIndex(res_index, Match::single_restricted);
+								return NodeIndex(res_index, SingleMatch::restricted);
 							}
 							else { //more than one condition -> "and" them
 								relevant_conditions.emplace(relevant_conditions.begin(), from_native(nv::Comm::and_));
 								const std::size_t and_index = Call::build(this->store_, relevant_conditions);
 								const std::size_t res_index = this->store_.allocate_one();
 								this->store_.at(res_index) = RestrictedSingleMatch{ ref.index, NodeIndex(and_index, Literal::call) };
-								return NodeIndex(res_index, Match::single_restricted);
+								return NodeIndex(res_index, SingleMatch::restricted);
 							}
 						}
 						return ref.typed_idx();
@@ -552,19 +552,14 @@ namespace simp {
 			}
 		}
 
-		void append_variadic_meta_data(const PatternCallData& data, std::string& str)
+		void append_pattern_meta_data(const PatternCallData& data, std::string& str)
 		{
-			using Bits = std::bitset<SharedPatternCallEntry::max_params_count>;
 			str.append("[");
 			str.append(std::to_string(data.match_data_index));
-			str.append(", ");
-			str.append(Bits(data.rematchable).to_string());
-			str.append(", ");
-			str.append(Bits(data.always_after_prev).to_string());
 			str.append("]");
 		}
 
-		void append_to_string(const UnsaveRef ref, std::string& str, const int parent_infixr)
+		void append_to_string(const UnsaveRef ref, std::string& str, const int parent_infixr, const bool print_operators)
 		{
 			switch (ref.type) {
 			case NodeType(Literal::complex):
@@ -574,7 +569,7 @@ namespace simp {
 				str.append(ref->symbol);
 				break;
 			case NodeType(PatternCall{}): 
-				append_variadic_meta_data(pattern_call_meta_data(ref), str);
+				append_pattern_meta_data(pattern_call_meta_data(ref), str);
 				[[fallthrough]];				
 			case NodeType(Literal::call): { 
 				const Call& call = *ref;
@@ -582,7 +577,7 @@ namespace simp {
 				const char* replacement_seperator = nullptr;
 				const auto [init, seperator] = [&]() -> std::pair<const char*, const char*> {
 					using namespace nv;
-					if (function.get_type() == Literal::native) {
+					if (function.get_type() == Literal::native && print_operators) {
 						switch (to_native(function)) {
 						case Native(Comm::sum):          return { "" , " + "  };
 						case Native(Comm::product):      return { "" , " * "  };
@@ -598,15 +593,15 @@ namespace simp {
 						case Native(ToBool::not_):       return { "!", ""     };
 						}
 					}
-					append_to_string(ref.new_at(function), str, max_infixr);
+					append_to_string(ref.new_at(function), str, max_infixr, print_operators);
 					return { "", ", " };
 				}();
-				const int own_infixr = ref.type == Literal::call ? infixr(function) : default_infixr;
+				const int own_infixr = print_operators ? infixr(function) : default_infixr;
 				if (own_infixr <= parent_infixr) { str.push_back('('); }				
 				const char* spacer = init;
 				for (const NodeIndex param : call.parameters()) {
 					str.append(std::exchange(spacer, seperator));
-					append_to_string(ref.new_at(param), str, own_infixr);
+					append_to_string(ref.new_at(param), str, own_infixr, print_operators);
 				}
 				if (own_infixr <= parent_infixr) { str.push_back(')'); }
 			} break;
@@ -616,28 +611,28 @@ namespace simp {
 			case NodeType(Literal::lambda): {
 				const Lambda& lambda = *ref;
 				str.append(lambda.transparent ? "(\\." : "{\\.");
-				append_to_string(ref.new_at(lambda.definition), str, max_infixr);
+				append_to_string(ref.new_at(lambda.definition), str, max_infixr, print_operators);
 				str.push_back(lambda.transparent ? ')' : '}');
 			} break;
 			case NodeType(Literal::lambda_param):
 				str.push_back('%');
 				str.append(std::to_string(ref.index));
 				break;
-			case NodeType(Match::single_restricted): {
+			case NodeType(SingleMatch::restricted): {
 				const RestrictedSingleMatch& var = *ref;
 				str.append("_S");
 				str.append(std::to_string(var.match_data_index));
 				str.append("[");
-				append_to_string(ref.new_at(var.condition), str, default_infixr);
+				append_to_string(ref.new_at(var.condition), str, default_infixr, print_operators);
 				str.append("]");
 			} break;				
-			case NodeType(Match::single_unrestricted):
-			case NodeType(Match::single_weak):
+			case NodeType(SingleMatch::unrestricted):
+			case NodeType(SingleMatch::weak):
 				str.append("_S");
 				str.append(std::to_string(ref.index));
-				str.append(ref.type == Match::single_weak ? "'" : "");
+				str.append(ref.type == SingleMatch::weak ? "'" : "");
 				break;
-			case NodeType(Match::multi): {
+			case NodeType(SpecialMatch::multi): {
 				const MultiMatch& var = *ref;
 				str.append("_M[");
 				str.append(std::to_string(var.match_data_index));
@@ -645,12 +640,12 @@ namespace simp {
 				str.append(std::to_string((int)var.nr_of_prev_multis));
 				str.append("]");
 			} break;
-			case NodeType(Match::value): {
+			case NodeType(SpecialMatch::value): {
 				const ValueMatch& var = *ref;
 				str.append("_V");
 				str.append(std::to_string(var.match_data_index));
 				str.append("[");
-				append_to_string(ref.new_at(var.match_index), str, default_infixr);
+				append_to_string(ref.new_at(var.match_index), str, default_infixr, print_operators);
 				str.append("]");
 			} break;
 			case NodeType(PatternUnsigned{}):
@@ -692,7 +687,7 @@ namespace simp {
 			case NodeType(PatternCall{}): {
 				std::string& prev_str = rows[ref.index - 1u];
 				prev_str += "meta data  : ";
-				append_variadic_meta_data(pattern_call_meta_data(ref), prev_str);
+				append_pattern_meta_data(pattern_call_meta_data(ref), prev_str);
 			} [[fallthrough]];
 			case NodeType(Literal::call): {
 				//parameters:
@@ -735,7 +730,7 @@ namespace simp {
 
 			//append name of subterm to line
 			current_str.append(std::max(0, 38 - (int)current_str.size()), ' ');
-			print::append_to_string(ref, current_str, 0);
+			print::append_to_string(ref, current_str, 0, false);
 		} //append_memory_row
 
 		std::string to_memory_layout(const Store& store, const std::initializer_list<const NodeIndex> heads)

@@ -3,6 +3,7 @@
 #include "types.hpp"
 #include "algorithms.hpp"
 
+
 namespace simp {
 
 	//term without any pattern shenaniganz
@@ -27,21 +28,60 @@ namespace simp {
 		}
 	}; //struct LiteralTerm
 
-	struct RewriteRule
+	struct RuleRef
 	{
-		Store store;
-		NodeIndex lhs_head; //start of match side
-		NodeIndex rhs_head; //start of replace side
-
-		RewriteRule(std::string name);
+		UnsaveRef lhs;
+		UnsaveRef rhs;
 
 		std::string to_string() const noexcept;
-
-		constexpr Ref lhs_ref() const noexcept { return Ref(this->store, this->lhs_head); }
-		constexpr Ref rhs_ref() const noexcept { return Ref(this->store, this->rhs_head); }
-
-		constexpr MutRef lhs_mut_ref() noexcept { return MutRef(this->store, this->lhs_head); }
-		constexpr MutRef rhs_mut_ref() noexcept { return MutRef(this->store, this->rhs_head); }
 	};
+
+	struct RuleSetIter 
+	{
+		std::vector<RuleHeads>::const_iterator iter;
+		const TermNode* const store_data;
+
+		using value_type = RuleRef;
+		using difference_type = void;
+		using pointer = void;
+		using reference = void;
+		using iterator_category = std::forward_iterator_tag;
+
+		RuleSetIter& operator++() noexcept { ++this->iter; return *this; }
+		RuleSetIter operator++(int) noexcept { auto result = *this; ++(*this); return result; }
+
+		RuleRef operator*() const 
+		{
+			const std::uint32_t lhs_index = this->iter->lhs.get_index();
+			const std::uint32_t rhs_index = this->iter->rhs.get_index();
+			return { UnsaveRef(this->store_data + lhs_index, lhs_index, this->iter->lhs.get_type()),
+			         UnsaveRef(this->store_data + rhs_index, rhs_index, this->iter->rhs.get_type()) };
+		}
+
+		bool operator==(const RuleSetIter& snd) const noexcept 
+		{
+			assert(this->store_data == snd.store_data);
+			return this->iter == snd.iter;
+		}
+	};
+
+	struct RuleSet
+	{
+		MonotonicStore store;
+		std::vector<RuleHeads> rules;
+
+		RuleSet(std::initializer_list<std::string_view> names, 
+			RuleHeads(*build)(Store&, std::string&) = build_rule::build_everything);
+
+		void add(std::initializer_list<const RuleSet*> sets);
+
+		RuleSetIter begin() const noexcept { return { this->rules.begin(), this->store.data() }; }
+		RuleSetIter end() const noexcept { return { this->rules.end(), this->store.data() }; }
+
+	private:
+		void migrate_rules(const Store& temp_store);
+	};
+
+
 
 } //namespace simp

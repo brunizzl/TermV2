@@ -17,6 +17,7 @@
 namespace simp {
 
 	using bmath::intern::SumEnum;
+	using bmath::intern::SingleSumEnumEntry;
 	using bmath::intern::StoredVector;
 	using bmath::intern::BasicTypedIdx;
 
@@ -40,24 +41,31 @@ namespace simp {
 	//  and to enable access to PatternCallData without first determining how many nodes the call owns.
 	//note 2: a PatternCall may only occur once the appearance of a pattern is finalized, e.g. it should have already been combined
 	//  and it may only occur on the match side of a rule
-	struct PatternCall :bmath::intern::SingleSumEnumEntry {}; 
+	struct PatternCall :SingleSumEnumEntry {}; 
 
-	//acts as unsigned integer type for pattern construction
-	struct PatternUnsigned :bmath::intern::SingleSumEnumEntry {};
+	//acts as unsigned integer type for pattern construction, meaning .get_index() is interpreted as unsigned integer
+	struct PatternUnsigned :SingleSumEnumEntry {};
 
-	//these act as different placeholders in a pattern
-	enum class Match 
+	enum class SingleMatch
 	{
 		//these two own their entry in MatchData::single_match, meaning they set a new subterm to match the given index.
-		single_restricted, //.get_index() points at RestrictedSingleMatch node in store
-		single_unrestricted, //shallow NodeIndex, .get_index() specifies position in MatchData::single_match
+		restricted,   //.get_index() points at RestrictedSingleMatch node in store
+		unrestricted, //shallow NodeIndex, .get_index() specifies position in MatchData::single_match
 		//does not own MatchData entry
-		single_weak, //(shallow) is expected to only be encountered after the .get_index() in MatchData::single_match has already been set
+		weak,  //(shallow) is expected to only be encountered after the .get_index() in MatchData::single_match has already been set
+		COUNT
+	};
+
+	enum class SpecialMatch
+	{
 		multi, //only expected in rhs, lhs holds multi_marker instead
 		value, //ownership is decided in ValueMatch
 		COUNT
 	};
-	using PatternNodeType = SumEnum<Match, PatternUnsigned, PatternCall>; //(ordered so that PatternCall directly follows Literal::call)
+
+	using MatchVariableType = SumEnum<SpecialMatch, SingleMatch>;
+
+	using PatternNodeType = SumEnum<MatchVariableType, PatternUnsigned, PatternCall>; //(ordered so that PatternCall directly follows Literal::call)
 
 	using NodeType = SumEnum<PatternNodeType, Literal>;
 
@@ -78,11 +86,11 @@ namespace simp {
 		case NodeType(Literal::call):              return true;
 		case NodeType(PatternCall{}):	           return true;
 		case NodeType(PatternUnsigned{}):          return false;
-		case NodeType(Match::single_restricted):   return true;
-		case NodeType(Match::single_unrestricted): return false;
-		case NodeType(Match::single_weak):         return false;
-		case NodeType(Match::multi):               return true;
-		case NodeType(Match::value):               return true;
+		case NodeType(SingleMatch::restricted):    return true;
+		case NodeType(SingleMatch::unrestricted):  return false;
+		case NodeType(SingleMatch::weak):          return false;
+		case NodeType(SpecialMatch::multi):        return true;
+		case NodeType(SpecialMatch::value):        return true;
 		case NodeType(NodeType::COUNT):            return false; //.get_type() of literal_nullptr
 		default:
 			assert(false);
@@ -365,6 +373,7 @@ namespace simp {
 	static_assert(sizeof(TermNode) == sizeof(Complex));
 
 	using Store = bmath::intern::BasicStore<TermNode>;
+	using MonotonicStore = bmath::intern::BasicMonotonicStore<TermNode>;
 
 	using Ref = bmath::intern::BasicSaveRef<NodeType, const Store>;
 	using UnsaveRef = bmath::intern::BasicUnsaveRef<NodeType, TermNode>;
@@ -389,6 +398,20 @@ namespace simp {
 		return bmath::intern::detail_vector::SaveEndIndicator{ (std::uint32_t)ref->call.size() };
 	}
 
+	template<bmath::intern::Reference R> requires (!requires { R::store; })
+		constexpr auto begin(const R& ref) noexcept
+	{
+		assert(ref.type == Literal::call || ref.type == PatternCall{});
+		return ref->call.begin();
+	}
+
+	template<bmath::intern::Reference R> requires (!requires { R::store; })
+		constexpr auto end(const R& ref) noexcept
+	{
+		assert(ref.type == Literal::call || ref.type == PatternCall{});
+		return ref->call.end();
+	}
+
 
 	constexpr const PatternCallData& pattern_call_meta_data(const UnsaveRef ref)
 	{
@@ -401,6 +424,13 @@ namespace simp {
 		assert(ref.type == PatternCall{});
 		return *(&ref.store->at(ref.index) - 1u);
 	}
+
+
+	struct TypeError
+	{
+		const char* what;
+		UnsaveRef occurence; 
+	};
 
 
 
@@ -565,11 +595,11 @@ namespace simp {
 			{ Literal::call              , "call"        , Literal::native },
 			{ PatternCall{}              , "\\"          , Literal::native }, //can not be constructed from a string
 			{ PatternUnsigned{}          , "_UInt"       , Literal::native },
-			{ Match::single_restricted   , "\\"          , Literal::native }, //can not be constructed from a string
-			{ Match::single_unrestricted , "\\"          , Literal::native }, //can not be constructed from a string
-			{ Match::single_weak         , "\\"          , Literal::native }, //can not be constructed from a string
-			{ Match::multi               , "\\"          , Literal::native }, //can not be constructed from a string
-			{ Match::value               , "\\"          , Literal::native }, //can not be constructed from a string
+			{ SingleMatch::restricted    , "\\"          , Literal::native }, //can not be constructed from a string
+			{ SingleMatch::unrestricted  , "\\"          , Literal::native }, //can not be constructed from a string
+			{ SingleMatch::weak          , "\\"          , Literal::native }, //can not be constructed from a string
+			{ SpecialMatch::multi        , "\\"          , Literal::native }, //can not be constructed from a string
+			{ SpecialMatch::value        , "\\"          , Literal::native }, //can not be constructed from a string
 		});
 		static_assert(constant_table.size() == (unsigned)Constant::COUNT);
 		static_assert(bmath::intern::is_sorted_by(constant_table, &CommonProps::type));
@@ -684,5 +714,13 @@ namespace simp {
 		{	return this->single_match_data[var.match_data_index];
 		}
 	}; //MatchData
+
+
+
+	struct RuleHeads
+	{
+		NodeIndex lhs; //match side
+		NodeIndex rhs; //replace side
+	};
 
 } //namespace simp
