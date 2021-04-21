@@ -138,6 +138,9 @@ namespace simp {
 					return res;
 				}
 				if (const NodeIndex res = find_name_in_infos(infos.multi_matches, name); res != literal_nullptr) {
+					if (infos.parse_match) [[unlikely]] {
+						throw bmath::ParseFailure{ view.offset, "multiple occurences of multi in lhs are forbidden" };
+					}
 					return copy_tree(Ref(store, res), store);
 				}
 				if (const NodeIndex res = find_name_in_infos(infos.value_matches, name); res != literal_nullptr) {
@@ -160,7 +163,9 @@ namespace simp {
 				if (name.find_first_of(' ') != std::string_view::npos) [[unlikely]] {
 						throw bmath::ParseFailure{ view.offset, "leave me some space, but not like that" };
 				}
-
+				if (!infos.parse_match) [[unlikely]] {
+					throw bmath::ParseFailure{ view.offset, "match variables need to be introduced in lhs" };
+				}
 				if (name.ends_with('.')) {
 					const std::size_t res_index = store.allocate_one();
 					store.at(res_index) = MultiMatch{ (unsigned)infos.multi_matches.size(), 0 };
@@ -360,10 +365,11 @@ namespace simp {
 			}(parse_str);
 
 			parse::name_lookup::PatternInfos infos;
-			PatternPair heads = {
-				parse::build(store, infos, lhs_view),
-				parse::build(store, infos, rhs_view)
-			};
+			PatternPair heads;
+			heads.lhs = parse::build(store, infos, lhs_view);
+			infos.parse_match = false;
+			heads.rhs = parse::build(store, infos, rhs_view); 
+
 			heads.lhs = normalize::recursive(MutRef(store, heads.lhs), {}, 0);
 			heads.rhs = normalize::recursive(MutRef(store, heads.rhs), { .remove_unary_assoc = false }, 0);
 
@@ -491,7 +497,7 @@ namespace simp {
 							this->encountered.set(ref.index);
 							std::vector<NodeIndex> relevant_conditions = {};
 							for (const SingleCondition cond : this->conditions) {
-								if (cond.dependencies.test(ref.index) && (cond.dependencies & ~encountered).none()) {
+								if (cond.dependencies.test(ref.index) && (cond.dependencies & ~this->encountered).none()) {
 									relevant_conditions.push_back(cond.head);
 								}
 							}
@@ -515,19 +521,6 @@ namespace simp {
 					}
 				} build_single_matches = { encountered_singles, single_conditions, store };
 				heads.lhs = build_single_matches(MutRef(store, heads.lhs));
-
-				//ensure every single match variable also appears in match side
-				for (const auto cond : single_conditions) {
-					if ((cond.dependencies & ~encountered_singles).any()) {
-						throw ParseFailure{ conditions_view.offset, "some condition contains a variable not present in the match" };
-					}
-				}
-				const NodeIndex undefined_in_rhs = search(Ref(store, heads.rhs), [encountered_singles](const UnsaveRef r) {
-					return r.type == Match::single_weak && !encountered_singles.test(r.index);
-				});
-				if (undefined_in_rhs != literal_nullptr) {
-					throw ParseFailure{ rhs_view.offset, "some variable in rhs is not present in lhs" };
-				}
 			}
 			return heads;
 		} //raw_rule
@@ -543,7 +536,6 @@ namespace simp {
 			if (f.get_type() != Literal::native) { return default_infixr; }
 			using namespace nv;
 			switch (to_native(f)) {
-			case Native(CtoC::negate):       return 4001;
 			case Native(ToBool::not_):       return 4000;
 			case Native(CtoC::pow):          return 3000;
 			case Native(Comm::product):      return 2001;
@@ -562,7 +554,7 @@ namespace simp {
 
 		void append_variadic_meta_data(const PatternCallData& data, std::string& str)
 		{
-			using Bits = std::bitset<SharedCallEntry::max_pn_variadic_params_count>;
+			using Bits = std::bitset<SharedPatternCallEntry::max_params_count>;
 			str.append("[");
 			str.append(std::to_string(data.match_data_index));
 			str.append(", ");
@@ -597,7 +589,6 @@ namespace simp {
 						case Native(Comm::and_):         return { "" , " && " };
 						case Native(Comm::or_):          return { "" , " || " };
 						case Native(CtoC::pow):          return { "" , " ^ "  };
-						case Native(CtoC::negate):       return { "-", ""     };
 						case Native(ToBool::eq):         return { "" , " == " };
 						case Native(ToBool::neq):        return { "" , " != " };
 						case Native(ToBool::greater):    return { "" , " > "  };
@@ -749,7 +740,7 @@ namespace simp {
 
 		std::string to_memory_layout(const Store& store, const std::initializer_list<const NodeIndex> heads)
 		{
-			std::vector<std::string> rows(std::max(store.size(), bmath::intern::pattern::match::MatchData::max_variadic_count), "");
+			std::vector<std::string> rows(std::max(store.size(), MatchData::max_pattern_call_count), "");
 
 			std::string result((heads.size() == 1u) ? "  head at index: " : "  heads at indices: ");
 			result.reserve(store.size() * 15);

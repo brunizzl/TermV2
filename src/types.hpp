@@ -42,7 +42,7 @@ namespace simp {
 	//  and it may only occur on the match side of a rule
 	struct PatternCall :bmath::intern::SingleSumEnumEntry {}; 
 
-	//acts as unsigned integer type for pattern construction and as auxilliary type
+	//acts as unsigned integer type for pattern construction
 	struct PatternUnsigned :bmath::intern::SingleSumEnumEntry {};
 
 	//these act as different placeholders in a pattern
@@ -57,7 +57,7 @@ namespace simp {
 		value, //ownership is decided in ValueMatch
 		COUNT
 	};
-	using PatternNodeType = SumEnum<Match, PatternUnsigned, PatternCall>; //(made so that PatternCall directly follows Literal::call
+	using PatternNodeType = SumEnum<Match, PatternUnsigned, PatternCall>; //(ordered so that PatternCall directly follows Literal::call)
 
 	using NodeType = SumEnum<PatternNodeType, Literal>;
 
@@ -124,8 +124,6 @@ namespace simp {
 		//these functions take complex values as arguments (the arity may be greater than one) and return complex values
 		enum class CtoC
 		{
-			negate, //x -> -x
-			invert, //x -> 1/x
 			pow,    //params[0] := base      params[1] := expo    
 			log,	//params[0] := base      params[1] := argument
 			sqrt,	//params[0] := argument
@@ -448,8 +446,6 @@ namespace simp {
 			{ ToBool::smaller           , "smaller"   , 2u, { ComplexSubset::real }, Restr::boolean              },
 			{ ToBool::greater_eq        , "greater_eq", 2u, { ComplexSubset::real }, Restr::boolean              },
 			{ ToBool::smaller_eq        , "smaller_eq", 2u, { ComplexSubset::real }, Restr::boolean              },
-			{ CtoC::negate              , "negate"    , 1u, { Literal::complex    }, Literal::complex            },
-			{ CtoC::invert              , "invert"    , 1u, { Literal::complex    }, Literal::complex            },
 			{ CtoC::pow                 , "pow"       , 2u, { Literal::complex    }, Literal::complex            },
 			{ CtoC::log                 , "log"       , 2u, { Literal::complex    }, Literal::complex            },
 			{ CtoC::sqrt                , "sqrt"      , 1u, { Literal::complex    }, Literal::complex            },
@@ -548,7 +544,7 @@ namespace simp {
 
 		constexpr auto constant_table = std::to_array<CommonProps>({
 			{ PatternConst::value_proxy  , "_VP"         , PatternConst::value_proxy },
-			{ PatternConst::multi_marker , "_MM"         , PatternConst::multi_marker },
+			{ PatternConst::multi_marker , "_M"          , PatternConst::multi_marker },
 			{ Restr::any                 , "\\"          , Literal::native }, //can not be constructed from a string
 			{ Restr::callable            , "callable"    , Literal::native },
 			{ Restr::boolean             , "bool"        , Literal::native },
@@ -634,20 +630,20 @@ namespace simp {
 		bool is_set() const noexcept { return !std::isnan(this->value.real()); } //debugging
 	};
 
-	struct SharedCallEntry
+	struct SharedPatternCallEntry
 	{
-		//no call to nv::Variadic in a pattern may have more parameters than max_pn_variadic_params_count many
-		static constexpr std::size_t max_pn_variadic_params_count = 10u;
+		//no PatternCall may have more parameters than max_params_count many
+		static constexpr std::size_t max_params_count = 10u;
 
 		using MatchPos_T = decltype(Call::Info::size);
 
 		//every element in pattern (except all multi match) has own entry which logs, 
 		//  with which element in term to match it currently is associated with.
-		std::array<MatchPos_T, max_pn_variadic_params_count> match_positions = {};
+		std::array<MatchPos_T, max_params_count> match_positions;
 
 		NodeIndex match_idx = literal_nullptr; //indexes in Term to simplify (the haystack)
 
-		constexpr SharedCallEntry() noexcept { this->match_positions.fill(-1u); }
+		constexpr SharedPatternCallEntry() noexcept { this->match_positions.fill(-1u); }
 
 		//checks this->match_positions if needle is contained
 		//use with care: might check more than actually contained in specific pattern!
@@ -664,12 +660,12 @@ namespace simp {
 		//maximal number of unrelated TreeMatchVariables allowed per pattern
 		static constexpr std::size_t max_single_match_count = 8u;
 		//maximal number of variadics allowed per pattern
-		static constexpr std::size_t max_variadic_count = 4u;
+		static constexpr std::size_t max_pattern_call_count = 4u;
 		//maximal number of unrelated ValueMatchVariables allowed per pattern
 		static constexpr std::size_t max_value_match_count = 2u;
 
 		std::array<SharedValueMatchEntry, max_single_match_count> single_match_data = {};
-		std::array<SharedCallEntry, max_variadic_count> pattern_call_data = {};
+		std::array<SharedPatternCallEntry, max_pattern_call_count> pattern_call_data = {};
 		std::array<SharedSingleMatchEntry, max_value_match_count> value_match_data = {};
 
 		constexpr auto& value_info(const ValueMatch& var) noexcept

@@ -217,8 +217,6 @@ namespace simp {
             if (param.imag() == 0.0) {
                 const double real_param = param.real();
                 switch (f) {
-                case CtoC::negate: return -real_param;
-                case CtoC::invert: return 1.0 / real_param;
                 case CtoC::asinh:  return std::asinh(real_param);
                 case CtoC::acosh:  return (         real_param  >= 1.0 ? std::acosh(real_param) : std::acosh(param));
                 case CtoC::atanh:  return (std::abs(real_param) <= 1.0 ? std::atanh(real_param) : std::atanh(param));
@@ -244,8 +242,6 @@ namespace simp {
             }
             else {
                 switch (f) {
-                case CtoC::negate: return -param;
-                case CtoC::invert: return 1.0 / param;
                 case CtoC::asinh:  return std::asinh(param);
                 case CtoC::acosh:  return std::acosh(param);
                 case CtoC::atanh:  return std::atanh(param);
