@@ -56,6 +56,7 @@ namespace simp {
         case NodeType(Match::single_restricted):   return 2100;
         case NodeType(Match::single_unrestricted): return 2100;
         case NodeType(Match::single_weak):         return 2100;
+        case NodeType(Match::multi):               return 3000;
         case NodeType(Literal::native):
             using namespace nv;
             static_assert((unsigned)Native::COUNT < 1000, "adjust values >= 2000 to circumvent overlap");
@@ -99,9 +100,9 @@ namespace simp {
         using parse::PatternPair;
 
         // - multi match variables are primed
-        // - function calls to nv::NonComm with at least one multi match are converted to PatternCall
-        // - every function call to nv::Comm is converted to PatternCall
-        PatternPair prime_variadic(Store& store, PatternPair heads);
+        // - every function call to nv::Comm in lhs is converted to PatternCall
+        // - if a call in lhs contains at least one multi match, the call is converted to PatternCall
+        PatternPair prime_multi(Store& store, PatternPair heads);
 
     } //namespace build_pattern
     

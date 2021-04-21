@@ -33,11 +33,11 @@ namespace simp {
 	};
 
 	//is present instead of Literal::call in a match side pattern node representing a call to a Variadic function
-	//acts exactly like Literal::call, only that at .get_index() - 1u an extra VariadicMetaData node is allocated in term
-	//layout in store: [...][...][VariadicMetaData][first call node][more call nodes...][last call node][...] 
+	//acts exactly like Literal::call, only that at .get_index() - 1u an extra PatternCallData node is allocated in term
+	//layout in store: [...][...][PatternCallData][first call node][more call nodes...][last call node][...] 
 	//                                             ^.get_index() points here
 	//note 1: the layout is chosen to enable handling of PattenCall and Literal::call as one in most cases 
-	//  and to enable access to VariadicMetaData without first determining how many nodes the call owns.
+	//  and to enable access to PatternCallData without first determining how many nodes the call owns.
 	//note 2: a PatternCall may only occur once the appearance of a pattern is finalized, e.g. it should have already been combined
 	//  and it may only occur on the match side of a rule
 	struct PatternCall :bmath::intern::SingleSumEnumEntry {}; 
@@ -53,6 +53,7 @@ namespace simp {
 		single_unrestricted, //shallow NodeIndex, .get_index() specifies position in MatchData::single_match
 		//does not own MatchData entry
 		single_weak, //(shallow) is expected to only be encountered after the .get_index() in MatchData::single_match has already been set
+		multi, //only expected in rhs, lhs holds multi_marker instead
 		value, //ownership is decided in ValueMatch
 		COUNT
 	};
@@ -80,6 +81,7 @@ namespace simp {
 		case NodeType(Match::single_restricted):   return true;
 		case NodeType(Match::single_unrestricted): return false;
 		case NodeType(Match::single_weak):         return false;
+		case NodeType(Match::multi):               return true;
 		case NodeType(Match::value):               return true;
 		case NodeType(NodeType::COUNT):            return false; //.get_type() of literal_nullptr
 		default:
@@ -183,10 +185,9 @@ namespace simp {
 			COUNT
 		};
 
-		//helpers for pattern construction and less important pattern parts
+		//helpers for pattern construction
 		enum class PatternAuxFn
 		{
-			multi_match, //differentiates between multiple MultiMatch instances in a single NonComm call
 			value_match, //used to represent all of ValueMatch during build process and final ValueMatch in rhs
 			type, //returns true if fst is element of snd
 			COUNT
@@ -292,20 +293,28 @@ namespace simp {
 	struct RestrictedSingleMatch
 	{
 		std::uint32_t match_data_index; //indexes in MatchData::single_match_data
-		NodeIndex condition; //eighter Literal::native, then assumed to be some subset or call to some testable expression
+		NodeIndex condition; //eighter Literal::native, then assumed to be some subset, or call to some testable expression
+	};
+
+	//only expected in rhs (lhs contains multi_marker instead)
+	struct MultiMatch
+	{
+		std::uint32_t match_data_index; //indexes in MatchData::variadic_match_data
+		//counts how many multi match variables reside in front of this in call to parent in match side
+		//e.g. in "list(xs..., 1, ys..., list(as..., 2, bs..., 3, cs...)) = list(cs...)" 
+		//  has rhs instance of "cs..." .nr_of_pre_multis = 2 (specifically "as..." and "bs...")
+		std::uint32_t nr_of_prev_multis; 
 	};
 
 	struct ValueMatch
 	{
 		std::uint32_t match_data_index; //indexes in MatchData::value_match_data
-		nv::ComplexSubset domain = nv::ComplexSubset::complex; //ComplexSubset::complex acts as no restriction
+		nv::ComplexSubset domain = nv::ComplexSubset::complex;
 		NodeIndex match_index;
 		bool owner;
 	};
 
-	//in a valid pattern every commutative Variadic and every 
-	//  non-commutative Variadic containing at least one MultiMatch is suceeded by an element of this
-	struct VariadicMetaData
+	struct PatternCallData
 	{
 		std::uint32_t match_data_index = -1u; //indexes in MatchData::variadic_match_data
 		//bit i dertermines whether parameter i is rematchable
@@ -324,32 +333,36 @@ namespace simp {
 
 		//nodes only expected in a pattern:
 		RestrictedSingleMatch single_match;
+		MultiMatch multi_match;
 		ValueMatch value_match;
-		VariadicMetaData variadic_data;
+		PatternCallData pattern_call_data;
 
-		constexpr TermNode(const Complex              & val) noexcept :complex(val)       {}
-		constexpr TermNode(const Symbol               & val) noexcept :symbol(val)        {}
-		constexpr TermNode(const Call                 & val) noexcept :call(val)          {}
-		constexpr TermNode(const Lambda               & val) noexcept :lambda(val)        {}
-		constexpr TermNode(const RestrictedSingleMatch& val) noexcept :single_match(val)  {}
-		constexpr TermNode(const ValueMatch           & val) noexcept :value_match(val)   {}
-		constexpr TermNode(const VariadicMetaData     & val) noexcept :variadic_data(val) {}
+		constexpr TermNode(const Complex              & val) noexcept :complex(val)           {}
+		constexpr TermNode(const Symbol               & val) noexcept :symbol(val)            {}
+		constexpr TermNode(const Call                 & val) noexcept :call(val)              {}
+		constexpr TermNode(const Lambda               & val) noexcept :lambda(val)            {}
+		constexpr TermNode(const RestrictedSingleMatch& val) noexcept :single_match(val)      {}
+		constexpr TermNode(const MultiMatch           & val) noexcept :multi_match(val)       {}
+		constexpr TermNode(const ValueMatch           & val) noexcept :value_match(val)       {}
+		constexpr TermNode(const PatternCallData      & val) noexcept :pattern_call_data(val) {}
 
-		constexpr operator const Complex              & () const noexcept { return this->complex;       }
-		constexpr operator const Symbol               & () const noexcept { return this->symbol;        }
-		constexpr operator const Call                 & () const noexcept { return this->call;          }
-		constexpr operator const Lambda               & () const noexcept { return this->lambda;        }
-		constexpr operator const RestrictedSingleMatch& () const noexcept { return this->single_match;  }
-		constexpr operator const ValueMatch           & () const noexcept { return this->value_match;   }
-		constexpr operator const VariadicMetaData     & () const noexcept { return this->variadic_data; }
+		constexpr operator const Complex              & () const noexcept { return this->complex;           }
+		constexpr operator const Symbol               & () const noexcept { return this->symbol;            }
+		constexpr operator const Call                 & () const noexcept { return this->call;              }
+		constexpr operator const Lambda               & () const noexcept { return this->lambda;            }
+		constexpr operator const RestrictedSingleMatch& () const noexcept { return this->single_match;      }
+		constexpr operator const MultiMatch           & () const noexcept { return this->multi_match;       }
+		constexpr operator const ValueMatch           & () const noexcept { return this->value_match;       }
+		constexpr operator const PatternCallData      & () const noexcept { return this->pattern_call_data; }
 
-		constexpr operator Complex              & () noexcept { return this->complex;       }
-		constexpr operator Symbol               & () noexcept { return this->symbol;        }
-		constexpr operator Call                 & () noexcept { return this->call;          }
-		constexpr operator Lambda               & () noexcept { return this->lambda;        }
-		constexpr operator RestrictedSingleMatch& () noexcept { return this->single_match;  }
-		constexpr operator ValueMatch           & () noexcept { return this->value_match;   }
-		constexpr operator VariadicMetaData     & () noexcept { return this->variadic_data; }
+		constexpr operator Complex              & () noexcept { return this->complex;           }
+		constexpr operator Symbol               & () noexcept { return this->symbol;            }
+		constexpr operator Call                 & () noexcept { return this->call;              }
+		constexpr operator Lambda               & () noexcept { return this->lambda;            }
+		constexpr operator RestrictedSingleMatch& () noexcept { return this->single_match;      }
+		constexpr operator MultiMatch           & () noexcept { return this->multi_match;       }
+		constexpr operator ValueMatch           & () noexcept { return this->value_match;       }
+		constexpr operator PatternCallData      & () noexcept { return this->pattern_call_data; }
 	}; //TermNode
 	static_assert(sizeof(TermNode) == sizeof(Complex));
 
@@ -379,13 +392,13 @@ namespace simp {
 	}
 
 
-	constexpr const VariadicMetaData& variadic_meta_data(const UnsaveRef ref)
+	constexpr const PatternCallData& pattern_call_meta_data(const UnsaveRef ref)
 	{
 		assert(ref.type == PatternCall{});
 		return *(ref.ptr - 1u);
 	}
 
-	constexpr VariadicMetaData& variadic_meta_data(const MutRef ref)
+	constexpr PatternCallData& pattern_call_meta_data(const MutRef ref)
 	{
 		assert(ref.type == PatternCall{});
 		return *(&ref.store->at(ref.index) - 1u);
@@ -466,7 +479,6 @@ namespace simp {
 			{ MiscFn::pair              , "pair"      , 2u, {}                     , MiscFn::pair                },
 			{ MiscFn::triple            , "triple"    , 3u, {}                     , MiscFn::triple              },
 			{ MiscFn::fmap              , "fmap"      , 2u, { Restr::callable, Literal::call }, Literal::call    },
-			{ PatternAuxFn::multi_match , "\\MM"      , 2u, { PatternUnsigned{}, PatternUnsigned{} }, Restr::any }, //match_data_idx, nr. in index
 			{ PatternAuxFn::value_match , "_VM"       , 3u, { PatternUnsigned{}, Literal::native, Restr::any }, Restr::any }, //layout as in ValueMatch (minus .owner)
 			{ PatternAuxFn::type        , "type"      , 2u, { Restr::any, Literal::native }, Restr::boolean      },
 		});
@@ -536,7 +548,7 @@ namespace simp {
 
 		constexpr auto constant_table = std::to_array<CommonProps>({
 			{ PatternConst::value_proxy  , "_VP"         , PatternConst::value_proxy },
-			{ PatternConst::multi_marker  , "_MM"         , PatternConst::multi_marker },
+			{ PatternConst::multi_marker , "_MM"         , PatternConst::multi_marker },
 			{ Restr::any                 , "\\"          , Literal::native }, //can not be constructed from a string
 			{ Restr::callable            , "callable"    , Literal::native },
 			{ Restr::boolean             , "bool"        , Literal::native },
@@ -560,6 +572,7 @@ namespace simp {
 			{ Match::single_restricted   , "\\"          , Literal::native }, //can not be constructed from a string
 			{ Match::single_unrestricted , "\\"          , Literal::native }, //can not be constructed from a string
 			{ Match::single_weak         , "\\"          , Literal::native }, //can not be constructed from a string
+			{ Match::multi               , "\\"          , Literal::native }, //can not be constructed from a string
 			{ Match::value               , "\\"          , Literal::native }, //can not be constructed from a string
 		});
 		static_assert(constant_table.size() == (unsigned)Constant::COUNT);
@@ -656,7 +669,7 @@ namespace simp {
 		static constexpr std::size_t max_value_match_count = 2u;
 
 		std::array<SharedValueMatchEntry, max_single_match_count> single_match_data = {};
-		std::array<SharedVariadicEntry, max_variadic_count> variadic_data = {};
+		std::array<SharedVariadicEntry, max_variadic_count> pattern_call_data = {};
 		std::array<SharedSingleMatchEntry, max_value_match_count> value_match_data = {};
 
 		constexpr auto& value_info(const ValueMatch& var) noexcept

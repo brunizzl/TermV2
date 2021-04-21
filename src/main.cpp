@@ -91,12 +91,11 @@ int main()
 	}
 	{
 		const auto names = std::to_array<std::string>({
-			{ "a^2 + 2 a b + b^2 = (a + b)^2" },
-			{ "$a^2 + 2 $a b + b^2 = ($a + b)^2" },
-			{ "a_sqr + two_a b + b^2 | (sqrt(a_sqr) == 0.5 two_a) = (0.5 two_a + b)^2" },
+			{ "a^2 + 2 a b + b^2 + cs... = (a + b)^2 + cs..." },
+			{ "$a^2 + 2 $a b + b^2 + cs... = ($a + b)^2 + cs..." },
+			{ "a_sqr + two_a b + b^2 + cs... | (sqrt(a_sqr) == 0.5 two_a) = (0.5 two_a + b)^2 + cs..." },
 			{ "list(x, xs...) = list(xs..., x)" },
-			{ "x as... + x bs... = x (as... + bs...)" },
-			{ "x as... + x bs... = x (as... + bs...)" },
+			{ "product(x, as...) + product(x, bs...) = x (product(as...) + product(bs...))" },
 			{ "'Y' = \\f n. f(f, n)" },
 			{ "a + _VM(idx, dom, match) | type(a, complex) = _VM(idx, dom, match - a)" },
 			{ "list(x, y, z, zs...) | x == y + z, x != y, type(y, complex) = 'huebsch'" },

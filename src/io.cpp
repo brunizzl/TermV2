@@ -162,12 +162,9 @@ namespace simp {
 				}
 
 				if (name.ends_with('.')) {
-					const std::size_t res_index = Call::build(store, std::to_array({
-						from_native(nv::PatternAuxFn::multi_match),           //function type
-						NodeIndex(infos.multi_matches.size(), PatternUnsigned{}), 
-						NodeIndex(0, PatternUnsigned{})
-					}));
-					const NodeIndex result = NodeIndex(res_index, Literal::call);
+					const std::size_t res_index = store.allocate_one();
+					store.at(res_index) = MultiMatch{ (unsigned)infos.multi_matches.size(), 0 };
+					const NodeIndex result = NodeIndex(res_index, Match::multi);
 					infos.multi_matches.emplace_back(name, result);
 					return result;
 				}
@@ -397,7 +394,7 @@ namespace simp {
 				const bool contains_value = simp::search(cond_ref,
 					[](const UnsaveRef r) { return r.typed_idx() == from_native(nv::PatternAuxFn::value_match); }) != literal_nullptr;
 				const bool contains_multi = simp::search(cond_ref,
-					[](const UnsaveRef r) { return r.typed_idx() == from_native(nv::PatternAuxFn::multi_match); }) != literal_nullptr; 
+					[](const UnsaveRef r) { return r.type == Match::multi; }) != literal_nullptr; 
 				const bool contains_lambda = simp::search(cond_ref,
 						[](const UnsaveRef r) { return r.type == Literal::lambda; }) != literal_nullptr; 
 				if (contains_multi || contains_lambda) [[unlikely]] {
@@ -563,14 +560,14 @@ namespace simp {
 			}
 		}
 
-		void append_variadic_meta_data(const VariadicMetaData& data, std::string& str)
+		void append_variadic_meta_data(const PatternCallData& data, std::string& str)
 		{
-			str.append("[");
+			str.append("[CALL ");
 			str.append(std::to_string(data.match_data_index));
-			str.append(", ");
-			str.append(std::bitset<32>(data.rematchable).to_string());
-			str.append(", ");
-			str.append(std::bitset<32>(data.always_after_prev).to_string());
+			//str.append(", ");
+			//str.append(std::bitset<32>(data.rematchable).to_string());
+			//str.append(", ");
+			//str.append(std::bitset<32>(data.always_after_prev).to_string());
 			str.append("]");
 		}
 
@@ -584,7 +581,7 @@ namespace simp {
 				str.append(ref->symbol);
 				break;
 			case NodeType(PatternCall{}): 
-				append_variadic_meta_data(variadic_meta_data(ref), str);
+				append_variadic_meta_data(pattern_call_meta_data(ref), str);
 				[[fallthrough]];				
 			case NodeType(Literal::call): { 
 				const Call& call = *ref;
@@ -612,7 +609,7 @@ namespace simp {
 					append_to_string(ref.new_at(function), str, max_infixr);
 					return { "", ", " };
 				}();
-				const int own_infixr = infixr(function);
+				const int own_infixr = ref.type == Literal::call ? infixr(function) : default_infixr;
 				if (own_infixr <= parent_infixr) { str.push_back('('); }				
 				const char* spacer = init;
 				for (const NodeIndex param : call.parameters()) {
@@ -636,7 +633,7 @@ namespace simp {
 				break;
 			case NodeType(Match::single_restricted): {
 				const RestrictedSingleMatch& var = *ref;
-				str.append("_T");
+				str.append("_S");
 				str.append(std::to_string(var.match_data_index));
 				str.append("[");
 				append_to_string(ref.new_at(var.condition), str, default_infixr);
@@ -644,10 +641,18 @@ namespace simp {
 			} break;				
 			case NodeType(Match::single_unrestricted):
 			case NodeType(Match::single_weak):
-				str.append("_T");
+				str.append("_S");
 				str.append(std::to_string(ref.index));
 				str.append(ref.type == Match::single_weak ? "'" : "");
 				break;
+			case NodeType(Match::multi): {
+				const MultiMatch& var = *ref;
+				str.append("_M[");
+				str.append(std::to_string(var.match_data_index));
+				str.append(", ");
+				str.append(std::to_string((int)var.nr_of_prev_multis));
+				str.append("]");
+			} break;
 			case NodeType(Match::value): {
 				const ValueMatch& var = *ref;
 				str.append("_V");
@@ -695,7 +700,7 @@ namespace simp {
 			case NodeType(PatternCall{}): {
 				std::string& prev_str = rows[ref.index - 1u];
 				prev_str += "meta data  : ";
-				append_variadic_meta_data(variadic_meta_data(ref), prev_str);
+				append_variadic_meta_data(pattern_call_meta_data(ref), prev_str);
 			} [[fallthrough]];
 			case NodeType(Literal::call): {
 				//parameters:
@@ -733,7 +738,7 @@ namespace simp {
 				print::append_memory_row(ref.new_at(lam.definition), rows);
 			} break;
 			default:
-				current_str += "unknown...";
+				current_str += "unknown type: " + std::to_string((unsigned)ref.type);
 			}
 
 			//append name of subterm to line

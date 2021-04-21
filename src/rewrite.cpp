@@ -33,11 +33,10 @@ namespace simp {
 
 	RewriteRule::RewriteRule(std::string name)
 	{
-		{
-			const auto [lhs, rhs] = parse::raw_rule(this->store, std::move(name));
-			this->lhs_head = lhs;
-			this->rhs_head = rhs;
-		}
+		parse::PatternPair heads = parse::raw_rule(this->store, std::move(name));
+		heads = build_pattern::prime_multi(this->store, heads);
+		this->lhs_head = heads.lhs;
+		this->rhs_head = heads.rhs;
 	}
 
 	std::string RewriteRule::to_string() const noexcept

@@ -3,6 +3,8 @@
 #include <tuple>
 #include <cfenv>
 #include <iostream>
+#include <optional>
+#include <algorithm>
 
 #include "utility/bit.hpp"
 #include "utility/vector.hpp"
@@ -654,6 +656,8 @@ namespace simp {
         case NodeType(Match::single_restricted):   
             free_tree(ref.new_at(ref->single_match.condition));
             break;
+        case NodeType(Match::multi):
+            break;
         case NodeType(Match::value):
             free_tree(ref.new_at(ref->value_match.match_index));
             break;
@@ -698,7 +702,7 @@ namespace simp {
                 const std::size_t nr_call_nodes = Call::_node_count(call_capacity);
 
                 const std::size_t dst_index = dst_store.allocate_n(1u + nr_call_nodes) + 1u;
-                dst_store.at(dst_index - 1u) = variadic_meta_data(src_ref);
+                dst_store.at(dst_index - 1u) = pattern_call_meta_data(src_ref);
                 Call::emplace(dst_store.at(dst_index), dst_subterms, call_capacity);
                 return NodeIndex(dst_index, src_ref.type);
             }
@@ -712,6 +716,8 @@ namespace simp {
             var.condition = copy_tree(src_ref.new_at(var.condition), dst_store);
             return insert_node(var, src_ref.type);
         } break;
+        case NodeType(Match::multi):
+            return insert_node(*src_ref, src_ref.type);
         case NodeType(Match::value): {
             ValueMatch var = *src_ref;
             var.match_index = copy_tree(src_ref.new_at(var.match_index), dst_store);
@@ -775,6 +781,8 @@ namespace simp {
         } break;
         case NodeType(Match::single_restricted): 
             return fst->single_match.match_data_index <=> snd->single_match.match_data_index;
+        case NodeType(Match::multi):
+            return fst->multi_match.match_data_index <=> snd->multi_match.match_data_index;
         case NodeType(Match::value):
             return fst->value_match.match_data_index <=> snd->value_match.match_data_index;
         default:
@@ -786,58 +794,107 @@ namespace simp {
 
     namespace build_pattern {
 
-        //mulit match variables are primed and
-        //function calls to nv::NonComm with at least one multi match are converted to PatternCall
-        //every function call to nv::Comm is converted to PatternCall
-        PatternPair prime_variadic(Store& store, PatternPair heads) 
+        struct MultiChange
         {
-            struct MultiChange
-            {
-                std::uint32_t identifier; //original creation index
-                std::uint32_t parent_match_data_index; //parent is the one in match side
-                std::uint32_t pos_in_parent; //counts how many multi match variables occured bevore this in parent call in match side
-            };
-            std::vector<MultiChange> multi_changes;
-            unsigned variadic_index = 0; //keeps track of how many conversions to PatternCall have already been made 
+            std::uint32_t identifier; //original creation index
+            MultiMatch new_;
+        };
 
-            struct {
-                std::vector<MultiChange>& changes;
-                unsigned& index;
-
-                NodeIndex operator()(const MutRef ref) {
-                    const auto get_multi = [ref](const NodeIndex param) -> Call* {
-                        if (param.get_type() == Literal::call) {
-                            Call& call = *ref.new_at(param);
-                            if (call.function() == from_native(nv::PatternAuxFn::multi_match)) {
-                                return &call;
-                            }
+        //changes call to pattern call if appropriate and change multis to multi_marker
+        [[nodiscard]] NodeIndex build_lhs_multis_and_pattern_calls(MutRef ref, std::vector<MultiChange>& multi_changes, unsigned& pattern_call_index) 
+        {
+            const auto make_ref_pattern_call = [&](unsigned encountered_multis) {
+                const unsigned this_pattern_index = pattern_call_index++;
+                { //change multis in call
+                    for (NodeIndex& param : ref->call.parameters()) {
+                        if (param.get_type() == Match::multi) {
+                            const unsigned identifier = ref.new_at(param)->multi_match.match_data_index;
+                            multi_changes.emplace_back(identifier, MultiMatch{ this_pattern_index, encountered_multis++ });
+                            free_tree(ref.new_at(param));
+                            param = multi_marker;
                         }
-                        return nullptr;
-                    };
-
-                    if (ref.type == Literal::call) {
-                        const std::size_t this_multi_count = std::count_if(ref->call.begin(), ref->call.end(), get_multi);
-                        Call& call = *ref;
-                        const NodeIndex f = call.function();
-                        //TODO
                     }
-                    return NodeIndex(); //TODO
                 }
-            } change_lhs = { multi_changes, variadic_index };
-            heads.lhs = change_lhs(MutRef(store, heads.lhs));
+                { //change call
+                    bmath::intern::StupidBufferVector<NodeIndex, 16> subterms;
+                    for (const NodeIndex sub : ref->call) {
+                        subterms.push_back(sub);
+                    }
+                    Call::free(*ref.store, ref.index);
+                    const std::size_t call_capacity = Call::smallest_fit_capacity(subterms.size());
+                    const std::size_t nr_call_nodes = Call::_node_count(call_capacity);
+
+                    ref.type = PatternCall{};
+                    ref.index = ref.store->allocate_n(1u + nr_call_nodes) + 1u;
+                    ref.store->at(ref.index - 1u) = PatternCallData{ .match_data_index = this_pattern_index };
+                    Call::emplace(ref.store->at(ref.index), subterms, call_capacity);
+                }
+            };
+            if (ref.type == Literal::call) {
+                //build current
+                const std::size_t this_multi_count = std::count_if(ref->call.begin(), ref->call.end(), 
+                    [](const NodeIndex i) { return i.get_type() == Match::multi; });
+                const NodeIndex f = ref->call.function();
+                if (f.get_type() == Literal::native) {
+                    using namespace nv;
+                    const Native native_f = to_native(f);
+                    if (native_f.is<Comm>()) {
+                        if (this_multi_count > 1) throw "too many multis in commutative";
+                        make_ref_pattern_call(-1u);
+                    }
+                    if (native_f.is<FixedArity>() && this_multi_count > 0) {
+                        throw "multi match illegal in fixed arity";
+                    }
+                    else if (native_f.is<NonComm>() && this_multi_count > 0) {
+                        make_ref_pattern_call(0);
+                    }
+                }
+                else if (this_multi_count > 0) {
+                    make_ref_pattern_call(0);
+                }
+                //build subterms
+                const auto stop = end(ref);
+                for (auto iter = begin(ref); iter != stop; ++iter) {
+                    *iter = build_lhs_multis_and_pattern_calls(
+                        ref.new_at(*iter), multi_changes, pattern_call_index);
+                }
+            }
+            return ref.typed_idx();
+        } //build_lhs_multis_and_pattern_calls
+
+        PatternPair prime_multi(Store& store, PatternPair heads)
+        {
+            std::vector<MultiChange> multi_changes;
+            unsigned pattern_call_index = 0; //keeps track of how many conversions to PatternCall have already been made 
+
+            heads.lhs = build_lhs_multis_and_pattern_calls(
+                MutRef(store, heads.lhs), multi_changes, pattern_call_index);
 
             struct {
                 const std::vector<MultiChange>& changes;
 
-                NodeIndex operator()(const MutRef ref) {
-                    return NodeIndex(); //TODO
+                void operator()(const MutRef ref) {
+                    if (ref.type == Literal::call) {
+                        for (NodeIndex& param : ref->call.parameters()) {
+                            (*this)(ref.new_at(param));
+                        }
+                    }
+                    if (ref.type == Match::multi) {
+                        const unsigned identifier = ref->multi_match.match_data_index; 
+                        const auto data = std::find_if(this->changes.begin(), this->changes.end(),
+                            [identifier](const MultiChange& c) { return c.identifier == identifier; });
+                        if (data == this->changes.end()) {
+                            throw std::exception("match variables may not only appear in rhs");
+                        }
+                        ref->multi_match = data->new_;
+                    }
                 }
             } change_rhs = { multi_changes };
-            heads.rhs = change_rhs(MutRef(store, heads.rhs));
+            change_rhs(MutRef(store, heads.rhs));
 
             //TODO: check if both sides are well formed
             return heads;
-        }
+        } //prime_multi
 
     } //namespace build_pattern
  
