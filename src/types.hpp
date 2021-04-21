@@ -634,7 +634,7 @@ namespace simp {
 		bool is_set() const noexcept { return !std::isnan(this->value.real()); } //debugging
 	};
 
-	struct SharedVariadicEntry
+	struct SharedCallEntry
 	{
 		//no call to nv::Variadic in a pattern may have more parameters than max_pn_variadic_params_count many
 		static constexpr std::size_t max_pn_variadic_params_count = 10u;
@@ -647,7 +647,7 @@ namespace simp {
 
 		NodeIndex match_idx = literal_nullptr; //indexes in Term to simplify (the haystack)
 
-		constexpr SharedVariadicEntry() noexcept { this->match_positions.fill(-1u); }
+		constexpr SharedCallEntry() noexcept { this->match_positions.fill(-1u); }
 
 		//checks this->match_positions if needle is contained
 		//use with care: might check more than actually contained in specific pattern!
@@ -656,7 +656,7 @@ namespace simp {
 			const auto stop = this->match_positions.end();
 			return std::find(this->match_positions.begin(), stop, needle) != stop;
 		}
-	}; //SharedVariadicEntry
+	}; //SharedCallEntry
 
 	//to allow a constant RewriteRule to be matched against, all match info is stored here
 	struct MatchData
@@ -669,7 +669,7 @@ namespace simp {
 		static constexpr std::size_t max_value_match_count = 2u;
 
 		std::array<SharedValueMatchEntry, max_single_match_count> single_match_data = {};
-		std::array<SharedVariadicEntry, max_variadic_count> pattern_call_data = {};
+		std::array<SharedCallEntry, max_variadic_count> pattern_call_data = {};
 		std::array<SharedSingleMatchEntry, max_value_match_count> value_match_data = {};
 
 		constexpr auto& value_info(const ValueMatch& var) noexcept

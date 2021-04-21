@@ -562,12 +562,13 @@ namespace simp {
 
 		void append_variadic_meta_data(const PatternCallData& data, std::string& str)
 		{
-			str.append("[CALL ");
+			using Bits = std::bitset<SharedCallEntry::max_pn_variadic_params_count>;
+			str.append("[");
 			str.append(std::to_string(data.match_data_index));
-			//str.append(", ");
-			//str.append(std::bitset<32>(data.rematchable).to_string());
-			//str.append(", ");
-			//str.append(std::bitset<32>(data.always_after_prev).to_string());
+			str.append(", ");
+			str.append(Bits(data.rematchable).to_string());
+			str.append(", ");
+			str.append(Bits(data.always_after_prev).to_string());
 			str.append("]");
 		}
 
