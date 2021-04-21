@@ -329,7 +329,7 @@ namespace simp {
 		template NodeIndex build(Store&, name_lookup::LiteralInfos&, bmath::intern::ParseView);
 		template NodeIndex build(Store&, name_lookup::PatternInfos&, bmath::intern::ParseView);
 
-		RuleHeads raw_rule(Store& store, std::string& name, IAmInformedThisRuleIsNotUsableYet)
+		RuleHead raw_rule(Store& store, std::string& name, IAmInformedThisRuleIsNotUsableYet)
 		{
 			using namespace bmath;
 			using namespace bmath::intern;
@@ -365,7 +365,7 @@ namespace simp {
 			}(parse_str);
 
 			parse::name_lookup::PatternInfos infos;
-			RuleHeads heads;
+			RuleHead heads;
 			heads.lhs = parse::build(store, infos, lhs_view);
 			infos.parse_match = false;
 			heads.rhs = parse::build(store, infos, rhs_view); 
@@ -377,11 +377,11 @@ namespace simp {
 			struct SingleCondition
 			{
 				NodeIndex head = literal_nullptr;
-				std::bitset<MatchData::max_single_match_count> dependencies = 0; //dependencies[i] is set iff single match i occurs in the condition
+				std::bitset<match::MatchData::max_single_match_count> dependencies = 0; //dependencies[i] is set iff single match i occurs in the condition
 			};
 			std::vector<SingleCondition> single_conditions;
 
-			std::array<nv::ComplexSubset, MatchData::max_value_match_count> value_conditions;
+			std::array<nv::ComplexSubset, match::MatchData::max_value_match_count> value_conditions;
 			value_conditions.fill(nv::ComplexSubset::complex);
 
 			while (conditions_view.size()) {
@@ -610,7 +610,7 @@ namespace simp {
 				break;
 			case NodeType(Literal::lambda): {
 				const Lambda& lambda = *ref;
-				str.append(lambda.transparent ? "(\\." : "{\\.");
+				str.append(lambda.transparent ? "(\\" : "{\\");
 				append_to_string(ref.new_at(lambda.definition), str, max_infixr, print_operators);
 				str.push_back(lambda.transparent ? ')' : '}');
 			} break;
@@ -620,7 +620,7 @@ namespace simp {
 				break;
 			case NodeType(SingleMatch::restricted): {
 				const RestrictedSingleMatch& var = *ref;
-				str.append("_S");
+				str.append("_X");
 				str.append(std::to_string(var.match_data_index));
 				str.append("[");
 				append_to_string(ref.new_at(var.condition), str, default_infixr, print_operators);
@@ -628,7 +628,7 @@ namespace simp {
 			} break;				
 			case NodeType(SingleMatch::unrestricted):
 			case NodeType(SingleMatch::weak):
-				str.append("_S");
+				str.append("_X");
 				str.append(std::to_string(ref.index));
 				str.append(ref.type == SingleMatch::weak ? "'" : "");
 				break;
@@ -735,7 +735,7 @@ namespace simp {
 
 		std::string to_memory_layout(const Store& store, const std::initializer_list<const NodeIndex> heads)
 		{
-			std::vector<std::string> rows(std::max(store.size(), MatchData::max_pattern_call_count), "");
+			std::vector<std::string> rows(std::max(store.size(), match::MatchData::max_pattern_call_count), "");
 
 			std::string result((heads.size() == 1u) ? "  head at index: " : "  heads at indices: ");
 			result.reserve(store.size() * 15);

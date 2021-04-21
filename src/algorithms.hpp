@@ -106,11 +106,44 @@ namespace simp {
         // - multi match variables are primed
         // - every function call to nv::Comm in lhs is converted to PatternCall
         // - if a call in lhs contains at least one multi match, the call is converted to PatternCall
-        RuleHeads prime_multi(Store& store, RuleHeads heads);
+        RuleHead prime_multi(Store& store, RuleHead heads);
 
         //returns a fully assembled rule
-        RuleHeads build_everything(Store& store, std::string& name);
+        RuleHead build_everything(Store& store, std::string& name);
 
     } //namespace build_rule
+
+    namespace match {
+
+        //decides if a condition appended to a single match variable is met with the current match data
+        bool test_condition(const UnsaveRef cond, const MatchData& match_data);
+
+        //(transiently) evaluates .match_index of ValueMatch for a given start_val
+        bmath::intern::OptionalComplex eval_value_match(const UnsaveRef ref, const Complex& start_val);
+
+        //compares term starting at ref.index in ref.store with pattern starting at pn_ref.index in pn_ref.store
+        //if match is succsessfull, match_data stores what pattern's match variables matched and true is returned.
+        //if match was not succsessfull, match_data is NOT reset and false is returned
+        bool match_(const UnsaveRef pn_ref, const UnsaveRef ref, MatchData& match_data);
+
+        // expects pn_ref to already be matched to ref via match_data
+        //if one exists, this function finds a different match of pn_ref in ref, appearing after the current one
+        //  in all permutations
+        bool rematch(const UnsaveRef pn_ref, const UnsaveRef ref, MatchData & match_data);
+
+        //determines weather there is a way to match needle_ref in hay_ref (thus needle_ref is assumed to part of a pattern)
+        //needle_i is the index of the first element in needle_ref to be matched. 
+        //if needle_i is not zero, it is assumed, that all previous elements in needle_ref are already matched (=> the call happens in a rematch).
+        //the first haystack_k elements of hay_ref will be skipped for the first match attemt.
+        //it is assumed, that needle_ref and hay_ref are both calls to the same nv::Comm, where pn_ref is a PatternCall
+        //returns true if a match was found
+        bool find_permutation(const UnsaveRef needle_ref, const UnsaveRef hay_ref,
+            MatchData& match_data, std::uint32_t needle_i, std::uint32_t hay_k);
+
+        //analogous to find_permutation, but for non commutative pattern containing at least one multi_marker
+        bool find_shift(const UnsaveRef needle_ref, const UnsaveRef hay_ref,
+            MatchData& match_data, std::uint32_t needle_i, std::uint32_t hay_k);
+
+    } //namespace match
     
 } //namespace simp

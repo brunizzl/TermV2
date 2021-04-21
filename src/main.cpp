@@ -22,6 +22,8 @@ important:
       - verify only one occurence of multi match in one Comm, any number of occurences in one NonComm, no occurences elsewhere
       - adjust muti match indices to equal corresponding call + add management field to call
       - check PatternCall to each not exceed maximal length and to not have more parameters than is allowed 
+	  - check no two multi match variables in direct succession
+	  - check no call in pattern only containing multi match
       - bubble value match variables up as high as possible, make first occurence owning
 
 nice to have:
@@ -89,7 +91,7 @@ int main()
 			{ "'Y' = \\f n. f(f, n)" },
 			{ "a + _VM(idx, dom, match) | type(a, complex) = _VM(idx, dom, match - a)" },
 			{ "list(x, y, z, zs...) | x == y + z, x != y, type(y, complex) = 'huebsch'" },
-			{ "fmap(f, g(x, xs...)) = 'concat'(g(f(x)), fmap(f, g(xs...)))" }
+			{ "fmap(f, g(xs..., x))= 'reverse_cons'(fmap(f, g(xs...)), f(x))" }
 		};
 		for (const simp::RuleRef rule : rules) {
 			std::cout << rule.to_string() << "\n\n";

@@ -5,6 +5,7 @@
 #include <iostream>
 #include <optional>
 #include <algorithm>
+#include <functional>
 
 #include "utility/bit.hpp"
 #include "utility/vector.hpp"
@@ -480,8 +481,7 @@ namespace simp {
                                 break;
                             }
                             Complex& summand = *ref.new_at(*iter_2);
-                            if (maybe_accumulate(acc, summand,
-                                [](const Complex& lhs, const Complex& rhs) { return lhs + rhs; })) 
+                            if (maybe_accumulate(acc, summand, std::plus<Complex>())) 
                             {
                                 ref.store->free_one(iter_2->get_index());
                                 *iter_2 = literal_nullptr;
@@ -501,8 +501,7 @@ namespace simp {
                                 switch (iter_2->get_type()) {
                                 case NodeType(Literal::complex): {
                                     Complex& factor = *ref.new_at(*iter_2);
-                                    if (maybe_accumulate(acc, factor,
-                                        [](const Complex& lhs, const Complex& rhs) { return lhs * rhs; })) 
+                                    if (maybe_accumulate(acc, factor, std::multiplies<Complex>()))
                                     {
                                         ref.store->free_one(iter_2->get_index());
                                         *iter_2 = literal_nullptr;
@@ -911,7 +910,7 @@ namespace simp {
             return ref.typed_idx();
         } //build_lhs_multis_and_pattern_calls
 
-        RuleHeads prime_multi(Store& store, RuleHeads heads)
+        RuleHead prime_multi(Store& store, RuleHead heads)
         {
             std::vector<MultiChange> multi_changes;
             unsigned pattern_call_index = 0; //keeps track of how many conversions to PatternCall have already been made 
@@ -939,18 +938,182 @@ namespace simp {
             } change_rhs = { multi_changes };
             change_rhs(MutRef(store, heads.rhs));
 
-            //TODO: check if both sides are well formed
             return heads;
         } //prime_multi
 
-        RuleHeads build_everything(Store& store, std::string& name)
+        RuleHead build_everything(Store& store, std::string& name)
         {
-            RuleHeads heads = parse::raw_rule(store, name, parse::IAmInformedThisRuleIsNotUsableYet{});
+            RuleHead heads = parse::raw_rule(store, name, parse::IAmInformedThisRuleIsNotUsableYet{});
             //TODO: build value match
             heads = build_rule::prime_multi(store, heads);
             return heads;
         } //build_everything
 
     } //namespace build_rule
+
+
+    namespace match {
+
+        bool test_condition(const UnsaveRef cond, const MatchData& match_data)
+        {
+            return false;
+        } //test_condition
+
+        bmath::intern::OptionalComplex eval_value_match(const UnsaveRef ref, const Complex& start_val)
+        {
+            return bmath::intern::OptionalComplex();
+        } //eval_value_match
+
+        bool match_(const UnsaveRef pn_ref, const UnsaveRef ref, MatchData& match_data)
+        {
+            if (pn_ref.type.is<Literal>() && pn_ref.type != ref.type) {
+                return false;
+            }
+            switch (pn_ref.type) {
+            case NodeType(Literal::complex): {
+                const Complex& pn_complex = *pn_ref;
+                const Complex& complex = *ref;
+                return bmath::intern::compare_complex(complex, pn_complex) == std::strong_ordering::equal;
+            }
+            case NodeType(Literal::symbol): {
+                const Symbol& pn_var = *pn_ref;
+                const Symbol& var = *ref;
+                return std::string_view(pn_var) == std::string_view(var);
+            }
+            case NodeType(Literal::native):
+            case NodeType(Literal::lambda_param):
+                return pn_ref.index == ref.index;
+            case NodeType(Literal::lambda): {
+                const Lambda pn_lambda = *pn_ref;
+                const Lambda lambda = *ref;
+                if (pn_lambda.param_count != lambda.param_count || 
+                    pn_lambda.transparent != lambda.transparent) 
+                {
+                    return false;
+                }
+                return match_(pn_ref.new_at(pn_lambda.definition), ref.new_at(lambda.definition), match_data);
+            }
+            case NodeType(Literal::call): {
+                const Call& pn_call = *pn_ref;
+                const Call& call = *ref;
+                if (pn_call.size() != call.size()) {
+                    return false;
+                }
+                const auto stop = call.end();                
+                for (auto pn_iter = pn_call.begin(), iter = call.begin(); iter != stop; ++pn_iter, ++iter) {
+                    if (!match_(pn_ref.new_at(*pn_iter), ref.new_at(*iter), match_data)) {
+                        return false;
+                    }
+                }
+                return true;
+            }
+            case NodeType(PatternCall{}): {
+                if (ref.type != Literal::call) {
+                    return false;
+                }
+                const UnsaveRef pn_function_ref = pn_ref.new_at(pn_ref->call.function());
+                if (!match_(pn_function_ref, ref.new_at(ref->call.function()), match_data)) {
+                    return false;
+                }
+                if (pn_function_ref.type == Literal::native && nv::Native(pn_function_ref.index).is<nv::Comm>()) {
+                    return find_permutation(pn_ref, ref, match_data, 0u, 0u);
+                }
+                return find_shift(pn_ref, ref, match_data, 0u, 0u);
+            }
+            case NodeType(SingleMatch::restricted): {
+                const RestrictedSingleMatch var = *pn_ref;
+                if (var.condition.get_type() == Literal::native && !meets_restriction(ref, to_native(var.condition))) {
+                    return false;
+                }
+                SharedSingleMatchEntry& entry = match_data.single_match_data[var.match_data_index];
+                entry.match_idx = ref.typed_idx();
+                return test_condition(pn_ref.new_at(var.condition), match_data);
+            }
+            case NodeType(SingleMatch::unrestricted): {
+                match_data.single_match_data[pn_ref.index].match_idx = ref.typed_idx();
+                return true;
+            }
+            case NodeType(SingleMatch::weak): {
+                const SharedSingleMatchEntry entry = match_data.single_match_data[pn_ref.index];
+                assert(entry.is_set());
+                return compare_tree(ref.new_at(entry.match_idx), ref) == std::strong_ordering::equal;
+            }
+            case NodeType(SpecialMatch::value): {
+                if (ref.type != Literal::complex) { //only this test allows us to pass *ref to evaluate this_value
+                    return false;
+                }
+                const ValueMatch& var = *pn_ref;
+                const bmath::intern::OptionalComplex this_value = eval_value_match(pn_ref.new_at(var.match_index), *ref);
+                if (!this_value || !in_complex_subset(*this_value, var.domain)) {
+                    return false;
+                }
+                else {
+                    auto& match_info = match_data.value_info(var);
+                    if (var.owner) {
+                        match_info.value = *this_value;
+                        return true;
+                    }
+                    assert(match_info.is_set());
+                    return *this_value == match_info.value;
+                }
+            } break;
+            case NodeType(SpecialMatch::multi): //multi is matched in PatternCall, not here
+            default:
+                assert(false);
+                BMATH_UNREACHABLE;
+                return false;
+            }
+        } //match_
+
+        bool rematch(const UnsaveRef pn_ref, const UnsaveRef ref, MatchData& match_data)
+        {
+            if (pn_ref.type == PatternCall{}) {
+                assert(ref.type == Literal::call);
+                SharedPatternCallEntry& entry = match_data.call_info(pn_ref);
+                assert(entry.match_idx == ref.typed_idx());
+
+                const auto needle_params = pn_ref->call.parameters();
+                const std::uint32_t needle_i = [&] {
+                    if (needle_params.back() == multi_marker) {
+                        assert(needle_params.size() > 1u); //that be stupid
+                        assert(needle_params[needle_params.size() - 2u] != multi_marker); //no two multi marker may follow in direct succession
+                        return needle_params.size() - 2u;
+                    }
+                    return needle_params.size() - 1u;
+                }();
+                const std::uint32_t hay_k = entry.match_positions[needle_i] + 1u;
+
+                const UnsaveRef pn_function_ref = pn_ref.new_at(pn_ref->call.function());
+                if (pn_function_ref.type == Literal::native && nv::Native(pn_function_ref.index).is<nv::Comm>()) {
+                    return find_permutation(pn_ref, ref, match_data, needle_i, hay_k);
+                }
+                return find_shift(pn_ref, ref, match_data, needle_i, hay_k);
+            }
+            else if (pn_ref.type == Literal::call) {
+                const Call& pn_call = *pn_ref;
+                const Call& call = *ref;
+                assert(pn_call.size() == call.size());
+                const auto stop = call.end();
+                for (auto pn_iter = pn_call.begin(), iter = call.begin(); iter != stop; ++pn_iter, ++iter) {
+                    if (rematch(pn_ref.new_at(*pn_iter), ref.new_at(*iter), match_data)) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        } //rematch
+
+        bool find_permutation(const UnsaveRef needle_ref, const UnsaveRef hay_ref, MatchData& match_data, std::uint32_t needle_i, std::uint32_t hay_k)
+        {
+            return false;
+        } //find_permutation
+
+        bool find_shift(const UnsaveRef needle_ref, const UnsaveRef hay_ref, MatchData& match_data, std::uint32_t needle_i, std::uint32_t hay_k)
+        {
+            return false;
+        } //find_shift
+
+
+    } //namespace match
  
 } //namespace simp

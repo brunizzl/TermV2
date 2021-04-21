@@ -42,7 +42,7 @@ namespace simp {
 		return res;
 	}
 
-	RuleSet::RuleSet(std::initializer_list<std::string_view> names, RuleHeads(*build)(Store&, std::string&))
+	RuleSet::RuleSet(std::initializer_list<std::string_view> names, RuleHead(*build)(Store&, std::string&))
 	{
 		Store temp_store;
 		for (const std::string_view name_view : names) {
@@ -68,12 +68,12 @@ namespace simp {
 	void RuleSet::add(std::initializer_list<const RuleSet*> sets)
 	{
 		Store temp_store;
-		for (RuleHeads& rule : this->rules) {
+		for (RuleHead& rule : this->rules) {
 			rule.lhs = copy_tree(UnsaveRef(&this->store.at(rule.lhs.get_index()), rule.lhs.get_index(), rule.lhs.get_type()), temp_store);
 			rule.rhs = copy_tree(UnsaveRef(&this->store.at(rule.rhs.get_index()), rule.rhs.get_index(), rule.rhs.get_type()), temp_store);
 		}
 		for (const RuleSet* set : sets) {
-			for (const RuleHeads rule : set->rules) {
+			for (const RuleHead rule : set->rules) {
 				this->rules.emplace_back(
 					copy_tree(UnsaveRef(&set->store.at(rule.lhs.get_index()), rule.lhs.get_index(), rule.lhs.get_type()), temp_store),
 					copy_tree(UnsaveRef(&set->store.at(rule.rhs.get_index()), rule.rhs.get_index(), rule.rhs.get_type()), temp_store));
@@ -86,7 +86,7 @@ namespace simp {
 	{
 		this->store.free_all();
 		std::stable_sort(this->rules.begin(), this->rules.end(),
-			[&temp_store](const RuleHeads fst, const RuleHeads snd) {
+			[&temp_store](const RuleHead fst, const RuleHead snd) {
 				return unsure_compare_tree(Ref(temp_store, fst.lhs), Ref(temp_store, snd.lhs))
 					== std::partial_ordering::less;
 			});

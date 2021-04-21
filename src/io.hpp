@@ -120,7 +120,7 @@ namespace simp {
 		//note: conditions are incorporated into match_side
 		//returns (match side, repacement side)
 		//the last parameter is only there to make the function type different from that passed into RuleSet
-		RuleHeads raw_rule(Store& store, std::string& name, IAmInformedThisRuleIsNotUsableYet);
+		RuleHead raw_rule(Store& store, std::string& name, IAmInformedThisRuleIsNotUsableYet);
 
 	} //namespace parse
 

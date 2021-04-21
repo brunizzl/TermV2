@@ -38,7 +38,7 @@ namespace simp {
 
 	struct RuleSetIter 
 	{
-		std::vector<RuleHeads>::const_iterator iter;
+		std::vector<RuleHead>::const_iterator iter;
 		const TermNode* const store_data;
 
 		using value_type = RuleRef;
@@ -68,10 +68,10 @@ namespace simp {
 	struct RuleSet
 	{
 		MonotonicStore store;
-		std::vector<RuleHeads> rules;
+		std::vector<RuleHead> rules;
 
 		RuleSet(std::initializer_list<std::string_view> names, 
-			RuleHeads(*build)(Store&, std::string&) = build_rule::build_everything);
+			RuleHead(*build)(Store&, std::string&) = build_rule::build_everything);
 
 		void add(std::initializer_list<const RuleSet*> sets);
 

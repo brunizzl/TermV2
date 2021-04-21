@@ -644,80 +644,91 @@ namespace simp {
 
 
 
+	namespace match {
 
-
-	//all MatchVariables of same name in pattern (e.g. "a" in pattern "a*b+a" share the same SharedTreeDatum to know 
-	//whitch actually matched, and if the name "a" is already matched, even if the current instance is not.
-	struct SharedSingleMatchEntry
-	{
-		NodeIndex match_idx = NodeIndex{}; //indexes in Term to simplify
-		bool is_set() const noexcept { return this->match_idx != literal_nullptr; } //debugging
-	};
-
-	struct SharedValueMatchEntry
-	{
-		Complex value = std::numeric_limits<double>::quiet_NaN();
-		bool is_set() const noexcept { return !std::isnan(this->value.real()); } //debugging
-	};
-
-	struct SharedPatternCallEntry
-	{
-		//no PatternCall may have more parameters than max_params_count many
-		static constexpr std::size_t max_params_count = 10u;
-
-		using MatchPos_T = decltype(Call::Info::size);
-
-		//every element in pattern (except all multi match) has own entry which logs, 
-		//  with which element in term to match it currently is associated with.
-		std::array<MatchPos_T, max_params_count> match_positions;
-
-		NodeIndex match_idx = literal_nullptr; //indexes in Term to simplify (the haystack)
-
-		constexpr SharedPatternCallEntry() noexcept { this->match_positions.fill(-1u); }
-
-		//checks this->match_positions if needle is contained
-		//use with care: might check more than actually contained in specific pattern!
-		constexpr bool index_matched(const MatchPos_T needle) const noexcept
+		//all MatchVariables of same name in pattern (e.g. "a" in pattern "a*b+a" share the same SharedTreeDatum to know 
+		//whitch actually matched, and if the name "a" is already matched, even if the current instance is not.
+		struct SharedSingleMatchEntry
 		{
-			const auto stop = this->match_positions.end();
-			return std::find(this->match_positions.begin(), stop, needle) != stop;
-		}
-	}; //SharedCallEntry
+			NodeIndex match_idx = literal_nullptr; //indexes in Term to simplify
+			bool is_set() const noexcept { return this->match_idx != literal_nullptr; } //debugging
+		};
 
-	//to allow a constant RewriteRule to be matched against, all match info is stored here
-	struct MatchData
-	{
-		//maximal number of unrelated TreeMatchVariables allowed per pattern
-		static constexpr std::size_t max_single_match_count = 8u;
-		//maximal number of variadics allowed per pattern
-		static constexpr std::size_t max_pattern_call_count = 4u;
-		//maximal number of unrelated ValueMatchVariables allowed per pattern
-		static constexpr std::size_t max_value_match_count = 2u;
+		struct SharedValueMatchEntry
+		{
+			Complex value = std::numeric_limits<double>::quiet_NaN();
+			bool is_set() const noexcept { return !std::isnan(this->value.real()); } //debugging
+		};
 
-		std::array<SharedValueMatchEntry, max_single_match_count> single_match_data = {};
-		std::array<SharedPatternCallEntry, max_pattern_call_count> pattern_call_data = {};
-		std::array<SharedSingleMatchEntry, max_value_match_count> value_match_data = {};
+		struct SharedPatternCallEntry
+		{
+			//no PatternCall may have more parameters than max_params_count many
+			static constexpr std::size_t max_params_count = 10u;
 
-		constexpr auto& value_info(const ValueMatch& var) noexcept
-		{	return this->value_match_data[var.match_data_index];
-		}
+			using MatchPos_T = decltype(Call::Info::size);
 
-		constexpr auto& value_info(const ValueMatch& var) const noexcept
-		{	return this->value_match_data[var.match_data_index];
-		}
+			//every element in pattern (except all multi match) has own entry which logs, 
+			//  with which element in term to match it currently is associated with.
+			std::array<MatchPos_T, max_params_count> match_positions;
 
-		constexpr auto& single_info(const RestrictedSingleMatch& var) noexcept
-		{	return this->single_match_data[var.match_data_index];
-		}
+			NodeIndex match_idx = literal_nullptr; //indexes in Term to simplify (the haystack)
 
-		constexpr auto& single_info(const RestrictedSingleMatch& var) const noexcept
-		{	return this->single_match_data[var.match_data_index];
-		}
-	}; //MatchData
+			constexpr SharedPatternCallEntry() noexcept { this->match_positions.fill(-1u); }
+
+			//checks this->match_positions if needle is contained
+			//use with care: might check more than actually contained in specific pattern!
+			constexpr bool index_matched(const MatchPos_T needle) const noexcept
+			{
+				const auto stop = this->match_positions.end();
+				return std::find(this->match_positions.begin(), stop, needle) != stop;
+			}
+		}; //SharedCallEntry
+
+		//to allow a constant RewriteRule to be matched against, all match info is stored here
+		struct MatchData
+		{
+			const TermNode* haystack_data; //pointer to .data() of haystack store
+			constexpr UnsaveRef make_ref(const NodeIndex n) const noexcept 
+			{	const std::uint32_t i = n.get_index(); 
+				return UnsaveRef(this->haystack_data + i, i, n.get_type()); 
+			}
+
+			//maximal number of unrelated single match variables allowed per pattern
+			static constexpr std::size_t max_single_match_count = 8u;
+			//maximal number of PatternCall allowed per pattern
+			static constexpr std::size_t max_pattern_call_count = 4u;
+			//maximal number of unrelated value match variables allowed per pattern
+			static constexpr std::size_t max_value_match_count = 2u;
+
+			std::array<SharedPatternCallEntry, max_pattern_call_count> pattern_call_data = {};
+			std::array<SharedSingleMatchEntry, max_value_match_count> single_match_data = {};
+			std::array<SharedValueMatchEntry, max_single_match_count> value_match_data = {};
+
+			constexpr auto& value_info(const ValueMatch& var) noexcept
+			{	return this->value_match_data[var.match_data_index];
+			}
+
+			constexpr auto& value_info(const ValueMatch& var) const noexcept
+			{	return this->value_match_data[var.match_data_index];
+			}
+
+			constexpr auto& call_info(const UnsaveRef ref) noexcept
+			{	assert(ref.type == PatternCall{});
+				return this->pattern_call_data[pattern_call_meta_data(ref).match_data_index];
+			}
+
+			constexpr auto& call_info(const UnsaveRef ref) const noexcept
+			{	assert(ref.type == PatternCall{});
+				return this->pattern_call_data[pattern_call_meta_data(ref).match_data_index];
+			}
+
+			constexpr MatchData(const TermNode* data_) noexcept :haystack_data(data_) {}
+		}; //MatchData
+
+	} //namespace match
 
 
-
-	struct RuleHeads
+	struct RuleHead
 	{
 		NodeIndex lhs; //match side
 		NodeIndex rhs; //replace side
