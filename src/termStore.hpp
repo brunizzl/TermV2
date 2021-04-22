@@ -417,7 +417,7 @@ namespace bmath::intern {
 		static_assert(sizeof(Memory) == sizeof(Payload_T*) || !std::is_empty_v<Alloc_T<Payload_T>>); //use empty base class optimisation for Alloc_T == std::allocator
 
 		//unsave, because if new_capacity is smaller than current this->size_, the last elements are lost and size_ is not shrunk -> possible to access invalid memory
-		void unsave_change_capacity(const std::size_t new_capacity) noexcept
+		constexpr void unsave_change_capacity(const std::size_t new_capacity) noexcept
 		{
 			assert(new_capacity > this->capacity);
 
@@ -447,7 +447,7 @@ namespace bmath::intern {
 		template<typename MemoryRecource>
 		constexpr BasicMonotonicStore(MemoryRecource r) noexcept :memory(r) {}
 
-		BasicMonotonicStore(const BasicMonotonicStore& snd) noexcept
+		constexpr BasicMonotonicStore(const BasicMonotonicStore& snd) noexcept
 		{
 			this->unsave_change_capacity(snd.capacity);
 			std::copy_n(snd.memory.data_, this->capacity, this->memory.data_);
@@ -460,14 +460,14 @@ namespace bmath::intern {
 			, memory(std::move(snd.memory))
 		{}
 
-		BasicMonotonicStore& operator=(const BasicMonotonicStore& snd) noexcept
+		constexpr BasicMonotonicStore& operator=(const BasicMonotonicStore& snd) noexcept
 		{
 			this->~BasicMonotonicStore();
 			new (this) BasicMonotonicStore(snd);
 			return *this;
 		}
 
-		BasicMonotonicStore& operator=(BasicMonotonicStore&& snd) noexcept
+		constexpr BasicMonotonicStore& operator=(BasicMonotonicStore&& snd) noexcept
 		{
 			this->~BasicMonotonicStore();
 			new (this) BasicMonotonicStore(std::move(snd));
@@ -475,12 +475,12 @@ namespace bmath::intern {
 		}
 
 
-		~BasicMonotonicStore() noexcept
+		constexpr ~BasicMonotonicStore() noexcept
 		{
 			this->memory.deallocate(this->memory.data_, this->capacity);
 		}
 
-		void reserve(const std::size_t new_capacity) noexcept
+		constexpr void reserve(const std::size_t new_capacity) noexcept
 		{
 			if (new_capacity > this->capacity) {
 				this->unsave_change_capacity(std::bit_ceil(new_capacity));
@@ -499,7 +499,7 @@ namespace bmath::intern {
 			return this->memory.data_[idx];
 		}
 
-		[[nodiscard]] std::size_t allocate_one() noexcept
+		constexpr [[nodiscard]] std::size_t allocate_one() noexcept
 		{
 			const std::size_t result = this->size_;
 			if (++this->size_ > this->capacity) {
@@ -510,7 +510,7 @@ namespace bmath::intern {
 
 		constexpr void free_one(const std::size_t idx) noexcept { assert(this->valid_idx(idx)); }
 
-		[[nodiscard]] std::size_t allocate_n(const std::size_t n) noexcept
+		constexpr [[nodiscard]] std::size_t allocate_n(const std::size_t n) noexcept
 		{
 			const std::size_t result = this->size_;
 			this->size_ += n;

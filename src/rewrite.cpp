@@ -84,12 +84,12 @@ namespace simp {
 
 	void RuleSet::migrate_rules(const Store& temp_store)
 	{
-		this->store.free_all();
 		std::stable_sort(this->rules.begin(), this->rules.end(),
 			[&temp_store](const RuleHead fst, const RuleHead snd) {
 				return unsure_compare_tree(Ref(temp_store, fst.lhs), Ref(temp_store, snd.lhs))
 					== std::partial_ordering::less;
 			});
+		this->store.free_all();
 		//first insert all match sides -> direct succession of those
 		for (std::size_t i = 0u; i < this->rules.size(); i++) {
 			this->rules[i].lhs = copy_tree(Ref(temp_store, this->rules[i].lhs), this->store);
