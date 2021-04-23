@@ -325,9 +325,10 @@ namespace simp {
 	{
 		std::uint32_t match_data_index = -1u; //indexes in MatchData::variadic_match_data
 		//bit i dertermines whether parameter i is rematchable
-		bmath::intern::BitSet32 rematchable = -1u;
-		//bit i determines whether parameter i is only matched with terms succeding match of parameter i-1
-		bmath::intern::BitSet32 always_after_prev = 0u;
+		bmath::intern::BitSet16 rematchable = (std::uint16_t)-1;
+		//bit i determines whether parameter i is guaranteed to never have a 
+		//  match at a higher haystack index than parameter i + 1
+		bmath::intern::BitSet16 always_preceeding_next = (std::uint16_t)0;
 	};
 
 	union TermNode
@@ -666,6 +667,7 @@ namespace simp {
 		{
 			//no PatternCall may have more parameters than max_params_count many
 			static constexpr std::size_t max_params_count = 10u;
+			static_assert(max_params_count <= 16u, "else larger bitsets are needed for PatternCallData");
 
 			using MatchPos_T = decltype(Call::Info::size);
 

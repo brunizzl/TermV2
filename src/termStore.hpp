@@ -453,7 +453,7 @@ namespace bmath::intern {
 			std::copy_n(snd.memory.data_, this->capacity, this->memory.data_);
 			this->size_ = snd.size_;
 		}
-
+		
 		constexpr BasicMonotonicStore(BasicMonotonicStore&& snd) noexcept
 			:size_(std::exchange(snd.size_, 0u))
 			, capacity(std::exchange(snd.capacity, 0u))

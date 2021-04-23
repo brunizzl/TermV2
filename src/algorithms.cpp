@@ -806,8 +806,7 @@ namespace simp {
         if (const int fst_order = shallow_order(fst),
                       snd_order = shallow_order(snd);
             fst_order != snd_order)
-        {
-            return fst_order <=> snd_order;
+        {   return fst_order <=> snd_order;
         }
         switch (fst.type) {
         case NodeType(Literal::complex):
@@ -816,11 +815,30 @@ namespace simp {
             return std::string_view(fst->symbol) <=> std::string_view(snd->symbol);
         case NodeType(PatternCall{}):
         case NodeType(Literal::call): {
-            const std::partial_ordering cmp_functions = 
-                unsure_compare_tree(fst.new_at(fst->call.function()), snd.new_at(snd->call.function()));
-            return cmp_functions == std::partial_ordering::equivalent ?
-                std::partial_ordering::unordered :
-                cmp_functions;
+            const NodeIndex fst_f = fst->call.function();
+            const NodeIndex snd_f = snd->call.function();            
+            if (const auto cmp_fs = unsure_compare_tree(fst.new_at(fst_f), snd.new_at(snd_f)); 
+                cmp_fs != std::partial_ordering::equivalent)
+            {   return cmp_fs;
+            }
+            else if (fst_f.get_type() == Literal::native && to_native(fst_f).is<nv::Comm>()) {
+                return std::partial_ordering::unordered;
+            }
+            const auto fst_end = fst->call.parameters().end();
+            const auto snd_end = snd->call.parameters().end();
+            auto fst_iter = fst->call.parameters().begin();
+            auto snd_iter = snd->call.parameters().begin();
+            for (; fst_iter != fst_end && snd_iter != snd_end; ++fst_iter, ++snd_iter) {
+                const std::partial_ordering cmp =
+                    unsure_compare_tree(fst.new_at(*fst_iter), snd.new_at(*snd_iter));
+                if (cmp != std::partial_ordering::equivalent) {
+                    return cmp;
+                }
+            }
+            if (fst_iter != fst_end || snd_iter != snd_end) {
+                return fst->call.size() <=> snd->call.size();
+            }
+            return std::partial_ordering::equivalent;
         } break;
         case NodeType(Literal::lambda): {
             const Lambda fst_lambda = *fst;
@@ -1103,9 +1121,70 @@ namespace simp {
             return false;
         } //rematch
 
-        bool find_permutation(const UnsaveRef needle_ref, const UnsaveRef hay_ref, MatchData& match_data, std::uint32_t needle_i, std::uint32_t hay_k)
+        bool find_permutation(const UnsaveRef pn_ref, const UnsaveRef hay_ref, MatchData& match_data, std::uint32_t needle_i, std::uint32_t hay_k)
         {
-            return false;
+            assert(pn_ref.type == PatternCall{} && hay_ref.type == Literal::call);
+            assert(pn_ref->call.function() == hay_ref->call.function());
+
+            const std::span<const NodeIndex> needles = pn_ref->call.parameters();
+            const std::span<const NodeIndex> haystack = hay_ref->call.parameters();
+
+            assert(std::is_sorted(needles.begin(), needles.end(), [&](auto lhs, auto rhs) {
+                return compare_tree(pn_ref.new_at(lhs), pn_ref.new_at(rhs)) == std::strong_ordering::less;
+            }));
+            assert(std::is_sorted(haystack.begin(), haystack.end(), [&](auto lhs, auto rhs) {
+                return compare_tree(hay_ref.new_at(lhs), hay_ref.new_at(rhs)) == std::strong_ordering::less;
+            }));
+
+            if (needles.back() != multi_marker && needles.size() != haystack.size()) {
+                return false; 
+            }
+
+            const PatternCallData pattern_info = pattern_call_meta_data(pn_ref);
+            SharedPatternCallEntry& this_entry = match_data.pattern_call_data[pattern_info.match_data_index];
+            assert(needle_i == 0u || this_entry.match_idx == hay_ref.typed_idx() && "rematch only with same subterm");
+            this_entry.match_idx = hay_ref.typed_idx();
+
+            auto currently_matched = bmath::intern::BitVector(haystack.size() + 1u); //one bit for each element in haystack + 1u for end
+            for (std::uint32_t i = 0u; i < needle_i; i++) {
+                currently_matched.set(this_entry.match_positions[i]);
+            }
+
+            while (needle_i < needles.size()) {
+                if (needles[needle_i] == multi_marker) {
+                    assert(needle_i + 1u == needles.size() && "multi is only valid as last element");
+                    return true; //multi scoops up all remaining pieces in haystack
+                }
+                const UnsaveRef needle_ref = pn_ref.new_at(needles[needle_i]);
+                for (; hay_k < haystack.size(); hay_k++) {
+                    if (!currently_matched.test(hay_k) && 
+                        match_(needle_ref, hay_ref.new_at(haystack[hay_k]), match_data)) 
+                    {   goto prepare_next_needle;
+                    }
+                }
+            rematch_last_needle:
+                if (needle_i == 0u) {
+                    return false; //failed to match first needle -> there is no hope
+                }
+                needle_i--;
+                hay_k = this_entry.match_positions[needle_i];
+                if (!pattern_info.rematchable.test(needle_i) ||
+                    !rematch(pn_ref.new_at(needles[needle_i]), hay_ref.new_at(haystack[hay_k]), match_data))
+                { //could not rematch last successfully-matched needle-hay pair with each other again
+                  //  -> try succeeding elements in haystack in next loop iteration for that needle
+                    currently_matched.reset(hay_k);
+                    hay_k++;
+                    continue;
+                }
+            prepare_next_needle:
+                currently_matched.set(hay_k);                 //already set if needle was rematched
+                this_entry.match_positions[needle_i] = hay_k; //already set if needle was rematched
+                hay_k = pattern_info.always_preceeding_next.test(needle_i) ? 
+                    hay_k + 1u : 
+                    0u;
+                needle_i++;
+            }
+            return true;
         } //find_permutation
 
         bool find_shift(const UnsaveRef needle_ref, const UnsaveRef hay_ref, MatchData& match_data, std::uint32_t needle_i, std::uint32_t hay_k)

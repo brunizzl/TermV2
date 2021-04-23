@@ -18,7 +18,7 @@
 #include "termVector.hpp"
 
 namespace bmath::intern {
-
+	
 	//matching algorithm will try to also match permutations
 	enum class Comm //short for Commutative
 	{

@@ -374,7 +374,6 @@ namespace simp {
 			heads.rhs = parse::build(store, infos, rhs_view); 
 
 			heads.lhs = normalize::recursive(MutRef(store, heads.lhs), {}, 0);
-			heads.rhs = normalize::recursive(MutRef(store, heads.rhs), { .remove_unary_assoc = false }, 0);
 
 			//extra condition concerning single match variables (might set multiple in relation)
 			struct SingleCondition

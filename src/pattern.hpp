@@ -420,7 +420,8 @@ namespace bmath::intern {
 	constexpr int generality(const pattern::PnType type) noexcept
 	{
 		using namespace pattern;
-		constexpr auto type_generality_table = std::to_array<std::pair<PnType, int>>({
+		struct TypeGenerality { PnType type; int generality; };
+		constexpr auto type_generality_table = std::to_array<TypeGenerality>({
 			{ Literal::complex      , 1000 },
 			{ Literal::symbol       , 1001 },
 			{ ValueMatch::owning    , 1002 }, //may match different subsets of complex numbers, but always requires an actual value to match against
@@ -430,7 +431,7 @@ namespace bmath::intern {
 			//values 3xxx are not present, as that would require every item in Domain to be listed here
 		});
 		static_assert(std::is_sorted(type_generality_table.begin(), type_generality_table.end(),
-			[](auto a, auto b) { return a.second < b.second; }));
+			[](auto a, auto b) { return a.generality < b.generality; }));
 		static_assert(static_cast<unsigned>(PnType::COUNT) == 
 			type_generality_table.size() + static_cast<unsigned>(Function::COUNT) + static_cast<unsigned>(Proxy::COUNT),
 			"all but elements in Function and Proxy need to be listed in table");
@@ -442,7 +443,7 @@ namespace bmath::intern {
 			return static_cast<unsigned>(type) + 3000;
 		}
 		else {
-			return find(type_generality_table, &std::pair<PnType, int>::first, type).second;
+			return find(type_generality_table, &TypeGenerality::type, type).generality;
 		}
 	}
 } //namespace bmath::intern

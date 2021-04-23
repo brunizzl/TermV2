@@ -96,14 +96,9 @@ int main()
 	}
 	{
 		const simp::RuleSet rules = {
-			{ "a^2 + 2 a b + b^2 + cs... = (a + b)^2 + cs..." },
-			{ "$a^2 + 2 $a b + b^2 + cs... = ($a + b)^2 + cs..." },
 			{ "a_sqr + two_a b + b^2 + cs... | (sqrt(a_sqr) == 0.5 two_a) = (0.5 two_a + b)^2 + cs..." },
-			{ "list(x, xs...) = list(xs..., x)" },
 			{ "'Y' = \\f n. f(f, n)" },
 			{ "a + _VM(idx, dom, match) | a :complex = _VM(idx, dom, match - a)" },
-			{ "list(x, y, z, zs...) | x == y + z, x != y, y :complex = 'huebsch'" },
-			{ "fmap(f, g(xs..., x))= 'reverse_cons'(fmap(f, g(xs...)), f(x))" },
 
 			{ "0 xs... = 0" },
 			{ "0^x     = 0" },
@@ -155,13 +150,13 @@ int main()
 			{ "fdiff(cos)    = \\x .-sin(x)" },
 			{ "fdiff(exp)    = exp" },
 			{ "fdiff(ln)     = \\x .x^(-1)" },
-			{ "fdiff(tan)    = \\x .cos(x)^(-2)" }
-			//
-			////exponential runtime fibonacci implementation:
-			//{ "         fib(0) = 0" },
-			//{ "         fib(1) = 1" },
-			//{ "n :nat | fib(n) = fib(n - 1) + fib(n - 2)" },
-			//
+			{ "fdiff(tan)    = \\x .cos(x)^(-2)" },
+			
+			//exponential runtime fibonacci implementation:
+			{ "'fib'(0)          = 0" },
+			{ "'fib'(1)          = 1" },
+			{ "'fib'(n) | n :nat = 'fib'(n - 1) + 'fib'(n - 2)" },
+			
 			////reversing a list:
 			//{ "xs :list...                 | reverse(list{xs}) = reverse'(list{}, list{xs})" },
 			//{ "xs :list..., y, ys :list... | reverse'(list{xs}, list{y, ys}) = reverse'(list{y, xs}, list{ys})" },
@@ -171,58 +166,28 @@ int main()
 			//{ "n :nat0                     | fib_n(n + 2)                   = reverse(list_fibs(n, list{1, 0}))" },
 			//{ "n :nat, a, b, tail :list... | list_fibs(n, list{a, b, tail}) = list_fibs(n - 1, list{force(a + b), a, b, tail})" },
 			//{ "              tail :list... | list_fibs(0, list{tail})       = list{tail}" },
-			//
-			////sorting numbers:
-			//{ "                     | sort(list{})      = list{}" },
-			//{ "x                    | sort(list{x})     = list{x}" },
-			//{ "p :real, xs :list... | sort(list{p, xs}) = concat3(sort(filter_s(p, list{}, list{xs})), list{p}, sort(filter_le(p, list{}, list{xs})))" },
-			//
-			//{ "xs :list..., ys :list..., zs :list... | concat3(list{xs}, list{ys}, list{zs}) = list{xs, ys, zs}" },
-			//
-			//{ "cond :not_positive, true_res, false_res | if_positive(cond, true_res, false_res) = false_res" },
-			//{ "cond :positive,     true_res, false_res | if_positive(cond, true_res, false_res) = true_res" },
-			//
-			//{ "p :real, xs :list..., y :real, ys :list... | filter_le(p, list{xs}, list{y, ys}) = filter_le(p, if_positive[force(p - y), list{xs}, list{xs, y}], list{ys})" },
-			//{ "p :real, xs :list...,                      | filter_le(p, list{xs}, list{})      = list{xs}" },
-			//
-			//{ "p :real, xs :list..., y :real, ys :list... | filter_s(p, list{xs}, list{y, ys}) = filter_s(p, if_positive[force(p - y), list{xs, y}, list{xs}], list{ys})" },
-			//{ "p :real, xs :list...,                      | filter_s(p, list{xs}, list{})      = list{xs}" },
-			//
-			//
-			//{ "x, xs :set... | set(x, x, xs) = set(x, xs)" },
-			//
-			//{ "xs :set..., ys :set... | union(set(xs), set(ys)) = union(set(xs, ys))" },
-			//{ "                       | union()                 = set()" },
-			//
-			//{ "x, xs :set..., ys :set... | intersection(set(x, xs), set(x, ys)) = union(set(x), intersection(set(xs), set(ys)))" },
-			//{ "xs, ys                    | intersection(xs, ys)                 = set()" },
-			//{ "                          | intersection()                       = set()" },
-			//
-			//{ "x :real, y :real | min{x, y} = if_positive(force(x-y), y, x)" },
-			//{ "x :real, y :real | max{x, y} = if_positive(force(x-y), x, y)" },
-			//
-			////A / B is more commonly written A \ B
-			//{ "x, xs :set..., y, ys :set... | set{x, xs} / set{x, ys} = set{xs} / set{x, ys}" },
-			//{ "   xs :set...,    ys :set... | set{xs}    / set{ys}    = set{xs}" },
-			//
-			//{ "'true'  = lambda($0)" },
-			//{ "'false' = lambda($1)" },
-			//{ "'not'   = lambda(call($0, lambda($1), lambda($0)))" },
-			//{ "'and'   = lambda(call($0, $1, $0))" },
-			//{ "'or'    = lambda(call($0, $0, $1))" },
-			//
-			//{ "'zero'  = lambda($1)" },
-			//{ "'one'   = lambda(call($0, $1))" },
-			//{ "'two'   = lambda(call($0, call($0, $1)))" },
-			//{ "'three' = lambda(call($0, call($0, call($0, $1))))" },
-			//{ "'succ'  = lambda(call($1, call($0, $1, $2)))" },
-			//
-			//{ "   x, xs :list... | cons(x, list{xs})   = list{x, xs}" },
-			//{ "f, x, xs :list... | map(f, list{x, xs}) = cons(call(f, x), map(f, list{xs}))" },
-			//{ "f,                | map(f, list{})      = list{}" },
-			//
-			//{ "f, acc, x, xs :list... | foldl(f, acc, list{x, xs}) = call(f, x, foldl(f, acc, list{xs}))" },
-			//{ "f, acc,                | foldl(f, acc, list{})      = acc" },
+
+			{ "'ffilter'(p, f(xs...)) = 'take_true'(f(), fmap(\\x .pair(p(x), x), f(xs...)))" },
+			{ "'take_true'(f(xs...), f(pair(true, x), ys...)) = 'take_true'(f(xs..., x), f(ys...))" },
+			{ "'take_true'(f(xs...), f(pair(_   , x), ys...)) = 'take_true'(f(xs...), f(ys...))" },
+			{ "'take_true'(f(xs...), f())                     = f(xs...)" },
+
+			{ "'sort'(list())         = list()" },
+			{ "'sort'(list(x))        = list(x)" },
+			{ "'sort'(list(x, xs...)) = 'concatcos'('ffilter'(\\y .y < x, list(xs...)), x, 'ffilter'(\\y .y >= x, list(xs...)))" },
+			{ "'concatcons'(list(xs...), x, list(ys...)) = list(xs..., x, ys...)" },
+			
+			{ "union(set(xs...), set(ys...)) = set(xs..., ys...)" },
+			{ "union()                       = set()" },
+			
+			{ "intersection(set(x, xs...), set(x, ys...)) = union(set(x), intersection(set(xs...), set(ys...)))" },
+			{ "intersection(x, xs...)                     = set()" },
+			
+			{ "min{x, y} | x :real, y :real, x > y = y" },
+			{ "max{x, y} | x :real, y :real, x > y = x" },
+			
+			{ "'foldl'(f, acc, list{x, xs}) = f(x, 'foldl'(f, acc, list{xs}))" },
+			{ "'foldl'(f, acc, list{})      = acc" },
 		};
 		for (const simp::RuleRef rule : rules) {
 			std::cout << rule.to_string() << "\n\n";
