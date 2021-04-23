@@ -184,7 +184,8 @@ namespace simp {
 		{
 			id, //unary identity function
 			force,  //params[0] := argument   forces evaluation even if it is unexact
-			diff,   //params[0] := function  params[1] := variable the derivation is done in respect to
+			diff,   //params[0] := function call  params[1] := variable the derivation is done in respect to
+			fdiff, //params[0] := function (e.g. "fdiff(sin) -> cos" or "fdiff(tan) -> \x .1/cos(x)^2" or "fdiff(\x .x^2) -> \x .2 x")
 			pair,   //two parameters, no evaluation
 			triple, //three parameters, no evaluation
 			fmap, //params[0] := unary lambda, params[1] := function call evaluates "fmap(f, g(xs...)) -> g(f(xs)...)"
@@ -195,7 +196,7 @@ namespace simp {
 		enum class PatternAuxFn
 		{
 			value_match, //used to represent all of ValueMatch during build process and final ValueMatch in rhs
-			type, //returns true if fst is element of snd
+			of_type, //returns true if fst is element of snd
 			COUNT
 		};
 
@@ -502,11 +503,12 @@ namespace simp {
 			{ MiscFn::id                , "id"        , 1u, { Restr::any          }, Restr::any                  },
 			{ MiscFn::force             , "force"     , 1u, { Literal::complex    }, Literal::complex            },
 			{ MiscFn::diff              , "diff"      , 2u, { Restr::any, Literal::symbol }, Restr::any          },
+			{ MiscFn::fdiff             , "fdiff"     , 1u, { Restr::callable     }, Restr::callable             },
 			{ MiscFn::pair              , "pair"      , 2u, {}                     , MiscFn::pair                },
 			{ MiscFn::triple            , "triple"    , 3u, {}                     , MiscFn::triple              },
 			{ MiscFn::fmap              , "fmap"      , 2u, { Restr::callable, Literal::call }, Literal::call    },
 			{ PatternAuxFn::value_match , "_VM"       , 3u, { PatternUnsigned{}, Literal::native, Restr::any }, Restr::any }, //layout as in ValueMatch (minus .owner)
-			{ PatternAuxFn::type        , "type"      , 2u, { Restr::any, Literal::native }, Restr::boolean      },
+			{ PatternAuxFn::of_type     , "_Of_T"     , 2u, { Restr::any, Literal::native }, Restr::boolean      },
 		});
 		static_assert(static_cast<unsigned>(fixed_arity_table.front().type) == 0u);
 		static_assert(bmath::intern::is_sorted_by(fixed_arity_table, &FixedArityProps::type));

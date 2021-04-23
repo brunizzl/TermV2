@@ -31,6 +31,7 @@ namespace simp {
 					{ token::product,      Arity::binary },
 					{ token::sticky_space, Arity::binary }, //can also act as multiplication
 					{ token::hat,          Arity::binary },
+					{ token::colon,        Arity::binary },
 					{ token::bang,         Arity::unary  },
 					{ token::unary_minus,  Arity::unary  },
 					});
@@ -63,6 +64,7 @@ namespace simp {
 					case ' ':  return Head::Type::times;
 					case '/':  return Head::Type::divided;
 					case '^':  return Head::Type::power;
+					case ':':  return Head::Type::of_type;
 					default:
 						assert(false);
 						return Head::Type::symbol;
@@ -265,6 +267,7 @@ namespace simp {
 			case Head::Type::times:      return to_buildin_call(1, nv::Comm::product);
 			case Head::Type::divided:    return to_inverse_buildin_call(nv::Comm::product, build_inverted<Store>);
 			case Head::Type::power:      return to_buildin_call(1, nv::CtoC::pow);
+			case Head::Type::of_type:    return to_buildin_call(1, nv::PatternAuxFn::of_type);
 			case Head::Type::not_: {
 				view.remove_prefix(1u);  //remove '!'
 				const NodeIndex to_negate = parse::build(store, infos, view);
@@ -338,7 +341,7 @@ namespace simp {
 				constexpr char allowed[] = { token::character, token::number, token::open_grouping,
 					token::clse_grouping, token::unary_minus, token::sum, token::product, token::comma,
 					token::hat, token::equals, token::bar, token::bang, token::space, token::imag_unit,
-					token::backslash, token::dot, token::relation, token::and_, token::or_, '\0' };
+					token::backslash, token::dot, token::relation, token::and_, token::or_, token::colon, '\0' };
 
 				if (const std::size_t pos = parse_str.tokens.find_first_not_of(allowed); pos != TokenString::npos) [[unlikely]] {
 					throw ParseFailure{ pos, "unexpected character" };
@@ -431,18 +434,20 @@ namespace simp {
 					//condition may only be of form "type($<value match>, <complex subset>)"
 					//if so: adjust value_conditions at right index
 					if (cond_ref.type != Literal::call ||
-						cond_ref->call.function() != from_native(nv::PatternAuxFn::type)) 
+						cond_ref->call.function() != from_native(nv::PatternAuxFn::of_type))
 					{
 						throw ParseFailure{ conditions_view.offset, "value match may only have its type restricted" };
 					}
-					const NodeIndex value_match = cond_ref->call[1];
 					const NodeIndex subset = cond_ref->call[2];
-					if (value_match.get_type() != PatternUnsigned{} || 
-						!to_native(subset).is<nv::ComplexSubset>()) 
-					{
+					const NodeIndex value_match_call_idx = cond_ref->call[1];
+					if (value_match_call_idx.get_type() != Literal::call || !to_native(subset).is<nv::ComplexSubset>()) {
 						throw ParseFailure{ conditions_view.offset, "value match may only have its type as real, nat etc." };
 					}
-					value_conditions[value_match.get_index()] = to_native(subset).to<nv::ComplexSubset>();
+					Call& value_match_call = *MutRef(store, value_match_call_idx);
+					if (value_match_call.function() != from_native(nv::PatternAuxFn::value_match)) {
+						throw ParseFailure{ conditions_view.offset, "uh oh to funky for me" };
+					}
+					value_conditions[value_match_call[1].get_index()] = to_native(subset).to<nv::ComplexSubset>();
 					free_tree(cond_ref);
 				}
 			}
@@ -579,18 +584,19 @@ namespace simp {
 					using namespace nv;
 					if (function.get_type() == Literal::native && print_operators) {
 						switch (to_native(function)) {
-						case Native(Comm::sum):          return { "" , " + "  };
-						case Native(Comm::product):      return { "" , " * "  };
-						case Native(Comm::and_):         return { "" , " && " };
-						case Native(Comm::or_):          return { "" , " || " };
-						case Native(CtoC::pow):          return { "" , " ^ "  };
-						case Native(ToBool::eq):         return { "" , " == " };
-						case Native(ToBool::neq):        return { "" , " != " };
-						case Native(ToBool::greater):    return { "" , " > "  };
-						case Native(ToBool::smaller):    return { "" , " < "  };
-						case Native(ToBool::greater_eq): return { "" , " >= " };
-						case Native(ToBool::smaller_eq): return { "" , " <= " };
-						case Native(ToBool::not_):       return { "!", ""     };
+						case Native(Comm::sum):             return { "" , " + "  };
+						case Native(Comm::product):         return { "" , " * "  };
+						case Native(Comm::and_):            return { "" , " && " };
+						case Native(Comm::or_):             return { "" , " || " };
+						case Native(CtoC::pow):             return { "" , " ^ "  };
+						case Native(ToBool::eq):            return { "" , " == " };
+						case Native(ToBool::neq):           return { "" , " != " };
+						case Native(ToBool::greater):       return { "" , " > "  };
+						case Native(ToBool::smaller):       return { "" , " < "  };
+						case Native(ToBool::greater_eq):    return { "" , " >= " };
+						case Native(ToBool::smaller_eq):    return { "" , " <= " };
+						case Native(ToBool::not_):          return { "!", ""     };
+						case Native(PatternAuxFn::of_type): return { "" , " :"   };
 						}
 					}
 					append_to_string(ref.new_at(function), str, max_infixr, print_operators);
