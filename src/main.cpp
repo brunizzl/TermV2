@@ -13,6 +13,7 @@
 TODO:
 
 important:
+ - replace multi_marker by info in PatternCallData
  - finish match:
 	   - test_condition
 	   - find_shift
@@ -213,27 +214,6 @@ int main()
 				std::cout << "parse failure: " << failure.what << '\n';
 				std::cout << name << '\n';
 				std::cout << std::string(failure.where, ' ') << "^\n\n";
-			}
-		}
-	}
-	{
-		const simp::RuleSet rules = {
-			{ " a^2 +  2 a b + b^2 =  (a + b)^2" },
-			{ "a bs... + a cs...   = a (product(bs...) + product(cs...))" },
-			{ "sin(x)^2 + cos(x)^2 = 1" },
-		};
-		const auto names = std::to_array<std::string>({
-			{ "sin(x)^2 + 2 sin(x) herbert + herbert^2" },
-			{ "sin(a + b)^2 + cos(a + b)^2" },
-			{ "a c d f + b c d g h" },
-		});
-		for (const auto& name : names) {
-			std::cout << name << "\n";
-			auto term = simp::LiteralTerm(name);
-			term.normalize();
-			for (const auto rule : rules) {
-				simp::match::MatchData match_data = term.store.data();
-				std::cout << "  " << (simp::match::match_(rule.lhs, term.ref(), match_data) ? "MAATCH " : "nope   ") << simp::print::to_string(rule.lhs) << "\n";
 			}
 		}
 	}

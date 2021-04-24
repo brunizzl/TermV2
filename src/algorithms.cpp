@@ -1138,7 +1138,7 @@ namespace simp {
             }));
 
             if (needles.back() != multi_marker && needles.size() != haystack.size()) {
-                return false; 
+                return false; //multi_marker may only appear as last element. 
             }
 
             const PatternCallData pattern_info = pattern_call_info(pn_ref);
@@ -1188,8 +1188,15 @@ namespace simp {
             return true;
         } //find_permutation
 
-        bool find_shift(const UnsaveRef needle_ref, const UnsaveRef hay_ref, MatchData& match_data, std::uint32_t needle_i, std::uint32_t hay_k)
+        bool find_shift(const UnsaveRef pn_ref, const UnsaveRef hay_ref, MatchData& match_data, std::uint32_t needle_i, std::uint32_t hay_k)
         {
+            assert(pn_ref.type == PatternCall{} && hay_ref.type == Literal::call);
+
+            const std::span<const NodeIndex> needles = pn_ref->call.parameters();
+            const std::span<const NodeIndex> haystack = hay_ref->call.parameters();
+            assert(std::find(needles.begin(), needles.end(), multi_marker) != needles.end() && 
+                "the multi marker is the reason to make this a PatternCall");
+
             return false;
         } //find_shift
 
