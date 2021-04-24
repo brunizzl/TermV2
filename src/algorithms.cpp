@@ -218,27 +218,28 @@ namespace simp {
             if (param.imag() == 0.0) {
                 const double real_param = param.real();
                 switch (f) {
-                case CtoC::asinh:  return std::asinh(real_param);
-                case CtoC::acosh:  return (         real_param  >= 1.0 ? std::acosh(real_param) : std::acosh(param));
-                case CtoC::atanh:  return (std::abs(real_param) <= 1.0 ? std::atanh(real_param) : std::atanh(param));
-                case CtoC::asin :  return (std::abs(real_param) <= 1.0 ?  std::asin(real_param) :  std::asin(param));
-                case CtoC::acos :  return (std::abs(real_param) <= 1.0 ?  std::acos(real_param) :  std::acos(param));
-                case CtoC::atan :  return std::atan (real_param);
-                case CtoC::sinh :  return std::sinh (real_param);
-                case CtoC::cosh :  return std::cosh (real_param);
-                case CtoC::tanh :  return std::tanh (real_param);
-                case CtoC::sqrt :  return (         real_param  >= 0.0 ?  std::sqrt(real_param) :  std::sqrt(param));
-                case CtoC::exp  :  return std::exp  (real_param);
-                case CtoC::sin  :  return std::sin  (real_param);
-                case CtoC::cos  :  return std::cos  (real_param);
-                case CtoC::tan  :  return std::tan  (real_param);
-                case CtoC::abs  :  return std::abs  (real_param);
-                case CtoC::arg  :  return std::arg  (real_param);
-                case CtoC::ln   :  return std::log  (real_param);
-                case CtoC::re   :  return real_param;
-                case CtoC::im   :  return 0.0;
-                case CtoC::floor:  return std::floor(real_param);
-                case CtoC::ceil :  return std::ceil (real_param);
+                case CtoC::asinh: return std::asinh(real_param);
+                case CtoC::acosh: return (         real_param  >= 1.0 ? std::acosh(real_param) : std::acosh(param));
+                case CtoC::atanh: return (std::abs(real_param) <= 1.0 ? std::atanh(real_param) : std::atanh(param));
+                case CtoC::asin : return (std::abs(real_param) <= 1.0 ?  std::asin(real_param) :  std::asin(param));
+                case CtoC::acos : return (std::abs(real_param) <= 1.0 ?  std::acos(real_param) :  std::acos(param));
+                case CtoC::atan : return std::atan (real_param);
+                case CtoC::sinh : return std::sinh (real_param);
+                case CtoC::cosh : return std::cosh (real_param);
+                case CtoC::tanh : return std::tanh (real_param);
+                case CtoC::sqrt : return (         real_param  >= 0.0 ?  std::sqrt(real_param) :  std::sqrt(param));
+                case CtoC::exp  : return std::exp  (real_param);
+                case CtoC::sin  : return std::sin  (real_param);
+                case CtoC::cos  : return std::cos  (real_param);
+                case CtoC::tan  : return std::tan  (real_param);
+                case CtoC::abs  : return std::abs  (real_param);
+                case CtoC::arg  : return std::arg  (real_param);
+                case CtoC::ln   : return std::log  (real_param);
+                case CtoC::re   : return real_param;
+                case CtoC::im   : return 0.0;
+                case CtoC::conj : return real_param;
+                case CtoC::floor: return std::floor(real_param);
+                case CtoC::ceil : return std::ceil (real_param);
                 }
             }
             else {
@@ -262,8 +263,9 @@ namespace simp {
                 case CtoC::ln   :  return std::log  (param);
                 case CtoC::re   :  return std::real (param);
                 case CtoC::im   :  return std::imag (param);
+                case CtoC::conj :  return std::conj (param);
                 case CtoC::floor:  return std::floor(param.real()); //not expected to happen
-                case CtoC::ceil:   return std::ceil (param.real()); //not expected to happen
+                case CtoC::ceil :  return std::ceil (param.real()); //not expected to happen
                 }
             }
             assert(false);
@@ -569,7 +571,7 @@ namespace simp {
                     }
                 } break;
                 case NodeType(Literal::lambda): {
-                    if (options.eval_lambdas && lambda_param_offset == 0u) {
+                    if (lambda_param_offset == 0u) {
                         const NodeIndex evaluated = eval_lambda(ref, options);
                         return evaluated;
                     }
@@ -698,7 +700,7 @@ namespace simp {
                 const std::size_t nr_call_nodes = Call::_node_count(call_capacity);
 
                 const std::size_t dst_index = dst_store.allocate_n(1u + nr_call_nodes) + 1u;
-                dst_store.at(dst_index - 1u) = pattern_call_meta_data(src_ref);
+                dst_store.at(dst_index - 1u) = pattern_call_info(src_ref);
                 Call::emplace(dst_store.at(dst_index), dst_subterms, call_capacity);
                 return NodeIndex(dst_index, src_ref.type);
             }
@@ -1043,16 +1045,16 @@ namespace simp {
                 if (var.condition.get_type() == Literal::native && !meets_restriction(ref, to_native(var.condition))) {
                     return false;
                 }
-                SharedSingleMatchEntry& entry = match_data.single_match_data[var.match_data_index];
+                SharedSingleMatchEntry& entry = match_data.single_vars[var.match_data_index];
                 entry.match_idx = ref.typed_idx();
                 return test_condition(pn_ref.new_at(var.condition), match_data);
             }
             case NodeType(SingleMatch::unrestricted): {
-                match_data.single_match_data[pn_ref.index].match_idx = ref.typed_idx();
+                match_data.single_vars[pn_ref.index].match_idx = ref.typed_idx();
                 return true;
             }
             case NodeType(SingleMatch::weak): {
-                const SharedSingleMatchEntry entry = match_data.single_match_data[pn_ref.index];
+                const SharedSingleMatchEntry entry = match_data.single_vars[pn_ref.index];
                 assert(entry.is_set());
                 return compare_tree(ref.new_at(entry.match_idx), ref) == std::strong_ordering::equal;
             }
@@ -1140,8 +1142,8 @@ namespace simp {
                 return false; 
             }
 
-            const PatternCallData pattern_info = pattern_call_meta_data(pn_ref);
-            SharedPatternCallEntry& this_entry = match_data.pattern_call_data[pattern_info.match_data_index];
+            const PatternCallData pattern_info = pattern_call_info(pn_ref);
+            SharedPatternCallEntry& this_entry = match_data.pattern_calls[pattern_info.match_data_index];
             assert(needle_i == 0u || this_entry.match_idx == hay_ref.typed_idx() && "rematch only with same subterm");
             this_entry.match_idx = hay_ref.typed_idx();
 
@@ -1152,7 +1154,7 @@ namespace simp {
 
             while (needle_i < needles.size()) {
                 if (needles[needle_i] == multi_marker) {
-                    assert(needle_i + 1u == needles.size() && "multi is only valid as last element");
+                    assert(needle_i + 1ull == needles.size() && "multi is only valid as last element");
                     return true; //multi scoops up all remaining pieces in haystack
                 }
                 const UnsaveRef needle_ref = pn_ref.new_at(needles[needle_i]);

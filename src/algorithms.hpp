@@ -17,8 +17,7 @@ namespace simp {
     namespace normalize {
         struct Options 
         {
-            bool exact = true; //(only significant if eval_values) true: only exact operations are permitted
-            bool eval_lambdas = true; //seems to be self explanatory
+            bool exact = true; //true: only exact operations are permitted
             bool normalize_lambdas = true; //true: all nested lambdas become transparent & unessecary indirections are removed
             bool remove_unary_assoc = true; //true: "f(a) -> a" for all associative f (e.g. sum, product, and...)
         };

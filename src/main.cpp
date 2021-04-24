@@ -13,10 +13,10 @@
 TODO:
 
 important:
- - start building RuleSet
- - store hints for faster matching in PatternCallData
- - type checking (extended: keep track of what restrictions apply to match variable in lhs, use in rhs)
+ - implement fst, snd, ffilter, fsplit, ...
  - add eval_buildin for min/max to remove values guaranteed to not be minimum / maximum without requiring full evaluation
+ - store hints for faster /nonrepetitive matching in PatternCallData
+ - type checking (extended: keep track of what restrictions apply to match variable in lhs, use in rhs)
  - finnish building / verifying pattern:
       - verify only one occurence of each multi match
       - verify only one occurence of multi match in one Comm, any number of occurences in one NonComm, no occurences elsewhere
@@ -60,7 +60,7 @@ int main()
 	}
 	{
 		const auto names = std::to_array<std::string>({
-			{ "(\\x .\\x. x)(1)(2)" },
+			{ "list(conj(3-i), conj(4+3i), conj(8), conj(-i))" },
 			{ "(\\f n. f(f, n))(\\f n.(n <= 1)(1, n * f(f, -1 + n)), 5)" },
 			{ "(\\f n. f(f, n))(\\f n.(n == 1)(1, n * f(f, -1 + n)), 5)" },
 			{ "list(3 == 4, 3 != 4, 3 < 4, 3 <= 4, 3 >= 4, 3 > 4)" },
@@ -167,14 +167,14 @@ int main()
 			//{ "n :nat, a, b, tail :list... | list_fibs(n, list{a, b, tail}) = list_fibs(n - 1, list{force(a + b), a, b, tail})" },
 			//{ "              tail :list... | list_fibs(0, list{tail})       = list{tail}" },
 
-			{ "'ffilter'(p, f(xs...)) = 'take_true'(f(), fmap(\\x .pair(p(x), x), f(xs...)))" },
+			{ "ffilter(p, f(xs...)) = 'take_true'(f(), fmap(\\x .pair(p(x), x), f(xs...)))" },
 			{ "'take_true'(f(xs...), f(pair(true, x), ys...)) = 'take_true'(f(xs..., x), f(ys...))" },
 			{ "'take_true'(f(xs...), f(pair(_   , x), ys...)) = 'take_true'(f(xs...), f(ys...))" },
 			{ "'take_true'(f(xs...), f())                     = f(xs...)" },
 
 			{ "'sort'(list())         = list()" },
 			{ "'sort'(list(x))        = list(x)" },
-			{ "'sort'(list(x, xs...)) = 'concatcos'('ffilter'(\\y .y < x, list(xs...)), x, 'ffilter'(\\y .y >= x, list(xs...)))" },
+			{ "'sort'(list(x, xs...)) = 'concatcos'(ffilter(\\y .y < x, list(xs...)), x, ffilter(\\y .y >= x, list(xs...)))" },
 			{ "'concatcons'(list(xs...), x, list(ys...)) = list(xs..., x, ys...)" },
 			
 			{ "union(set(xs...), set(ys...)) = set(xs..., ys...)" },
@@ -186,8 +186,8 @@ int main()
 			{ "min{x, y} | x :real, y :real, x > y = y" },
 			{ "max{x, y} | x :real, y :real, x > y = x" },
 			
-			{ "'foldl'(f, acc, list{x, xs}) = f(x, 'foldl'(f, acc, list{xs}))" },
-			{ "'foldl'(f, acc, list{})      = acc" },
+			{ "foldr(f, acc, list())         = acc" },
+			{ "foldr(f, acc, list(x, xs...)) = f(x, foldr(f, acc, list(xs...)))" },
 		};
 		for (const simp::RuleRef rule : rules) {
 			std::cout << rule.to_string() << "\n\n";

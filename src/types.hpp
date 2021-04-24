@@ -134,25 +134,26 @@ namespace simp {
 		{
 			pow,    //params[0] := base      params[1] := expo    
 			log,	//params[0] := base      params[1] := argument
-			sqrt,	//params[0] := argument
-			exp,	//params[0] := argument
-			ln,		//params[0] := argument
-			sin,	//params[0] := argument
-			cos,	//params[0] := argument
-			tan,	//params[0] := argument
-			sinh,	//params[0] := argument
-			cosh,	//params[0] := argument
-			tanh,	//params[0] := argument
-			asin,	//params[0] := argument
-			acos,	//params[0] := argument
-			atan,	//params[0] := argument
-			asinh,	//params[0] := argument
-			acosh,	//params[0] := argument
-			atanh,	//params[0] := argument
-			abs,	//params[0] := argument
-			arg,	//params[0] := argument
-			re,		//params[0] := argument
-			im,		//params[0] := argument
+			sqrt,	
+			exp,	
+			ln,		
+			sin,	
+			cos,	
+			tan,	
+			sinh,	
+			cosh,	
+			tanh,	
+			asin,	
+			acos,	
+			atan,	
+			asinh,	
+			acosh,	
+			atanh,	
+			abs,	
+			arg,	
+			re,		
+			im,		
+			conj, 
 			floor,  //round down
 			ceil,   //round up
 			COUNT
@@ -187,8 +188,15 @@ namespace simp {
 			diff,   //params[0] := function call  params[1] := variable the derivation is done in respect to
 			fdiff, //params[0] := function (e.g. "fdiff(sin) -> cos" or "fdiff(tan) -> \x .1/cos(x)^2" or "fdiff(\x .x^2) -> \x .2 x")
 			pair,   //two parameters, no evaluation
-			triple, //three parameters, no evaluation
-			fmap, //params[0] := unary lambda, params[1] := function call evaluates "fmap(f, g(xs...)) -> g(f(xs)...)"
+			fst, //access pair elements
+			snd, //access pair elements
+
+			//as in haskell, but applicable to any function call, not just lists:
+			fmap, //params[0] := unary lambda, params[1] := function call (evaluates "fmap(f, g(xs...)) -> g(f(xs)...)")
+			ffilter, //params[0] := unary lambda returning bool, params[1] := function call (leaves only parameters of params[1] where params[0] returns true)
+			fsplit, //as ffilter, but returns both subsets (predicate true and else) as pair
+			ffoldl, //folds call from left
+			ffoldr, //folds call from right
 			COUNT
 		};
 
@@ -299,7 +307,7 @@ namespace simp {
 
 	struct RestrictedSingleMatch
 	{
-		std::uint32_t match_data_index; //indexes in MatchData::single_match_data
+		std::uint32_t match_data_index; //indexes in MatchData::single_vars
 		NodeIndex condition; //eighter Literal::native, then assumed to be some subset, or call to some testable expression
 	};
 
@@ -315,7 +323,7 @@ namespace simp {
 
 	struct ValueMatch
 	{
-		std::uint32_t match_data_index; //indexes in MatchData::value_match_data
+		std::uint32_t match_data_index; //indexes in MatchData::value_vars
 		nv::ComplexSubset domain = nv::ComplexSubset::complex;
 		NodeIndex match_index;
 		bool owner;
@@ -401,27 +409,27 @@ namespace simp {
 	}
 
 	template<bmath::intern::Reference R> requires (!requires { R::store; })
-		constexpr auto begin(const R& ref) noexcept
+	constexpr auto begin(const R& ref) noexcept
 	{
 		assert(ref.type == Literal::call || ref.type == PatternCall{});
 		return ref->call.begin();
 	}
 
 	template<bmath::intern::Reference R> requires (!requires { R::store; })
-		constexpr auto end(const R& ref) noexcept
+	constexpr auto end(const R& ref) noexcept
 	{
 		assert(ref.type == Literal::call || ref.type == PatternCall{});
 		return ref->call.end();
 	}
 
 
-	constexpr const PatternCallData& pattern_call_meta_data(const UnsaveRef ref)
+	constexpr inline const PatternCallData& pattern_call_info(const UnsaveRef ref)
 	{
 		assert(ref.type == PatternCall{});
 		return *(ref.ptr - 1u);
 	}
 
-	constexpr PatternCallData& pattern_call_meta_data(const MutRef ref)
+	constexpr inline PatternCallData& pattern_call_info(const MutRef ref)
 	{
 		assert(ref.type == PatternCall{});
 		return *(&ref.store->at(ref.index) - 1u);
@@ -499,6 +507,7 @@ namespace simp {
 			{ CtoC::arg                 , "arg"       , 1u, { Literal::complex    }, ComplexSubset::not_negative },
 			{ CtoC::re                  , "re"        , 1u, { Literal::complex    }, ComplexSubset::real         },
 			{ CtoC::im                  , "im"        , 1u, { Literal::complex    }, ComplexSubset::real         },
+			{ CtoC::conj                , "conj"      , 1u, { Literal::complex    }, Literal::complex            },
 			{ CtoC::floor               , "floor"     , 1u, { ComplexSubset::real }, ComplexSubset::integer      },
 			{ CtoC::ceil                , "ceil"      , 1u, { ComplexSubset::real }, ComplexSubset::integer      },
 			{ MiscFn::id                , "id"        , 1u, { Restr::any          }, Restr::any                  },
@@ -506,8 +515,13 @@ namespace simp {
 			{ MiscFn::diff              , "diff"      , 2u, { Restr::any, Literal::symbol }, Restr::any          },
 			{ MiscFn::fdiff             , "fdiff"     , 1u, { Restr::callable     }, Restr::callable             },
 			{ MiscFn::pair              , "pair"      , 2u, {}                     , MiscFn::pair                },
-			{ MiscFn::triple            , "triple"    , 3u, {}                     , MiscFn::triple              },
+			{ MiscFn::fst               , "fst"       , 1u, { MiscFn::pair        }, Restr::any                  },
+			{ MiscFn::snd               , "snd"       , 1u, { MiscFn::pair        }, Restr::any                  },
 			{ MiscFn::fmap              , "fmap"      , 2u, { Restr::callable, Literal::call }, Literal::call    },
+			{ MiscFn::ffilter           , "ffilter"   , 2u, { Restr::callable, Literal::call }, Literal::call    },
+			{ MiscFn::fsplit            , "fsplit"    , 2u, { Restr::callable, Literal::call }, MiscFn::pair     },
+			{ MiscFn::ffoldl            , "ffoldl"    , 2u, { Restr::callable, Restr::any, Literal::call }, Restr::any }, //foldl f z (x:xs) = foldl f (f z x) xs
+			{ MiscFn::ffoldr            , "ffoldr"    , 2u, { Restr::callable, Restr::any, Literal::call }, Restr::any }, //foldr f z (x:xs) = f x (foldr f z xs) 
 			{ PatternAuxFn::value_match , "_VM"       , 3u, { PatternUnsigned{}, Literal::native, Restr::any }, Restr::any }, //layout as in ValueMatch (minus .owner)
 			{ PatternAuxFn::of_type     , "_Of_T"     , 2u, { Restr::any, Literal::native }, Restr::boolean      },
 		});
@@ -704,26 +718,26 @@ namespace simp {
 			//maximal number of unrelated value match variables allowed per pattern
 			static constexpr std::size_t max_value_match_count = 2u;
 
-			std::array<SharedPatternCallEntry, max_pattern_call_count> pattern_call_data = {};
-			std::array<SharedSingleMatchEntry, max_value_match_count> single_match_data = {};
-			std::array<SharedValueMatchEntry, max_single_match_count> value_match_data = {};
+			std::array<SharedPatternCallEntry, max_pattern_call_count> pattern_calls = {};
+			std::array<SharedSingleMatchEntry, max_value_match_count> single_vars = {};
+			std::array<SharedValueMatchEntry, max_single_match_count> value_vars = {};
 
 			constexpr auto& value_info(const ValueMatch& var) noexcept
-			{	return this->value_match_data[var.match_data_index];
+			{	return this->value_vars[var.match_data_index];
 			}
 
 			constexpr auto& value_info(const ValueMatch& var) const noexcept
-			{	return this->value_match_data[var.match_data_index];
+			{	return this->value_vars[var.match_data_index];
 			}
 
 			constexpr auto& call_info(const UnsaveRef ref) noexcept
 			{	assert(ref.type == PatternCall{});
-				return this->pattern_call_data[pattern_call_meta_data(ref).match_data_index];
+				return this->pattern_calls[pattern_call_info(ref).match_data_index];
 			}
 
 			constexpr auto& call_info(const UnsaveRef ref) const noexcept
 			{	assert(ref.type == PatternCall{});
-				return this->pattern_call_data[pattern_call_meta_data(ref).match_data_index];
+				return this->pattern_calls[pattern_call_info(ref).match_data_index];
 			}
 
 			constexpr MatchData(const TermNode* data_) noexcept :haystack_data(data_) {}

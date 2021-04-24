@@ -208,8 +208,8 @@ namespace bmath::intern::debug {
 			{ "f, x, xs :list... | map(f, list{x, xs}) = cons(call(f, x), map(f, list{xs}))" },
 			{ "f,                | map(f, list{})      = list{}" },
 
-			{ "f, acc, x, xs :list... | foldl(f, acc, list{x, xs}) = call(f, x, foldl(f, acc, list{xs}))" },
-			{ "f, acc,                | foldl(f, acc, list{})      = acc" },
+			{ "f, acc, x, xs :list... | foldr(f, acc, list{x, xs}) = call(f, x, foldr(f, acc, list{xs}))" },
+			{ "f, acc,                | foldr(f, acc, list{})      = acc" },
 
 			{ "'Y' = lambda(call($0, call($1, $1), call($0, call($1, $1))))" },
 			//{ "'Y' = [\\f.[\\x.f(x(x))](\\x.f(x(x)))]" },

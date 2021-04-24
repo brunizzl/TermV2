@@ -573,7 +573,7 @@ namespace simp {
 				str.append(ref->symbol);
 				break;
 			case NodeType(PatternCall{}): 
-				append_pattern_meta_data(pattern_call_meta_data(ref), str);
+				append_pattern_meta_data(pattern_call_info(ref), str);
 				[[fallthrough]];				
 			case NodeType(Literal::call): { 
 				const Call& call = *ref;
@@ -692,7 +692,7 @@ namespace simp {
 			case NodeType(PatternCall{}): {
 				std::string& prev_str = rows[ref.index - 1u];
 				prev_str += "meta data  : ";
-				append_pattern_meta_data(pattern_call_meta_data(ref), prev_str);
+				append_pattern_meta_data(pattern_call_info(ref), prev_str);
 			} [[fallthrough]];
 			case NodeType(Literal::call): {
 				//parameters:
