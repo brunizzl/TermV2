@@ -374,6 +374,8 @@ namespace simp {
 			heads.rhs = parse::build(store, infos, rhs_view); 
 
 			heads.lhs = normalize::recursive(MutRef(store, heads.lhs), {}, 0);
+			heads.lhs = normalize::recursive(MutRef(store, heads.lhs), 
+				{ .eval_haskell = false, .remove_unary_assoc = false }, 0);
 
 			//extra condition concerning single match variables (might set multiple in relation)
 			struct SingleCondition
@@ -563,8 +565,9 @@ namespace simp {
 			str.append("]");
 		}
 
-		void append_to_string(const UnsaveRef ref, std::string& str, const int parent_infixr, const bool print_operators)
+		void append_to_string(const UnsaveRef ref, std::string& str, const int parent_infixr)
 		{
+			bool print_this_operator = true;
 			switch (ref.type) {
 			case NodeType(Literal::complex):
 				bmath::intern::print::append_complex(*ref, str, parent_infixr);
@@ -574,6 +577,7 @@ namespace simp {
 				break;
 			case NodeType(PatternCall{}): 
 				append_pattern_meta_data(pattern_call_info(ref), str);
+				print_this_operator = false;
 				[[fallthrough]];				
 			case NodeType(Literal::call): { 
 				const Call& call = *ref;
@@ -581,7 +585,7 @@ namespace simp {
 				const char* replacement_seperator = nullptr;
 				const auto [init, seperator] = [&]() -> std::pair<const char*, const char*> {
 					using namespace nv;
-					if (function.get_type() == Literal::native && print_operators) {
+					if (function.get_type() == Literal::native && print_this_operator) {
 						switch (to_native(function)) {
 						case Native(Comm::sum):             return { "" , " + "  };
 						case Native(Comm::product):         return { "" , " * "  };
@@ -598,15 +602,15 @@ namespace simp {
 						case Native(PatternAuxFn::of_type): return { "" , " :"   };
 						}
 					}
-					append_to_string(ref.new_at(function), str, max_infixr, print_operators);
+					append_to_string(ref.new_at(function), str, max_infixr);
 					return { "", ", " };
 				}();
-				const int own_infixr = print_operators ? infixr(function) : default_infixr;
+				const int own_infixr = print_this_operator ? infixr(function) : default_infixr;
 				if (own_infixr <= parent_infixr) { str.push_back('('); }				
 				const char* spacer = init;
 				for (const NodeIndex param : call.parameters()) {
 					str.append(std::exchange(spacer, seperator));
-					append_to_string(ref.new_at(param), str, own_infixr, print_operators);
+					append_to_string(ref.new_at(param), str, own_infixr);
 				}
 				if (own_infixr <= parent_infixr) { str.push_back(')'); }
 			} break;
@@ -616,7 +620,7 @@ namespace simp {
 			case NodeType(Literal::lambda): {
 				const Lambda& lambda = *ref;
 				str.append(lambda.transparent ? "(\\" : "{\\");
-				append_to_string(ref.new_at(lambda.definition), str, max_infixr, print_operators);
+				append_to_string(ref.new_at(lambda.definition), str, max_infixr);
 				str.push_back(lambda.transparent ? ')' : '}');
 			} break;
 			case NodeType(Literal::lambda_param):
@@ -628,7 +632,7 @@ namespace simp {
 				str.append("_X");
 				str.append(std::to_string(var.match_data_index));
 				str.append("[");
-				append_to_string(ref.new_at(var.condition), str, default_infixr, print_operators);
+				append_to_string(ref.new_at(var.condition), str, default_infixr);
 				str.append("]");
 			} break;				
 			case NodeType(SingleMatch::unrestricted):
@@ -650,7 +654,7 @@ namespace simp {
 				str.append("_V");
 				str.append(std::to_string(var.match_data_index));
 				str.append("[");
-				append_to_string(ref.new_at(var.match_index), str, default_infixr, print_operators);
+				append_to_string(ref.new_at(var.match_index), str, default_infixr);
 				str.append("]");
 			} break;
 			case NodeType(PatternUnsigned{}):
@@ -735,7 +739,7 @@ namespace simp {
 
 			//append name of subterm to line
 			current_str.append(std::max(0, 38 - (int)current_str.size()), ' ');
-			print::append_to_string(ref, current_str, 0, false);
+			print::append_to_string(ref, current_str, 0);
 		} //append_memory_row
 
 		std::string to_memory_layout(const Store& store, const std::initializer_list<const NodeIndex> heads)

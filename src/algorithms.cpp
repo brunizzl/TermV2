@@ -58,7 +58,7 @@ namespace simp {
             case nv::Native(nv::Restr::boolean):
                 return ref.type == Literal::native && nv::Native(ref.index).is<nv::Bool>();
             case nv::Native(nv::Restr::callable):
-                return ref.type == Literal::native || ref.type == Literal::lambda;
+                return bmath::intern::is_one_of<Literal::lambda, Literal::symbol, Literal::native>(ref.type);
             default:
                 assert(false);
                 BMATH_UNREACHABLE;
@@ -407,13 +407,12 @@ namespace simp {
                     return bool_to_typed_idx(!is_ordered_as(std::strong_ordering::less));
                 case FixedArity(ToBool::smaller_eq):
                     return bool_to_typed_idx(!is_ordered_as(std::strong_ordering::greater));
-                case FixedArity(MiscFn::fmap): {
+                case FixedArity(HaskellFn::fmap): if (options.eval_haskell) {
                     const NodeIndex converter = call[1];
                     const NodeIndex convertee = call[2];
                     const MutRef converter_ref = ref.new_at(converter);
                     const MutRef convertee_ref = ref.new_at(convertee);
                     assert(convertee_ref.type == Literal::call);
-                    assert(is_unary_function(converter_ref));
                     const auto stop = end(convertee_ref);
                     auto iter = begin(convertee_ref);
                     for (++iter; iter != stop; ++iter) {
@@ -421,12 +420,12 @@ namespace simp {
                         const std::size_t call_index = ref.store->allocate_one();
                         const NodeIndex converter_copy = copy_tree(converter_ref, *ref.store);
                         ref.store->at(call_index) = Call({ converter_copy, *iter });
-                        *iter = eval_lambda(ref.new_at(NodeIndex(call_index, Literal::call)), options);
+                        *iter = outermost(ref.new_at(NodeIndex(call_index, Literal::call)), options, lambda_param_offset).res;
                     }
                     static_assert(Call::min_capacity >= 3u, "assumes fmap call to only use one store slot");
                     ref.store->free_one(ref.index); //free call to fmap
                     free_tree(converter_ref); //free function to map
-                    return convertee_ref.typed_idx();
+                    return outermost(convertee_ref, options, lambda_param_offset).res;
                 } break;
                 }
             } //end fixed arity
@@ -535,8 +534,9 @@ namespace simp {
             return literal_nullptr;
         } //eval_buildin
 
-        NodeIndex outermost(MutRef ref, const Options options, const unsigned lambda_param_offset)
+        Result outermost(MutRef ref, const Options options, const unsigned lambda_param_offset)
         {
+            bool change = false;
             assert(ref.type != PatternCall{});
             if (ref.type == Literal::call) {  
                 const NodeIndex function = ref->call.function();
@@ -546,7 +546,7 @@ namespace simp {
                     const bool associative = buildin_type.is<nv::Variadic>() && 
                         nv::is_associative(buildin_type.to<nv::Variadic>());
                     if (associative) {
-                        merge_associative_calls(ref, function);
+                        change |= merge_associative_calls(ref, function);
                     }
                     if (buildin_type.is<nv::Comm>()) {
                         auto range = ref->call.parameters();
@@ -559,21 +559,21 @@ namespace simp {
                         res != literal_nullptr) 
                     {
                         //if the function could be fully evaluated, the following step(s) can no longer be executed -> return
-                        return res;
+                        return { res, true };
                     }
                     if (associative && options.remove_unary_assoc) {
                         const Call& call = *ref;
                         if (call.size() == 2u) { //only contains function type and single parameter
                             const NodeIndex single_param = call[1u];
                             Call::free(*ref.store, ref.index);
-                            return single_param;
+                            return { single_param, true };
                         }
                     }
                 } break;
                 case NodeType(Literal::lambda): {
                     if (lambda_param_offset == 0u) {
                         const NodeIndex evaluated = eval_lambda(ref, options);
-                        return evaluated;
+                        return { evaluated, true };
                     }
                 } break;
                 }
@@ -586,6 +586,7 @@ namespace simp {
                     if (!lambda.transparent && lambda_param_offset != 0u) {
                         lambda.transparent = true;
                         lambda.definition = add_offset(ref.new_at(lambda.definition), lambda_param_offset);
+                        change = true;
                     }
                     if (lambda.definition.get_type() == Literal::lambda) {
                         const UnsaveRef nested = ref.new_at(lambda.definition);
@@ -593,10 +594,11 @@ namespace simp {
                         lambda.definition = nested->lambda.definition;
                         lambda.param_count += nested->lambda.param_count;
                         ref.store->free_one(nested.index);
+                        change = true;
                     }
                 }
             } //end ref.type == Literal::lambda
-            return ref.typed_idx();
+            return { ref.typed_idx(), change };
         } //outermost
 
         NodeIndex recursive(MutRef ref, const Options options, const unsigned lambda_param_offset)
@@ -606,7 +608,7 @@ namespace simp {
                 auto iter = begin(ref);
                 *iter = normalize::recursive(ref.new_at(*iter), options, lambda_param_offset);
                 if (nv::is_lazy(*iter)) {
-                    const NodeIndex result = normalize::outermost(ref, options, lambda_param_offset);
+                    const NodeIndex result = normalize::outermost(ref, options, lambda_param_offset).res;
                     return normalize::recursive(ref.new_at(result), options, lambda_param_offset);
                 }
                 else [[likely]] {
@@ -621,7 +623,7 @@ namespace simp {
                 ref->lambda.definition = normalize::recursive(
                     ref.new_at(lambda.definition), options, lambda_param_offset + lambda.param_count);
             }
-            return normalize::outermost(ref, options, lambda_param_offset);
+            return normalize::outermost(ref, options, lambda_param_offset).res;
         } //recursive
 
     } //namespace normalize
@@ -642,7 +644,7 @@ namespace simp {
             for (const NodeIndex subtree : ref) {
                 free_tree(ref.new_at(subtree));
             }
-            if (ref.type == Literal::call) {
+            if (ref.type == Literal::call) [[likely]] {
                 Call::free(*ref.store, ref.index);
             }
             else {
@@ -1131,9 +1133,6 @@ namespace simp {
             const std::span<const NodeIndex> needles = pn_ref->call.parameters();
             const std::span<const NodeIndex> haystack = hay_ref->call.parameters();
 
-            assert(std::is_sorted(needles.begin(), needles.end(), [&](auto lhs, auto rhs) {
-                return compare_tree(pn_ref.new_at(lhs), pn_ref.new_at(rhs)) == std::strong_ordering::less;
-            }));
             assert(std::is_sorted(haystack.begin(), haystack.end(), [&](auto lhs, auto rhs) {
                 return compare_tree(hay_ref.new_at(lhs), hay_ref.new_at(rhs)) == std::strong_ordering::less;
             }));
@@ -1143,13 +1142,13 @@ namespace simp {
             }
 
             const PatternCallData pattern_info = pattern_call_info(pn_ref);
-            SharedPatternCallEntry& this_entry = match_data.pattern_calls[pattern_info.match_data_index];
-            assert(needle_i == 0u || this_entry.match_idx == hay_ref.typed_idx() && "rematch only with same subterm");
-            this_entry.match_idx = hay_ref.typed_idx();
+            SharedPatternCallEntry& needles_data = match_data.pattern_calls[pattern_info.match_data_index];
+            assert(needle_i == 0u || needles_data.match_idx == hay_ref.typed_idx() && "rematch only with same subterm");
+            needles_data.match_idx = hay_ref.typed_idx();
 
             auto currently_matched = bmath::intern::BitVector(haystack.size() + 1u); //one bit for each element in haystack + 1u for end
             for (std::uint32_t i = 0u; i < needle_i; i++) {
-                currently_matched.set(this_entry.match_positions[i]);
+                currently_matched.set(needles_data.match_positions[i]);
             }
 
             while (needle_i < needles.size()) {
@@ -1169,7 +1168,7 @@ namespace simp {
                     return false; //failed to match first needle -> there is no hope
                 }
                 needle_i--;
-                hay_k = this_entry.match_positions[needle_i];
+                hay_k = needles_data.match_positions[needle_i];
                 if (!pattern_info.rematchable.test(needle_i) ||
                     !rematch(pn_ref.new_at(needles[needle_i]), hay_ref.new_at(haystack[hay_k]), match_data))
                 { //could not rematch last successfully-matched needle-hay pair with each other again
@@ -1179,8 +1178,8 @@ namespace simp {
                     continue;
                 }
             prepare_next_needle:
-                currently_matched.set(hay_k);                 //already set if needle was rematched
-                this_entry.match_positions[needle_i] = hay_k; //already set if needle was rematched
+                currently_matched.set(hay_k);                   //already set if needle was rematched
+                needles_data.match_positions[needle_i] = hay_k; //already set if needle was rematched
                 hay_k = pattern_info.always_preceeding_next.test(needle_i) ? 
                     hay_k + 1u : 
                     0u;
@@ -1196,5 +1195,76 @@ namespace simp {
 
 
     } //namespace match
+
+
+    NodeIndex copy_pattern_interpretation(const UnsaveRef pn_ref, const match::MatchData& match_data, 
+        const Store& src_store, Store& dst_store, const unsigned lambda_param_offset)
+    {
+        const auto insert_node = [&](const TermNode node, NodeType type) {
+            const std::size_t dst_index = dst_store.allocate_one();
+            dst_store.at(dst_index) = node;
+            return NodeIndex(dst_index, type);
+        };
+
+        switch (pn_ref.type) {
+        case NodeType(Literal::complex): {
+            return insert_node(*pn_ref, pn_ref.type);
+        } break;
+        case NodeType(Literal::symbol): {
+            const Symbol& src_var = *pn_ref;
+            const auto src_name = std::string(src_var.data(), src_var.size());
+            const std::size_t dst_index = Symbol::build(dst_store, src_name);
+            return NodeIndex(dst_index, pn_ref.type);
+        } break;
+        case NodeType(Literal::native):
+            return pn_ref.typed_idx();
+        case NodeType(Literal::lambda): {
+            Lambda dst_lam = *pn_ref;
+            dst_lam.definition = copy_pattern_interpretation(
+                pn_ref.new_at(dst_lam.definition), match_data, src_store, dst_store, lambda_param_offset + dst_lam.param_count);
+            return insert_node(dst_lam, pn_ref.type);
+        } break;
+        case NodeType(Literal::lambda_param):
+            return pn_ref.typed_idx();
+        case NodeType(Literal::call): {
+            bmath::intern::StupidBufferVector<NodeIndex, 16> dst_subterms;
+            const auto stop = end(pn_ref);
+            for (auto iter = begin(pn_ref); iter != stop; ++iter) {
+                if (iter->get_type() == SpecialMatch::multi) {
+                    const MultiMatch multi = *pn_ref.new_at(*iter);
+                    assert(multi.nr_of_prev_multis == -1u && "only commutative is implemented so far here");
+                    const match::SharedPatternCallEntry& entry = match_data.pattern_calls[multi.match_data_index];
+                    const Ref donator = Ref(src_store, entry.match_idx);
+                    const auto donator_stop = end(donator);
+                    for (auto donator_iter = begin(donator); donator_iter != donator_stop; ++donator_iter) {
+                        if (!entry.index_matched(donator_iter.array_idx)) {
+                            const NodeIndex dst_param = copy_tree(Ref(src_store, *donator_iter), dst_store); //call normal copy!
+                            dst_subterms.push_back(dst_param);
+                        }
+                    }
+                }
+                else {
+                    dst_subterms.push_back(copy_pattern_interpretation(
+                        pn_ref.new_at(*iter), match_data, src_store, dst_store, lambda_param_offset));
+                }
+            }
+            const std::size_t dst_index = Call::build(dst_store, dst_subterms);
+            return normalize::outermost(MutRef(dst_store, NodeIndex(dst_index, pn_ref.type)), {}, lambda_param_offset).res;
+        } break;
+        case NodeType(SingleMatch::weak): {
+            const match::SharedSingleMatchEntry& entry = match_data.single_vars[pn_ref.index];
+            assert(entry.is_set());
+            return copy_tree(Ref(src_store, entry.match_idx), dst_store); //call to different copy!
+        } break;
+        case NodeType(SpecialMatch::value): {
+            const Complex& val = match_data.value_info(*pn_ref).value;
+            return insert_node(val, Literal::complex);
+        } break;
+        default:
+            assert(false);
+            BMATH_UNREACHABLE;
+            return literal_nullptr;
+        }
+    } //copy_pattern_interpretation
  
 } //namespace simp

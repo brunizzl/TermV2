@@ -127,12 +127,12 @@ namespace simp {
 
 	namespace print {
 
-		void append_to_string(const UnsaveRef ref, std::string& str, const int parent_infixr, const bool print_operators);
+		void append_to_string(const UnsaveRef ref, std::string& str, const int parent_infixr);
 
 		inline std::string to_string(const UnsaveRef ref)
 		{
 			std::string name;
-			print::append_to_string(ref, name, 0, true);
+			print::append_to_string(ref, name, 0);
 			return name;
 		}
 

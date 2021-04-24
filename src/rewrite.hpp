@@ -45,7 +45,7 @@ namespace simp {
 		using difference_type = void;
 		using pointer = void;
 		using reference = void;
-		using iterator_category = std::forward_iterator_tag;
+		using iterator_category = std::forward_iterator_tag; //TODO: make random access iterator
 
 		RuleSetIter& operator++() noexcept { ++this->iter; return *this; }
 		RuleSetIter operator++(int) noexcept { auto result = *this; ++(*this); return result; }
@@ -65,6 +65,13 @@ namespace simp {
 		}
 	};
 
+	struct RuleRange 
+	{
+		RuleSetIter start, stop;
+		RuleSetIter begin() const noexcept { return this->start; }
+		RuleSetIter end() const noexcept { return this->stop; }
+	};
+
 	struct RuleSet
 	{
 		MonotonicStore store;
@@ -78,10 +85,25 @@ namespace simp {
 		RuleSetIter begin() const noexcept { return { this->rules.begin(), this->store.data() }; }
 		RuleSetIter end() const noexcept { return { this->rules.end(), this->store.data() }; }
 
+		RuleRange applicable_rules(const UnsaveRef ref) const noexcept;
+
 	private:
 		void migrate_rules(const Store& temp_store);
 	};
 
+	struct RuleApplicationRes
+	{
+		NodeIndex result_term;
+		RuleSetIter rule;
+	};
+	//tries to match every maybe applicable rule, returns first succesfull rule application,
+	//the old ref is not deleted.
+	//if no match was found, { literal_nullptr, undefined } is returned
+	[[nodiscard]] RuleApplicationRes shallow_apply_ruleset(const RuleSet& rules, const Ref ref,
+		Store& dst_store, const unsigned lambda_param_offset, match::MatchData& match_data);
 
+	//lazyliy applies first rule applicable in depth first search in ref until no further rules can be applied
+	[[nodiscard]] NodeIndex greedy_apply_ruleset(const RuleSet& rules, MutRef ref,
+		const unsigned lambda_param_offset);
 
 } //namespace simp

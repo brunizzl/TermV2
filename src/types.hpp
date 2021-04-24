@@ -190,8 +190,12 @@ namespace simp {
 			pair,   //two parameters, no evaluation
 			fst, //access pair elements
 			snd, //access pair elements
+			COUNT
+		};
 
-			//as in haskell, but applicable to any function call, not just lists:
+		//as in haskell, but applicable to any function call, not just lists:
+		enum class HaskellFn
+		{
 			fmap, //params[0] := unary lambda, params[1] := function call (evaluates "fmap(f, g(xs...)) -> g(f(xs)...)")
 			ffilter, //params[0] := unary lambda returning bool, params[1] := function call (leaves only parameters of params[1] where params[0] returns true)
 			fsplit, //as ffilter, but returns both subsets (predicate true and else) as pair
@@ -212,7 +216,7 @@ namespace simp {
 		//behavior for every specific element in FixedArity is (at least) defined at array nv::fn_props_table specifying name and arity
 		// if the element in Fn is of order one (no functions as arguments / results), 
 		//  function nv::eval specifies how to evaluate
-		using FixedArity = SumEnum<PatternAuxFn, MiscFn, CtoC, ToBool, Bool>;
+		using FixedArity = SumEnum<PatternAuxFn, HaskellFn, MiscFn, CtoC, ToBool, Bool>;
 
 		//everything callable
 		using Function_ = SumEnum<Variadic, FixedArity>;
@@ -221,7 +225,7 @@ namespace simp {
 		enum class Restr
 		{
 			any, //everything is possible
-			callable, //eighter Literal::lambda or Literal::native with .is<Function_>()
+			callable, //eighter Literal::lambda or Literal::native with .is<Function_>() or Literal::symbol
 			boolean, //maybe add "types" section to native, handle bool there?
 			COUNT
 		};
@@ -517,11 +521,11 @@ namespace simp {
 			{ MiscFn::pair              , "pair"      , 2u, {}                     , MiscFn::pair                },
 			{ MiscFn::fst               , "fst"       , 1u, { MiscFn::pair        }, Restr::any                  },
 			{ MiscFn::snd               , "snd"       , 1u, { MiscFn::pair        }, Restr::any                  },
-			{ MiscFn::fmap              , "fmap"      , 2u, { Restr::callable, Literal::call }, Literal::call    },
-			{ MiscFn::ffilter           , "ffilter"   , 2u, { Restr::callable, Literal::call }, Literal::call    },
-			{ MiscFn::fsplit            , "fsplit"    , 2u, { Restr::callable, Literal::call }, MiscFn::pair     },
-			{ MiscFn::ffoldl            , "ffoldl"    , 2u, { Restr::callable, Restr::any, Literal::call }, Restr::any }, //foldl f z (x:xs) = foldl f (f z x) xs
-			{ MiscFn::ffoldr            , "ffoldr"    , 2u, { Restr::callable, Restr::any, Literal::call }, Restr::any }, //foldr f z (x:xs) = f x (foldr f z xs) 
+			{ HaskellFn::fmap           , "fmap"      , 2u, { Restr::callable, Literal::call }, Literal::call    },
+			{ HaskellFn::ffilter        , "ffilter"   , 2u, { Restr::callable, Literal::call }, Literal::call    },
+			{ HaskellFn::fsplit         , "fsplit"    , 2u, { Restr::callable, Literal::call }, MiscFn::pair     },
+			{ HaskellFn::ffoldl         , "ffoldl"    , 2u, { Restr::callable, Restr::any, Literal::call }, Restr::any }, //foldl f z (x:xs) = foldl f (f z x) xs
+			{ HaskellFn::ffoldr         , "ffoldr"    , 2u, { Restr::callable, Restr::any, Literal::call }, Restr::any }, //foldr f z (x:xs) = f x (foldr f z xs) 
 			{ PatternAuxFn::value_match , "_VM"       , 3u, { PatternUnsigned{}, Literal::native, Restr::any }, Restr::any }, //layout as in ValueMatch (minus .owner)
 			{ PatternAuxFn::of_type     , "_Of_T"     , 2u, { Restr::any, Literal::native }, Restr::boolean      },
 		});
@@ -719,8 +723,8 @@ namespace simp {
 			static constexpr std::size_t max_value_match_count = 2u;
 
 			std::array<SharedPatternCallEntry, max_pattern_call_count> pattern_calls = {};
-			std::array<SharedSingleMatchEntry, max_value_match_count> single_vars = {};
-			std::array<SharedValueMatchEntry, max_single_match_count> value_vars = {};
+			std::array<SharedSingleMatchEntry, max_single_match_count> single_vars = {};
+			std::array<SharedValueMatchEntry, max_value_match_count> value_vars = {};
 
 			constexpr auto& value_info(const ValueMatch& var) noexcept
 			{	return this->value_vars[var.match_data_index];

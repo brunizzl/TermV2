@@ -24,7 +24,7 @@ namespace simp {
 	std::string LiteralTerm::to_string() const noexcept
 	{
 		std::string res;
-		print::append_to_string(this->ref(), res, 0, true);
+		print::append_to_string(this->ref(), res, 0);
 		return res;
 	}
 
@@ -36,9 +36,9 @@ namespace simp {
 	std::string RuleRef::to_string() const noexcept
 	{
 		std::string res;
-		print::append_to_string(this->lhs, res, 0, false);
+		print::append_to_string(this->lhs, res, 0);
 		res.append(" = ");
-		print::append_to_string(this->rhs, res, 0, false);
+		print::append_to_string(this->rhs, res, 0);
 		return res;
 	}
 
@@ -82,6 +82,12 @@ namespace simp {
 		this->migrate_rules(temp_store);
 	} //RuleSet::add
 
+	RuleRange RuleSet::applicable_rules(const UnsaveRef ref) const noexcept
+	{
+		//TODO: binary search start and end
+		return { this->begin(), this->end() };
+	}
+
 	void RuleSet::migrate_rules(const Store& temp_store)
 	{
 		std::stable_sort(this->rules.begin(), this->rules.end(),
@@ -98,5 +104,66 @@ namespace simp {
 			this->rules[i].rhs = copy_tree(Ref(temp_store, this->rules[i].rhs), this->store);
 		}
 	} //RuleSet::migrate_rules
+
+	RuleApplicationRes shallow_apply_ruleset(const RuleSet& rules, const Ref ref, Store& dst_store, 
+		const unsigned lambda_param_offset, match::MatchData& match_data)
+	{
+		const RuleRange applicable_rules = rules.applicable_rules(ref);
+		const RuleSetIter stop = applicable_rules.end();
+		for (RuleSetIter iter = applicable_rules.begin(); iter != stop; ++iter) {
+			const RuleRef rule = *iter;
+			if (match::match_(rule.lhs, ref, match_data)) {
+				return { copy_pattern_interpretation(rule.rhs, match_data, *ref.store, dst_store, lambda_param_offset), iter };
+			}
+		}
+		return { literal_nullptr, stop };
+	} //shallow_apply_ruleset
+
+	NodeIndex recursive_greedy_apply(const RuleSet& rules, MutRef ref, const unsigned lambda_param_offset) {
+		{ //try replacing this
+			match::MatchData match_data = ref.store->data();
+			const RuleApplicationRes applied = shallow_apply_ruleset(rules, ref, *ref.store, lambda_param_offset, match_data);
+			if (applied.result_term != literal_nullptr) {
+				free_tree(ref);
+				return applied.result_term;
+			}
+		}
+		if (ref.type == Literal::call) {
+			bool change = false;
+			const auto stop = end(ref);
+			for (auto subterm = begin(ref); subterm != stop; ++subterm) {
+				const NodeIndex sub_result = recursive_greedy_apply(rules, ref.new_at(*subterm), lambda_param_offset);
+				if (sub_result != literal_nullptr) {
+					*subterm = sub_result;
+					change = true;
+				}
+			}
+			if (change) {
+				return normalize::outermost(ref, {}, lambda_param_offset).res;
+			}
+		}
+		else if (ref.type == Literal::lambda) {
+			const Lambda lambda = *ref;
+			const NodeIndex sub_result = recursive_greedy_apply(
+				rules, ref.new_at(lambda.definition), lambda_param_offset + lambda.param_count);
+			if (sub_result != literal_nullptr) {
+				ref->lambda.definition = sub_result;
+				return normalize::outermost(ref, {}, lambda_param_offset).res;
+			}
+		}
+		return literal_nullptr;
+	} //recursive_greedy_apply
+
+	NodeIndex greedy_apply_ruleset(const RuleSet& rules, MutRef ref, const unsigned lambda_param_offset)
+	{
+	apply_ruleset:
+		NodeIndex result = recursive_greedy_apply(rules, ref, lambda_param_offset);
+		if (result != literal_nullptr) {
+			ref.type = result.get_type();
+			ref.index = result.get_index();
+			goto apply_ruleset;
+		}
+		return ref.typed_idx();
+	}
 
 } //namespace simp

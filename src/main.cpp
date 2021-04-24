@@ -13,9 +13,15 @@
 TODO:
 
 important:
+ - finish match:
+	   - test_condition
+	   - find_shift
+	   - adjust rematch to work with implementation of find_shift
+	   - (eval_value_match)
  - implement fst, snd, ffilter, fsplit, ...
  - add eval_buildin for min/max to remove values guaranteed to not be minimum / maximum without requiring full evaluation
  - store hints for faster /nonrepetitive matching in PatternCallData
+ - only test subset of rulerange
  - type checking (extended: keep track of what restrictions apply to match variable in lhs, use in rhs)
  - finnish building / verifying pattern:
       - verify only one occurence of each multi match
@@ -28,10 +34,9 @@ important:
 
 nice to have:
  - implement meta_pn::match function for variadic patterns
- - achieve feature parity between compile time pattern and run time pattern (add value match to ct and conditions to rt)
+ - achieve feature parity between compile time pattern and run time pattern (add value match to ct)
  - enable StupidBufferVector to handle non-trivial destructible types -> change name to BufferVector
  - automate error checking in stupidTests.hpp -> change name to tests.hpp
- - pattern::match::copy should copy in same store (again...)
  - noexceptify everything
  - restructure everything to use modules (basically needed to constexprfy all the things)
  - allow to restrict a variables domain (split Literal::symbol in own enum?)
@@ -58,7 +63,7 @@ int main()
 				<< "\n";
 		}
 	}
-	{
+	if (false) {
 		const auto names = std::to_array<std::string>({
 			{ "list(conj(3-i), conj(4+3i), conj(8), conj(-i))" },
 			{ "(\\f n. f(f, n))(\\f n.(n <= 1)(1, n * f(f, -1 + n)), 5)" },
@@ -153,9 +158,9 @@ int main()
 			{ "fdiff(tan)    = \\x .cos(x)^(-2)" },
 			
 			//exponential runtime fibonacci implementation:
-			{ "'fib'(0)          = 0" },
-			{ "'fib'(1)          = 1" },
-			{ "'fib'(n) | n :nat = 'fib'(n - 1) + 'fib'(n - 2)" },
+			{ "'fib'(0) = 0" },
+			{ "'fib'(1) = 1" },
+			{ "'fib'(n) = 'fib'(n - 1) + 'fib'(n - 2)" },
 			
 			////reversing a list:
 			//{ "xs :list...                 | reverse(list{xs}) = reverse'(list{}, list{xs})" },
@@ -193,6 +198,44 @@ int main()
 			std::cout << rule.to_string() << "\n\n";
 		}
 		std::cout << "\n";
+
+		while (true) {
+			std::string name;
+			std::cout << "simp> ";
+			std::getline(std::cin, name);
+			try {
+				auto term = simp::LiteralTerm(name);
+				term.normalize();
+				term.head = simp::greedy_apply_ruleset(rules, term.mut_ref(), 0);
+				std::cout << " = " << term.to_string() << "\n\n";
+			}
+			catch (bmath::ParseFailure failure) {
+				std::cout << "parse failure: " << failure.what << '\n';
+				std::cout << name << '\n';
+				std::cout << std::string(failure.where, ' ') << "^\n\n";
+			}
+		}
+	}
+	{
+		const simp::RuleSet rules = {
+			{ " a^2 +  2 a b + b^2 =  (a + b)^2" },
+			{ "a bs... + a cs...   = a (product(bs...) + product(cs...))" },
+			{ "sin(x)^2 + cos(x)^2 = 1" },
+		};
+		const auto names = std::to_array<std::string>({
+			{ "sin(x)^2 + 2 sin(x) herbert + herbert^2" },
+			{ "sin(a + b)^2 + cos(a + b)^2" },
+			{ "a c d f + b c d g h" },
+		});
+		for (const auto& name : names) {
+			std::cout << name << "\n";
+			auto term = simp::LiteralTerm(name);
+			term.normalize();
+			for (const auto rule : rules) {
+				simp::match::MatchData match_data = term.store.data();
+				std::cout << "  " << (simp::match::match_(rule.lhs, term.ref(), match_data) ? "MAATCH " : "nope   ") << simp::print::to_string(rule.lhs) << "\n";
+			}
+		}
 	}
 	//debug::enumerate_type();
 	bmath::intern::debug::test_rechner();
