@@ -15,8 +15,8 @@ TODO:
 important:
  - finish match:
 	   - test_condition
-	   - find_shift
-	   - adjust rematch to work with implementation of find_shift
+	   - find_dilation
+	   - adjust rematch to work with implementation of find_dilation
 	   - (eval_value_match)
  - implement fst, snd, ffilter, fsplit, ...
  - add eval_buildin for min/max to remove values guaranteed to not be minimum / maximum without requiring full evaluation
@@ -24,7 +24,6 @@ important:
  - type checking (extended: keep track of what restrictions apply to match variable in lhs, use in rhs)
  - finnish building / verifying pattern:
       - check PatternCall to each not exceed maximal length and check numer of PatternCall in pattern not more than allowed 
-	  - check no call in pattern only contains multi match
       - enable hints for faster /nonrepetitive matching in PatternCallData
       - bubble value match variables up as high as possible, make first occurence owning
 
@@ -172,12 +171,18 @@ int main()
 			{ "ffilter(p, f(xs...)) = 'take_true'(f(), fmap(\\x .pair(p(x), x), f(xs...)))" },
 			{ "'take_true'(f(xs...), f(pair(true, x), ys...)) = 'take_true'(f(xs..., x), f(ys...))" },
 			{ "'take_true'(f(xs...), f(pair(_   , x), ys...)) = 'take_true'(f(xs...), f(ys...))" },
-			{ "'take_true'(f(xs...), f())                     = f(xs...)" },
+			{ "'take_true'(fxs, f())                          = fxs" },
 
-			{ "'sort'(list())         = list()" },
-			{ "'sort'(list(x))        = list(x)" },
-			{ "'sort'(list(x, xs...)) = 'concatcos'(ffilter(\\y .y < x, list(xs...)), x, ffilter(\\y .y >= x, list(xs...)))" },
-			{ "'concatcons'(list(xs...), x, list(ys...)) = list(xs..., x, ys...)" },
+			{ "fsplit(p, f(xs...)) = 'split_hlp'(f(), f(), fmap(\\x .pair(p(x), x), f(xs...)))" },
+			{ "'split_hlp'(f(xs...), f(ys...), f(pair(true, z), zs...)) = 'split_hlp'(f(xs..., z), f(ys...), f(zs...))" },
+			{ "'split_hlp'(f(xs...), f(ys...), f(pair(_   , z), zs...)) = 'split_hlp'(f(xs...), f(ys..., z), f(zs...))" },
+			{ "'split_hlp'(fxs, fys, f())                               = pair(fxs, fys)" },
+
+			{ "'sort'(list())                               = list()" },
+			{ "'sort'(list(x))                              = list(x)" },
+			{ "'sort'(list(x, xs...))                       = 'sort_h1'(fsplit(\\y .y < x, list(xs...)), x)" },
+			{ "'sort_h1'(pair(list(xs...), list(ys...)), x) = 'sort_h2'('sort'(xs...), x, 'sort'(ys...))" },
+			{ "'sort_h2'(list(xs...), x, list(ys...))       = list(xs..., x, ys...)" },
 			
 			{ "union(set(xs...), set(ys...)) = set(xs..., ys...)" },
 			{ "union()                       = set()" },
@@ -188,8 +193,8 @@ int main()
 			{ "min{x, y} | x :real, y :real, x > y = y" },
 			{ "max{x, y} | x :real, y :real, x > y = x" },
 			
-			{ "foldr(f, acc, list())         = acc" },
-			{ "foldr(f, acc, list(x, xs...)) = f(x, foldr(f, acc, list(xs...)))" },
+			{ "ffoldr(f, acc, list())         = acc" },
+			{ "ffoldr(f, acc, list(x, xs...)) = f(x, ffoldr(f, acc, list(xs...)))" },
 		};
 		for (const simp::RuleRef rule : rules) {
 			std::cout << rule.to_string() << "\n\n";

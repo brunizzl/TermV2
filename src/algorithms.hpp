@@ -167,7 +167,7 @@ namespace simp {
             MatchData& match_data, std::uint32_t needle_i, std::uint32_t hay_k);
 
         //analogous to find_permutation, but for non commutative pattern containing at least one multi_marker
-        bool find_shift(const UnsaveRef needle_ref, const UnsaveRef hay_ref,
+        bool find_dilation(const UnsaveRef needle_ref, const UnsaveRef hay_ref,
             MatchData& match_data, std::uint32_t needle_i, std::uint32_t hay_k);
 
     } //namespace match

@@ -562,6 +562,10 @@ namespace simp {
 		{
 			str.append("[");
 			str.append(std::to_string(data.match_data_index));
+			str.append(" ");
+			str.append(data.commutative ? 
+				(data.has_multi_match_variable ? "M" : "_") : 
+				std::bitset<match::SharedPatternCallEntry::max_params_count>(data.preceeded_by_multi).to_string());
 			str.append("]");
 		}
 

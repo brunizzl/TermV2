@@ -52,15 +52,21 @@ namespace simp {
 
     bool meets_restriction(const UnsaveRef ref, const nv::Native restr)
     {
-        using namespace bmath::intern;
-        if (restr.is<nv::Restr>()) {
+        using namespace nv;
+        if (restr.is<Restr>()) {
             switch (restr) {
-            case nv::Native(nv::Restr::any):
+            case Native(Restr::any):
                 return true;
-            case nv::Native(nv::Restr::boolean):
-                return ref.type == Literal::native && nv::Native(ref.index).is<nv::Bool>();
-            case nv::Native(nv::Restr::callable):
+            case Native(Restr::boolean):
+                return ref.type == Literal::native && Native(ref.index).is<Bool>();
+            case Native(Restr::callable):
                 return bmath::intern::is_one_of<Literal::lambda, Literal::symbol, Literal::native>(ref.type);
+            case Native(Restr::no_value):
+                return ref.type != Literal::complex;
+            case Native(Restr::not_neg_1):
+                return ref.type != Literal::complex || ref->complex != 1.0;
+            case Native(Restr::not_0):
+                return ref.type != Literal::complex || ref->complex != 0.0;
             default:
                 assert(false);
                 BMATH_UNREACHABLE;
@@ -69,7 +75,7 @@ namespace simp {
         else if (restr.is<NodeType>()) {
             return ref.type == restr;
         }
-        else if (restr.is<nv::Function_>()) {
+        else if (restr.is<Function_>()) {
             if (ref.type != Literal::call && ref.type != PatternCall{}) {
                 return false;
             }
@@ -77,11 +83,11 @@ namespace simp {
             return from_native(restr) == function;
         }
         else {
-            assert(restr.is<nv::ComplexSubset>());
+            assert(restr.is<ComplexSubset>());
             if (ref.type != Literal::complex) {
                 return false;
             }
-            return in_complex_subset(*ref, restr.to<nv::ComplexSubset>());
+            return in_complex_subset(*ref, restr.to<ComplexSubset>());
         }
     } //meets_restriction
 
@@ -357,9 +363,10 @@ namespace simp {
                                 std::sqrt(base.real()) :
                                 std::sqrt(base);
                         }
-                        else if (in_complex_subset(expo, ComplexSubset::natural_0)) {
-                            const std::size_t nat_expo = expo.real();
-                            return bmath::intern::nat_pow(base, nat_expo);
+                        else if (in_complex_subset(expo, ComplexSubset::integer)) {
+                            const long long int_expo = expo.real();
+                            const Complex res = bmath::intern::nat_pow(base, std::abs(int_expo));
+                            return int_expo < 0 ? 1.0 / res : res;
                         }
                         return std::pow(base, expo);
                     });
@@ -877,7 +884,8 @@ namespace simp {
         {
             const auto make_ref_pattern_call = [&](const bool commutative) {
                 const unsigned this_pattern_index = pattern_call_index++;
-                auto this_call_data = PatternCallData{ .match_data_index = this_pattern_index };
+                auto this_call_data = PatternCallData{ .match_data_index = this_pattern_index, 
+                                                       .commutative      = commutative };
                 { //change multis in call
                     std::uint32_t pos_mod_multis = 0; //only is incremented, when no multi is encountered
                     Call& call = *ref;
@@ -949,6 +957,10 @@ namespace simp {
                         ref.new_at(*iter), multi_changes, pattern_call_index);
                 }
             }
+            else if (ref.type == Literal::lambda) {
+                ref->lambda.definition = build_lhs_multis_and_pattern_calls(
+                    ref.new_at(ref->lambda.definition), multi_changes, pattern_call_index);
+            }
             return ref.typed_idx();
         } //build_lhs_multis_and_pattern_calls
 
@@ -959,26 +971,21 @@ namespace simp {
 
             heads.lhs = build_lhs_multis_and_pattern_calls(
                 MutRef(store, heads.lhs), multi_changes, pattern_call_index);
+            if (pattern_call_index > match::MatchData::max_pattern_call_count) {
+                throw TypeError{ "too many pattern calls", Ref(store, heads.lhs) };
+            }
 
-            struct {
-                const std::vector<MultiChange>& changes;
-
-                void operator()(const MutRef ref) {
-                    if (ref.type == Literal::call) {
-                        for (NodeIndex& param : ref->call.parameters()) {
-                            (*this)(ref.new_at(param));
-                        }
-                    }
-                    if (ref.type == SpecialMatch::multi) {
-                        const unsigned identifier = ref->multi_match.match_data_index; 
-                        const auto data = std::find_if(this->changes.begin(), this->changes.end(),
-                            [identifier](const MultiChange& c) { return c.identifier == identifier; });
-                        assert(data != this->changes.end());
-                        ref->multi_match = data->new_;
-                    }
+            const auto prime_rhs = [&multi_changes](const MutRef r) {
+                if (r.type == SpecialMatch::multi) {
+                    const unsigned identifier = r->multi_match.match_data_index;
+                    const auto data = std::find_if(multi_changes.begin(), multi_changes.end(),
+                        [identifier](const MultiChange& c) { return c.identifier == identifier; });
+                    assert(data != multi_changes.end());
+                    r->multi_match = data->new_;
                 }
-            } change_rhs = { multi_changes };
-            change_rhs(MutRef(store, heads.rhs));
+                return r.typed_idx();
+            };
+            heads.rhs = transform(MutRef(store, heads.rhs), prime_rhs);
 
             return heads;
         } //prime_call
@@ -990,11 +997,14 @@ namespace simp {
                 return h;
             };
             static const auto rules = RuleSet({
-                { "x :t   = t" },
-                { "x < 0  = _Negative" },
-                { "x > 0  = _Positive" },
-                { "x <= 0 = _NotPositive" },
-                { "x >= 0 = _NotNegative" },
+                { "x :t          = t" },
+                { "x < 0         = _Negative" },
+                { "x > 0         = _Positive" },
+                { "x <= 0        = _NotPositive" },
+                { "x >= 0        = _NotNegative" },
+                { "!(x :complex) = _NoValue" },
+                { "x != 1        = _NotNeg1" },
+                { "x != 0        = _Not0" },
             }, build_very_basic_pattern);
             const auto optimize = [](const MutRef r) {
                 if (r.type == SingleMatch::restricted) {
@@ -1137,10 +1147,9 @@ namespace simp {
                 if (!match_(pn_function_ref, ref.new_at(ref->call.function()), match_data)) {
                     return false;
                 }
-                if (pn_function_ref.type == Literal::native && nv::Native(pn_function_ref.index).is<nv::Comm>()) {
-                    return find_permutation(pn_ref, ref, match_data, 0u, 0u);
-                }
-                return find_shift(pn_ref, ref, match_data, 0u, 0u);
+                return pattern_call_info(pn_ref).commutative ?
+                    find_permutation(pn_ref, ref, match_data, 0u, 0u) :
+                    find_dilation(pn_ref, ref, match_data, 0u, 0u);
             }
             case NodeType(SingleMatch::restricted): {
                 const RestrictedSingleMatch var = *pn_ref;
@@ -1198,11 +1207,9 @@ namespace simp {
                 const std::uint32_t needle_i = needle_params.size() - 1u;
                 const std::uint32_t hay_k = entry.match_positions[needle_i] + 1u;
 
-                const UnsaveRef pn_function_ref = pn_ref.new_at(pn_ref->call.function());
-                if (pn_function_ref.type == Literal::native && nv::Native(pn_function_ref.index).is<nv::Comm>()) {
-                    return find_permutation(pn_ref, ref, match_data, needle_i, hay_k);
-                }
-                return find_shift(pn_ref, ref, match_data, needle_i, hay_k);
+                return pattern_call_info(pn_ref).commutative ?
+                    find_permutation(pn_ref, ref, match_data, needle_i, hay_k) :
+                    find_dilation(pn_ref, ref, match_data, needle_i, hay_k);
             }
             else if (pn_ref.type == Literal::call) {
                 const Call& pn_call = *pn_ref;
@@ -1214,6 +1221,9 @@ namespace simp {
                         return true;
                     }
                 }
+            }
+            else if (pn_ref.type == Literal::lambda) {
+                return rematch(pn_ref.new_at(pn_ref->lambda.definition), ref.new_at(ref->lambda.definition), match_data);
             }
             return false;
         } //rematch
@@ -1281,7 +1291,7 @@ namespace simp {
             return true;
         } //find_permutation
 
-        bool find_shift(const UnsaveRef pn_ref, const UnsaveRef hay_ref, MatchData& match_data, std::uint32_t needle_i, std::uint32_t hay_k)
+        bool find_dilation(const UnsaveRef pn_ref, const UnsaveRef hay_ref, MatchData& match_data, std::uint32_t needle_i, std::uint32_t hay_k)
         {
             assert(pn_ref.type == PatternCall{} && hay_ref.type == Literal::call);
 
@@ -1289,7 +1299,7 @@ namespace simp {
             const std::span<const NodeIndex> haystack = hay_ref->call.parameters();
 
             return false;
-        } //find_shift
+        } //find_dilation
 
 
     } //namespace match

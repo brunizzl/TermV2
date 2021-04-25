@@ -227,6 +227,9 @@ namespace simp {
 			any, //everything is possible
 			callable, //eighter Literal::lambda or Literal::native with .is<Function_>() or Literal::symbol
 			boolean, //maybe add "types" section to native, handle bool there?
+			no_value, //all except Literal::complex
+			not_neg_1, //all except the exact value of -1.0 for Literal::complex
+			not_0, //all except the exact value of 0.0 (or differently signed variants) for Literal::complex
 			COUNT
 		};
 
@@ -348,6 +351,7 @@ namespace simp {
 		};
 		//true: allows matching terms larger than pattern (used in commutative)
 		bool has_multi_match_variable = false;
+		bool commutative = false;
 	};
 
 	union TermNode
@@ -605,6 +609,9 @@ namespace simp {
 			{ Restr::any                 , "\\"          , Literal::native }, //can not be constructed from a string
 			{ Restr::callable            , "callable"    , Literal::native },
 			{ Restr::boolean             , "bool"        , Literal::native },
+			{ Restr::no_value            , "_NoValue"    , Literal::native },
+			{ Restr::not_neg_1           , "_NotNeg1"    , Literal::native },
+			{ Restr::not_0               , "_Not0"       , Literal::native },
 			{ ComplexSubset::natural     , "nat"         , Literal::native },
 			{ ComplexSubset::natural_0   , "nat_0"       , Literal::native },
 			{ ComplexSubset::integer     , "int"         , Literal::native },
