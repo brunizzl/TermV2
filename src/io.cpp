@@ -5,6 +5,7 @@
 #include <concepts>
 #include <bitset>
 #include <array>
+#include <iostream>
 
 #include "utility/vector.hpp"
 #include "utility/misc.hpp"
@@ -206,7 +207,7 @@ namespace simp {
 					if (!mundane_name(param)) [[unlikely]]
 						throw bmath::ParseFailure{ params_view.offset, "we name lambda parameters less exiting around here" };
 					if (!param.size()) [[unlikely]]
-						throw bmath::ParseFailure{ params_view.offset, "there is no reason for nullary lambdas in a purely functional language" };
+						throw bmath::ParseFailure{ params_view.offset, "there is little reason for nullary lambdas in a purely functional language" };
 					lambda_params.push_back({ param.to_string_view(), NodeIndex(lambda_params.size(), Literal::lambda_param) });
 					param_count++;
 				}

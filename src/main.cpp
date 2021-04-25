@@ -26,6 +26,7 @@ important:
       - check PatternCall to each not exceed maximal length and check numer of PatternCall in pattern not more than allowed 
       - enable hints for faster /nonrepetitive matching in PatternCallData
       - bubble value match variables up as high as possible, make first occurence owning
+	  - enable implicit outer multi
 
 nice to have:
  - use ref-counting in store instead of always copy
