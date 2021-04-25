@@ -6,6 +6,7 @@
 #include <optional>
 #include <algorithm>
 #include <functional>
+#include <bitset>
 
 #include "utility/bit.hpp"
 #include "utility/vector.hpp"
@@ -14,6 +15,7 @@
 
 #include "termVector.hpp"
 #include "io.hpp"
+#include "rewrite.hpp"
 
 
 
@@ -950,7 +952,7 @@ namespace simp {
             return ref.typed_idx();
         } //build_lhs_multis_and_pattern_calls
 
-        RuleHead prime_multi(Store& store, RuleHead heads)
+        RuleHead prime_call(Store& store, RuleHead heads)
         {
             std::vector<MultiChange> multi_changes;
             unsigned pattern_call_index = 0; //keeps track of how many conversions to PatternCall have already been made 
@@ -979,13 +981,93 @@ namespace simp {
             change_rhs(MutRef(store, heads.rhs));
 
             return heads;
-        } //prime_multi
+        } //prime_call
+
+        RuleHead optimize_single_conditions(Store& store, RuleHead heads)
+        {
+            const auto build_very_basic_pattern = [](Store& s, std::string& name) {
+                RuleHead h = parse::raw_rule(s, name, parse::IAmInformedThisRuleIsNotUsableYet{});
+                return h;
+            };
+            static const auto rules = RuleSet({
+                { "x :t   = t" },
+                { "x < 0  = _Negative" },
+                { "x > 0  = _Positive" },
+                { "x <= 0 = _NotPositive" },
+                { "x >= 0 = _NotNegative" },
+            }, build_very_basic_pattern);
+            const auto optimize = [](const MutRef r) {
+                if (r.type == SingleMatch::restricted) {
+                    r->single_match.condition = managed_shallow_apply_ruleset(rules, r.new_at(r->single_match.condition), 0);
+                }
+                return r.typed_idx();
+            };
+            heads.lhs = transform(MutRef(store, heads.lhs), optimize);
+            return heads;
+        } //optimize_single_conditions
+
+        RuleHead prime_value(Store& store, RuleHead heads)
+        {
+            const auto build_basic_pattern = [](Store& s, std::string& name) {
+                RuleHead h = parse::raw_rule(s, name, parse::IAmInformedThisRuleIsNotUsableYet{});
+                h = build_rule::optimize_single_conditions(s, h);
+                h = build_rule::prime_call(s, h);
+                return h;
+            };
+            static const auto rules = RuleSet({
+                { "     _VM(idx, domain, match) + a + cs... | a :complex = _VM(idx, domain, match - a) + cs..." },
+                { "     _VM(idx, domain, match) * a * cs... | a :complex = _VM(idx, domain, match / a) * cs..." },
+                { "     _VM(idx, domain, match) ^ 2                      = _VM(idx, domain, sqrt(match))" },
+                { "sqrt(_VM(idx, domain, match))                         = _VM(idx, domain, match ^ 2)" },
+            }, build_basic_pattern);
+            heads.lhs = greedy_apply_ruleset(rules, MutRef(store, heads.lhs), 0);
+            heads.lhs = normalize::recursive(MutRef(store, heads.lhs), {}, 0); //combine match
+
+            const auto build_value_match = [](const MutRef r) {
+                if (r.type == Literal::call && r->call.function() == from_native(nv::PatternAuxFn::value_match)) {
+                    Call& call = *r;
+                    assert((call[1].get_type().is<PatternUnsigned>() && call[2].get_type() == Literal::native));
+                    const std::uint32_t match_data_index = call[1].get_index();
+                    const auto domain = nv::Native(call[2].get_index()).to<nv::ComplexSubset>();
+                    assert(domain < nv::ComplexSubset::COUNT);
+                    const NodeIndex match_index = call[3];
+                    call[3] = literal_nullptr;
+                    free_tree(r);
+                    const std::size_t result_index = r.store->allocate_one();
+                    r.store->at(result_index) = ValueMatch{ .match_data_index = match_data_index,
+                                                            .domain = domain,
+                                                            .match_index = match_index,
+                                                            .owner = false };
+                    return NodeIndex(result_index, SpecialMatch::value);
+                }
+                return r.typed_idx();
+            };
+            heads.lhs = transform(MutRef(store, heads.lhs), build_value_match);
+            heads.rhs = transform(MutRef(store, heads.rhs), build_value_match);
+            heads.lhs = normalize::recursive(MutRef(store, heads.lhs), {}, 0); //order value match to right positions in commutative
+
+            std::bitset<match::MatchData::max_value_match_count> encountered = 0;
+            const auto set_owner = [&encountered](const MutRef r) {
+                if (r.type == SpecialMatch::value) {
+                    ValueMatch& var = *r;
+                    if (!encountered.test(var.match_data_index)) {
+                        encountered.set(var.match_data_index);
+                        var.owner = true;
+                    }
+                }
+                return r.typed_idx();
+            };
+            heads.lhs = transform(MutRef(store, heads.lhs), set_owner);
+
+            return heads;
+        } //prime_value
 
         RuleHead build_everything(Store& store, std::string& name)
         {
             RuleHead heads = parse::raw_rule(store, name, parse::IAmInformedThisRuleIsNotUsableYet{});
-            //TODO: build value match
-            heads = build_rule::prime_multi(store, heads);
+            heads = build_rule::optimize_single_conditions(store, heads);
+            heads = build_rule::prime_value(store, heads);
+            heads = build_rule::prime_call(store, heads);
             return heads;
         } //build_everything
 
@@ -1062,11 +1144,11 @@ namespace simp {
             }
             case NodeType(SingleMatch::restricted): {
                 const RestrictedSingleMatch var = *pn_ref;
-                if (var.condition.get_type() == Literal::native && !meets_restriction(ref, to_native(var.condition))) {
-                    return false;
-                }
                 SharedSingleMatchEntry& entry = match_data.single_vars[var.match_data_index];
                 entry.match_idx = ref.typed_idx();
+                if (var.condition.get_type() == Literal::native) {
+                    return meets_restriction(ref, to_native(var.condition));
+                }
                 return test_condition(pn_ref.new_at(var.condition), match_data);
             }
             case NodeType(SingleMatch::unrestricted): {

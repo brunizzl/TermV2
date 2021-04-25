@@ -13,7 +13,6 @@
 TODO:
 
 important:
- - replace multi_marker by info in PatternCallData
  - finish match:
 	   - test_condition
 	   - find_shift
@@ -21,19 +20,17 @@ important:
 	   - (eval_value_match)
  - implement fst, snd, ffilter, fsplit, ...
  - add eval_buildin for min/max to remove values guaranteed to not be minimum / maximum without requiring full evaluation
- - store hints for faster /nonrepetitive matching in PatternCallData
  - only test subset of rulerange
  - type checking (extended: keep track of what restrictions apply to match variable in lhs, use in rhs)
  - finnish building / verifying pattern:
-      - verify only one occurence of each multi match
-      - verify only one occurence of multi match in one Comm, any number of occurences in one NonComm, no occurences elsewhere
-      - adjust muti match indices to equal corresponding call + add management field to call
-      - check PatternCall to each not exceed maximal length and to not have more parameters than is allowed 
-	  - check no two multi match variables in direct succession
-	  - check no call in pattern only containing multi match
+      - check PatternCall to each not exceed maximal length and check numer of PatternCall in pattern not more than allowed 
+	  - check no call in pattern only contains multi match
+      - enable hints for faster /nonrepetitive matching in PatternCallData
       - bubble value match variables up as high as possible, make first occurence owning
 
 nice to have:
+ - use ref-counting in store instead of always copy
+ - store symbols in program wide map, only use hashes (aka. index in map) in every term
  - implement meta_pn::match function for variadic patterns
  - achieve feature parity between compile time pattern and run time pattern (add value match to ct)
  - enable StupidBufferVector to handle non-trivial destructible types -> change name to BufferVector
@@ -104,7 +101,6 @@ int main()
 		const simp::RuleSet rules = {
 			{ "a_sqr + two_a b + b^2 + cs... | (sqrt(a_sqr) == 0.5 two_a) = (0.5 two_a + b)^2 + cs..." },
 			{ "'Y' = \\f n. f(f, n)" },
-			{ "a + _VM(idx, dom, match) | a :complex = _VM(idx, dom, match - a)" },
 
 			{ "0 xs... = 0" },
 			{ "0^x     = 0" },
@@ -143,9 +139,9 @@ int main()
 
 			//differentiation rules:
 			{ "diff(x, x)                                 = 1" },
-			{ "diff(a, x)       | a :symbol || a :complex = 0" },
-			{ "diff(f^a, x)     | a:complex               = diff(f, x) a f^(a-1)" },
-			{ "diff(a^f, x)     | a:complex               = diff(f, x) ln(a) a^f" },
+			{ "diff(a, x)       | a :complex || a :symbol = 0" },
+			{ "diff(f^a, x)     | a :complex              = diff(f, x) a f^(a-1)" },
+			{ "diff(a^f, x)     | a :complex              = diff(f, x) ln(a) a^f" },
 			{ "diff(g^h, x)                               = (diff(h, x) ln(g) + h diff(g, x)/g) g^h" },
 			{ "diff(a, x)       | a :sum                  = fmap(\\f .diff(f, x), a)" },
 			{ "diff(u vs..., x)                           = diff(u, x) vs... + u diff(product(vs...), x)" },
@@ -159,9 +155,9 @@ int main()
 			{ "fdiff(tan)    = \\x .cos(x)^(-2)" },
 			
 			//exponential runtime fibonacci implementation:
-			{ "'fib'(0) = 0" },
-			{ "'fib'(1) = 1" },
-			{ "'fib'(n) = 'fib'(n - 1) + 'fib'(n - 2)" },
+			{ "'fib'(0)         = 0" },
+			{ "'fib'(1)         = 1" },
+			{ "'fib'(n) | n > 0 = 'fib'(n - 1) + 'fib'(n - 2)" },
 			
 			////reversing a list:
 			//{ "xs :list...                 | reverse(list{xs}) = reverse'(list{}, list{xs})" },

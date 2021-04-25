@@ -11,7 +11,8 @@ namespace bmath::intern {
 	{
 		static_assert(std::is_unsigned_v<UInt_T>);
 
-		static constexpr std::size_t npos = std::countr_zero((UInt_T(0)));
+		static constexpr std::size_t npos = std::countr_zero(UInt_T(0));
+		static constexpr std::size_t max_pos = npos - 1u;
 
 		UInt_T data;
 
@@ -25,6 +26,12 @@ namespace bmath::intern {
 		constexpr void   set(const std::uint32_t pos, const bool val) noexcept { val ? this->set(pos) : this->reset(pos); }
 
 		constexpr bool  test(const std::uint32_t pos) const noexcept { return this->data & (UInt_T(1) << pos); }
+
+		constexpr void  flip_back() noexcept { this->flip(max_pos); }
+		constexpr void reset_back() noexcept { this->reset(max_pos); }
+		constexpr void   set_back() noexcept { this->set(max_pos); }
+
+		constexpr bool  test_back() const noexcept { return this->test(max_pos); }
 
 		constexpr bool none() const noexcept { return   !this->data;  }
 		constexpr bool  any() const noexcept { return    this->data;  }

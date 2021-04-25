@@ -653,6 +653,7 @@ namespace simp {
 				const ValueMatch& var = *ref;
 				str.append("_V");
 				str.append(std::to_string(var.match_data_index));
+				str.append(var.owner ? "" : "'");
 				str.append("[");
 				append_to_string(ref.new_at(var.match_index), str, default_infixr);
 				str.append("]");

@@ -99,8 +99,12 @@ namespace simp {
 	//tries to match every maybe applicable rule, returns first succesfull rule application,
 	//the old ref is not deleted.
 	//if no match was found, { literal_nullptr, undefined } is returned
-	[[nodiscard]] RuleApplicationRes shallow_apply_ruleset(const RuleSet& rules, const Ref ref,
+	[[nodiscard]] RuleApplicationRes raw_shallow_apply_ruleset(const RuleSet& rules, const Ref ref,
 		Store& dst_store, const unsigned lambda_param_offset, match::MatchData& match_data);
+
+	//same as above, only handles storage, returns new ref's index.
+	[[nodiscard]] NodeIndex managed_shallow_apply_ruleset(const RuleSet& rules, MutRef ref,
+		const unsigned lambda_param_offset);
 
 	//lazyliy applies first rule applicable in depth first search in ref until no further rules can be applied
 	[[nodiscard]] NodeIndex greedy_apply_ruleset(const RuleSet& rules, MutRef ref,

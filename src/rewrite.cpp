@@ -105,7 +105,7 @@ namespace simp {
 		}
 	} //RuleSet::migrate_rules
 
-	RuleApplicationRes shallow_apply_ruleset(const RuleSet& rules, const Ref ref, Store& dst_store, 
+	RuleApplicationRes raw_shallow_apply_ruleset(const RuleSet& rules, const Ref ref, Store& dst_store, 
 		const unsigned lambda_param_offset, match::MatchData& match_data)
 	{
 		const RuleRange applicable_rules = rules.applicable_rules(ref);
@@ -119,10 +119,24 @@ namespace simp {
 		return { literal_nullptr, stop };
 	} //shallow_apply_ruleset
 
+	NodeIndex managed_shallow_apply_ruleset(const RuleSet& rules, MutRef ref, const unsigned lambda_param_offset)
+	{
+	apply_ruleset:
+		match::MatchData match_data = ref.store->data();
+		RuleApplicationRes result = raw_shallow_apply_ruleset(rules, ref, *ref.store, lambda_param_offset, match_data);
+		if (result.result_term != literal_nullptr) {
+			free_tree(ref);
+			ref.index = result.result_term.get_index();
+			ref.type = result.result_term.get_type();
+			goto apply_ruleset;
+		}
+		return ref.typed_idx();
+	}
+
 	NodeIndex recursive_greedy_apply(const RuleSet& rules, MutRef ref, const unsigned lambda_param_offset) {
 		{ //try replacing this
 			match::MatchData match_data = ref.store->data();
-			const RuleApplicationRes applied = shallow_apply_ruleset(rules, ref, *ref.store, lambda_param_offset, match_data);
+			const RuleApplicationRes applied = raw_shallow_apply_ruleset(rules, ref, *ref.store, lambda_param_offset, match_data);
 			if (applied.result_term != literal_nullptr) {
 				free_tree(ref);
 				return applied.result_term;

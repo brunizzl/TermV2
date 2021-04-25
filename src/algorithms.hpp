@@ -1,11 +1,12 @@
 #pragma once
 
-#include "types.hpp"
-#include "io.hpp"
-
 #include <compare>
 #include <concepts>
 #include <string>
+
+#include "types.hpp"
+#include "io.hpp"
+#include "utility/meta.hpp"
 
 namespace simp {
 
@@ -102,12 +103,36 @@ namespace simp {
         return literal_nullptr;
     } //search
 
+    //applies f to every subterm in postorder
+    template<bmath::intern::CallableTo<NodeIndex, MutRef> F>
+    [[nodiscard]] NodeIndex transform(const MutRef ref, F f) 
+    {
+        if (ref.type == Literal::call) {
+            const auto stop = end(ref);
+            for (auto iter = begin(ref); iter != stop; ++iter) {
+                *iter = transform(ref.new_at(*iter), f);
+            }
+        }
+        if (ref.type == Literal::lambda) {
+            ref->lambda.definition = transform(ref.new_at(ref->lambda.definition), f);
+        }
+        return f(ref);
+    } //transform
+
     namespace build_rule {
 
-        // - multi match variables are primed
         // - every function call to nv::Comm in lhs is converted to PatternCall
         // - if a call in lhs contains at least one multi match, the call is converted to PatternCall
-        RuleHead prime_multi(Store& store, RuleHead heads);
+        // - multi match variables are primed
+        //note: as after this procedure there may be PatterCall instances present, this may be done as last transformation
+        RuleHead prime_call(Store& store, RuleHead heads);
+
+        //turns "_Xn[_Xn' :<some_type>]" into "_Xn[<some_type>]"
+        RuleHead optimize_single_conditions(Store& store, RuleHead heads);
+
+        //value match variables intermediary form are bubbled up as high as possible
+        //intermediary is converted to final form and ownership is decided (thus sorts bevore that)
+        RuleHead prime_value(Store& store, RuleHead heads);
 
         //returns a fully assembled rule
         RuleHead build_everything(Store& store, std::string& name);

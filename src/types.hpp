@@ -333,7 +333,8 @@ namespace simp {
 
 	struct PatternCallData
 	{
-		std::uint32_t match_data_index = -1u; //indexes in MatchData::variadic_match_data
+		//indexes in MatchData::variadic_match_data (used in both commutative and non-commutative)
+		std::uint32_t match_data_index = -1u;
 		//bit i dertermines whether parameter i is rematchable (used in both commutative and non-commutative)
 		bmath::intern::BitSet16 rematchable = (std::uint16_t)-1;
 		union {
@@ -342,8 +343,8 @@ namespace simp {
 			bmath::intern::BitSet16 always_preceeding_next = (std::uint16_t)0;
 			//bit i determines, wether pattern parameter i comes after a multi match variable
 			// (because the multi match variables are not present in lhs as actual parameters) (used in non-commutative)
-			//note: as a multi is also valid as last parameter, a pattern call may only hold up to 15 parameters!
-			bmath::intern::BitSet16 preceeded_by_multi;
+			//note: as a multi is also valid as last parameter, a pattern call may only hold up to 15 non-multi parameters!
+			bmath::intern::BitSet16 preceeded_by_multi; //default is also 0
 		};
 		//true: allows matching terms larger than pattern (used in commutative)
 		bool has_multi_match_variable = false;
@@ -609,10 +610,10 @@ namespace simp {
 			{ ComplexSubset::integer     , "int"         , Literal::native },
 			{ ComplexSubset::real        , "real"        , Literal::native },
 			{ ComplexSubset::complex     , "_Complex"    , Literal::native }, 
-			{ ComplexSubset::negative    , "\\"          , Literal::native }, //can not be constructed from a string
-			{ ComplexSubset::positive    , "\\"          , Literal::native }, //can not be constructed from a string
-			{ ComplexSubset::not_negative, "\\"          , Literal::native }, //can not be constructed from a string
-			{ ComplexSubset::not_positive, "\\"          , Literal::native }, //can not be constructed from a string
+			{ ComplexSubset::negative    , "_Negative"   , Literal::native }, //can not be constructed from a string
+			{ ComplexSubset::positive    , "_Positive"   , Literal::native }, //can not be constructed from a string
+			{ ComplexSubset::not_negative, "_NotNegative", Literal::native }, //can not be constructed from a string
+			{ ComplexSubset::not_positive, "_NotPositive", Literal::native }, //can not be constructed from a string
 			{ Literal::complex           , "complex"     , Literal::native },
 			{ Literal::symbol            , "symbol"      , Literal::native },
 			{ Literal::native            , "native"      , Literal::native },
