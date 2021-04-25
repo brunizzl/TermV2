@@ -54,12 +54,12 @@ namespace simp {
 				std::cerr << "parse failure: " << failure.what << "\n";
 				std::cerr << name << "\n";
 				std::cerr << std::string(failure.where, ' ') << "^\n";
-				throw failure;
+				throw std::exception();
 			}
 			catch (TypeError error) {
 				std::cerr << "type error: " << error.what << "\n";
 				std::cerr << print::to_string(error.occurence) << "\n";
-				throw error;
+				throw std::exception();
 			}
 		}
 		this->migrate_rules(temp_store);
@@ -113,17 +113,19 @@ namespace simp {
 		for (RuleSetIter iter = applicable_rules.begin(); iter != stop; ++iter) {
 			const RuleRef rule = *iter;
 			if (match::match_(rule.lhs, ref, match_data)) {
-				return { copy_pattern_interpretation(rule.rhs, match_data, *ref.store, dst_store, lambda_param_offset), iter };
+				const NodeIndex res = copy_pattern_interpretation(
+					rule.rhs, match_data, *ref.store, dst_store, lambda_param_offset);
+				return { res, iter };
 			}
 		}
 		return { literal_nullptr, stop };
 	} //shallow_apply_ruleset
 
-	NodeIndex managed_shallow_apply_ruleset(const RuleSet& rules, MutRef ref, const unsigned lambda_param_offset)
+	NodeIndex shallow_apply_ruleset(const RuleSet& rules, MutRef ref)
 	{
 	apply_ruleset:
 		match::MatchData match_data = ref.store->data();
-		RuleApplicationRes result = raw_shallow_apply_ruleset(rules, ref, *ref.store, lambda_param_offset, match_data);
+		RuleApplicationRes result = raw_shallow_apply_ruleset(rules, ref, *ref.store, 0, match_data);
 		if (result.result_term != literal_nullptr) {
 			free_tree(ref);
 			ref.index = result.result_term.get_index();
@@ -131,7 +133,7 @@ namespace simp {
 			goto apply_ruleset;
 		}
 		return ref.typed_idx();
-	}
+	} //shallow_apply_ruleset
 
 	NodeIndex recursive_greedy_apply(const RuleSet& rules, MutRef ref, const unsigned lambda_param_offset) {
 		{ //try replacing this
@@ -168,16 +170,16 @@ namespace simp {
 		return literal_nullptr;
 	} //recursive_greedy_apply
 
-	NodeIndex greedy_apply_ruleset(const RuleSet& rules, MutRef ref, const unsigned lambda_param_offset)
+	NodeIndex greedy_apply_ruleset(const RuleSet& rules, MutRef ref)
 	{
 	apply_ruleset:
-		NodeIndex result = recursive_greedy_apply(rules, ref, lambda_param_offset);
+		NodeIndex result = recursive_greedy_apply(rules, ref, 0);
 		if (result != literal_nullptr) {
 			ref.type = result.get_type();
 			ref.index = result.get_index();
 			goto apply_ruleset;
 		}
 		return ref.typed_idx();
-	}
+	} //greedy_apply_ruleset
 
 } //namespace simp

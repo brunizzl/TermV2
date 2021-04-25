@@ -337,16 +337,6 @@ namespace simp {
 			using namespace bmath;
 			using namespace bmath::intern;
 			auto parse_str = ParseString(name);
-			{
-				constexpr char allowed[] = { token::character, token::number, token::open_grouping,
-					token::clse_grouping, token::unary_minus, token::sum, token::product, token::comma,
-					token::hat, token::equals, token::bar, token::bang, token::space, token::imag_unit,
-					token::backslash, token::dot, token::relation, token::and_, token::or_, token::colon, '\0' };
-
-				if (const std::size_t pos = parse_str.tokens.find_first_not_of(allowed); pos != TokenString::npos) [[unlikely]] {
-					throw ParseFailure{ pos, "unexpected character" };
-				}
-			}
 			parse_str.allow_implicit_product(token::sticky_space, ' ');
 			parse_str.remove_space();
 			auto [lhs_view, conditions_view, rhs_view] = [](ParseView view) {
@@ -381,12 +371,13 @@ namespace simp {
 			struct SingleCondition
 			{
 				NodeIndex head = literal_nullptr;
-				std::bitset<match::MatchData::max_single_match_count> dependencies = 0; //dependencies[i] is set iff single match i occurs in the condition
+				//dependencies[i] is set iff single match i occurs in the condition
+				std::bitset<match::MatchData::max_single_match_count> dependencies = 0; 
 			};
 			std::vector<SingleCondition> single_conditions;
 
-			std::array<nv::ComplexSubset, match::MatchData::max_value_match_count> value_conditions;
-			value_conditions.fill(nv::ComplexSubset::complex);
+			std::array<NodeIndex, match::MatchData::max_value_match_count> value_conditions;
+			value_conditions.fill(from_native(nv::ComplexSubset::complex));
 
 			while (conditions_view.size()) {
 				assert(conditions_view.tokens.starts_with(token::bar) || conditions_view.tokens.starts_with(token::comma));
@@ -423,7 +414,10 @@ namespace simp {
 									res |= (*this)(ref.new_at(sub));
 								}
 							}
-							if (ref.type == SingleMatch::weak) {
+							else if (ref.type == Literal::lambda) {
+								res |= (*this)(ref.new_at(ref->lambda.definition));
+							}
+							else if (ref.type == SingleMatch::weak) {
 								res.set(ref.index);
 							}
 							return res;
@@ -432,52 +426,31 @@ namespace simp {
 					single_conditions.emplace_back(condition_head, list_singles(cond_ref));
 				}
 				if (contains_value) {
-					//condition may only be of form "type($<value match>, <complex subset>)"
-					//if so: adjust value_conditions at right index
-					if (cond_ref.type != Literal::call ||
-						cond_ref->call.function() != from_native(nv::PatternAuxFn::of_type))
-					{
-						throw ParseFailure{ conditions_view.offset, "value match may only have its type restricted" };
-					}
-					const NodeIndex subset = cond_ref->call[2];
-					const NodeIndex value_match_call_idx = cond_ref->call[1];
-					if (value_match_call_idx.get_type() != Literal::call || !to_native(subset).is<nv::ComplexSubset>()) {
-						throw ParseFailure{ conditions_view.offset, "value match may only have its type as real, nat etc." };
-					}
-					Call& value_match_call = *MutRef(store, value_match_call_idx);
-					if (value_match_call.function() != from_native(nv::PatternAuxFn::value_match)) {
-						throw ParseFailure{ conditions_view.offset, "uh oh to funky for me" };
-					}
-					value_conditions[value_match_call[1].get_index()] = to_native(subset).to<nv::ComplexSubset>();
-					free_tree(cond_ref);
+					const NodeIndex value_call_idx = simp::search(cond_ref,
+						[](const UnsaveRef r) { 
+							return r.type == Literal::call && 
+							r->call.function() == from_native(nv::PatternAuxFn::value_match); 
+						});
+					assert(value_call_idx != literal_nullptr);
+					Call& value_call = *MutRef(store, value_call_idx);
+					value_conditions[value_call[1].get_index()] = condition_head;
 				}
-			}
-			{
-				struct {
-					decltype(value_conditions) const& domains;
-					Store& store_;
-
-					NodeIndex operator()(const MutRef ref) {
-						if (ref.type == Literal::call) {
-							if (ref->call.function() == from_native(nv::PatternAuxFn::value_match) && //call to _VM
-								//if call contains no match variables itself and holds only shallow parameters, 
-								//  it is assumed to stem from name_lookup::build_symbol
-								std::none_of(ref->call.begin(), ref->call.end(), 
-									[](auto idx) { return idx.get_type().is<MatchVariableType>() || is_stored_node(idx.get_type()); }))
-							{
-								const std::size_t value_index = ref->call[1].get_index();
-								ref->call[2] = from_native(this->domains[value_index]);
-							}
-							else {
-								for (NodeIndex& sub : ref) {
-									sub = (*this)(ref.new_at(sub));
-								}
-							}
-						}
-						return ref.typed_idx();
+			}	
+			{ //give value conditions to value match variables
+				const auto restrict_value = [&value_conditions](const MutRef r) {
+					if (r.type == Literal::call && 
+						r->call.function() == from_native(nv::PatternAuxFn::value_match) && //call to _VM
+						//if call contains no match variables itself and holds only shallow parameters, 
+						//  it is assumed to stem from name_lookup::build_symbol
+						std::none_of(r->call.begin(), r->call.end(),
+							[](auto idx) { return idx.get_type().is<MatchVariableType>() || is_stored_node(idx.get_type()); }))
+					{
+						const std::size_t value_index = r->call[1].get_index();
+						r->call[2] = value_conditions[value_index];
 					}
-				} build_value_matches = { value_conditions, store };
-				heads.lhs = build_value_matches(MutRef(store, heads.lhs));
+					return r.typed_idx();
+				};
+				heads.lhs = transform(MutRef(store, heads.lhs), restrict_value);
 			}
 			{
 				//go through lhs in preorder, adjust single match using single_conditions
@@ -486,47 +459,35 @@ namespace simp {
 				//if not: check if single_conditions contains conditions depending only on already encountered indices and the current one
 				//           yes: combine these conditions into an "and" condition, append it at a RestrictedSingleMatch node
 				//           no: turn Instance to SingleMatch::unrestricted
-				decltype(SingleCondition::dependencies) encountered_singles = 0;
-				struct {
-					decltype(SingleCondition::dependencies)& encountered;
-					const std::vector<SingleCondition>& conditions;
-					Store& store_;
-
-					NodeIndex operator()(const MutRef ref) {
-						if (ref.type == Literal::call) {
-							const auto stop = end(ref);
-							for (auto iter = begin(ref); iter != stop; ++iter) { //important: dont skip function!
-								*iter = (*this)(ref.new_at(*iter));
+				decltype(SingleCondition::dependencies) encountered = 0;
+				const auto empower_singles = [&encountered, &single_conditions](const MutRef r) {
+					if (r.type == SingleMatch::weak && !encountered.test(r.index)) {
+						encountered.set(r.index);
+						std::vector<NodeIndex> relevant_conditions = {};
+						for (const SingleCondition cond : single_conditions) {
+							if (cond.dependencies.test(r.index) && (cond.dependencies & ~encountered).none()) {
+								relevant_conditions.push_back(cond.head);
 							}
 						}
-						if (ref.type == SingleMatch::weak && !this->encountered.test(ref.index)) {
-							this->encountered.set(ref.index);
-							std::vector<NodeIndex> relevant_conditions = {};
-							for (const SingleCondition cond : this->conditions) {
-								if (cond.dependencies.test(ref.index) && (cond.dependencies & ~this->encountered).none()) {
-									relevant_conditions.push_back(cond.head);
-								}
-							}
-							if (relevant_conditions.size() == 0u) {
-								return NodeIndex(ref.index, SingleMatch::unrestricted);
-							}
-							if (relevant_conditions.size() == 1u) {
-								const std::size_t res_index = this->store_.allocate_one();
-								this->store_.at(res_index) = RestrictedSingleMatch{ ref.index, relevant_conditions.front() };
-								return NodeIndex(res_index, SingleMatch::restricted);
-							}
-							else { //more than one condition -> "and" them
-								relevant_conditions.emplace(relevant_conditions.begin(), from_native(nv::Comm::and_));
-								const std::size_t and_index = Call::build(this->store_, relevant_conditions);
-								const std::size_t res_index = this->store_.allocate_one();
-								this->store_.at(res_index) = RestrictedSingleMatch{ ref.index, NodeIndex(and_index, Literal::call) };
-								return NodeIndex(res_index, SingleMatch::restricted);
-							}
+						if (relevant_conditions.size() == 0u) {
+							return NodeIndex(r.index, SingleMatch::unrestricted);
 						}
-						return ref.typed_idx();
+						if (relevant_conditions.size() == 1u) {
+							const std::size_t res_index = r.store->allocate_one();
+							r.store->at(res_index) = RestrictedSingleMatch{ r.index, relevant_conditions.front() };
+							return NodeIndex(res_index, SingleMatch::restricted);
+						}
+						else { //more than one condition -> "and" them
+							relevant_conditions.emplace(relevant_conditions.begin(), from_native(nv::Comm::and_));
+							const std::size_t and_index = Call::build(*r.store, relevant_conditions);
+							const std::size_t res_index = r.store->allocate_one();
+							r.store->at(res_index) = RestrictedSingleMatch{ r.index, NodeIndex(and_index, Literal::call) };
+							return NodeIndex(res_index, SingleMatch::restricted);
+						}
 					}
-				} build_single_matches = { encountered_singles, single_conditions, store };
-				heads.lhs = build_single_matches(MutRef(store, heads.lhs));
+					return r.typed_idx();
+				};
+				heads.lhs = transform(MutRef(store, heads.lhs), empower_singles);
 			}
 			return heads;
 		} //raw_rule
@@ -660,6 +621,10 @@ namespace simp {
 				str.append(var.owner ? "" : "'");
 				str.append("[");
 				append_to_string(ref.new_at(var.match_index), str, default_infixr);
+				if (var.domain != nv::ComplexSubset::complex) {
+					str.append(", ");
+					str.append(nv::name_of(var.domain));
+				}
 				str.append("]");
 			} break;
 			case NodeType(PatternUnsigned{}):

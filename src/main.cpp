@@ -102,6 +102,8 @@ int main()
 			{ "'Y' = \\f n. f(f, n)" },
 
 			{ "0 xs... = 0" },
+			{ "0 + xs... = sum(xs...)" },
+			{ "1 * xs... = product(xs...)" },
 			{ "0^x     = 0" },
 			{ "x^0     = 1" },
 			{ "x^1     = x" },
@@ -116,10 +118,10 @@ int main()
 			{ " a^2 -  2 a b + b^2 + cs... =  (a - b)^2 + cs..." },
 			{ "$a^2 + 2 $a b + b^2 + cs... = ($a + b)^2 + cs..." },
 
-			{ "a bs... + a cs... | !(a :complex) = a (product(bs...) + product(cs...))" },
-			{ "a bs... + a       | !(a :complex) = a (product(bs...) + 1)" },
-			{ "a       + a       | !(a :complex) = 2 a" },
-			{ "a (b + cs...)     |   a :complex  = a b + a product(cs...)" },
+			{ "a bs... + a cs... | !(a :complex)      = a (product(bs...) + product(cs...))" },
+			{ "a bs... + a       | !(a :complex)      = a (product(bs...) + 1)" },
+			{ "a       + a       | !(a :complex)      = 2 a" },
+			{ "a b               | a :complex, b :sum = fmap(\\x .a x, b)" },
 
 			{ "-a     | a :sum     = fmap(\\x. -x    , a)" },
 			{ "a^(-1) | a :product = fmap(\\x. x^(-1), a)" },
@@ -137,14 +139,15 @@ int main()
 			{ "sin((2 $k + 1.5) 'pi') | $k :int = -1" },
 
 			//differentiation rules:
-			{ "diff(x, x)                                 = 1" },
-			{ "diff(a, x)       | a :complex || a :symbol = 0" },
-			{ "diff(f^a, x)     | a :complex              = diff(f, x) a f^(a-1)" },
-			{ "diff(a^f, x)     | a :complex              = diff(f, x) ln(a) a^f" },
-			{ "diff(g^h, x)                               = (diff(h, x) ln(g) + h diff(g, x)/g) g^h" },
-			{ "diff(a, x)       | a :sum                  = fmap(\\f .diff(f, x), a)" },
-			{ "diff(u vs..., x)                           = diff(u, x) vs... + u diff(product(vs...), x)" },
-			{ "diff(f(y), x)                              = diff(y, x) fdiff(f)(y)" },
+			{ "diff(x, x)                    = 1" },
+			{ "diff(a, x)       | a :complex = 0" },
+			{ "diff(a, x)       | a :symbol  = 0" },
+			{ "diff(f^a, x)     | a :complex = diff(f, x) a f^(a-1)" },
+			{ "diff(a^f, x)     | a :complex = diff(f, x) ln(a) a^f" },
+			{ "diff(g^h, x)                  = (diff(h, x) ln(g) + h diff(g, x)/g) g^h" },
+			{ "diff(a, x)       | a :sum     = fmap(\\f .diff(f, x), a)" },
+			{ "diff(u vs..., x)              = diff(u, x) vs... + u diff(product(vs...), x)" },
+			{ "diff(f(y), x)                 = diff(y, x) fdiff(f)(y)" },
 
 			{ "fdiff(\\x .y) = \\x .diff(y, x)" },
 			{ "fdiff(sin)    = cos" },
@@ -209,13 +212,17 @@ int main()
 				auto term = simp::LiteralTerm(name);
 				term.normalize();
 				//std::cout << " = " << term.to_string() << "\n\n";
-				term.head = simp::greedy_apply_ruleset(rules, term.mut_ref(), 0);
+				term.head = simp::greedy_apply_ruleset(rules, term.mut_ref());
 				std::cout << " = " << term.to_string() << "\n\n";
 			}
 			catch (bmath::ParseFailure failure) {
 				std::cout << "parse failure: " << failure.what << '\n';
 				std::cout << name << '\n';
 				std::cout << std::string(failure.where, ' ') << "^\n\n";
+			}
+			catch (simp::TypeError error) {
+				std::cerr << "type error: " << error.what << "\n";
+				std::cerr << simp::print::to_string(error.occurence) << "\n";
 			}
 		}
 	}

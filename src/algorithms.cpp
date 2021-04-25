@@ -1008,7 +1008,8 @@ namespace simp {
             }, build_very_basic_pattern);
             const auto optimize = [](const MutRef r) {
                 if (r.type == SingleMatch::restricted) {
-                    r->single_match.condition = managed_shallow_apply_ruleset(rules, r.new_at(r->single_match.condition), 0);
+                    r->single_match.condition = 
+                        shallow_apply_ruleset(rules, r.new_at(r->single_match.condition));
                 }
                 return r.typed_idx();
             };
@@ -1024,30 +1025,40 @@ namespace simp {
                 h = build_rule::prime_call(s, h);
                 return h;
             };
-            static const auto rules = RuleSet({
+            static const auto bubble_up = RuleSet({
                 { "     _VM(idx, domain, match) + a + cs... | a :complex = _VM(idx, domain, match - a) + cs..." },
                 { "     _VM(idx, domain, match) * a * cs... | a :complex = _VM(idx, domain, match / a) * cs..." },
                 { "     _VM(idx, domain, match) ^ 2                      = _VM(idx, domain, sqrt(match))" },
                 { "sqrt(_VM(idx, domain, match))                         = _VM(idx, domain, match ^ 2)" },
             }, build_basic_pattern);
-            heads.lhs = greedy_apply_ruleset(rules, MutRef(store, heads.lhs), 0);
+            heads.lhs = greedy_apply_ruleset(bubble_up, MutRef(store, heads.lhs));
             heads.lhs = normalize::recursive(MutRef(store, heads.lhs), {}, 0); //combine match
 
+            static const auto to_domain = RuleSet({
+                { "v :t   = t" },
+                { "v < 0  = _Negative" },
+                { "v > 0  = _Positive" },
+                { "v <= 0 = _NotPositive" },
+                { "v >= 0 = _NotNegative" },
+            }, build_basic_pattern);
             const auto build_value_match = [](const MutRef r) {
                 if (r.type == Literal::call && r->call.function() == from_native(nv::PatternAuxFn::value_match)) {
                     Call& call = *r;
-                    assert((call[1].get_type().is<PatternUnsigned>() && call[2].get_type() == Literal::native));
+                    assert(call[1].get_type().is<PatternUnsigned>());
                     const std::uint32_t match_data_index = call[1].get_index();
-                    const auto domain = nv::Native(call[2].get_index()).to<nv::ComplexSubset>();
-                    assert(domain < nv::ComplexSubset::COUNT);
+                    const NodeIndex domain = shallow_apply_ruleset(to_domain, r.new_at(call[2]));
                     const NodeIndex match_index = call[3];
+                    if (domain.get_type() != Literal::native || !to_native(domain).is<nv::ComplexSubset>()) {
+                        throw TypeError{ "value match restrictions may only be of form \"<value match> :<complex subset>\"", r };
+                    }
+                    call[2] = literal_nullptr;
                     call[3] = literal_nullptr;
                     free_tree(r);
                     const std::size_t result_index = r.store->allocate_one();
                     r.store->at(result_index) = ValueMatch{ .match_data_index = match_data_index,
-                                                            .domain = domain,
-                                                            .match_index = match_index,
-                                                            .owner = false };
+                                                            .domain           = to_native(domain).to<nv::ComplexSubset>(),
+                                                            .match_index      = match_index,
+                                                            .owner            = false };
                     return NodeIndex(result_index, SpecialMatch::value);
                 }
                 return r.typed_idx();
