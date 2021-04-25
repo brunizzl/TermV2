@@ -64,8 +64,7 @@ namespace simp {
             using namespace nv;
             static_assert((unsigned)Native::COUNT < 1000, "adjust values >= 2000 to circumvent overlap");
             switch (Native(ref.index)) {
-            default:                                 return ref.index + 1000;
-            case Native(PatternConst::multi_marker): return 3001;
+            default:                               return ref.index + 1000;
             }
         default:
             assert(false);

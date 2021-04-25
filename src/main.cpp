@@ -117,9 +117,9 @@ int main()
 			{ "x^a x^b = x^(a + b)" },
 			{ "exp(product(ln(y), xs...)) = y^(product(xs...))" },
 
-			{ " a^2 +  2 a b + b^2 =  (a + b)^2" },
-			{ " a^2 -  2 a b + b^2 =  (a - b)^2" },
-			{ "$a^2 + 2 $a b + b^2 = ($a + b)^2" },
+			{ " a^2 +  2 a b + b^2 + cs... =  (a + b)^2 + cs..." },
+			{ " a^2 -  2 a b + b^2 + cs... =  (a - b)^2 + cs..." },
+			{ "$a^2 + 2 $a b + b^2 + cs... = ($a + b)^2 + cs..." },
 
 			{ "a bs... + a cs... | !(a :complex) = a (product(bs...) + product(cs...))" },
 			{ "a bs... + a       | !(a :complex) = a (product(bs...) + 1)" },
@@ -207,6 +207,7 @@ int main()
 			try {
 				auto term = simp::LiteralTerm(name);
 				term.normalize();
+				//std::cout << " = " << term.to_string() << "\n\n";
 				term.head = simp::greedy_apply_ruleset(rules, term.mut_ref(), 0);
 				std::cout << " = " << term.to_string() << "\n\n";
 			}

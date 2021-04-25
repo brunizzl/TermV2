@@ -873,17 +873,35 @@ namespace simp {
         //changes call to pattern call if appropriate and change multis to multi_marker
         [[nodiscard]] NodeIndex build_lhs_multis_and_pattern_calls(MutRef ref, std::vector<MultiChange>& multi_changes, unsigned& pattern_call_index) 
         {
-            const auto make_ref_pattern_call = [&](unsigned encountered_multis) {
+            const auto make_ref_pattern_call = [&](const bool commutative) {
                 const unsigned this_pattern_index = pattern_call_index++;
+                auto this_call_data = PatternCallData{ .match_data_index = this_pattern_index };
                 { //change multis in call
-                    for (NodeIndex& param : ref->call.parameters()) {
+                    std::uint32_t pos_mod_multis = 0; //only is incremented, when no multi is encountered
+                    Call& call = *ref;
+                    for (NodeIndex& param : call.parameters()) {
                         if (param.get_type() == SpecialMatch::multi) {
                             const unsigned identifier = ref.new_at(param)->multi_match.match_data_index;
-                            multi_changes.emplace_back(identifier, MultiMatch{ this_pattern_index, encountered_multis++ });
+                            multi_changes.emplace_back(identifier, 
+                                MultiMatch{ this_pattern_index, commutative ? -1u : pos_mod_multis });
                             free_tree(ref.new_at(param));
-                            param = multi_marker;
+                            param = literal_nullptr;
+                            if (commutative) {
+                                this_call_data.has_multi_match_variable = true;
+                            }
+                            else {
+                                if (this_call_data.preceeded_by_multi.test(pos_mod_multis)) {
+                                    throw TypeError{ "two multis in direct succession are illegal in lhs", ref };
+                                }
+                                this_call_data.preceeded_by_multi.set(pos_mod_multis);
+                            }
+                        }
+                        else {
+                            pos_mod_multis++;
                         }
                     }
+                    const auto new_end = std::remove(call.begin(), call.end(), literal_nullptr);
+                    call.size() = new_end - call.begin();
                 }
                 { //change call
                     bmath::intern::StupidBufferVector<NodeIndex, 16> subterms;
@@ -896,7 +914,7 @@ namespace simp {
 
                     ref.type = PatternCall{};
                     ref.index = ref.store->allocate_n(1u + nr_call_nodes) + 1u;
-                    ref.store->at(ref.index - 1u) = PatternCallData{ .match_data_index = this_pattern_index };
+                    ref.store->at(ref.index - 1u) = this_call_data;
                     Call::emplace(ref.store->at(ref.index), subterms, call_capacity);
                 }
             };
@@ -910,17 +928,17 @@ namespace simp {
                     const Native native_f = to_native(f);
                     if (native_f.is<Comm>()) {
                         if (this_multi_count > 1) throw TypeError{ "too many multis in commutative", ref };
-                        make_ref_pattern_call(-1u);
+                        make_ref_pattern_call(true);
                     }
                     if (native_f.is<FixedArity>() && this_multi_count > 0) {
                         throw TypeError{ "multi match illegal in fixed arity", ref };
                     }
                     else if (native_f.is<NonComm>() && this_multi_count > 0) {
-                        make_ref_pattern_call(0);
+                        make_ref_pattern_call(false);
                     }
                 }
                 else if (this_multi_count > 0) {
-                    make_ref_pattern_call(0);
+                    make_ref_pattern_call(false);
                 }
                 //build subterms
                 const auto stop = end(ref);
@@ -1095,14 +1113,7 @@ namespace simp {
                 assert(entry.match_idx == ref.typed_idx());
 
                 const auto needle_params = pn_ref->call.parameters();
-                const std::uint32_t needle_i = [&] {
-                    if (needle_params.back() == multi_marker) {
-                        assert(needle_params.size() > 1u); //that be stupid
-                        assert(needle_params[needle_params.size() - 2u] != multi_marker); //no two multi marker may follow in direct succession
-                        return needle_params.size() - 2u;
-                    }
-                    return needle_params.size() - 1u;
-                }();
+                const std::uint32_t needle_i = needle_params.size() - 1u;
                 const std::uint32_t hay_k = entry.match_positions[needle_i] + 1u;
 
                 const UnsaveRef pn_function_ref = pn_ref.new_at(pn_ref->call.function());
@@ -1137,11 +1148,15 @@ namespace simp {
                 return compare_tree(hay_ref.new_at(lhs), hay_ref.new_at(rhs)) == std::strong_ordering::less;
             }));
 
-            if (needles.back() != multi_marker && needles.size() != haystack.size()) {
-                return false; //multi_marker may only appear as last element. 
-            }
-
             const PatternCallData pattern_info = pattern_call_info(pn_ref);
+            if (pattern_info.has_multi_match_variable) {
+                if (needles.size() > haystack.size()) {
+                    return false;
+                }
+            }
+            else if (needles.size() != haystack.size()) {
+                return false;
+            }
             SharedPatternCallEntry& needles_data = match_data.pattern_calls[pattern_info.match_data_index];
             assert(needle_i == 0u || needles_data.match_idx == hay_ref.typed_idx() && "rematch only with same subterm");
             needles_data.match_idx = hay_ref.typed_idx();
@@ -1152,10 +1167,6 @@ namespace simp {
             }
 
             while (needle_i < needles.size()) {
-                if (needles[needle_i] == multi_marker) {
-                    assert(needle_i + 1ull == needles.size() && "multi is only valid as last element");
-                    return true; //multi scoops up all remaining pieces in haystack
-                }
                 const UnsaveRef needle_ref = pn_ref.new_at(needles[needle_i]);
                 for (; hay_k < haystack.size(); hay_k++) {
                     if (!currently_matched.test(hay_k) && 
@@ -1194,8 +1205,6 @@ namespace simp {
 
             const std::span<const NodeIndex> needles = pn_ref->call.parameters();
             const std::span<const NodeIndex> haystack = hay_ref->call.parameters();
-            assert(std::find(needles.begin(), needles.end(), multi_marker) != needles.end() && 
-                "the multi marker is the reason to make this a PatternCall");
 
             return false;
         } //find_shift
@@ -1239,12 +1248,13 @@ namespace simp {
             for (auto iter = begin(pn_ref); iter != stop; ++iter) {
                 if (iter->get_type() == SpecialMatch::multi) {
                     const MultiMatch multi = *pn_ref.new_at(*iter);
-                    assert(multi.nr_of_prev_multis == -1u && "only commutative is implemented so far here");
+                    assert(multi.index_in_params == -1u && "only commutative is implemented so far here");
                     const match::SharedPatternCallEntry& entry = match_data.pattern_calls[multi.match_data_index];
                     const Ref donator = Ref(src_store, entry.match_idx);
                     const auto donator_stop = end(donator);
-                    for (auto donator_iter = begin(donator); donator_iter != donator_stop; ++donator_iter) {
-                        if (!entry.index_matched(donator_iter.array_idx)) {
+                    auto donator_iter = begin(donator); //currently pointing at function
+                    for (++donator_iter; donator_iter != donator_stop; ++donator_iter) {
+                        if (!entry.index_matched(donator_iter.array_idx - 1u)) { //-1u as we dont want the function itself, only the parameters
                             const NodeIndex dst_param = copy_tree(Ref(src_store, *donator_iter), dst_store); //call normal copy!
                             dst_subterms.push_back(dst_param);
                         }

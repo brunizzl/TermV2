@@ -646,7 +646,7 @@ namespace simp {
 				str.append("_M[");
 				str.append(std::to_string(var.match_data_index));
 				str.append(", ");
-				str.append(std::to_string((int)var.nr_of_prev_multis));
+				str.append(std::to_string((int)var.index_in_params));
 				str.append("]");
 			} break;
 			case NodeType(SpecialMatch::value): {

@@ -58,7 +58,7 @@ namespace simp {
 
 	enum class SpecialMatch
 	{
-		multi, //only expected in rhs, lhs holds multi_marker instead
+		multi, //only expected in rhs, lhs holds multi info in PatternCallData
 		value, //ownership is decided in ValueMatch
 		COUNT
 	};
@@ -247,7 +247,6 @@ namespace simp {
 		enum class PatternConst
 		{
 			value_proxy, //found as offspring of .match_index of ValueMatch
-			multi_marker, //found in match side of pattern as child of Variadic
 			COUNT
 		};
 
@@ -276,7 +275,6 @@ namespace simp {
 	constexpr NodeIndex literal_false   = from_native(nv::Bool::false_);
 	constexpr NodeIndex literal_true    = from_native(nv::Bool::true_);
 	constexpr NodeIndex value_proxy     = from_native(nv::PatternConst::value_proxy);
-	constexpr NodeIndex multi_marker    = from_native(nv::PatternConst::multi_marker);
 
 	constexpr NodeIndex bool_to_typed_idx(const bool b) { return b ? literal_true : literal_false; }
 
@@ -315,14 +313,14 @@ namespace simp {
 		NodeIndex condition; //eighter Literal::native, then assumed to be some subset, or call to some testable expression
 	};
 
-	//only expected in rhs (lhs contains multi_marker instead)
+	//only expected in rhs (lhs stores multis only as bool /bits in PatternCallData)
 	struct MultiMatch
 	{
-		std::uint32_t match_data_index; //indexes in MatchData::variadic_match_data
-		//counts how many multi match variables reside in front of this in call to parent in match side
+		std::uint32_t match_data_index; //indexes in MatchData::pattern_calls
+		//imaginary (as multi match variables are not explicitly in lhs) index in call of lhs, minus the other multis
 		//e.g. in "list(xs..., 1, ys..., list(as..., 2, bs..., 3, cs...)) = list(cs...)" 
-		//  has rhs instance of "cs..." .nr_of_pre_multis = 2 (specifically "as..." and "bs...")
-		std::uint32_t nr_of_prev_multis; 
+		//  has rhs instance of "cs..." .index_in_params = 2 (preceeded by "2" and "3")
+		std::uint32_t index_in_params; 
 	};
 
 	struct ValueMatch
@@ -336,11 +334,19 @@ namespace simp {
 	struct PatternCallData
 	{
 		std::uint32_t match_data_index = -1u; //indexes in MatchData::variadic_match_data
-		//bit i dertermines whether parameter i is rematchable
+		//bit i dertermines whether parameter i is rematchable (used in both commutative and non-commutative)
 		bmath::intern::BitSet16 rematchable = (std::uint16_t)-1;
-		//bit i determines whether parameter i is guaranteed to never have a 
-		//  match at a higher haystack index than parameter i + 1
-		bmath::intern::BitSet16 always_preceeding_next = (std::uint16_t)0;
+		union {
+			//bit i determines whether parameter i is guaranteed to never have a 
+			//  match at a higher haystack index than parameter i + 1 (used in commutative)
+			bmath::intern::BitSet16 always_preceeding_next = (std::uint16_t)0;
+			//bit i determines, wether pattern parameter i comes after a multi match variable
+			// (because the multi match variables are not present in lhs as actual parameters) (used in non-commutative)
+			//note: as a multi is also valid as last parameter, a pattern call may only hold up to 15 parameters!
+			bmath::intern::BitSet16 preceeded_by_multi;
+		};
+		//true: allows matching terms larger than pattern (used in commutative)
+		bool has_multi_match_variable = false;
 	};
 
 	union TermNode
@@ -595,7 +601,6 @@ namespace simp {
 
 		constexpr auto constant_table = std::to_array<CommonProps>({
 			{ PatternConst::value_proxy  , "_VP"         , PatternConst::value_proxy },
-			{ PatternConst::multi_marker , "_M"          , PatternConst::multi_marker },
 			{ Restr::any                 , "\\"          , Literal::native }, //can not be constructed from a string
 			{ Restr::callable            , "callable"    , Literal::native },
 			{ Restr::boolean             , "bool"        , Literal::native },
@@ -685,7 +690,7 @@ namespace simp {
 		{
 			//no PatternCall may have more parameters than max_params_count many
 			static constexpr std::size_t max_params_count = 10u;
-			static_assert(max_params_count <= 16u, "else larger bitsets are needed for PatternCallData");
+			static_assert(max_params_count < 16u, "else larger bitsets are needed for PatternCallData");
 
 			using MatchPos_T = decltype(Call::Info::size);
 
