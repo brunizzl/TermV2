@@ -5,7 +5,6 @@
 #include <concepts>
 #include <bitset>
 #include <array>
-#include <iostream>
 
 #include "utility/vector.hpp"
 #include "utility/misc.hpp"
@@ -86,8 +85,10 @@ namespace simp {
 			if (first_not_character == TokenView::npos) {
 				return Head{ 0u, Head::Type::symbol };
 			}
-			if (view.tokens[first_not_character] != token::open_grouping) [[unlikely]] throw ParseFailure{ first_not_character + view.offset, "illegal character, expected '('" };
-			if (!view.tokens.ends_with(token::clse_grouping)) [[unlikely]] throw ParseFailure{ view.size() + view.offset, "poor grouping, expected ')'" };
+			if (view.tokens[first_not_character] != token::open_grouping) [[unlikely]] 
+				throw ParseFailure{ first_not_character + view.offset, "illegal character, expected '('" };
+			if (!view.tokens.ends_with(token::clse_grouping)) [[unlikely]] 
+				throw ParseFailure{ view.size() + view.offset, "poor grouping, expected ')'" };
 			if (first_not_character == 0u && find_closed_par(0, view.tokens) + 1u == view.tokens.size()) {
 				return Head{ 0u, Head::Type::group };
 			}
@@ -102,9 +103,7 @@ namespace simp {
 			{
 				const std::string_view name = view.to_string_view();
 				return view.tokens.find_first_not_of(bmath::intern::token::character) == std::string_view::npos &&
-					name.find_first_of('.') == std::string_view::npos &&
-					name.find_first_of('$') == std::string_view::npos &&
-					name.find_first_of(' ') == std::string_view::npos;
+					name.find_first_of(".$ ") == std::string_view::npos;
 			}
 
 			NodeIndex find_name_in_infos(const std::vector<NameInfo>& infos, const std::string_view name)
@@ -119,14 +118,14 @@ namespace simp {
 			NodeIndex build_symbol(Store& store, const LiteralInfos& infos, bmath::intern::ParseView view)
 			{
 				const std::string_view name = view.to_string_view();
-				if (!mundane_name(view)) [[unlikely]] {
-					throw bmath::ParseFailure{ view.offset, "ellipses or the dollar symbol are only expected when building a pattern" };
-				}
 				if (const NodeIndex res = find_name_in_infos(infos.lambda_params, name); res != literal_nullptr) {
 					return res;
 				}
 				if (const nv::Native type = nv::type_of(name); type != nv::Native(nv::Native::COUNT)) {
 					return from_native(type);
+				}
+				if (!mundane_name(view)) [[unlikely]] {
+					throw bmath::ParseFailure{ view.offset, "ellipses or the dollar symbol are only expected when building a pattern" };
 				}
 				return NodeIndex(Symbol::build(store, name), Literal::symbol);
 			}
@@ -197,9 +196,9 @@ namespace simp {
 			unsigned add_lambda_params(std::vector<NameInfo>& lambda_params, bmath::intern::ParseView params_view)
 			{
 				using namespace bmath::intern;
-				if (!params_view.tokens.starts_with(token::backslash) /*|| params_view.tokens.find_last_not_of(token::character) != 0u*/) [[unlikely]]
+				if (!params_view.tokens.starts_with(token::backslash)) [[unlikely]]
 					throw bmath::ParseFailure{ params_view.offset, "this is a weird looking lambda parameter declaration" };
-				unsigned param_count = 0u;
+				const unsigned old_size = lambda_params.size();
 				while (params_view.size()) {
 					params_view.remove_prefix(1u); //remove previous space (or '\\' for first parameter)
 					const std::size_t space = params_view.to_string_view().find_first_of(' ');
@@ -209,9 +208,8 @@ namespace simp {
 					if (!param.size()) [[unlikely]]
 						throw bmath::ParseFailure{ params_view.offset, "there is little reason for nullary lambdas in a purely functional language" };
 					lambda_params.push_back({ param.to_string_view(), NodeIndex(lambda_params.size(), Literal::lambda_param) });
-					param_count++;
 				}
-				return param_count;
+				return lambda_params.size() - old_size;
 			}
 		} //namespace name_lookup
 

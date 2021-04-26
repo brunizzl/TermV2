@@ -631,9 +631,9 @@ namespace simp {
 			{ PatternUnsigned{}          , "_UInt"       , Literal::native },
 			{ SingleMatch::restricted    , "\\"          , Literal::native }, //can not be constructed from a string
 			{ SingleMatch::unrestricted  , "\\"          , Literal::native }, //can not be constructed from a string
-			{ SingleMatch::weak          , "\\"          , Literal::native }, //can not be constructed from a string
-			{ SpecialMatch::multi        , "\\"          , Literal::native }, //can not be constructed from a string
-			{ SpecialMatch::value        , "\\"          , Literal::native }, //can not be constructed from a string
+			{ SingleMatch::weak          , "_SingleMatch", Literal::native }, //can not be constructed from a string
+			{ SpecialMatch::multi        , "_MultiMatch" , Literal::native }, //can not be constructed from a string
+			{ SpecialMatch::value        , "_ValueMatch" , Literal::native }, //can not be constructed from a string
 		});
 		static_assert(constant_table.size() == (unsigned)Constant::COUNT);
 		static_assert(bmath::intern::is_sorted_by(constant_table, &CommonProps::type));

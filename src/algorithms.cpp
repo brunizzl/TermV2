@@ -997,7 +997,7 @@ namespace simp {
                 return h;
             };
             static const auto rules = RuleSet({
-                { "x :t          = t" },
+                { "x :t          = t" }, //TODO: only convert for x :_SingleMatch
                 { "x < 0         = _Negative" },
                 { "x > 0         = _Positive" },
                 { "x <= 0        = _NotPositive" },

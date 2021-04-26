@@ -17,10 +17,11 @@ important:
 	   - test_condition
 	   - find_dilation
 	   - adjust rematch to work with implementation of find_dilation
-	   - (eval_value_match)
+	   - eval_value_match
  - implement fst, snd, ffilter, fsplit, ...
  - add eval_buildin for min/max to remove values guaranteed to not be minimum / maximum without requiring full evaluation
  - only test subset of rulerange
+ - remove "0" from sum, "1" from product
  - type checking (extended: keep track of what restrictions apply to match variable in lhs, use in rhs)
  - finnish building / verifying pattern:
       - check PatternCall to each not exceed maximal length and check numer of PatternCall in pattern not more than allowed 
@@ -158,9 +159,7 @@ int main()
 			{ "fdiff(tan)    = \\x .cos(x)^(-2)" },
 			
 			//exponential runtime fibonacci implementation:
-			{ "'fib'(0)         = 0" },
-			{ "'fib'(1)         = 1" },
-			{ "'fib'(n) | n > 0 = 'fib'(n - 1) + 'fib'(n - 2)" },
+			{ "'fib'(n) | n >= 0 = (n < 2)(n, 'fib'(n - 1) + 'fib'(n - 2))" },
 			
 			////reversing a list:
 			//{ "xs :list...                 | reverse(list{xs}) = reverse'(list{}, list{xs})" },
