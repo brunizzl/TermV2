@@ -20,13 +20,12 @@ important:
 	   - eval_value_match
  - implement fst, snd, ffilter, fsplit, ...
  - add eval_buildin for min/max to remove values guaranteed to not be minimum / maximum without requiring full evaluation
- - only test subset of rulerange
+ - only test subset of rulerange (requires rule iterator to become random access)
  - remove "0" from sum, "1" from product
  - type checking (extended: keep track of what restrictions apply to match variable in lhs, use in rhs)
  - finnish building / verifying pattern:
+      - (depends on type checking) verify whole patterns
       - check PatternCall to each not exceed maximal length and check numer of PatternCall in pattern not more than allowed 
-      - enable hints for faster /nonrepetitive matching in PatternCallData
-      - bubble value match variables up as high as possible, make first occurence owning
 	  - enable implicit outer multi
 
 nice to have:
@@ -115,9 +114,9 @@ int main()
 			{ "x^a x^b = x^(a + b)" },
 			{ "exp(product(ln(y), xs...)) = y^(product(xs...))" },
 
-			{ " a^2 +  2 a b + b^2 + cs... =  (a + b)^2 + cs..." },
-			{ " a^2 -  2 a b + b^2 + cs... =  (a - b)^2 + cs..." },
-			{ "$a^2 + 2 $a b + b^2 + cs... = ($a + b)^2 + cs..." },
+			{ " a^2 +  2 a b + b^2 =  (a + b)^2" },
+			{ " a^2 -  2 a b + b^2 =  (a - b)^2" },
+			{ "$a^2 + 2 $a b + b^2 = ($a + b)^2" },
 
 			{ "a bs... + a cs... | !(a :complex)      = a (product(bs...) + product(cs...))" },
 			{ "a bs... + a       | !(a :complex)      = a (product(bs...) + 1)" },

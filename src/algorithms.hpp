@@ -136,17 +136,23 @@ namespace simp {
     namespace build_rule {
 
         //turns "_Xn[_Xn' :<some_type>]" into "_Xn[<some_type>]"
-        RuleHead optimize_single_conditions(Store& store, RuleHead heads);
+        RuleHead optimize_single_conditions(Store& store, RuleHead head);
 
         //value match variables intermediary form are bubbled up as high as possible
         //intermediary is converted to final form and ownership is decided (thus sorts bevore that)
-        RuleHead prime_value(Store& store, RuleHead heads);
+        RuleHead prime_value(Store& store, RuleHead head);
 
         // - every function call to nv::Comm in lhs is converted to PatternCall
         // - if a call in lhs contains at least one multi match, the call is converted to PatternCall
         // - multi match variables are primed
         //note: as after this procedure there may be PatterCall instances present, this may be done as last real transformation
-        RuleHead prime_call(Store& store, RuleHead heads);
+        RuleHead prime_call(Store& store, RuleHead head);
+
+        //if the outermost node of lhs is associative and 
+        //  eighter commutative and does not contain a multi match variable
+        //  or non-commutative and multi match variables are not present in the front and back
+        //these missing multi match variables are added
+        RuleHead add_implicit_multis(Store& store, RuleHead head);
 
         //sets /unsets bits in data of PatternCall
         //note: will only change something if prime_call has already run

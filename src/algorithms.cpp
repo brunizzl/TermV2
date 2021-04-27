@@ -1109,7 +1109,7 @@ namespace simp {
         //two single match variables are equivalent, if swapping instances in whole pattern out for another, 
         //  the same pattern results.
         //idea: copy whole pattern, swap pairs of single match variables, test if pattern is unchanged, then variables are equivalent 
-        EquivalenceTable determine_equivalence_table(const UnsaveRef lhs_ref) 
+        EquivalenceTable build_equivalence_table(const UnsaveRef lhs_ref) 
         {
             constexpr std::size_t max_singles = match::MatchData::max_single_match_count;
             std::array<bool, max_singles> occurs_unrestricted = {};
@@ -1160,7 +1160,7 @@ namespace simp {
                 }
             }
             return equivalence_table;
-        } //determine_equivalence_table
+        } //build_equivalence_table
 
         //determines if fst and second are equivalent, if single match variables are considered equivalent as in eq
         bool equivalent(const UnsaveRef fst, const UnsaveRef snd, const EquivalenceTable& eq)
@@ -1203,9 +1203,42 @@ namespace simp {
             return compare_tree(fst, snd) == std::strong_ordering::equal;
         } //equivalent
 
+        RuleHead add_implicit_multis(Store& store, RuleHead head)
+        {
+            const MutRef lhs_ref = MutRef(store, head.lhs);
+            if (lhs_ref.type != PatternCall{})
+                return head;
+            const NodeIndex f = lhs_ref->call.function();
+            if (f.get_type() != Literal::native)
+                return head;
+            const nv::Native f_native = to_native(f);
+            if (!f_native.is<nv::Variadic>()) 
+                return head;
+            const nv::Variadic f_variadic = f_native.to<nv::Variadic>();
+            if (!nv::is_associative(f_variadic))
+                return head;
+
+            auto& info = pattern_call_info(lhs_ref);
+            if (f_variadic.is<nv::Comm>() && !info.has_multi_match_variable) {
+                info.has_multi_match_variable = true;
+                const std::size_t rhs_multi_index = store.allocate_one();
+                store.at(rhs_multi_index) = MultiMatch{ .match_data_index = 0, .index_in_params = -1u };
+                const std::size_t temp_head_rhs_index = 
+                    Call::build(store, std::to_array({ f, head.rhs, NodeIndex(rhs_multi_index, SpecialMatch::multi) }));
+                head.rhs = normalize::outermost(
+                    MutRef(store, temp_head_rhs_index, Literal::call), 
+                    { .eval_haskell = false, .remove_unary_assoc = false }, 0).res;
+                return head;
+            }
+            if (f_variadic.is<nv::NonComm>()) {
+                assert(false); //TODO
+            }
+            return head;
+        } //add_implicit_multis
+
         void set_always_preceeding_next(const MutRef head_lhs)
         {
-            const EquivalenceTable eq_table = determine_equivalence_table(head_lhs);
+            const EquivalenceTable eq_table = build_equivalence_table(head_lhs);
             const auto set_bits = [&eq_table](const MutRef r) {
                 if (r.type == PatternCall{} && pattern_call_info(r).is_commutative) {
                     auto& bits = pattern_call_info(r).always_preceeding_next;
@@ -1284,6 +1317,7 @@ namespace simp {
             head = build_rule::optimize_single_conditions(store, head);
             head = build_rule::prime_value(store, head);
             head = build_rule::prime_call(store, head);
+            head = build_rule::add_implicit_multis(store, head);
 
             const auto lhs_ref = MutRef(store, head.lhs);
             build_rule::set_always_preceeding_next(lhs_ref);
