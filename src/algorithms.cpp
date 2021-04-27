@@ -543,6 +543,18 @@ namespace simp {
             return literal_nullptr;
         } //eval_buildin
 
+        void BMATH_FORCE_INLINE sort(MutRef ref)
+        {
+            assert((ref.type == Literal::call || ref.type == PatternCall{}) &&
+                ref->call.function().get_type() == Literal::native && 
+                to_native(ref->call.function()).is<nv::Comm>());
+            auto range = ref->call.parameters();
+            std::sort(range.begin(), range.end(),
+                [&](const NodeIndex fst, const NodeIndex snd) {
+                    return compare_tree(ref.new_at(fst), ref.new_at(snd)) == std::strong_ordering::less;
+                });
+        } //sort
+
         Result outermost(MutRef ref, const Options options, const unsigned lambda_param_offset)
         {
             bool change = false;
@@ -558,11 +570,7 @@ namespace simp {
                         change |= merge_associative_calls(ref, function);
                     }
                     if (buildin_type.is<nv::Comm>()) {
-                        auto range = ref->call.parameters();
-                        std::sort(range.begin(), range.end(), 
-                            [&](const NodeIndex fst, const NodeIndex snd) {
-                                return compare_tree(ref.new_at(fst), ref.new_at(snd)) == std::strong_ordering::less;
-                            });
+                        sort(ref);
                     }
                     if (const NodeIndex res = eval_buildin(ref, options, function, lambda_param_offset);
                         res != literal_nullptr) 
@@ -1100,6 +1108,7 @@ namespace simp {
 
         //two single match variables are equivalent, if swapping instances in whole pattern out for another, 
         //  the same pattern results.
+        //idea: copy whole pattern, swap pairs of single match variables, test if pattern is unchanged, then variables are equivalent 
         EquivalenceTable determine_equivalence(const UnsaveRef lhs_ref) 
         {
             constexpr std::size_t max_singles = match::MatchData::max_single_match_count;
@@ -1118,67 +1127,92 @@ namespace simp {
                 const auto swap_single = [i, k](MutRef r) {
                     if (r.type.is<SingleMatch>()) {
                         const auto replace_with = [&r](const std::size_t new_idx) {
-                            if (r.type == SingleMatch::restricted)
-                                r->single_match.match_data_index = new_idx;
-                            else
-                                r.index = new_idx;
+                            if (r.type == SingleMatch::restricted) r->single_match.match_data_index = new_idx;
+                            else                                   r.index = new_idx;
                         };
                         const std::uint32_t current = single_match_index(r);
-                        if (current == i) 
-                            replace_with(k);
-                        if (current == k) 
-                            replace_with(i);
+                        if (current == i) replace_with(k);
+                        if (current == k) replace_with(i);
                     }
                     else if (r.type == PatternCall{} && 
                         r->call.function().get_type() == Literal::native && 
                         to_native(r->call.function()).is<nv::Comm>()) 
-                    {
-                        auto range = r->call.parameters();
-                        std::sort(range.begin(), range.end(),
-                            [&](const NodeIndex fst, const NodeIndex snd) {
-                                return compare_tree(r.new_at(fst), r.new_at(snd)) == std::strong_ordering::less;
-                            });
+                    {   normalize::sort(r);
                     }
                     return r.typed_idx();
                 };
                 head_copy = transform(MutRef(copy_store, head_copy), swap_single);
             }; //lambda swap_singles
 
-            EquivalenceTable table = {};
-            for (std::size_t i = 0; i < max_singles; i++) {
-                table[i][i] = true; //every variable is equivalent to itself
-            }
+            EquivalenceTable equivalence_table = {};
             for (std::size_t i = 0; i + 1u < max_singles; i++) {
-                if (!occurs_unrestricted[i]) {
-                    continue;
-                }
+                equivalence_table[i][i] = true; //every variable is equivalent to itself
+                if (!occurs_unrestricted[i]) continue;
                 for (std::size_t k = i + 1u; k < max_singles; k++) {
-                    if (!occurs_unrestricted[k]) {
-                        continue;
-                    }
+                    if (!occurs_unrestricted[k]) continue;
                     assert(compare_tree(lhs_ref, Ref(copy_store, head_copy)) == std::strong_ordering::equal);
                     swap_singles(i, k);
                     if (compare_tree(lhs_ref, Ref(copy_store, head_copy)) == std::strong_ordering::equal) {
-                        table[i][k] = true;
-                        table[k][i] = true;
+                        equivalence_table[i][k] = true;
+                        equivalence_table[k][i] = true;
                     }
-                    swap_singles(i, k);
+                    swap_singles(i, k); //swap back to start fresh for next round
                 }
             }
-            return table;
+            return equivalence_table;
         } //determine_equivalence
+
+        //note: two "equivalent" trees still compare std::strong_ordering::equal, not std::strong_ordering::equivalent
+        std::strong_ordering compare_tree_equivalence(const UnsaveRef fst, const UnsaveRef snd, const EquivalenceTable& eq)
+        {
+            const auto is_call = [](const NodeType t) { return t == Literal::call || t == PatternCall{}; };
+            if (is_call(fst.type) && is_call(snd.type)) {
+                const auto fst_end = fst->call.end();
+                const auto snd_end = snd->call.end();
+                auto fst_iter = fst->call.begin();
+                auto snd_iter = snd->call.begin();
+                for (; fst_iter != fst_end && snd_iter != snd_end; ++fst_iter, ++snd_iter) {
+                    const std::strong_ordering cmp =
+                        compare_tree_equivalence(fst.new_at(*fst_iter), snd.new_at(*snd_iter), eq);
+                    if (cmp != std::strong_ordering::equal) {
+                        return cmp;
+                    }
+                }
+                if (fst_iter != fst_end || snd_iter != snd_end) {
+                    return fst->call.size() <=> snd->call.size();
+                }
+                return std::strong_ordering::equal;
+            }
+            else if (fst.type == Literal::lambda && snd.type == Literal::lambda) {
+                const Lambda fst_lambda = *fst;
+                const Lambda snd_lambda = *snd;
+                if (fst_lambda.param_count != snd_lambda.param_count) {
+                    return fst_lambda.param_count <=> snd_lambda.param_count;
+                }
+                if (fst_lambda.transparent != snd_lambda.transparent) {
+                    return fst_lambda.transparent <=> snd_lambda.transparent;
+                }
+                return compare_tree_equivalence(fst.new_at(fst_lambda.definition), snd.new_at(snd_lambda.definition), eq);
+            }
+            else if (fst.type.is<SingleMatch>() && snd.type.is<SingleMatch>()) {
+                if (eq.at(single_match_index(fst)).at(single_match_index(snd))) {
+                    return std::strong_ordering::equal;
+                }
+            }
+            return compare_tree(fst, snd);
+        } //compare_tree_equivalence
 
         void set_always_preceeding_next(const MutRef head_lhs)
         {
             //TODO: test if two match variables play equivalent roles, then both are considered equal
-            const EquivalenceTable equivalent_singles = determine_equivalence(head_lhs);
-            const auto set_bits = [](const MutRef r) {
+            const EquivalenceTable eq_table = determine_equivalence(head_lhs);
+            const auto set_bits = [&eq_table](const MutRef r) {
                 if (r.type == PatternCall{} && pattern_call_info(r).commutative) {
                     auto& bits = pattern_call_info(r).always_preceeding_next;
                     const auto params = r->call.parameters();
                     for (std::size_t i = 0; i + 1 < params.size(); i++) {
-                        const auto unsure = unsure_compare_tree(r.new_at(params[i]), r.new_at(params[i + 1]));
-                        const auto sure   =        compare_tree(r.new_at(params[i]), r.new_at(params[i + 1]));
+                        const auto unsure =      unsure_compare_tree(r.new_at(params[i]), r.new_at(params[i + 1]));
+                        const auto sure   = compare_tree_equivalence(r.new_at(params[i]), r.new_at(params[i + 1]), eq_table);
                         bits.set(i, unsure == std::partial_ordering::less || sure == std::strong_ordering::equal);
                     }
                 }
