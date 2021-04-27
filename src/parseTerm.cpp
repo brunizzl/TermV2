@@ -292,6 +292,21 @@ namespace bmath::intern {
 		return name.find_first_of(token, after_clsd_par);
 	} //find_first_of_skip_pars
 
+	std::size_t find_last_of_skip_pars(const TokenView name, const Token token) noexcept
+	{
+		std::size_t clsd_par = name.find_last_of(token::clse_grouping);
+		std::size_t open_par = name.size();
+		while (clsd_par != TokenView::npos) {
+			const TokenView search_view(name.substr(clsd_par + 1u, open_par - clsd_par - 1u)); //only search "...)here(..."
+			if (const std::size_t found = search_view.find_last_of(token); found != TokenView::npos) {
+				return found + clsd_par + 1u;
+			}
+			open_par = find_open_par(clsd_par, name);
+			clsd_par = name.find_last_of(token::clse_grouping, open_par);
+		}
+		return name.find_last_of(token, open_par);
+	} //find_last_of_skip_pars
+
 	std::size_t count_skip_pars(const TokenView name, const Token token) noexcept
 	{
 		std::size_t count = 0u;

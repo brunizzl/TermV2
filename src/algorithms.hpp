@@ -19,7 +19,7 @@ namespace simp {
         struct Options 
         {
             bool exact = true; //true: only exact operations are permitted
-            bool eval_haskell = true; //true: function in nv::HaskellFn are evaluated
+            bool eval_haskell = true; //true: functions in nv::HaskellFn are evaluated
             bool normalize_lambdas = true; //true: all nested lambdas become transparent & unessecary indirections are removed
             bool remove_unary_assoc = true; //true: "f(a) -> a" for all associative f (e.g. sum, product, and...)
         };
@@ -104,11 +104,10 @@ namespace simp {
     } //search
 
     //applies f to every subterm in postorder, result is new subterm
-    template<bmath::intern::CallableTo<NodeIndex, MutRef> F>
-    [[nodiscard]] NodeIndex transform(const MutRef ref, F f) 
+    template<bmath::intern::Reference R, bmath::intern::CallableTo<NodeIndex, R> F>
+    [[nodiscard]] NodeIndex transform(const R ref, F f) 
     {
-        assert(ref.type != PatternCall{});
-        if (ref.type == Literal::call) {
+        if (ref.type == Literal::call || ref.type == PatternCall{}) {
             const auto stop = end(ref);
             for (auto iter = begin(ref); iter != stop; ++iter) {
                 *iter = transform(ref.new_at(*iter), f);

@@ -36,8 +36,12 @@ namespace simp {
 					{ token::unary_minus,  Arity::unary  },
 					});
 				for (std::size_t i = 0u; i < operators.size(); i++) {
-					const std::size_t pos = find_first_of_skip_pars(token_view, operators[i].tok);
+					std::size_t pos = find_last_of_skip_pars(token_view, operators[i].tok);
 					if (pos != TokenView::npos) {
+						//as we search in reverse, this loop adjust pos to point at first part of token
+						while (pos > 0 && token_view[pos - 1] == operators[i].tok) { 
+							pos--; //TODO: make less hacky
+						}
 						if (operators[i].arity == Arity::binary || pos == 0u) {
 							return pos;
 						}

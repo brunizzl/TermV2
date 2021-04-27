@@ -12,6 +12,7 @@ namespace bmath::intern {
 		{ a.operator*() } -> std::convertible_to<const typename R::value_type>;
 		{ a.operator->() } -> std::convertible_to<const typename R::value_type*>;
 		{ a.new_at(typed_idx) } -> std::same_as<R>;
+		{ R::is_const };
 	};
 
 

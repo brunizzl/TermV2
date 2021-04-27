@@ -130,7 +130,7 @@ int main()
 
 			{ "sin(x)^2 + cos(x)^2 = 1" },
 
-			//roots and extreme points of sin and cos:
+				//roots and extreme points of sin and cos:
 			{ "cos(             'pi')           = -1" },
 			{ "cos(($k + 0.5)   'pi') | $k :int =  0" },
 			{ "cos((2 $k)       'pi') | $k :int =  1" },
@@ -140,7 +140,7 @@ int main()
 			{ "sin((2 $k + 0.5) 'pi') | $k :int =  1" },
 			{ "sin((2 $k + 1.5) 'pi') | $k :int = -1" },
 
-			//differentiation rules:
+				//differentiation rules:
 			{ "diff(x, x)                    = 1" },
 			{ "diff(a, x)       | a :complex = 0" },
 			{ "diff(a, x)       | a :symbol  = 0" },
@@ -157,19 +157,19 @@ int main()
 			{ "fdiff(exp)    = exp" },
 			{ "fdiff(ln)     = \\x .x^(-1)" },
 			{ "fdiff(tan)    = \\x .cos(x)^(-2)" },
-			
-			//exponential runtime fibonacci implementation:
+
+				//exponential runtime fibonacci implementation:
 			{ "'fib'(n) | n >= 0 = (n < 2)(n, 'fib'(n - 1) + 'fib'(n - 2))" },
-			
-			////reversing a list:
-			//{ "xs :list...                 | reverse(list{xs}) = reverse'(list{}, list{xs})" },
-			//{ "xs :list..., y, ys :list... | reverse'(list{xs}, list{y, ys}) = reverse'(list{y, xs}, list{ys})" },
-			//{ "xs :list...,                | reverse'(list{xs}, list{})      = list{xs}" },
-			//
-			////listing first n fibonacci numbers:
-			//{ "n :nat0                     | fib_n(n + 2)                   = reverse(list_fibs(n, list{1, 0}))" },
-			//{ "n :nat, a, b, tail :list... | list_fibs(n, list{a, b, tail}) = list_fibs(n - 1, list{force(a + b), a, b, tail})" },
-			//{ "              tail :list... | list_fibs(0, list{tail})       = list{tail}" },
+
+				////reversing a list:
+				//{ "xs :list...                 | reverse(list{xs}) = reverse'(list{}, list{xs})" },
+				//{ "xs :list..., y, ys :list... | reverse'(list{xs}, list{y, ys}) = reverse'(list{y, xs}, list{ys})" },
+				//{ "xs :list...,                | reverse'(list{xs}, list{})      = list{xs}" },
+				//
+				////listing first n fibonacci numbers:
+				//{ "n :nat0                     | fib_n(n + 2)                   = reverse(list_fibs(n, list{1, 0}))" },
+				//{ "n :nat, a, b, tail :list... | list_fibs(n, list{a, b, tail}) = list_fibs(n - 1, list{force(a + b), a, b, tail})" },
+				//{ "              tail :list... | list_fibs(0, list{tail})       = list{tail}" },
 
 			{ "ffilter(p, f(xs...)) = 'take_true'(f(), fmap(\\x .pair(p(x), x), f(xs...)))" },
 			{ "'take_true'(f(xs...), f(pair(true, x), ys...)) = 'take_true'(f(xs..., x), f(ys...))" },
@@ -186,16 +186,16 @@ int main()
 			{ "'sort'(list(x, xs...))                       = 'sort_h1'(fsplit(\\y .y < x, list(xs...)), x)" },
 			{ "'sort_h1'(pair(list(xs...), list(ys...)), x) = 'sort_h2'('sort'(xs...), x, 'sort'(ys...))" },
 			{ "'sort_h2'(list(xs...), x, list(ys...))       = list(xs..., x, ys...)" },
-			
+
 			{ "union(set(xs...), set(ys...)) = set(xs..., ys...)" },
 			{ "union()                       = set()" },
-			
+
 			{ "intersection(set(x, xs...), set(x, ys...)) = union(set(x), intersection(set(xs...), set(ys...)))" },
 			{ "intersection(x, xs...)                     = set()" },
-			
+
 			{ "min{x, y} | x :real, y :real, x > y = y" },
 			{ "max{x, y} | x :real, y :real, x > y = x" },
-			
+
 			{ "ffoldr(f, acc, list())         = acc" },
 			{ "ffoldr(f, acc, list(x, xs...)) = f(x, ffoldr(f, acc, list(xs...)))" },
 		};
@@ -226,8 +226,15 @@ int main()
 			}
 		}
 	}
+	{
+		std::string s = "(--)-(())-(-())";
+		auto view = bmath::intern::TokenView(s.data(), s.size());
+		const std::size_t pos = bmath::intern::find_last_of_skip_pars(view, '-');
+		std::cout << s << "\n";
+		std::cout << std::string(pos, ' ') << "^\n";
+	}
 	//debug::enumerate_type();
-	bmath::intern::debug::test_rechner();
+	//bmath::intern::debug::test_rechner();
 	//test::stable_sort();
 	//test::meta_pattern();
 	//test::meta_pattern_2();

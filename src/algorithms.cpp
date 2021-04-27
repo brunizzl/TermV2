@@ -750,15 +750,16 @@ namespace simp {
         return std::strong_ordering::equal;
     } //makeshift operator<=>
 
+    std::uint32_t single_match_index(const UnsaveRef ref) 
+    {
+        assert(!is_stored_node(ref.type) || ref.type == SingleMatch::restricted);
+        return ref.type == SingleMatch::restricted ?
+            ref->single_match.match_data_index :
+            ref.index;
+    }
 
     std::strong_ordering compare_tree(const UnsaveRef fst, const UnsaveRef snd)
     {
-        const auto single_match_index = [](const UnsaveRef ref) {
-            assert(!is_stored_node(ref.type) || ref.type == SingleMatch::restricted);
-            return ref.type == SingleMatch::restricted ?
-                ref->single_match.match_data_index :
-                ref.index;
-        };
         if (const int fst_order = shallow_order(fst), 
                       snd_order = shallow_order(snd); 
             fst_order != snd_order) 
@@ -1084,9 +1085,93 @@ namespace simp {
             return heads;
         } //prime_call
 
+        using EquivalenceTable = std::array<std::array<bool, match::MatchData::max_single_match_count>, 
+            match::MatchData::max_single_match_count>;
+
+        void debug_print_table(const EquivalenceTable& t) {
+            for (std::size_t i = 0; i < t.size(); i++) {
+                for (std::size_t k = 0; k < t.size(); k++) {
+                    std::cout << (t[i][k] ? 'x' : ' ') << ' ';
+                }
+                std::cout << "\n";
+            }
+            std::cout << "\n";
+        } //debug_print_table
+
+        //two single match variables are equivalent, if swapping instances in whole pattern out for another, 
+        //  the same pattern results.
+        EquivalenceTable determine_equivalence(const UnsaveRef lhs_ref) 
+        {
+            constexpr std::size_t max_singles = match::MatchData::max_single_match_count;
+            std::array<bool, max_singles> occurs_unrestricted = {};
+            const auto catalog_occurence = [&occurs_unrestricted](const UnsaveRef r) {
+                if (r.type == SingleMatch::unrestricted) {
+                    occurs_unrestricted.at(r.index) = true;
+                }
+            };
+            transform(lhs_ref, catalog_occurence);
+
+            Store copy_store;
+            NodeIndex head_copy = copy_tree(lhs_ref, copy_store);
+
+            const auto swap_singles = [&](const std::size_t i, const std::size_t k) {
+                const auto swap_single = [i, k](MutRef r) {
+                    if (r.type.is<SingleMatch>()) {
+                        const auto replace_with = [&r](const std::size_t new_idx) {
+                            if (r.type == SingleMatch::restricted)
+                                r->single_match.match_data_index = new_idx;
+                            else
+                                r.index = new_idx;
+                        };
+                        const std::uint32_t current = single_match_index(r);
+                        if (current == i) 
+                            replace_with(k);
+                        if (current == k) 
+                            replace_with(i);
+                    }
+                    else if (r.type == PatternCall{} && 
+                        r->call.function().get_type() == Literal::native && 
+                        to_native(r->call.function()).is<nv::Comm>()) 
+                    {
+                        auto range = r->call.parameters();
+                        std::sort(range.begin(), range.end(),
+                            [&](const NodeIndex fst, const NodeIndex snd) {
+                                return compare_tree(r.new_at(fst), r.new_at(snd)) == std::strong_ordering::less;
+                            });
+                    }
+                    return r.typed_idx();
+                };
+                head_copy = transform(MutRef(copy_store, head_copy), swap_single);
+            }; //lambda swap_singles
+
+            EquivalenceTable table = {};
+            for (std::size_t i = 0; i < max_singles; i++) {
+                table[i][i] = true; //every variable is equivalent to itself
+            }
+            for (std::size_t i = 0; i + 1u < max_singles; i++) {
+                if (!occurs_unrestricted[i]) {
+                    continue;
+                }
+                for (std::size_t k = i + 1u; k < max_singles; k++) {
+                    if (!occurs_unrestricted[k]) {
+                        continue;
+                    }
+                    assert(compare_tree(lhs_ref, Ref(copy_store, head_copy)) == std::strong_ordering::equal);
+                    swap_singles(i, k);
+                    if (compare_tree(lhs_ref, Ref(copy_store, head_copy)) == std::strong_ordering::equal) {
+                        table[i][k] = true;
+                        table[k][i] = true;
+                    }
+                    swap_singles(i, k);
+                }
+            }
+            return table;
+        } //determine_equivalence
+
         void set_always_preceeding_next(const MutRef head_lhs)
         {
             //TODO: test if two match variables play equivalent roles, then both are considered equal
+            const EquivalenceTable equivalent_singles = determine_equivalence(head_lhs);
             const auto set_bits = [](const MutRef r) {
                 if (r.type == PatternCall{} && pattern_call_info(r).commutative) {
                     auto& bits = pattern_call_info(r).always_preceeding_next;
@@ -1108,10 +1193,11 @@ namespace simp {
             //a pattern call with at least one of the following properties:
             //   - in a non-commutative call at least two parameters are multi match variables 
             //     e.g. "list(xs..., 1, 2, ys...)" but not "list(xs..., 1, 2, list(ys...))"
-            //   - in a commutative call a multi match and one or more parameters containing an owned single match are directly held
+            //   - in a commutative call a multi match and one or more parameters containing an owned single match are held
             //     e.g. "a + bs..." or "2 a + bs..." but not "2 + bs..."
             //   - in a commutative call two or more parameters hold an owned single match and are relatively unordered
             //     e.g. "a^2 + b^2" or "a^2 + b" but not "a^2 + 2 b"
+            //note: "relatively unordered" refers to the bits set by set_always_preceeding_next
 
         } //set_rematchable
 

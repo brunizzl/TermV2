@@ -162,6 +162,8 @@ namespace bmath::intern {
 	//search all of name not enclosed by parentheses for token
 	std::size_t find_first_of_skip_pars(const TokenView name, const Token token) noexcept;
 
+	std::size_t find_last_of_skip_pars(const TokenView name, const Token token) noexcept;
+
 	//counts occurences of token in all of name not enclosed by parentheses
 	std::size_t count_skip_pars(const TokenView name, const Token token) noexcept;
 
