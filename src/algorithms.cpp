@@ -989,7 +989,7 @@ namespace simp {
             const auto make_ref_pattern_call = [&](const bool commutative) {
                 const unsigned this_pattern_index = pattern_call_index++;
                 auto this_call_data = PatternCallData{ .match_data_index = this_pattern_index, 
-                                                       .commutative      = commutative };
+                                                       .is_commutative   = commutative };
                 { //change multis in call
                     std::uint32_t pos_mod_multis = 0; //only is incremented, when no multi is encountered
                     Call& call = *ref;
@@ -1109,7 +1109,7 @@ namespace simp {
         //two single match variables are equivalent, if swapping instances in whole pattern out for another, 
         //  the same pattern results.
         //idea: copy whole pattern, swap pairs of single match variables, test if pattern is unchanged, then variables are equivalent 
-        EquivalenceTable determine_equivalence(const UnsaveRef lhs_ref) 
+        EquivalenceTable determine_equivalence_table(const UnsaveRef lhs_ref) 
         {
             constexpr std::size_t max_singles = match::MatchData::max_single_match_count;
             std::array<bool, max_singles> occurs_unrestricted = {};
@@ -1160,92 +1160,135 @@ namespace simp {
                 }
             }
             return equivalence_table;
-        } //determine_equivalence
+        } //determine_equivalence_table
 
-        //note: two "equivalent" trees still compare std::strong_ordering::equal, not std::strong_ordering::equivalent
-        std::strong_ordering compare_tree_equivalence(const UnsaveRef fst, const UnsaveRef snd, const EquivalenceTable& eq)
+        //determines if fst and second are equivalent, if single match variables are considered equivalent as in eq
+        bool equivalent(const UnsaveRef fst, const UnsaveRef snd, const EquivalenceTable& eq)
         {
             const auto is_call = [](const NodeType t) { return t == Literal::call || t == PatternCall{}; };
             if (is_call(fst.type) && is_call(snd.type)) {
+                if (fst.type != snd.type) {
+                    return false;
+                }
+                if (fst.type == PatternCall{}) { //compare if multis occur in equivalent places
+                    const PatternCallData fst_info = pattern_call_info(fst);
+                    const PatternCallData snd_info = pattern_call_info(snd);
+                    if (fst_info.is_commutative           != snd_info.is_commutative           ||
+                        fst_info.has_multi_match_variable != snd_info.has_multi_match_variable ||
+                        fst_info.preceeded_by_multi       != snd_info.preceeded_by_multi) 
+                    {   return false;
+                    }
+                }
                 const auto fst_end = fst->call.end();
                 const auto snd_end = snd->call.end();
                 auto fst_iter = fst->call.begin();
                 auto snd_iter = snd->call.begin();
                 for (; fst_iter != fst_end && snd_iter != snd_end; ++fst_iter, ++snd_iter) {
-                    const std::strong_ordering cmp =
-                        compare_tree_equivalence(fst.new_at(*fst_iter), snd.new_at(*snd_iter), eq);
-                    if (cmp != std::strong_ordering::equal) {
-                        return cmp;
+                    if (!equivalent(fst.new_at(*fst_iter), snd.new_at(*snd_iter), eq)) {
+                        return false;
                     }
                 }
-                if (fst_iter != fst_end || snd_iter != snd_end) {
-                    return fst->call.size() <=> snd->call.size();
-                }
-                return std::strong_ordering::equal;
+                return fst_iter == fst_end && snd_iter == snd_end;
             }
             else if (fst.type == Literal::lambda && snd.type == Literal::lambda) {
                 const Lambda fst_lambda = *fst;
                 const Lambda snd_lambda = *snd;
-                if (fst_lambda.param_count != snd_lambda.param_count) {
-                    return fst_lambda.param_count <=> snd_lambda.param_count;
-                }
-                if (fst_lambda.transparent != snd_lambda.transparent) {
-                    return fst_lambda.transparent <=> snd_lambda.transparent;
-                }
-                return compare_tree_equivalence(fst.new_at(fst_lambda.definition), snd.new_at(snd_lambda.definition), eq);
+                return fst_lambda.param_count == snd_lambda.param_count &&
+                    fst_lambda.transparent == snd_lambda.transparent &&
+                    equivalent(fst.new_at(fst_lambda.definition), snd.new_at(snd_lambda.definition), eq);
             }
             else if (fst.type.is<SingleMatch>() && snd.type.is<SingleMatch>()) {
-                if (eq.at(single_match_index(fst)).at(single_match_index(snd))) {
-                    return std::strong_ordering::equal;
-                }
+                return eq[single_match_index(fst)][single_match_index(snd)];
             }
-            return compare_tree(fst, snd);
-        } //compare_tree_equivalence
+            return compare_tree(fst, snd) == std::strong_ordering::equal;
+        } //equivalent
 
         void set_always_preceeding_next(const MutRef head_lhs)
         {
-            //TODO: test if two match variables play equivalent roles, then both are considered equal
-            const EquivalenceTable eq_table = determine_equivalence(head_lhs);
+            const EquivalenceTable eq_table = determine_equivalence_table(head_lhs);
             const auto set_bits = [&eq_table](const MutRef r) {
-                if (r.type == PatternCall{} && pattern_call_info(r).commutative) {
+                if (r.type == PatternCall{} && pattern_call_info(r).is_commutative) {
                     auto& bits = pattern_call_info(r).always_preceeding_next;
                     const auto params = r->call.parameters();
                     for (std::size_t i = 0; i + 1 < params.size(); i++) {
-                        const auto unsure =      unsure_compare_tree(r.new_at(params[i]), r.new_at(params[i + 1]));
-                        const auto sure   = compare_tree_equivalence(r.new_at(params[i]), r.new_at(params[i + 1]), eq_table);
-                        bits.set(i, unsure == std::partial_ordering::less || sure == std::strong_ordering::equal);
+                        const auto i_ref    = r.new_at(params[i]);
+                        const auto next_ref = r.new_at(params[i + 1]);
+                        bool i_always_preceeding_next =
+                            unsure_compare_tree(i_ref, next_ref) == std::partial_ordering::less ||
+                            equivalent(i_ref, next_ref, eq_table);
+                        bits.set(i, i_always_preceeding_next);
                     }
                 }
             };
             transform(head_lhs, set_bits);
         } //set_always_preceeding_next
 
+        //to be rematchable one has to eighter contain a rematchable subterm or be 
+        //a pattern call with at least one of the following properties:
+        //   - in a non-commutative call at least two parameters are multi match variables 
+        //     e.g. "list(xs..., 1, 2, ys...)" but not "list(xs..., 1, 2, list(ys...))"
+        //   - in a commutative call a multi match and one or more parameters containing an owned single match are held
+        //     e.g. "a + bs..." or "2 a + bs..." but not "2 + bs..."
+        //   - in a commutative call two or more parameters hold an owned single match and are relatively unordered
+        //     e.g. "a^2 + b^2" or "a^2 + b" but not "a^2 + 2 b"
+        //note: "relatively unordered" refers to the bits set by set_always_preceeding_next
         void set_rematchable(const MutRef head_lhs)
         {
-            //TODO
-            //to be rematchable one has to eighter contain a rematchable subterm or be 
-            //a pattern call with at least one of the following properties:
-            //   - in a non-commutative call at least two parameters are multi match variables 
-            //     e.g. "list(xs..., 1, 2, ys...)" but not "list(xs..., 1, 2, list(ys...))"
-            //   - in a commutative call a multi match and one or more parameters containing an owned single match are held
-            //     e.g. "a + bs..." or "2 a + bs..." but not "2 + bs..."
-            //   - in a commutative call two or more parameters hold an owned single match and are relatively unordered
-            //     e.g. "a^2 + b^2" or "a^2 + b" but not "a^2 + 2 b"
-            //note: "relatively unordered" refers to the bits set by set_always_preceeding_next
-
+            const auto set_pattern_call = [](const MutRef r) {
+                if (r.type == PatternCall{}) {
+                    PatternCallData& this_info = pattern_call_info(r);
+                    this_info.rematchable_params = 0u;
+                    const std::span<NodeIndex> params = r->call.parameters();
+                    for (std::size_t i = 0; i < params.size(); i++) {
+                        const NodeIndex rematchable_sub = search(r.new_at(params[i]), [](const UnsaveRef rr) { 
+                                return rr.type == PatternCall{} && pattern_call_info(rr).is_rematchable; 
+                            });
+                        this_info.rematchable_params.set(i, rematchable_sub != literal_nullptr);
+                    }
+                    this_info.is_rematchable = [&]() {
+                        if (this_info.rematchable_params.any()) {   
+                            return true;
+                        }
+                        if (!this_info.is_commutative) {
+                            return this_info.preceeded_by_multi.count() > 1;
+                        }
+                        const auto has_owned_single = [r](const NodeIndex n) {
+                            return search(r.new_at(n), [](const UnsaveRef rr) { 
+                                    return rr.type == SingleMatch::restricted || rr.type == SingleMatch::unrestricted; 
+                                }) != literal_nullptr;
+                        };
+                        if (this_info.has_multi_match_variable) {
+                            return std::count_if(params.begin(), params.end(), has_owned_single) > 0;
+                        }
+                        std::array<bool, match::SharedPatternCallEntry::max_params_count> single_owners = {};
+                        for (std::size_t i = 0; i < params.size(); i++) {
+                            single_owners[i] = has_owned_single(params[i]);
+                        }
+                        for (std::size_t i = 0; i < params.size(); i++) {
+                            if (!single_owners[i]) continue;
+                            if (this_info.always_preceeding_next.test(i)) continue;
+                            for (std::size_t k = i + 1u; k < params.size(); k++) {
+                                if (single_owners[k]) return true;
+                            }
+                        }
+                        return false;
+                    }();
+                }
+            };
+            transform(head_lhs, set_pattern_call);
         } //set_rematchable
 
         RuleHead build_everything(Store& store, std::string& name)
         {
-            RuleHead heads = parse::raw_rule(store, name, parse::IAmInformedThisRuleIsNotUsableYet{});
-            heads = build_rule::optimize_single_conditions(store, heads);
-            heads = build_rule::prime_value(store, heads);
-            heads = build_rule::prime_call(store, heads);
+            RuleHead head = parse::raw_rule(store, name, parse::IAmInformedThisRuleIsNotUsableYet{});
+            head = build_rule::optimize_single_conditions(store, head);
+            head = build_rule::prime_value(store, head);
+            head = build_rule::prime_call(store, head);
 
-            const auto lhs_ref = MutRef(store, heads.lhs);
+            const auto lhs_ref = MutRef(store, head.lhs);
             build_rule::set_always_preceeding_next(lhs_ref);
             build_rule::set_rematchable(lhs_ref);
-            return heads;
+            return head;
         } //build_everything
 
     } //namespace build_rule
@@ -1314,7 +1357,7 @@ namespace simp {
                 if (!match_(pn_function_ref, ref.new_at(ref->call.function()), match_data)) {
                     return false;
                 }
-                return pattern_call_info(pn_ref).commutative ?
+                return pattern_call_info(pn_ref).is_commutative ?
                     find_permutation(pn_ref, ref, match_data, 0u, 0u) :
                     find_dilation(pn_ref, ref, match_data, 0u, 0u);
             }
@@ -1374,7 +1417,7 @@ namespace simp {
                 const std::uint32_t needle_i = needle_params.size() - 1u;
                 const std::uint32_t hay_k = entry.match_positions[needle_i] + 1u;
 
-                return pattern_call_info(pn_ref).commutative ?
+                return pattern_call_info(pn_ref).is_commutative ?
                     find_permutation(pn_ref, ref, match_data, needle_i, hay_k) :
                     find_dilation(pn_ref, ref, match_data, needle_i, hay_k);
             }
@@ -1421,7 +1464,7 @@ namespace simp {
             assert(needle_i == 0u || needles_data.match_idx == hay_ref.typed_idx() && "rematch only with same subterm");
             needles_data.match_idx = hay_ref.typed_idx();
 
-            auto currently_matched = bmath::intern::BitVector(haystack.size() + 1u); //one bit for each element in haystack + 1u for end
+            auto currently_matched = bmath::intern::BitVector(haystack.size());
             for (std::uint32_t i = 0u; i < needle_i; i++) {
                 currently_matched.set(needles_data.match_positions[i]);
             }
@@ -1440,7 +1483,7 @@ namespace simp {
                 }
                 needle_i--;
                 hay_k = needles_data.match_positions[needle_i];
-                if (!pattern_info.rematchable.test(needle_i) ||
+                if (!pattern_info.rematchable_params.test(needle_i) ||
                     !rematch(pn_ref.new_at(needles[needle_i]), hay_ref.new_at(haystack[hay_k]), match_data))
                 { //could not rematch last successfully-matched needle-hay pair with each other again
                   //  -> try succeeding elements in haystack in next loop iteration for that needle

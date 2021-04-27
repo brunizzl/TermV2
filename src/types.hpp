@@ -339,7 +339,7 @@ namespace simp {
 		//indexes in MatchData::variadic_match_data (used in both commutative and non-commutative)
 		std::uint32_t match_data_index = -1u;
 		//bit i dertermines whether parameter i is rematchable (used in both commutative and non-commutative)
-		bmath::intern::BitSet16 rematchable = (std::uint16_t)-1;
+		bmath::intern::BitSet16 rematchable_params = (std::uint16_t)-1;
 		union {
 			//bit i determines whether parameter i is guaranteed to never have a 
 			//  match at a higher haystack index than parameter i + 1 (used in commutative)
@@ -348,10 +348,10 @@ namespace simp {
 			// (because the multi match variables are not present in lhs as actual parameters) (used in non-commutative)
 			//note: as a multi is also valid as last parameter, a pattern call may only hold up to 15 non-multi parameters!
 			bmath::intern::BitSet16 preceeded_by_multi; //default is also 0
-		};
-		//true: allows matching terms larger than pattern (used in commutative)
-		bool has_multi_match_variable = false;
-		bool commutative = false;
+		};		
+		bool has_multi_match_variable = false; //true: allows matching terms larger than pattern (used only in commutative)
+		bool is_commutative = false; //(obviously used in both commutative and non-commutative)
+		bool is_rematchable = true; //(used in both commutative and non-commutative)
 	};
 
 	union TermNode

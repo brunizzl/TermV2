@@ -100,7 +100,6 @@ int main()
 	}
 	{
 		const simp::RuleSet rules = {
-			{ "a_sqr + two_a b + b^2 + cs... | (sqrt(a_sqr) == 0.5 two_a) = (0.5 two_a + b)^2 + cs..." },
 			{ "'Y' = \\f n. f(f, n)" },
 
 			{ "0 xs... = 0" },

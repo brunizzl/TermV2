@@ -85,14 +85,13 @@ namespace simp {
     template<std::predicate<UnsaveRef> Pred>
     NodeIndex search(const UnsaveRef ref, Pred pred)
     {
-        assert(ref.type != PatternCall{});
         if (pred(ref)) {
             return ref.typed_idx();
         }
         else if (ref.type == Literal::lambda) {
             return search(ref.new_at(ref->lambda.definition), pred);
         }
-        else if (ref.type == Literal::call) {
+        else if (ref.type == Literal::call || ref.type == PatternCall{}) {
             for (const NodeIndex subterm : ref->call) {
                 const NodeIndex sub_res = search(ref.new_at(subterm), pred);
                 if (sub_res != literal_nullptr) {
@@ -133,45 +132,6 @@ namespace simp {
         }
         f(ref);
     } //transform
-
-
-    template<typename A, typename Res_T>
-    concept Accumulator = requires(A a, Res_T r) {
-        { a.consume(r) };
-        { a.result() } -> std::convertible_to<Res_T>;
-    };
-
-    template<typename T>
-    concept Scaaary = requires(T t) {
-        { t() } -> std::same_as<void>;
-    };
-
-    constexpr auto scaaary = []() -> void {};
-    static_assert(Scaaary<decltype(scaaary)>);
-
-    //this fold differentiates between recursive nodes (call and lambda) and Leafes (the rest (note: also all match variables))
-    //Acc is constructed before a recursive call is made and consumes each recursive result. It thus needs to at least
-    //  have a Constructor taking as arguments (BasicSaveRef<Union_T, Type_T, Const> ref, AccInit... init) 
-    //  and a consume method taking as single parameter of type Res_T
-    //  a result method taking no parameters and returning Res_T	
-    template<typename Res_T, Accumulator<Res_T> Acc, bmath::intern::Reference R,
-        bmath::intern::CallableTo<Res_T, R> LeafApply, typename... AccInit>
-    Res_T tree_fold(const R ref, LeafApply leaf_apply, const AccInit... init)
-    {
-        if (ref.type == Literal::call) {
-            Acc acc(ref, init...);
-            for (auto sub : ref) {
-                acc.consume(tree_fold<Res_T, Acc>(ref.new_at(sub), leaf_apply, init...));
-            }
-            return acc.result();
-        }
-        else if (ref.type == Literal::lambda) {
-            Acc acc(ref, init...);
-            acc.consume(tree_fold<Res_T, Acc>(ref.new_at(ref->lambda.definition), leaf_apply, init...));
-            return acc.result();
-        }
-        return leaf_apply(ref);
-    } //tree_fold
 
     namespace build_rule {
 

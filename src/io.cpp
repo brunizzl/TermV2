@@ -533,8 +533,11 @@ namespace simp {
 			str.append("[");
 			str.append(std::to_string(data.match_data_index));
 			str.append(" ");
-			str.append(data.has_multi_match_variable ? "M " : "_ ");
-			str.append(to_string(data.rematchable));
+			str.append(data.is_commutative ? 
+				(data.has_multi_match_variable ? "M" : "_") : 
+				(data.preceeded_by_multi.any() ? "M" : "_"));
+			str.append(data.is_rematchable ? "R " : "_ ");
+			str.append(to_string(data.rematchable_params));
 			str.append(" ");
 			str.append(to_string(data.preceeded_by_multi));
 			str.append("]");

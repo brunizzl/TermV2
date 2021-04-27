@@ -37,7 +37,7 @@ namespace simp {
 	{
 		std::string res;
 		print::append_to_string(this->lhs, res, 0);
-		res.append(" = ");
+		res.append("\n   ->   ");
 		print::append_to_string(this->rhs, res, 0);
 		return res;
 	}
