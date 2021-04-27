@@ -759,7 +759,6 @@ namespace simp {
                 ref->single_match.match_data_index :
                 ref.index;
         };
-        assert(fst.type != PatternCall{} && snd.type != PatternCall{});
         if (const int fst_order = shallow_order(fst), 
                       snd_order = shallow_order(snd); 
             fst_order != snd_order) 
@@ -771,6 +770,7 @@ namespace simp {
             return bmath::intern::compare_complex(*fst, *snd);
         case NodeType(Literal::symbol):
             return std::string_view(fst->symbol) <=> std::string_view(snd->symbol);
+        case NodeType(PatternCall{}):
         case NodeType(Literal::call): {
             const auto fst_end = fst->call.end();
             const auto snd_end = snd->call.end();
@@ -813,7 +813,8 @@ namespace simp {
 
     std::partial_ordering unsure_compare_tree(const UnsaveRef fst, const UnsaveRef snd)
     {
-        if (fst.type.is<MatchVariableType>() || snd.type.is<MatchVariableType>()) {
+        const auto is_unordered = [](const NodeType t) { return t.is<SingleMatch>() || t == SpecialMatch::multi; };
+        if (is_unordered(fst.type) || is_unordered(snd.type)) {
             return std::partial_ordering::unordered;
         }
         if (const int fst_order = shallow_order(fst),
@@ -864,6 +865,8 @@ namespace simp {
             }
             return unsure_compare_tree(fst.new_at(fst_lambda.definition), snd.new_at(snd_lambda.definition));
         } break;
+        case NodeType(SpecialMatch::value):
+            return std::partial_ordering::unordered;
         default:
             assert(!is_stored_node(fst.type) && !is_stored_node(snd.type));
             return fst.index <=> snd.index;
@@ -872,6 +875,98 @@ namespace simp {
 
 
     namespace build_rule {
+
+        RuleHead optimize_single_conditions(Store& store, RuleHead heads)
+        {
+            const auto build_very_basic_pattern = [](Store& s, std::string& name) {
+                RuleHead h = parse::raw_rule(s, name, parse::IAmInformedThisRuleIsNotUsableYet{});
+                return h;
+            };
+            static const auto rules = RuleSet({
+                //{ "x :t | x :_SingleMatch = t" }, //TODO: make this work (and add restriction to other rules here)
+                { "x :t          = t" },
+                { "x < 0         = _Negative" },
+                { "x > 0         = _Positive" },
+                { "x <= 0        = _NotPositive" },
+                { "x >= 0        = _NotNegative" },
+                { "!(x :complex) = _NoValue" },
+                { "x != 1        = _NotNeg1" },
+                { "x != 0        = _Not0" },
+                }, build_very_basic_pattern);
+            const auto optimize = [](const MutRef r) {
+                if (r.type == SingleMatch::restricted) {
+                    r->single_match.condition =
+                        shallow_apply_ruleset(rules, r.new_at(r->single_match.condition));
+                }
+            };
+            transform(MutRef(store, heads.lhs), optimize);
+            return heads;
+        } //optimize_single_conditions
+
+        RuleHead prime_value(Store& store, RuleHead heads)
+        {
+            const auto build_basic_pattern = [](Store& s, std::string& name) {
+                RuleHead h = parse::raw_rule(s, name, parse::IAmInformedThisRuleIsNotUsableYet{});
+                h = build_rule::optimize_single_conditions(s, h);
+                h = build_rule::prime_call(s, h);
+                return h;
+            };
+            static const auto bubble_up = RuleSet({
+                { "     _VM(idx, domain, match) + a + cs... | a :complex = _VM(idx, domain, match - a) + cs..." },
+                { "     _VM(idx, domain, match) * a * cs... | a :complex = _VM(idx, domain, match / a) * cs..." },
+                { "     _VM(idx, domain, match) ^ 2                      = _VM(idx, domain, sqrt(match))" },
+                { "sqrt(_VM(idx, domain, match))                         = _VM(idx, domain, match ^ 2)" },
+                }, build_basic_pattern);
+            heads.lhs = greedy_apply_ruleset(bubble_up, MutRef(store, heads.lhs));
+            heads.lhs = normalize::recursive(MutRef(store, heads.lhs), {}, 0); //combine match
+
+            static const auto to_domain = RuleSet({
+                { "v :t   = t" },
+                { "v < 0  = _Negative" },
+                { "v > 0  = _Positive" },
+                { "v <= 0 = _NotPositive" },
+                { "v >= 0 = _NotNegative" },
+                }, build_basic_pattern);
+            const auto build_value_match = [](const MutRef r) {
+                if (r.type == Literal::call && r->call.function() == from_native(nv::PatternAuxFn::value_match)) {
+                    Call& call = *r;
+                    assert(call[1].get_type().is<PatternUnsigned>());
+                    const std::uint32_t match_data_index = call[1].get_index();
+                    const NodeIndex domain = shallow_apply_ruleset(to_domain, r.new_at(call[2]));
+                    const NodeIndex match_index = call[3];
+                    if (domain.get_type() != Literal::native || !to_native(domain).is<nv::ComplexSubset>()) {
+                        throw TypeError{ "value match restrictions may only be of form \"<value match> :<complex subset>\"", r };
+                    }
+                    call[2] = literal_nullptr;
+                    call[3] = literal_nullptr;
+                    free_tree(r);
+                    const std::size_t result_index = r.store->allocate_one();
+                    r.store->at(result_index) = ValueMatch{ .match_data_index = match_data_index,
+                                                            .domain = to_native(domain).to<nv::ComplexSubset>(),
+                                                            .match_index = match_index,
+                                                            .owner = false };
+                    return NodeIndex(result_index, SpecialMatch::value);
+                }
+                return r.typed_idx();
+            };
+            heads.lhs = transform(MutRef(store, heads.lhs), build_value_match);
+            heads.rhs = transform(MutRef(store, heads.rhs), build_value_match);
+            heads.lhs = normalize::recursive(MutRef(store, heads.lhs), {}, 0); //order value match to right positions in commutative
+
+            std::bitset<match::MatchData::max_value_match_count> encountered = 0;
+            const auto set_owner = [&encountered](const MutRef r) {
+                if (r.type == SpecialMatch::value) {
+                    ValueMatch& var = *r;
+                    if (!encountered.test(var.match_data_index)) {
+                        encountered.set(var.match_data_index);
+                        var.owner = true;
+                    }
+                }
+            };
+            transform(MutRef(store, heads.lhs), set_owner);
+
+            return heads;
+        } //prime_value
 
         struct MultiChange
         {
@@ -983,105 +1078,42 @@ namespace simp {
                     assert(data != multi_changes.end());
                     r->multi_match = data->new_;
                 }
-                return r.typed_idx();
             };
-            heads.rhs = transform(MutRef(store, heads.rhs), prime_rhs);
+            transform(MutRef(store, heads.rhs), prime_rhs);
 
             return heads;
         } //prime_call
 
-        RuleHead optimize_single_conditions(Store& store, RuleHead heads)
+        void set_always_preceeding_next(const MutRef head_lhs)
         {
-            const auto build_very_basic_pattern = [](Store& s, std::string& name) {
-                RuleHead h = parse::raw_rule(s, name, parse::IAmInformedThisRuleIsNotUsableYet{});
-                return h;
-            };
-            static const auto rules = RuleSet({
-                { "x :t          = t" }, //TODO: only convert for x :_SingleMatch
-                { "x < 0         = _Negative" },
-                { "x > 0         = _Positive" },
-                { "x <= 0        = _NotPositive" },
-                { "x >= 0        = _NotNegative" },
-                { "!(x :complex) = _NoValue" },
-                { "x != 1        = _NotNeg1" },
-                { "x != 0        = _Not0" },
-            }, build_very_basic_pattern);
-            const auto optimize = [](const MutRef r) {
-                if (r.type == SingleMatch::restricted) {
-                    r->single_match.condition = 
-                        shallow_apply_ruleset(rules, r.new_at(r->single_match.condition));
-                }
-                return r.typed_idx();
-            };
-            heads.lhs = transform(MutRef(store, heads.lhs), optimize);
-            return heads;
-        } //optimize_single_conditions
-
-        RuleHead prime_value(Store& store, RuleHead heads)
-        {
-            const auto build_basic_pattern = [](Store& s, std::string& name) {
-                RuleHead h = parse::raw_rule(s, name, parse::IAmInformedThisRuleIsNotUsableYet{});
-                h = build_rule::optimize_single_conditions(s, h);
-                h = build_rule::prime_call(s, h);
-                return h;
-            };
-            static const auto bubble_up = RuleSet({
-                { "     _VM(idx, domain, match) + a + cs... | a :complex = _VM(idx, domain, match - a) + cs..." },
-                { "     _VM(idx, domain, match) * a * cs... | a :complex = _VM(idx, domain, match / a) * cs..." },
-                { "     _VM(idx, domain, match) ^ 2                      = _VM(idx, domain, sqrt(match))" },
-                { "sqrt(_VM(idx, domain, match))                         = _VM(idx, domain, match ^ 2)" },
-            }, build_basic_pattern);
-            heads.lhs = greedy_apply_ruleset(bubble_up, MutRef(store, heads.lhs));
-            heads.lhs = normalize::recursive(MutRef(store, heads.lhs), {}, 0); //combine match
-
-            static const auto to_domain = RuleSet({
-                { "v :t   = t" },
-                { "v < 0  = _Negative" },
-                { "v > 0  = _Positive" },
-                { "v <= 0 = _NotPositive" },
-                { "v >= 0 = _NotNegative" },
-            }, build_basic_pattern);
-            const auto build_value_match = [](const MutRef r) {
-                if (r.type == Literal::call && r->call.function() == from_native(nv::PatternAuxFn::value_match)) {
-                    Call& call = *r;
-                    assert(call[1].get_type().is<PatternUnsigned>());
-                    const std::uint32_t match_data_index = call[1].get_index();
-                    const NodeIndex domain = shallow_apply_ruleset(to_domain, r.new_at(call[2]));
-                    const NodeIndex match_index = call[3];
-                    if (domain.get_type() != Literal::native || !to_native(domain).is<nv::ComplexSubset>()) {
-                        throw TypeError{ "value match restrictions may only be of form \"<value match> :<complex subset>\"", r };
-                    }
-                    call[2] = literal_nullptr;
-                    call[3] = literal_nullptr;
-                    free_tree(r);
-                    const std::size_t result_index = r.store->allocate_one();
-                    r.store->at(result_index) = ValueMatch{ .match_data_index = match_data_index,
-                                                            .domain           = to_native(domain).to<nv::ComplexSubset>(),
-                                                            .match_index      = match_index,
-                                                            .owner            = false };
-                    return NodeIndex(result_index, SpecialMatch::value);
-                }
-                return r.typed_idx();
-            };
-            heads.lhs = transform(MutRef(store, heads.lhs), build_value_match);
-            heads.rhs = transform(MutRef(store, heads.rhs), build_value_match);
-            heads.lhs = normalize::recursive(MutRef(store, heads.lhs), {}, 0); //order value match to right positions in commutative
-
-            std::bitset<match::MatchData::max_value_match_count> encountered = 0;
-            const auto set_owner = [&encountered](const MutRef r) {
-                if (r.type == SpecialMatch::value) {
-                    ValueMatch& var = *r;
-                    if (!encountered.test(var.match_data_index)) {
-                        encountered.set(var.match_data_index);
-                        var.owner = true;
+            //TODO: test if two match variables play equivalent roles, then both are considered equal
+            const auto set_bits = [](const MutRef r) {
+                if (r.type == PatternCall{} && pattern_call_info(r).commutative) {
+                    auto& bits = pattern_call_info(r).always_preceeding_next;
+                    const auto params = r->call.parameters();
+                    for (std::size_t i = 0; i + 1 < params.size(); i++) {
+                        const auto unsure = unsure_compare_tree(r.new_at(params[i]), r.new_at(params[i + 1]));
+                        const auto sure   =        compare_tree(r.new_at(params[i]), r.new_at(params[i + 1]));
+                        bits.set(i, unsure == std::partial_ordering::less || sure == std::strong_ordering::equal);
                     }
                 }
-                return r.typed_idx();
             };
-            heads.lhs = transform(MutRef(store, heads.lhs), set_owner);
+            transform(head_lhs, set_bits);
+        } //set_always_preceeding_next
 
-            return heads;
-        } //prime_value
+        void set_rematchable(const MutRef head_lhs)
+        {
+            //TODO
+            //to be rematchable one has to eighter contain a rematchable subterm or be 
+            //a pattern call with at least one of the following properties:
+            //   - in a non-commutative call at least two parameters are multi match variables 
+            //     e.g. "list(xs..., 1, 2, ys...)" but not "list(xs..., 1, 2, list(ys...))"
+            //   - in a commutative call a multi match and one or more parameters containing an owned single match are directly held
+            //     e.g. "a + bs..." or "2 a + bs..." but not "2 + bs..."
+            //   - in a commutative call two or more parameters hold an owned single match and are relatively unordered
+            //     e.g. "a^2 + b^2" or "a^2 + b" but not "a^2 + 2 b"
+
+        } //set_rematchable
 
         RuleHead build_everything(Store& store, std::string& name)
         {
@@ -1089,6 +1121,10 @@ namespace simp {
             heads = build_rule::optimize_single_conditions(store, heads);
             heads = build_rule::prime_value(store, heads);
             heads = build_rule::prime_call(store, heads);
+
+            const auto lhs_ref = MutRef(store, heads.lhs);
+            build_rule::set_always_preceeding_next(lhs_ref);
+            build_rule::set_rematchable(lhs_ref);
             return heads;
         } //build_everything
 
@@ -1223,6 +1259,7 @@ namespace simp {
                     find_dilation(pn_ref, ref, match_data, needle_i, hay_k);
             }
             else if (pn_ref.type == Literal::call) {
+                assert(ref.type == Literal::call);
                 const Call& pn_call = *pn_ref;
                 const Call& call = *ref;
                 assert(pn_call.size() == call.size());

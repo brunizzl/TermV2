@@ -68,7 +68,10 @@ namespace bmath::intern {
 	concept Callable = requires (F f, Args... args) { f(args...); };
 
 	template<typename F, typename R, typename... Args>
-	concept CallableTo = requires (F f, Args... args) { {f(args...)} -> std::convertible_to<R>; };
+	concept CallableTo = requires (F f, Args... args) { { f(args...) } -> std::convertible_to<R>; };
+
+	template<typename F, typename... Args>
+	concept Procedure = requires (F f, Args... args) { { f(args...) } -> std::same_as<void>; };
 
 
 	/////////////////   InstanceOf

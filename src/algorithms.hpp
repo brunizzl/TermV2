@@ -103,10 +103,11 @@ namespace simp {
         return literal_nullptr;
     } //search
 
-    //applies f to every subterm in postorder
+    //applies f to every subterm in postorder, result is new subterm
     template<bmath::intern::CallableTo<NodeIndex, MutRef> F>
     [[nodiscard]] NodeIndex transform(const MutRef ref, F f) 
     {
+        assert(ref.type != PatternCall{});
         if (ref.type == Literal::call) {
             const auto stop = end(ref);
             for (auto iter = begin(ref); iter != stop; ++iter) {
@@ -119,13 +120,61 @@ namespace simp {
         return f(ref);
     } //transform
 
-    namespace build_rule {
+    //applies f to every subterm in postorder
+    template<bmath::intern::Reference R, bmath::intern::Procedure<R> F>
+    void transform(const R ref, F f)
+    {
+        if (ref.type == Literal::call || ref.type == PatternCall{}) {
+            for (const auto sub : ref) {
+                transform(ref.new_at(sub), f);
+            }
+        }
+        if (ref.type == Literal::lambda) {
+            transform(ref.new_at(ref->lambda.definition), f);
+        }
+        f(ref);
+    } //transform
 
-        // - every function call to nv::Comm in lhs is converted to PatternCall
-        // - if a call in lhs contains at least one multi match, the call is converted to PatternCall
-        // - multi match variables are primed
-        //note: as after this procedure there may be PatterCall instances present, this may be done as last transformation
-        RuleHead prime_call(Store& store, RuleHead heads);
+
+    template<typename A, typename Res_T>
+    concept Accumulator = requires(A a, Res_T r) {
+        { a.consume(r) };
+        { a.result() } -> std::convertible_to<Res_T>;
+    };
+
+    template<typename T>
+    concept Scaaary = requires(T t) {
+        { t() } -> std::same_as<void>;
+    };
+
+    constexpr auto scaaary = []() -> void {};
+    static_assert(Scaaary<decltype(scaaary)>);
+
+    //this fold differentiates between recursive nodes (call and lambda) and Leafes (the rest (note: also all match variables))
+    //Acc is constructed before a recursive call is made and consumes each recursive result. It thus needs to at least
+    //  have a Constructor taking as arguments (BasicSaveRef<Union_T, Type_T, Const> ref, AccInit... init) 
+    //  and a consume method taking as single parameter of type Res_T
+    //  a result method taking no parameters and returning Res_T	
+    template<typename Res_T, Accumulator<Res_T> Acc, bmath::intern::Reference R,
+        bmath::intern::CallableTo<Res_T, R> LeafApply, typename... AccInit>
+    Res_T tree_fold(const R ref, LeafApply leaf_apply, const AccInit... init)
+    {
+        if (ref.type == Literal::call) {
+            Acc acc(ref, init...);
+            for (auto sub : ref) {
+                acc.consume(tree_fold<Res_T, Acc>(ref.new_at(sub), leaf_apply, init...));
+            }
+            return acc.result();
+        }
+        else if (ref.type == Literal::lambda) {
+            Acc acc(ref, init...);
+            acc.consume(tree_fold<Res_T, Acc>(ref.new_at(ref->lambda.definition), leaf_apply, init...));
+            return acc.result();
+        }
+        return leaf_apply(ref);
+    } //tree_fold
+
+    namespace build_rule {
 
         //turns "_Xn[_Xn' :<some_type>]" into "_Xn[<some_type>]"
         RuleHead optimize_single_conditions(Store& store, RuleHead heads);
@@ -133,6 +182,21 @@ namespace simp {
         //value match variables intermediary form are bubbled up as high as possible
         //intermediary is converted to final form and ownership is decided (thus sorts bevore that)
         RuleHead prime_value(Store& store, RuleHead heads);
+
+        // - every function call to nv::Comm in lhs is converted to PatternCall
+        // - if a call in lhs contains at least one multi match, the call is converted to PatternCall
+        // - multi match variables are primed
+        //note: as after this procedure there may be PatterCall instances present, this may be done as last real transformation
+        RuleHead prime_call(Store& store, RuleHead heads);
+
+        //sets /unsets bits in data of PatternCall
+        //note: will only change something if prime_call has already run
+        void set_always_preceeding_next(const MutRef head_lhs);
+
+        //sets /unsets bits in data of PatternCall
+        //note: will only change something if prime_call has already run
+        //note2: for less conservative results, first run set_always_preceeding_next()
+        void set_rematchable(const MutRef head_lhs);
 
         //returns a fully assembled rule
         RuleHead build_everything(Store& store, std::string& name);

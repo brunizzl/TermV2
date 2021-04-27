@@ -518,20 +518,26 @@ namespace simp {
 			}
 		}
 
-		void append_pattern_meta_data(const PatternCallData& data, std::string& str)
+		void append_pattern_meta_data(const PatternCallData& data, const std::size_t param_count, std::string& str)
 		{
+			const auto to_string = [param_count](const auto bitset) {
+				std::string string = std::bitset<32>(bitset).to_string();
+				std::reverse(string.begin(), string.end());
+				string.resize(param_count);
+				return string;
+			};
 			str.append("[");
 			str.append(std::to_string(data.match_data_index));
 			str.append(" ");
-			str.append(data.commutative ? 
-				(data.has_multi_match_variable ? "M" : "_") : 
-				std::bitset<match::SharedPatternCallEntry::max_params_count>(data.preceeded_by_multi).to_string());
+			str.append(data.has_multi_match_variable ? "M " : "_ ");
+			str.append(to_string(data.rematchable));
+			str.append(" ");
+			str.append(to_string(data.preceeded_by_multi));
 			str.append("]");
 		}
 
 		void append_to_string(const UnsaveRef ref, std::string& str, const int parent_infixr)
 		{
-			bool print_this_operator = true;
 			switch (ref.type) {
 			case NodeType(Literal::complex):
 				bmath::intern::print::append_complex(*ref, str, parent_infixr);
@@ -540,16 +546,14 @@ namespace simp {
 				str.append(ref->symbol);
 				break;
 			case NodeType(PatternCall{}): 
-				append_pattern_meta_data(pattern_call_info(ref), str);
-				print_this_operator = false;
-				[[fallthrough]];				
 			case NodeType(Literal::call): { 
+				const bool in_pattern_call = ref.type.is<PatternCall>();
 				const Call& call = *ref;
 				const NodeIndex function = call.function();
 				const char* replacement_seperator = nullptr;
 				const auto [init, seperator] = [&]() -> std::pair<const char*, const char*> {
 					using namespace nv;
-					if (function.get_type() == Literal::native && print_this_operator) {
+					if (!in_pattern_call && function.get_type() == Literal::native) {
 						switch (to_native(function)) {
 						case Native(Comm::sum):             return { "" , " + "  };
 						case Native(Comm::product):         return { "" , " * "  };
@@ -567,9 +571,12 @@ namespace simp {
 						}
 					}
 					append_to_string(ref.new_at(function), str, max_infixr);
+					if (in_pattern_call) {
+						append_pattern_meta_data(pattern_call_info(ref), ref->call.size() - 1u, str);
+					}
 					return { "", ", " };
 				}();
-				const int own_infixr = print_this_operator ? infixr(function) : default_infixr;
+				const int own_infixr = in_pattern_call ? default_infixr : infixr(function);
 				if (own_infixr <= parent_infixr) { str.push_back('('); }				
 				const char* spacer = init;
 				for (const NodeIndex param : call.parameters()) {
@@ -665,7 +672,7 @@ namespace simp {
 			case NodeType(PatternCall{}): {
 				std::string& prev_str = rows[ref.index - 1u];
 				prev_str += "meta data  : ";
-				append_pattern_meta_data(pattern_call_info(ref), prev_str);
+				append_pattern_meta_data(pattern_call_info(ref), ref->call.size() - 1u, prev_str);
 			} [[fallthrough]];
 			case NodeType(Literal::call): {
 				//parameters:
