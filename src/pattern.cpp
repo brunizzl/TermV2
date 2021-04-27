@@ -892,7 +892,7 @@ namespace bmath::intern::pattern {
 					}
 				}
 				else {
-					assert(pn_i_ref.type.is<TreeMatchNonOwning>()); //other may not be encoountered in this function
+					assert(pn_i_ref.type.is<TreeMatchNonOwning>()); //other may not be encountered in this function
 					assert(match_data.tree_match_data[pn_i_ref.index].is_set());
 					const MathIdx match_idx = match_data.tree_match_data[pn_i_ref.index].match_idx;
 
