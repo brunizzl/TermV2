@@ -549,7 +549,7 @@ namespace simp {
                 ref->call.function().get_type() == Literal::native && 
                 to_native(ref->call.function()).is<nv::Comm>());
             auto range = ref->call.parameters();
-            std::sort(range.begin(), range.end(), compare_less_in(ref.store->data()));
+            std::sort(range.begin(), range.end(), ordered_less(ref.store->data()));
         } //sort
 
         Result outermost(MutRef ref, const Options options, const unsigned lambda_param_offset)
@@ -985,7 +985,7 @@ namespace simp {
         {
             const auto make_ref_pattern_call = [&](const bool commutative) {
                 const unsigned this_pattern_index = pattern_call_index++;
-                auto this_call_data = PatternCallData{ .match_data_index = this_pattern_index, 
+                auto this_call_data = PatternCallInfo{ .match_data_index = this_pattern_index, 
                                                        .is_commutative   = commutative };
                 { //change multis in call
                     std::uint32_t pos_mod_multis = 0; //only is incremented, when no multi is encountered
@@ -1168,8 +1168,8 @@ namespace simp {
                     return false;
                 }
                 if (fst.type == PatternCall{}) { //compare if multis occur in equivalent places
-                    const PatternCallData fst_info = pattern_call_info(fst);
-                    const PatternCallData snd_info = pattern_call_info(snd);
+                    const PatternCallInfo fst_info = pattern_call_info(fst);
+                    const PatternCallInfo snd_info = pattern_call_info(snd);
                     if (fst_info.is_commutative           != snd_info.is_commutative           ||
                         fst_info.has_multi_match_variable != snd_info.has_multi_match_variable ||
                         fst_info.preceeded_by_multi       != snd_info.preceeded_by_multi) 
@@ -1266,7 +1266,7 @@ namespace simp {
         {
             const auto set_pattern_call = [](const MutRef r) {
                 if (r.type == PatternCall{}) {
-                    PatternCallData& this_info = pattern_call_info(r);
+                    PatternCallInfo& this_info = pattern_call_info(r);
                     this_info.rematchable_params = 0u;
                     const std::span<NodeIndex> params = r->call.parameters();
                     for (std::size_t i = 0; i < params.size(); i++) {
@@ -1420,7 +1420,7 @@ namespace simp {
                     return false;
                 }
                 else {
-                    auto& match_info = match_data.value_info(var);
+                    auto& match_info = match_data.value_entry(var);
                     if (var.owner) {
                         match_info.value = *this_value;
                         return true;
@@ -1441,7 +1441,7 @@ namespace simp {
         {
             if (pn_ref.type == PatternCall{}) {
                 assert(ref.type == Literal::call);
-                SharedPatternCallEntry& entry = match_data.call_info(pn_ref);
+                SharedPatternCallEntry& entry = match_data.call_entry(pn_ref);
                 assert(entry.match_idx == ref.typed_idx());
 
                 const auto needle_params = pn_ref->call.parameters();
@@ -1450,7 +1450,7 @@ namespace simp {
 
                 return pattern_call_info(pn_ref).is_commutative ?
                     find_permutation(pn_ref, ref, match_data, needle_i, hay_k) :
-                    find_dilation(pn_ref, ref, match_data, needle_i, hay_k);
+                    find_dilation   (pn_ref, ref, match_data, needle_i, hay_k);
             }
             else if (pn_ref.type == Literal::call) {
                 assert(ref.type == Literal::call);
@@ -1473,15 +1473,15 @@ namespace simp {
         bool find_permutation(const UnsaveRef pn_ref, const UnsaveRef hay_ref, MatchData& match_data, std::uint32_t needle_i, std::uint32_t hay_k)
         {
             assert(pn_ref.type == PatternCall{} && hay_ref.type == Literal::call);
-            assert(pn_ref->call.function() == hay_ref->call.function());
+            assert(pn_ref->call.function() == hay_ref->call.function()); //maybe too strict if the future allows to search unordered in unknown calls
 
             const std::span<const NodeIndex> needles = pn_ref->call.parameters();
             const std::span<const NodeIndex> haystack = hay_ref->call.parameters();
-            assert(std::is_sorted(needles.begin(), needles.end(), compare_less_in(pn_ref.store_data())));
-            assert(std::is_sorted(haystack.begin(), haystack.end(), compare_less_in(hay_ref.store_data())));
+            assert(std::is_sorted(needles.begin(), needles.end(), ordered_less(pn_ref.store_data())));
+            assert(std::is_sorted(haystack.begin(), haystack.end(), ordered_less(hay_ref.store_data())));
 
-            const PatternCallData pattern_info = pattern_call_info(pn_ref);
-            if (pattern_info.has_multi_match_variable) {
+            const PatternCallInfo info = pattern_call_info(pn_ref);
+            if (info.has_multi_match_variable) {
                 if (needles.size() > haystack.size()) {
                     return false;
                 }
@@ -1489,7 +1489,7 @@ namespace simp {
             else if (needles.size() != haystack.size()) {
                 return false;
             }
-            SharedPatternCallEntry& needles_data = match_data.pattern_calls[pattern_info.match_data_index];
+            SharedPatternCallEntry& needles_data = match_data.pattern_calls[info.match_data_index];
             assert(needle_i == 0u || needles_data.match_idx == hay_ref.typed_idx() && "rematch only with same subterm");
             needles_data.match_idx = hay_ref.typed_idx();
 
@@ -1512,7 +1512,7 @@ namespace simp {
                 }
                 needle_i--;
                 hay_k = needles_data.match_positions[needle_i];
-                if (!pattern_info.rematchable_params.test(needle_i) ||
+                if (!info.rematchable_params.test(needle_i) ||
                     !rematch(pn_ref.new_at(needles[needle_i]), hay_ref.new_at(haystack[hay_k]), match_data))
                 { //could not rematch last successfully-matched needle-hay pair with each other again
                   //  -> try succeeding elements in haystack in next loop iteration for that needle
@@ -1523,7 +1523,7 @@ namespace simp {
             prepare_next_needle:
                 currently_matched.set(hay_k);                   //already set if needle was rematched
                 needles_data.match_positions[needle_i] = hay_k; //already set if needle was rematched
-                hay_k = pattern_info.always_preceeding_next.test(needle_i) ? 
+                hay_k = info.always_preceeding_next.test(needle_i) ? 
                     hay_k + 1u : 
                     0u;
                 needle_i++;
@@ -1537,15 +1537,66 @@ namespace simp {
 
             const std::span<const NodeIndex> needles = pn_ref->call.parameters();
             const std::span<const NodeIndex> haystack = hay_ref->call.parameters();
+            const PatternCallInfo info = pattern_call_info(pn_ref);
 
+            SharedPatternCallEntry& needles_data = match_data.pattern_calls[info.match_data_index];
+            assert(needle_i == 0u || needles_data.match_idx == hay_ref.typed_idx() && "rematch only with same subterm");
+            needles_data.match_idx = hay_ref.typed_idx();
+
+            //how may elements of haystack can still be skipped (aka matched with a multi) without matching a (real) needle
+            int skip_budget = haystack.size() - hay_k - needles.size() + needle_i;
+            if (skip_budget < 0) {
+                return false;
+            }
+            //the function rematch calls find_dilation with needle_i set to the last needle in needles and 
+            //  the last needles old match incemented by one.
+            //if that last needle is not preceeded by a multi, it would be illegal to create a gap between the needles.
+            while (needle_i > 0u && !info.preceeded_by_multi.test(needle_i)) [[unlikely]] {
+                needle_i--;
+                hay_k--;
+            }
+
+            while (needle_i < needles.size()) {
+                const UnsaveRef needle_ref = pn_ref.new_at(needles[needle_i]);
+                if (info.preceeded_by_multi.test(needle_i)) {
+                    for (; skip_budget >= 0; hay_k++, skip_budget--) { 
+                        assert(hay_k < haystack.size()); //implied by not negative skip budget
+                        if (match_(needle_ref, hay_ref.new_at(haystack[hay_k]), match_data))
+                        {   goto prepare_next_needle;
+                        }
+                    }
+                }
+                else { //needle can not choose from here to 
+
+                }
+                if (skip_budget < 0) {
+                    return false;
+                }
+                if (match_(needle_ref, hay_ref.new_at(haystack[hay_k]), match_data)) 
+                {   goto prepare_next_needle;
+                }
+                else if (info.preceeded_by_multi.test(needle_i)) {
+                    hay_k++;
+                    skip_budget--;
+                    continue;
+                }
+            rematch_last_needle:
+                continue;
+            prepare_next_needle:
+                needles_data.match_positions[needle_i] = hay_k; //already set if needle was rematched
+                hay_k = info.always_preceeding_next.test(needle_i) ?
+                    hay_k + 1u :
+                    0u;
+                needle_i++;
+            }
             return false;
+            return skip_budget == 0 || info.preceeded_by_multi.test(needle_i); //eighter we exactly reached the end 
         } //find_dilation
-
 
     } //namespace match
 
 
-    NodeIndex copy_pattern_interpretation(const UnsaveRef pn_ref, const match::MatchData& match_data, 
+    NodeIndex pattern_interpretation(const UnsaveRef pn_ref, const match::MatchData& match_data, 
         const Store& src_store, Store& dst_store, const unsigned lambda_param_offset)
     {
         const auto insert_node = [&](const TermNode node, NodeType type) {
@@ -1568,7 +1619,7 @@ namespace simp {
             return pn_ref.typed_idx();
         case NodeType(Literal::lambda): {
             Lambda dst_lam = *pn_ref;
-            dst_lam.definition = copy_pattern_interpretation(
+            dst_lam.definition = pattern_interpretation(
                 pn_ref.new_at(dst_lam.definition), match_data, src_store, dst_store, lambda_param_offset + dst_lam.param_count);
             return insert_node(dst_lam, pn_ref.type);
         } break;
@@ -1593,7 +1644,7 @@ namespace simp {
                     }
                 }
                 else {
-                    dst_subterms.push_back(copy_pattern_interpretation(
+                    dst_subterms.push_back(pattern_interpretation(
                         pn_ref.new_at(*iter), match_data, src_store, dst_store, lambda_param_offset));
                 }
             }
@@ -1606,7 +1657,7 @@ namespace simp {
             return copy_tree(Ref(src_store, entry.match_idx), dst_store); //call to different copy!
         } break;
         case NodeType(SpecialMatch::value): {
-            const Complex& val = match_data.value_info(*pn_ref).value;
+            const Complex& val = match_data.value_entry(*pn_ref).value;
             return insert_node(val, Literal::complex);
         } break;
         default:
@@ -1614,6 +1665,6 @@ namespace simp {
             BMATH_UNREACHABLE;
             return literal_nullptr;
         }
-    } //copy_pattern_interpretation
+    } //pattern_interpretation
  
 } //namespace simp

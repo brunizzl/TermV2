@@ -34,11 +34,11 @@ namespace simp {
 	};
 
 	//is present instead of Literal::call in a match side pattern node representing a call to a Variadic function
-	//acts exactly like Literal::call, only that at .get_index() - 1u an extra PatternCallData node is allocated in term
-	//layout in store: [...][...][PatternCallData][first call node][more call nodes...][last call node][...] 
+	//acts exactly like Literal::call, only that at .get_index() - 1u an extra PatternCallInfo node is allocated in term
+	//layout in store: [...][...][PatternCallInfo][first call node][more call nodes...][last call node][...] 
 	//                                             ^.get_index() points here
 	//note 1: the layout is chosen to enable handling of PattenCall and Literal::call as one in most cases 
-	//  and to enable access to PatternCallData without first determining how many nodes the call owns.
+	//  and to enable access to PatternCallInfo without first determining how many nodes the call owns.
 	//note 2: a PatternCall may only occur once the appearance of a pattern is finalized, e.g. it should have already been combined
 	//  and it may only occur on the match side of a rule
 	struct PatternCall :SingleSumEnumEntry {}; 
@@ -334,7 +334,7 @@ namespace simp {
 		bool owner;
 	};
 
-	struct PatternCallData
+	struct PatternCallInfo
 	{
 		//indexes in MatchData::variadic_match_data (used in both commutative and non-commutative)
 		std::uint32_t match_data_index = -1u;
@@ -366,7 +366,7 @@ namespace simp {
 		RestrictedSingleMatch single_match;
 		MultiMatch multi_match;
 		ValueMatch value_match;
-		PatternCallData pattern_call_data;
+		PatternCallInfo pattern_call_data;
 
 		constexpr TermNode(const Complex              & val) noexcept :complex(val)           {}
 		constexpr TermNode(const Symbol               & val) noexcept :symbol(val)            {}
@@ -375,7 +375,7 @@ namespace simp {
 		constexpr TermNode(const RestrictedSingleMatch& val) noexcept :single_match(val)      {}
 		constexpr TermNode(const MultiMatch           & val) noexcept :multi_match(val)       {}
 		constexpr TermNode(const ValueMatch           & val) noexcept :value_match(val)       {}
-		constexpr TermNode(const PatternCallData      & val) noexcept :pattern_call_data(val) {}
+		constexpr TermNode(const PatternCallInfo      & val) noexcept :pattern_call_data(val) {}
 
 		constexpr operator const Complex              & () const noexcept { return this->complex;           }
 		constexpr operator const Symbol               & () const noexcept { return this->symbol;            }
@@ -384,7 +384,7 @@ namespace simp {
 		constexpr operator const RestrictedSingleMatch& () const noexcept { return this->single_match;      }
 		constexpr operator const MultiMatch           & () const noexcept { return this->multi_match;       }
 		constexpr operator const ValueMatch           & () const noexcept { return this->value_match;       }
-		constexpr operator const PatternCallData      & () const noexcept { return this->pattern_call_data; }
+		constexpr operator const PatternCallInfo      & () const noexcept { return this->pattern_call_data; }
 
 		constexpr operator Complex              & () noexcept { return this->complex;           }
 		constexpr operator Symbol               & () noexcept { return this->symbol;            }
@@ -393,7 +393,7 @@ namespace simp {
 		constexpr operator RestrictedSingleMatch& () noexcept { return this->single_match;      }
 		constexpr operator MultiMatch           & () noexcept { return this->multi_match;       }
 		constexpr operator ValueMatch           & () noexcept { return this->value_match;       }
-		constexpr operator PatternCallData      & () noexcept { return this->pattern_call_data; }
+		constexpr operator PatternCallInfo      & () noexcept { return this->pattern_call_data; }
 	}; //TermNode
 	static_assert(sizeof(TermNode) == sizeof(Complex));
 
@@ -438,13 +438,13 @@ namespace simp {
 	}
 
 
-	constexpr inline const PatternCallData& pattern_call_info(const UnsaveRef ref)
+	constexpr inline const PatternCallInfo& pattern_call_info(const UnsaveRef ref)
 	{
 		assert(ref.type == PatternCall{});
 		return *(ref.ptr - 1u);
 	}
 
-	constexpr inline PatternCallData& pattern_call_info(const MutRef ref)
+	constexpr inline PatternCallInfo& pattern_call_info(const MutRef ref)
 	{
 		assert(ref.type == PatternCall{});
 		return *(&ref.store->at(ref.index) - 1u);
@@ -461,7 +461,7 @@ namespace simp {
 
 	namespace nv {
 		// a function of fixed arity may restrict the different parameters differently. 
-		//if more than four parameters are expected, all parameters beyond the third share the forth restriction
+		//if more than max_different_count parameters are expected, all parameters beyond the third share the forth restriction
 		struct FixedInputSpace
 		{
 			static constexpr std::size_t max_different_count = 4;
@@ -739,20 +739,20 @@ namespace simp {
 			std::array<SharedSingleMatchEntry, max_single_match_count> single_vars = {};
 			std::array<SharedValueMatchEntry, max_value_match_count> value_vars = {};
 
-			constexpr auto& value_info(const ValueMatch& var) noexcept
+			constexpr auto& value_entry(const ValueMatch& var) noexcept
 			{	return this->value_vars[var.match_data_index];
 			}
 
-			constexpr auto& value_info(const ValueMatch& var) const noexcept
+			constexpr auto& value_entry(const ValueMatch& var) const noexcept
 			{	return this->value_vars[var.match_data_index];
 			}
 
-			constexpr auto& call_info(const UnsaveRef ref) noexcept
+			constexpr auto& call_entry(const UnsaveRef ref) noexcept
 			{	assert(ref.type == PatternCall{});
 				return this->pattern_calls[pattern_call_info(ref).match_data_index];
 			}
 
-			constexpr auto& call_info(const UnsaveRef ref) const noexcept
+			constexpr auto& call_entry(const UnsaveRef ref) const noexcept
 			{	assert(ref.type == PatternCall{});
 				return this->pattern_calls[pattern_call_info(ref).match_data_index];
 			}

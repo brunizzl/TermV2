@@ -78,14 +78,16 @@ namespace simp {
     std::strong_ordering compare_tree(const UnsaveRef fst, const UnsaveRef snd);
 
     //returns a function comparing two NodeIndices assumed their index points in store_data
-    constexpr auto compare_less_in(const TermNode* const store_data) 
+    template<std::strong_ordering Ord>
+    constexpr auto ordered(const TermNode* const store_data) 
     {
         return [store_data](const NodeIndex fst, const NodeIndex snd) {
             const UnsaveRef fst_ref = UnsaveRef(store_data, fst.get_index(), fst.get_type());
             const UnsaveRef snd_ref = UnsaveRef(store_data, snd.get_index(), snd.get_type());
-            return compare_tree(fst_ref, snd_ref) == std::strong_ordering::less;
+            return compare_tree(fst_ref, snd_ref) == Ord;
         };
     } //compare_in
+    constexpr auto ordered_less = ordered<std::strong_ordering::less>;
 
     //can not differentiate calls to same commutative function from each other
     //  and can not differentiate match variables from anything
@@ -212,7 +214,7 @@ namespace simp {
     } //namespace match
 
     //copies pn_ref like copy_tree, only match variables are replaced by their matched counterparts from src_store.
-    [[nodiscard]] NodeIndex copy_pattern_interpretation(const UnsaveRef pn_ref, const match::MatchData& match_data,
+    [[nodiscard]] NodeIndex pattern_interpretation(const UnsaveRef pn_ref, const match::MatchData& match_data,
         const Store& src_store, Store& dst_store, const unsigned lambda_param_offset);
     
 } //namespace simp

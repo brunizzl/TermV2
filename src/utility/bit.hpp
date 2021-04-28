@@ -269,7 +269,7 @@ namespace bmath::intern {
 
 		constexpr void pop_back() noexcept
 		{ 
-			assert(this->size_ > 0u && "tried popping on empty data_vector");
+			assert(this->size_ > 0u && "tried popping on empty vector");
 			this->reset(--this->size_);
 		}
 

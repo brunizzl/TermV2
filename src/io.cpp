@@ -522,7 +522,7 @@ namespace simp {
 			}
 		}
 
-		void append_pattern_meta_data(const PatternCallData& data, const std::size_t param_count, std::string& str)
+		void append_pattern_call_info(const PatternCallInfo& data, const std::size_t param_count, std::string& str)
 		{
 			const auto to_string = [param_count](const auto bitset) {
 				std::string string = std::bitset<32>(bitset).to_string();
@@ -579,7 +579,7 @@ namespace simp {
 					}
 					append_to_string(ref.new_at(function), str, max_infixr);
 					if (in_pattern_call) {
-						append_pattern_meta_data(pattern_call_info(ref), ref->call.size() - 1u, str);
+						append_pattern_call_info(pattern_call_info(ref), ref->call.size() - 1u, str);
 					}
 					return { "", ", " };
 				}();
@@ -679,7 +679,7 @@ namespace simp {
 			case NodeType(PatternCall{}): {
 				std::string& prev_str = rows[ref.index - 1u];
 				prev_str += "meta data  : ";
-				append_pattern_meta_data(pattern_call_info(ref), ref->call.size() - 1u, prev_str);
+				append_pattern_call_info(pattern_call_info(ref), ref->call.size() - 1u, prev_str);
 			} [[fallthrough]];
 			case NodeType(Literal::call): {
 				//parameters:

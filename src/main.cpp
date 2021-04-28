@@ -219,17 +219,10 @@ int main()
 				std::cout << std::string(failure.where, ' ') << "^\n\n";
 			}
 			catch (simp::TypeError error) {
-				std::cerr << "type error: " << error.what << "\n";
-				std::cerr << simp::print::to_string(error.occurence) << "\n";
+				std::cout << "type error: " << error.what << "\n";
+				std::cout << simp::print::to_string(error.occurence) << "\n";
 			}
 		}
-	}
-	{
-		std::string s = "(--)-(())-(-())";
-		auto view = bmath::intern::TokenView(s.data(), s.size());
-		const std::size_t pos = bmath::intern::find_last_of_skip_pars(view, '-');
-		std::cout << s << "\n";
-		std::cout << std::string(pos, ' ') << "^\n";
 	}
 	//debug::enumerate_type();
 	//bmath::intern::debug::test_rechner();
