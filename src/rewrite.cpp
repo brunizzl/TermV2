@@ -69,14 +69,14 @@ namespace simp {
 	{
 		Store temp_store;
 		for (RuleHead& rule : this->rules) {
-			rule.lhs = copy_tree(UnsaveRef(&this->store.at(rule.lhs.get_index()), rule.lhs.get_index(), rule.lhs.get_type()), temp_store);
-			rule.rhs = copy_tree(UnsaveRef(&this->store.at(rule.rhs.get_index()), rule.rhs.get_index(), rule.rhs.get_type()), temp_store);
+			rule.lhs = copy_tree(UnsaveRef(this->store.data(), rule.lhs.get_index(), rule.lhs.get_type()), temp_store);
+			rule.rhs = copy_tree(UnsaveRef(this->store.data(), rule.rhs.get_index(), rule.rhs.get_type()), temp_store);
 		}
 		for (const RuleSet* set : sets) {
 			for (const RuleHead rule : set->rules) {
 				this->rules.emplace_back(
-					copy_tree(UnsaveRef(&set->store.at(rule.lhs.get_index()), rule.lhs.get_index(), rule.lhs.get_type()), temp_store),
-					copy_tree(UnsaveRef(&set->store.at(rule.rhs.get_index()), rule.rhs.get_index(), rule.rhs.get_type()), temp_store));
+					copy_tree(UnsaveRef(set->store.data(), rule.lhs.get_index(), rule.lhs.get_type()), temp_store),
+					copy_tree(UnsaveRef(set->store.data(), rule.rhs.get_index(), rule.rhs.get_type()), temp_store));
 			}
 		}
 		this->migrate_rules(temp_store);

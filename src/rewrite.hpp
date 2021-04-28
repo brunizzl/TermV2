@@ -54,8 +54,8 @@ namespace simp {
 		{
 			const std::uint32_t lhs_index = this->iter->lhs.get_index();
 			const std::uint32_t rhs_index = this->iter->rhs.get_index();
-			return { UnsaveRef(this->store_data + lhs_index, lhs_index, this->iter->lhs.get_type()),
-			         UnsaveRef(this->store_data + rhs_index, rhs_index, this->iter->rhs.get_type()) };
+			return { UnsaveRef(this->store_data, lhs_index, this->iter->lhs.get_type()),
+			         UnsaveRef(this->store_data, rhs_index, this->iter->rhs.get_type()) };
 		}
 
 		bool operator==(const RuleSetIter& snd) const noexcept 

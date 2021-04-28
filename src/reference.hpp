@@ -80,27 +80,23 @@ namespace bmath::intern {
 
 		constexpr auto typed_idx() const noexcept { return BasicTypedIdx<Type_T>(this->index, this->type); }
 
-		constexpr BasicUnsaveRef(const Union_T* const new_ptr, const std::uint32_t new_index, const Type_T new_type) noexcept
-			:ptr(new_ptr), index(new_index), type(new_type) {}
+		constexpr BasicUnsaveRef(const Union_T* const store_data, const std::uint32_t new_index, const Type_T new_type) noexcept
+			:ptr(store_data + new_index), index(new_index), type(new_type) {}
 
 		template<StoreLike Store_T> requires (std::is_same_v<Union_T, typename Store_T::value_type>)
 		constexpr BasicUnsaveRef(const BasicSaveRef<Type_T, Store_T> init) noexcept
 			:ptr(init.store->data() + init.index), index(init.index), type(init.type) {}
 
-
 		constexpr const Union_T& operator*() const { return *this->ptr; }
 		constexpr const Union_T* operator->() const { return this->ptr; }
 
-		constexpr BasicUnsaveRef new_at(const BasicTypedIdx<Type_T> elem) const noexcept
-		{
-			const std::uint32_t new_index = elem.get_index();
-			const Union_T* const new_ptr = this->ptr - this->index + new_index;
-			return BasicUnsaveRef(new_ptr, new_index, elem.get_type());
-		}
+		constexpr const Union_T* store_data() const noexcept { return this->ptr - this->index; }
 
 		constexpr const Union_T* raw_at(std::uint32_t idx) const noexcept { return this->ptr - this->index + idx; }
 
-		constexpr const Union_T* store_data() const noexcept { return this->ptr - this->index; }
+		constexpr BasicUnsaveRef new_at(const BasicTypedIdx<Type_T> elem) const noexcept
+		{	return BasicUnsaveRef(this->store_data(), elem.get_index(), elem.get_type());
+		}
 	}; //struct BasicSaveRef
 
 

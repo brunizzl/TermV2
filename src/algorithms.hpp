@@ -81,10 +81,8 @@ namespace simp {
     constexpr auto compare_less_in(const TermNode* const store_data) 
     {
         return [store_data](const NodeIndex fst, const NodeIndex snd) {
-            const std::uint32_t fst_idx = fst.get_index();
-            const std::uint32_t snd_idx = snd.get_index();
-            const UnsaveRef fst_ref = UnsaveRef(store_data + fst_idx, fst_idx, fst.get_type());
-            const UnsaveRef snd_ref = UnsaveRef(store_data + snd_idx, snd_idx, snd.get_type());
+            const UnsaveRef fst_ref = UnsaveRef(store_data, fst.get_index(), fst.get_type());
+            const UnsaveRef snd_ref = UnsaveRef(store_data, snd.get_index(), snd.get_type());
             return compare_tree(fst_ref, snd_ref) == std::strong_ordering::less;
         };
     } //compare_in

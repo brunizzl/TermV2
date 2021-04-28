@@ -725,7 +725,7 @@ namespace simp {
 			const TermNode* haystack_data; //pointer to .data() of haystack store
 			constexpr UnsaveRef make_ref(const NodeIndex n) const noexcept 
 			{	const std::uint32_t i = n.get_index(); 
-				return UnsaveRef(this->haystack_data + i, i, n.get_type()); 
+				return UnsaveRef(this->haystack_data, i, n.get_type()); 
 			}
 
 			//maximal number of unrelated single match variables allowed per pattern
