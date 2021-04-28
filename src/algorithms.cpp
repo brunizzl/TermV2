@@ -983,72 +983,66 @@ namespace simp {
         //changes call to pattern call if appropriate and change multis to multi_marker
         [[nodiscard]] NodeIndex build_lhs_multis_and_pattern_calls(MutRef ref, std::vector<MultiChange>& multi_changes, unsigned& pattern_call_index) 
         {
-            const auto make_ref_pattern_call = [&](const bool commutative) {
-                const unsigned this_pattern_index = pattern_call_index++;
-                auto this_call_data = PatternCallInfo{ .match_data_index = this_pattern_index, 
-                                                       .is_commutative   = commutative };
-                { //change multis in call
-                    std::uint32_t pos_mod_multis = 0; //only is incremented, when no multi is encountered
-                    Call& call = *ref;
-                    for (NodeIndex& param : call.parameters()) {
-                        if (param.get_type() == SpecialMatch::multi) {
-                            const unsigned identifier = ref.at(param)->multi_match.match_data_index;
-                            multi_changes.emplace_back(identifier, 
-                                MultiMatch{ this_pattern_index, commutative ? -1u : pos_mod_multis });
-                            free_tree(ref.at(param));
-                            param = literal_nullptr;
-                            if (commutative) {
-                                this_call_data.has_multi_match_variable = true;
-                            }
-                            else {
-                                if (this_call_data.preceeded_by_multi.test(pos_mod_multis)) {
-                                    throw TypeError{ "two multis in direct succession are illegal in lhs", ref };
-                                }
-                                this_call_data.preceeded_by_multi.set(pos_mod_multis);
-                            }
-                        }
-                        else {
-                            pos_mod_multis++;
-                        }
-                    }
-                    const auto new_end = std::remove(call.begin(), call.end(), literal_nullptr);
-                    call.size() = new_end - call.begin();
-                }
-                { //change call
-                    bmath::intern::StupidBufferVector<NodeIndex, 16> subterms;
-                    for (const NodeIndex sub : ref->call) {
-                        subterms.push_back(sub);
-                    }
-                    Call::free(*ref.store, ref.index);
-                    const std::size_t call_capacity = Call::smallest_fit_capacity(subterms.size());
-                    const std::size_t nr_call_nodes = Call::_node_count(call_capacity);
-
-                    ref.type = PatternCall{};
-                    ref.index = ref.store->allocate_n(1u + nr_call_nodes) + 1u;
-                    ref.store->at(ref.index - 1u) = this_call_data;
-                    Call::emplace(ref.store->at(ref.index), subterms, call_capacity);
-                }
-            };
             if (ref.type == Literal::call) {
                 //build current
-                const bool commutative = [&] {
+                const std::size_t this_multi_count = std::count_if(ref->call.begin(), ref->call.end(),
+                    [](const NodeIndex i) { return i.get_type() == SpecialMatch::multi; });
+                const auto [convert, commutative] = [&] {
                     const NodeIndex f = ref->call.function();
                     if (f.get_type() == Literal::native) {
                         using namespace nv;
-                        const std::size_t this_multi_count = std::count_if(ref->call.begin(), ref->call.end(),
-                            [](const NodeIndex i) { return i.get_type() == SpecialMatch::multi; });
                         const Native native_f = to_native(f);
                         if (native_f.is<Comm>()) {
                             if (this_multi_count > 1) 
                                 throw TypeError{ "too many multis in commutative", ref };
-                            return true;
+                            return std::tuple{ true, true };
                         }
                         if (native_f.is<FixedArity>() && this_multi_count > 0)
                             throw TypeError{ "multi match illegal in fixed arity", ref };
                     }
-                    return false;
+                    return std::tuple{ this_multi_count > 0u, false };
                 } ();
-                make_ref_pattern_call(commutative);
+                if (convert) {
+                    const unsigned this_pattern_index = pattern_call_index++;
+                    auto this_call_data = PatternCallInfo{ .match_data_index = this_pattern_index,
+                                                           .is_commutative = commutative };
+                    { //change multis in call
+                        std::uint32_t pos_mod_multis = 0; //only is incremented, when no multi is encountered
+                        Call& call = *ref;
+                        for (NodeIndex& param : call.parameters()) {
+                            if (param.get_type() == SpecialMatch::multi) {
+                                const unsigned identifier = ref.at(param)->multi_match.match_data_index;
+                                multi_changes.emplace_back(identifier,
+                                    MultiMatch{ this_pattern_index, commutative ? -1u : pos_mod_multis });
+                                free_tree(ref.at(param));
+                                param = literal_nullptr;
+                                if (this_call_data.preceeded_by_multi.test(pos_mod_multis)) {
+                                    throw TypeError{ "two multis in direct succession are illegal in lhs", ref };
+                                }
+                                this_call_data.preceeded_by_multi.set(commutative ? 1 : pos_mod_multis);
+                            }
+                            else {
+                                pos_mod_multis++;
+                            }
+                        }
+                        const auto new_end = std::remove(call.begin(), call.end(), literal_nullptr);
+                        call.size() = new_end - call.begin();
+                    }
+                    { //change call
+                        bmath::intern::StupidBufferVector<NodeIndex, 16> subterms;
+                        for (const NodeIndex sub : ref->call) {
+                            subterms.push_back(sub);
+                        }
+                        Call::free(*ref.store, ref.index);
+                        const std::size_t call_capacity = Call::smallest_fit_capacity(subterms.size());
+                        const std::size_t nr_call_nodes = Call::_node_count(call_capacity);
+
+                        ref.type = PatternCall{};
+                        ref.index = ref.store->allocate_n(1u + nr_call_nodes) + 1u;
+                        ref.store->at(ref.index - 1u) = this_call_data;
+                        Call::emplace(ref.store->at(ref.index), subterms, call_capacity);
+                    }
+                }
                 //build subterms
                 const auto stop = end(ref);
                 for (auto iter = begin(ref); iter != stop; ++iter) {
@@ -1169,7 +1163,6 @@ namespace simp {
                     const PatternCallInfo fst_info = pattern_call_info(fst);
                     const PatternCallInfo snd_info = pattern_call_info(snd);
                     if (fst_info.is_commutative           != snd_info.is_commutative           ||
-                        fst_info.has_multi_match_variable != snd_info.has_multi_match_variable ||
                         fst_info.preceeded_by_multi       != snd_info.preceeded_by_multi) 
                     {   return false;
                     }
@@ -1214,8 +1207,8 @@ namespace simp {
                 return head;
 
             auto& info = pattern_call_info(lhs_ref);
-            if (f_variadic.is<nv::Comm>() && !info.has_multi_match_variable) {
-                info.has_multi_match_variable = true;
+            if (f_variadic.is<nv::Comm>() && !info.preceeded_by_multi) {
+                info.preceeded_by_multi = 1;
                 const std::size_t rhs_multi_index = store.allocate_one();
                 store.at(rhs_multi_index) = MultiMatch{ .match_data_index = 0, .index_in_params = -1u };
                 const std::size_t temp_head_rhs_index = 
@@ -1285,7 +1278,7 @@ namespace simp {
                                     return rr.type == SingleMatch::restricted || rr.type == SingleMatch::unrestricted; 
                                 }) != literal_nullptr;
                         };
-                        if (this_info.has_multi_match_variable) {
+                        if (this_info.preceeded_by_multi) {
                             return std::count_if(params.begin(), params.end(), has_owned_single) > 0;
                         }
                         std::array<bool, match::SharedPatternCallEntry::max_params_count> single_owners = {};
@@ -1478,7 +1471,7 @@ namespace simp {
             assert(std::is_sorted(haystack.begin(), haystack.end(), ordered_less(hay_ref.store_data())));
 
             const PatternCallInfo info = pattern_call_info(pn_ref);
-            if (info.has_multi_match_variable) {
+            if (info.preceeded_by_multi) {
                 if (needles.size() > haystack.size()) {
                     return false;
                 }
@@ -1558,62 +1551,7 @@ namespace simp {
                 needle_i--;
                 hay_k--;
             }
-
-        match_current_needle: 
-            if (info.preceeded_by_multi.test(needle_i)) {
-                const UnsaveRef needle_ref = pn_ref.at(needles[needle_i]);
-                //how may elements of haystack can still be skipped (aka matched with a multi) without matching a (real) needle
-                int skip_budget = haystack.size() - hay_k - needles.size() + needle_i;
-                while (skip_budget >= 0) {
-                    assert(hay_k < haystack.size()); //implied by not negative skip budget
-                    if (match_(needle_ref, hay_ref.at(haystack[hay_k]), match_data))
-                    {   goto prepare_next_needle;
-                    }
-                    hay_k++;
-                    skip_budget--;
-                }
-                goto rematch_last_needle;
-            }
-            else if (match_(pn_ref.at(needles[needle_i]), hay_ref.at(haystack[hay_k]), match_data))
-            {   goto prepare_next_needle;
-            }
-            goto rematch_last_needle;
-        rematch_last_needle: 
-            if (needle_i == 0u) {
-                return false;
-            }
-            needle_i--;
-            hay_k = needles_data.match_positions[needle_i];
-            if (info.rematchable_params.test(needle_i) &&
-                match_(pn_ref.at(needles[needle_i]), hay_ref.at(haystack[hay_k]), match_data))
-            {   goto prepare_next_needle;
-            }
-            while (!info.preceeded_by_multi.test(needle_i)) {
-                if (needle_i == 0u) {
-                    return false;
-                }
-                needle_i--;
-            }
-            hay_k = needles_data.match_positions[needle_i] + 1u;
-            goto match_current_needle;
-        prepare_next_needle: 
-            needles_data.match_positions[needle_i] = hay_k; //already set if needle was rematched
-            needle_i++;
-            hay_k++;
-            if (needle_i == needles.size()) {
-                if (info.preceeded_by_multi.test(needle_i) || hay_k == haystack.size()) {
-                    return true;
-                }
-                needle_i--;
-                hay_k--;
-                goto rematch_last_needle;
-            }
-            if (hay_k == haystack.size()) {
-                needle_i--;
-                hay_k--;
-                goto rematch_last_needle;
-            }
-            goto match_current_needle;
+            return false;
         } //find_dilation
 
     } //namespace match

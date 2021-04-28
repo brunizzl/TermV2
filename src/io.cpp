@@ -532,14 +532,15 @@ namespace simp {
 			};
 			str.append("[");
 			str.append(std::to_string(data.match_data_index));
-			str.append(" ");
-			str.append(data.is_commutative ? 
-				(data.has_multi_match_variable ? "M" : "_") : 
-				(data.preceeded_by_multi.any() ? "M" : "_"));
-			str.append(data.is_rematchable ? "R " : "_ ");
+			str.append(" R:");
 			str.append(to_string(data.rematchable_params, param_count));
-			str.append(" ");
-			str.append(to_string(data.preceeded_by_multi, param_count + !data.is_commutative));
+			str.append(" M:");
+			str.append(to_string(data.preceeded_by_multi, data.is_commutative ? 1 : param_count + 1));
+			if (data.is_commutative) {
+				str.append(" O:");
+				str.append(to_string(data.always_preceeding_next, param_count));
+			}
+			str.append(data.is_rematchable ? " r" : "");
 			str.append("]");
 		}
 

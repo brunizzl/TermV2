@@ -14,6 +14,7 @@ TODO:
 
 important:
  - finish match:
+       - fix bug: match will not always succeed, if Literal::call in pattern holds a rematchable subterm
 	   - test_condition
 	   - find_dilation
 	   - adjust rematch to work with implementation of find_dilation

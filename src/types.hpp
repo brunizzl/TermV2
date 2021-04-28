@@ -340,16 +340,15 @@ namespace simp {
 		std::uint32_t match_data_index = -1u;
 		//bit i dertermines whether parameter i is rematchable (used in both commutative and non-commutative)
 		bmath::intern::BitSet16 rematchable_params = (std::uint16_t)-1;
-		union {
-			//bit i determines whether parameter i is guaranteed to never have a 
-			//  match at a higher haystack index than parameter i + 1 (used in commutative)
-			bmath::intern::BitSet16 always_preceeding_next = (std::uint16_t)0;
-			//bit i determines, wether pattern parameter i comes after a multi match variable
-			// (because the multi match variables are not present in lhs as actual parameters) (used in non-commutative)
-			//note: as a multi is also valid as last parameter, a pattern call may only hold up to 15 non-multi parameters!
-			bmath::intern::BitSet16 preceeded_by_multi; //default is also 0
-		};		
-		bool has_multi_match_variable = false; //true: allows matching terms larger than pattern (used only in commutative)
+		//bit i determines whether parameter i is guaranteed to never have a 
+		//  match at a higher haystack index than parameter i + 1 (used in commutative)
+		bmath::intern::BitSet16 always_preceeding_next = (std::uint16_t)0;
+		//bit i determines, wether pattern parameter i comes after a multi match variable
+		// (because the multi match variables are not present in lhs as actual parameters)
+		//note: as a multi is also valid as last parameter, a pattern call may only hold up to 15 non-multi parameters!
+		//(used in non-commutative as bitset and in commutative as bool)
+		bmath::intern::BitSet16 preceeded_by_multi = (std::uint16_t)0;
+
 		bool is_commutative = false; //(obviously used in both commutative and non-commutative)
 		bool is_rematchable = true; //(used in both commutative and non-commutative)
 	};
