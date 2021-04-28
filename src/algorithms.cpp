@@ -549,10 +549,7 @@ namespace simp {
                 ref->call.function().get_type() == Literal::native && 
                 to_native(ref->call.function()).is<nv::Comm>());
             auto range = ref->call.parameters();
-            std::sort(range.begin(), range.end(),
-                [&](const NodeIndex fst, const NodeIndex snd) {
-                    return compare_tree(ref.new_at(fst), ref.new_at(snd)) == std::strong_ordering::less;
-                });
+            std::sort(range.begin(), range.end(), compare_less_in(ref.store->data()));
         } //sort
 
         Result outermost(MutRef ref, const Options options, const unsigned lambda_param_offset)
@@ -1480,10 +1477,8 @@ namespace simp {
 
             const std::span<const NodeIndex> needles = pn_ref->call.parameters();
             const std::span<const NodeIndex> haystack = hay_ref->call.parameters();
-
-            assert(std::is_sorted(haystack.begin(), haystack.end(), [&](auto lhs, auto rhs) {
-                return compare_tree(hay_ref.new_at(lhs), hay_ref.new_at(rhs)) == std::strong_ordering::less;
-            }));
+            assert(std::is_sorted(needles.begin(), needles.end(), compare_less_in(pn_ref.store_data())));
+            assert(std::is_sorted(haystack.begin(), haystack.end(), compare_less_in(hay_ref.store_data())));
 
             const PatternCallData pattern_info = pattern_call_info(pn_ref);
             if (pattern_info.has_multi_match_variable) {
