@@ -1031,26 +1031,24 @@ namespace simp {
             };
             if (ref.type == Literal::call) {
                 //build current
-                const std::size_t this_multi_count = std::count_if(ref->call.begin(), ref->call.end(), 
-                    [](const NodeIndex i) { return i.get_type() == SpecialMatch::multi; });
-                const NodeIndex f = ref->call.function();
-                if (f.get_type() == Literal::native) {
-                    using namespace nv;
-                    const Native native_f = to_native(f);
-                    if (native_f.is<Comm>()) {
-                        if (this_multi_count > 1) throw TypeError{ "too many multis in commutative", ref };
-                        make_ref_pattern_call(true);
+                const bool commutative = [&] {
+                    const NodeIndex f = ref->call.function();
+                    if (f.get_type() == Literal::native) {
+                        using namespace nv;
+                        const std::size_t this_multi_count = std::count_if(ref->call.begin(), ref->call.end(),
+                            [](const NodeIndex i) { return i.get_type() == SpecialMatch::multi; });
+                        const Native native_f = to_native(f);
+                        if (native_f.is<Comm>()) {
+                            if (this_multi_count > 1) 
+                                throw TypeError{ "too many multis in commutative", ref };
+                            return true;
+                        }
+                        if (native_f.is<FixedArity>() && this_multi_count > 0)
+                            throw TypeError{ "multi match illegal in fixed arity", ref };
                     }
-                    if (native_f.is<FixedArity>() && this_multi_count > 0) {
-                        throw TypeError{ "multi match illegal in fixed arity", ref };
-                    }
-                    else if (native_f.is<NonComm>() && this_multi_count > 0) {
-                        make_ref_pattern_call(false);
-                    }
-                }
-                else if (this_multi_count > 0) {
-                    make_ref_pattern_call(false);
-                }
+                    return false;
+                } ();
+                make_ref_pattern_call(commutative);
                 //build subterms
                 const auto stop = end(ref);
                 for (auto iter = begin(ref); iter != stop; ++iter) {
@@ -1556,61 +1554,66 @@ namespace simp {
             //the function rematch calls find_dilation with needle_i set to the last needle in needles and 
             //  the last needles old match incemented by one.
             //if that last needle is not preceeded by a multi, it would be illegal to create a gap between the needles.
-            while (needle_i > 0u && !info.preceeded_by_multi.test(needle_i)) [[unlikely]] {
+            while (needle_i > 0u && !info.preceeded_by_multi.test(needle_i)) {
                 needle_i--;
                 hay_k--;
             }
-        match_current_needle: {
+
+        match_current_needle: 
+            if (info.preceeded_by_multi.test(needle_i)) {
                 const UnsaveRef needle_ref = pn_ref.at(needles[needle_i]);
-                if (info.preceeded_by_multi.test(needle_i)) {
-                    //how may elements of haystack can still be skipped (aka matched with a multi) without matching a (real) needle
-                    int skip_budget = haystack.size() - hay_k - needles.size() + needle_i;
-                    while (skip_budget >= 0) {
-                        assert(hay_k < haystack.size()); //implied by not negative skip budget
-                        if (match_(needle_ref, hay_ref.at(haystack[hay_k]), match_data))
-                        {   goto prepare_next_needle;
-                        }
-                        hay_k++;
-                        skip_budget--;
+                //how may elements of haystack can still be skipped (aka matched with a multi) without matching a (real) needle
+                int skip_budget = haystack.size() - hay_k - needles.size() + needle_i;
+                while (skip_budget >= 0) {
+                    assert(hay_k < haystack.size()); //implied by not negative skip budget
+                    if (match_(needle_ref, hay_ref.at(haystack[hay_k]), match_data))
+                    {   goto prepare_next_needle;
                     }
-                    goto rematch_last_needle;
-                }
-                else if (match_(needle_ref, hay_ref.at(haystack[hay_k]), match_data))
-                {   goto prepare_next_needle;
+                    hay_k++;
+                    skip_budget--;
                 }
                 goto rematch_last_needle;
             }
-        rematch_last_needle: {
+            else if (match_(pn_ref.at(needles[needle_i]), hay_ref.at(haystack[hay_k]), match_data))
+            {   goto prepare_next_needle;
+            }
+            goto rematch_last_needle;
+        rematch_last_needle: 
+            if (needle_i == 0u) {
+                return false;
+            }
+            needle_i--;
+            hay_k = needles_data.match_positions[needle_i];
+            if (info.rematchable_params.test(needle_i) &&
+                match_(pn_ref.at(needles[needle_i]), hay_ref.at(haystack[hay_k]), match_data))
+            {   goto prepare_next_needle;
+            }
+            while (!info.preceeded_by_multi.test(needle_i)) {
                 if (needle_i == 0u) {
                     return false;
                 }
                 needle_i--;
-                hay_k = needles_data.match_positions[needle_i];
-                if (info.rematchable_params.test(needle_i) &&
-                    match_(pn_ref.at(needles[needle_i]), hay_ref.at(haystack[hay_k]), match_data))
-                {   goto prepare_next_needle;
-                }
-                while (!info.preceeded_by_multi.test(needle_i)) {
-                    if (needle_i == 0u) {
-                        return false;
-                    }
-                    needle_i--;
-                }
-                hay_k = needles_data.match_positions[needle_i] + 1u;
-                goto match_current_needle;
             }
-        prepare_next_needle: {
-                needles_data.match_positions[needle_i] = hay_k; //already set if needle was rematched
-                needle_i++;
-                hay_k++;
-                if (needle_i == needles.size()) {
-                    if (info.preceeded_by_multi.test(needle_i) || hay_k == haystack.size()) {
-                        return true;
-                    }
-                    goto rematch_last_needle;
+            hay_k = needles_data.match_positions[needle_i] + 1u;
+            goto match_current_needle;
+        prepare_next_needle: 
+            needles_data.match_positions[needle_i] = hay_k; //already set if needle was rematched
+            needle_i++;
+            hay_k++;
+            if (needle_i == needles.size()) {
+                if (info.preceeded_by_multi.test(needle_i) || hay_k == haystack.size()) {
+                    return true;
                 }
-                goto match_current_needle;
+                needle_i--;
+                hay_k--;
+                goto rematch_last_needle;
             }
+            if (hay_k == haystack.size()) {
+                needle_i--;
+                hay_k--;
+                goto rematch_last_needle;
+            }
+            goto match_current_needle;
         } //find_dilation
 
     } //namespace match

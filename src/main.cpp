@@ -95,39 +95,39 @@ int main()
 			std::cout << term.to_memory_layout() << "\n";
 			std::cout << "\n";
 		}
-		std::cout << "\n";
+		std::cout << "\n\n\n";
 	}
 	{
 		const simp::RuleSet rules = {
 			{ "'Y' = \\f n. f(f, n)" },
-
+			
 			{ "0 xs... = 0" },
 			{ "0 + xs... = sum(xs...)" },
 			{ "1 * xs... = product(xs...)" },
 			{ "0^x     = 0" },
 			{ "x^0     = 1" },
 			{ "x^1     = x" },
-
+			
 			{ "(x^a)^b = x^(a b)" },
 			{ "x x     = x^2" },
 			{ "x x^a   = x^(a + 1)" },
 			{ "x^a x^b = x^(a + b)" },
 			{ "exp(product(ln(y), xs...)) = y^(product(xs...))" },
-
+			
 			{ " a^2 +  2 a b + b^2 =  (a + b)^2" },
 			{ " a^2 -  2 a b + b^2 =  (a - b)^2" },
 			{ "$a^2 + 2 $a b + b^2 = ($a + b)^2" },
-
+			
 			{ "a bs... + a cs... | !(a :complex)      = a (product(bs...) + product(cs...))" },
 			{ "a bs... + a       | !(a :complex)      = a (product(bs...) + 1)" },
 			{ "a       + a       | !(a :complex)      = 2 a" },
 			{ "a b               | a :complex, b :sum = fmap(\\x .a x, b)" },
-
+			
 			{ "-a     | a :sum     = fmap(\\x. -x    , a)" },
 			{ "a^(-1) | a :product = fmap(\\x. x^(-1), a)" },
-
+			
 			{ "sin(x)^2 + cos(x)^2 = 1" },
-
+			
 				//roots and extreme points of sin and cos:
 			{ "cos(             'pi')           = -1" },
 			{ "cos(($k + 0.5)   'pi') | $k :int =  0" },
@@ -137,7 +137,7 @@ int main()
 			{ "sin($k           'pi') | $k :int =  0" },
 			{ "sin((2 $k + 0.5) 'pi') | $k :int =  1" },
 			{ "sin((2 $k + 1.5) 'pi') | $k :int = -1" },
-
+			
 				//differentiation rules:
 			{ "diff(x, x)                    = 1" },
 			{ "diff(a, x)       | a :complex = 0" },
@@ -148,17 +148,17 @@ int main()
 			{ "diff(a, x)       | a :sum     = fmap(\\f .diff(f, x), a)" },
 			{ "diff(u vs..., x)              = diff(u, x) vs... + u diff(product(vs...), x)" },
 			{ "diff(f(y), x)                 = diff(y, x) fdiff(f)(y)" },
-
+			
 			{ "fdiff(\\x .y) = \\x .diff(y, x)" },
 			{ "fdiff(sin)    = cos" },
 			{ "fdiff(cos)    = \\x .-sin(x)" },
 			{ "fdiff(exp)    = exp" },
 			{ "fdiff(ln)     = \\x .x^(-1)" },
 			{ "fdiff(tan)    = \\x .cos(x)^(-2)" },
-
+			
 				//exponential runtime fibonacci implementation:
 			{ "'fib'(n) | n >= 0 = (n < 2)(n, 'fib'(n - 1) + 'fib'(n - 2))" },
-
+			
 				////reversing a list:
 				//{ "xs :list...                 | reverse(list{xs}) = reverse'(list{}, list{xs})" },
 				//{ "xs :list..., y, ys :list... | reverse'(list{xs}, list{y, ys}) = reverse'(list{y, xs}, list{ys})" },
@@ -168,36 +168,37 @@ int main()
 				//{ "n :nat0                     | fib_n(n + 2)                   = reverse(list_fibs(n, list{1, 0}))" },
 				//{ "n :nat, a, b, tail :list... | list_fibs(n, list{a, b, tail}) = list_fibs(n - 1, list{force(a + b), a, b, tail})" },
 				//{ "              tail :list... | list_fibs(0, list{tail})       = list{tail}" },
-
+			
 			{ "ffilter(p, f(xs...)) = 'take_true'(f(), fmap(\\x .pair(p(x), x), f(xs...)))" },
 			{ "'take_true'(f(xs...), f(pair(true, x), ys...)) = 'take_true'(f(xs..., x), f(ys...))" },
 			{ "'take_true'(f(xs...), f(pair(_   , x), ys...)) = 'take_true'(f(xs...), f(ys...))" },
 			{ "'take_true'(fxs, f())                          = fxs" },
-
+			
 			{ "fsplit(p, f(xs...)) = 'split_hlp'(f(), f(), fmap(\\x .pair(p(x), x), f(xs...)))" },
 			{ "'split_hlp'(f(xs...), f(ys...), f(pair(true, z), zs...)) = 'split_hlp'(f(xs..., z), f(ys...), f(zs...))" },
 			{ "'split_hlp'(f(xs...), f(ys...), f(pair(_   , z), zs...)) = 'split_hlp'(f(xs...), f(ys..., z), f(zs...))" },
 			{ "'split_hlp'(fxs, fys, f())                               = pair(fxs, fys)" },
-
+			
 			{ "'sort'(list())                               = list()" },
 			{ "'sort'(list(x))                              = list(x)" },
 			{ "'sort'(list(x, xs...))                       = 'sort_h1'(fsplit(\\y .y < x, list(xs...)), x)" },
 			{ "'sort_h1'(pair(list(xs...), list(ys...)), x) = 'sort_h2'('sort'(xs...), x, 'sort'(ys...))" },
 			{ "'sort_h2'(list(xs...), x, list(ys...))       = list(xs..., x, ys...)" },
-
+			
 			{ "union(set(xs...), set(ys...)) = set(xs..., ys...)" },
 			{ "union()                       = set()" },
-
+			
 			{ "intersection(set(x, xs...), set(x, ys...)) = union(set(x), intersection(set(xs...), set(ys...)))" },
 			{ "intersection(x, xs...)                     = set()" },
-
+			
 			{ "min{x, y} | x :real, y :real, x > y = y" },
 			{ "max{x, y} | x :real, y :real, x > y = x" },
-
+			
 			{ "ffoldr(f, acc, list())         = acc" },
 			{ "ffoldr(f, acc, list(x, xs...)) = f(x, ffoldr(f, acc, list(xs...)))" },
 
-			{ "pair(list(as..., 1, b, c, 4, ds..., e, 6, fs...), list(b, c, e)) = list('as'(as...), 1, b, c, 4, 'ds'(ds...), e, 6, 'fs'(fs...))" },
+			{ "pair('test_'(ws..., a, b, c, xs...), 'test'(ys..., a, b, c, zs...)) = pair('found'(ws..., a, b, c, xs...), 'found'(ys..., a, b, c, zs...))" },
+			{ "pair(a + b, list(b, a)) = 'success'('a_is', a, 'and_b_is', b)" },
 		};
 		for (const simp::RuleRef rule : rules) {
 			std::cout << rule.to_string() << "\n\n";
