@@ -1019,7 +1019,7 @@ namespace simp {
                                 if (this_call_data.preceeded_by_multi.test(pos_mod_multis)) {
                                     throw TypeError{ "two multis in direct succession are illegal in lhs", ref };
                                 }
-                                this_call_data.preceeded_by_multi.set(commutative ? 1 : pos_mod_multis);
+                                this_call_data.preceeded_by_multi.set(commutative ? 0 : pos_mod_multis);
                             }
                             else {
                                 pos_mod_multis++;

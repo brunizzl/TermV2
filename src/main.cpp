@@ -14,7 +14,8 @@ TODO:
 
 important:
  - finish match:
-       - fix bug: match will not always succeed, if Literal::call in pattern holds a rematchable subterm
+       - fix bug: match will not always succeed, if Literal::call in pattern holds a rematchable subterm 
+	        (idea: combine set_rematchable and prime_call, problem is, that prime_call has to use preorder, where set_rematchable (currently) uses postorder)
 	   - test_condition
 	   - find_dilation
 	   - adjust rematch to work with implementation of find_dilation
@@ -52,15 +53,26 @@ idea status:
 int main()
 {
 	{
+		for (unsigned i = 0; i < (unsigned)simp::NodeType::COUNT; i++) {
+			const auto as_native = simp::nv::Native(simp::NodeType(i));
+			const auto name = simp::nv::name_of(as_native);
+			std::cout
+				<< name
+				<< std::string(std::max(20 - (int)name.size(), 0), '.')
+				<< i
+				<< "\n";
+		}
+		std::cout << "\n";
 		for (const auto& props : simp::nv::common_table) {
 			std::cout
 				<< props.name
-				<< std::string(25 - props.name.length(), '.')
+				<< std::string(std::max(20 - (int)props.name.size(), 0), '.')
 				<< (unsigned)props.type
 				<< " \t-> "
 				<< simp::nv::name_of(props.result_space)
 				<< "\n";
 		}
+		std::cout << "\n\n";
 	}
 	if (false) {
 		const auto names = std::to_array<std::string>({

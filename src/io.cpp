@@ -536,9 +536,9 @@ namespace simp {
 			str.append(to_string(data.rematchable_params, param_count));
 			str.append(" M:");
 			str.append(to_string(data.preceeded_by_multi, data.is_commutative ? 1 : param_count + 1));
-			if (data.is_commutative) {
+			if (data.is_commutative && param_count > 0u) {
 				str.append(" O:");
-				str.append(to_string(data.always_preceeding_next, param_count));
+				str.append(to_string(data.always_preceeding_next, param_count - 1));
 			}
 			str.append(data.is_rematchable ? " r" : "");
 			str.append("]");
