@@ -414,11 +414,11 @@ namespace simp {
 							Res res = 0u;
 							if (ref.type == Literal::call) {
 								for (const NodeIndex sub : ref->call) {
-									res |= (*this)(ref.new_at(sub));
+									res |= (*this)(ref.at(sub));
 								}
 							}
 							else if (ref.type == Literal::lambda) {
-								res |= (*this)(ref.new_at(ref->lambda.definition));
+								res |= (*this)(ref.at(ref->lambda.definition));
 							}
 							else if (ref.type == SingleMatch::weak) {
 								res.set(ref.index);
@@ -577,7 +577,7 @@ namespace simp {
 						case Native(PatternAuxFn::of_type): return { "" , " :"   };
 						}
 					}
-					append_to_string(ref.new_at(function), str, max_infixr);
+					append_to_string(ref.at(function), str, max_infixr);
 					if (in_pattern_call) {
 						append_pattern_call_info(pattern_call_info(ref), ref->call.size() - 1u, str);
 					}
@@ -588,7 +588,7 @@ namespace simp {
 				const char* spacer = init;
 				for (const NodeIndex param : call.parameters()) {
 					str.append(std::exchange(spacer, seperator));
-					append_to_string(ref.new_at(param), str, own_infixr);
+					append_to_string(ref.at(param), str, own_infixr);
 				}
 				if (own_infixr <= parent_infixr) { str.push_back(')'); }
 			} break;
@@ -598,7 +598,7 @@ namespace simp {
 			case NodeType(Literal::lambda): {
 				const Lambda& lambda = *ref;
 				str.append(lambda.transparent ? "(\\" : "{\\");
-				append_to_string(ref.new_at(lambda.definition), str, max_infixr);
+				append_to_string(ref.at(lambda.definition), str, max_infixr);
 				str.push_back(lambda.transparent ? ')' : '}');
 			} break;
 			case NodeType(Literal::lambda_param):
@@ -610,7 +610,7 @@ namespace simp {
 				str.append("_X");
 				str.append(std::to_string(var.match_data_index));
 				str.append("[");
-				append_to_string(ref.new_at(var.condition), str, default_infixr);
+				append_to_string(ref.at(var.condition), str, default_infixr);
 				str.append("]");
 			} break;				
 			case NodeType(SingleMatch::unrestricted):
@@ -633,7 +633,7 @@ namespace simp {
 				str.append(std::to_string(var.match_data_index));
 				str.append(var.owner ? "" : "'");
 				str.append("[");
-				append_to_string(ref.new_at(var.match_index), str, default_infixr);
+				append_to_string(ref.at(var.match_index), str, default_infixr);
 				if (var.domain != nv::ComplexSubset::complex) {
 					str.append(", ");
 					str.append(nv::name_of(var.domain));
@@ -704,7 +704,7 @@ namespace simp {
 						*current_line += ' '; //pleeeaaasee std::format, where are you? :(
 					}
 					*current_line += std::to_string(elem_idx);
-					print::append_memory_row(ref.new_at(vec[vec_idx]), rows);
+					print::append_memory_row(ref.at(vec[vec_idx]), rows);
 				}
 				*current_line += " }";
 				for (; vec_idx < vec.capacity(); vec_idx++) {
@@ -714,7 +714,7 @@ namespace simp {
 			case NodeType(Literal::lambda): {
 				const Lambda& lam= *ref;
 				current_str += "lambda     : ";
-				print::append_memory_row(ref.new_at(lam.definition), rows);
+				print::append_memory_row(ref.at(lam.definition), rows);
 			} break;
 			default:
 				current_str += "unknown type: " + std::to_string((unsigned)ref.type);

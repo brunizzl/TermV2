@@ -101,11 +101,11 @@ namespace simp {
             return ref.typed_idx();
         }
         else if (ref.type == Literal::lambda) {
-            return search(ref.new_at(ref->lambda.definition), pred);
+            return search(ref.at(ref->lambda.definition), pred);
         }
         else if (ref.type == Literal::call || ref.type == PatternCall{}) {
             for (const NodeIndex subterm : ref->call) {
-                const NodeIndex sub_res = search(ref.new_at(subterm), pred);
+                const NodeIndex sub_res = search(ref.at(subterm), pred);
                 if (sub_res != literal_nullptr) {
                     return sub_res;
                 }
@@ -121,11 +121,11 @@ namespace simp {
         if (ref.type == Literal::call || ref.type == PatternCall{}) {
             const auto stop = end(ref);
             for (auto iter = begin(ref); iter != stop; ++iter) {
-                *iter = transform(ref.new_at(*iter), f);
+                *iter = transform(ref.at(*iter), f);
             }
         }
         if (ref.type == Literal::lambda) {
-            ref->lambda.definition = transform(ref.new_at(ref->lambda.definition), f);
+            ref->lambda.definition = transform(ref.at(ref->lambda.definition), f);
         }
         return f(ref);
     } //transform
@@ -136,11 +136,11 @@ namespace simp {
     {
         if (ref.type == Literal::call || ref.type == PatternCall{}) {
             for (const auto sub : ref) {
-                transform(ref.new_at(sub), f);
+                transform(ref.at(sub), f);
             }
         }
         if (ref.type == Literal::lambda) {
-            transform(ref.new_at(ref->lambda.definition), f);
+            transform(ref.at(ref->lambda.definition), f);
         }
         f(ref);
     } //transform

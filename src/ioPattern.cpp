@@ -204,7 +204,7 @@ namespace bmath::intern::print {
 			const char* seperator = "";
 			for (const auto param : fn::range(ref)) {
 				str.append(std::exchange(seperator, ", "));
-				print::append_to_string(ref.new_at(param), str, depth + 1);
+				print::append_to_string(ref.at(param), str, depth + 1);
 			}
 			str.push_back(clse_paren);
 		} break;
@@ -235,7 +235,7 @@ namespace bmath::intern::print {
 			str.push_back(open_paren);
 			str.append(name_of(var.domain));
 			str.append(", ");
-			print::append_to_string(ref.new_at(var.mtch_idx), str, depth + 1);
+			print::append_to_string(ref.at(var.mtch_idx), str, depth + 1);
 			str.push_back(clse_paren);
 		} break;
 		case PnType(ValueProxy{}): {
@@ -283,7 +283,7 @@ namespace bmath::intern::print {
 			}
 			str.push_back(':');
 			for (const auto param : fn::range(ref)) {
-				print::appent_to_simple_tree(ref.new_at(param), str, depth + 1);
+				print::appent_to_simple_tree(ref.at(param), str, depth + 1);
 			}
 		} break;
 		case PnType(Literal::symbol): {
@@ -313,7 +313,7 @@ namespace bmath::intern::print {
 			str.push_back('(');
 			str.append(name_of(var.domain));
 			str.append(", ");
-			print::append_to_string(ref.new_at(var.mtch_idx), str, depth + 1);
+			print::append_to_string(ref.at(var.mtch_idx), str, depth + 1);
 			str.push_back(')');
 		} break;
 		case PnType(ValueProxy{}): {

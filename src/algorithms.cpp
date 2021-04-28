@@ -101,14 +101,14 @@ namespace simp {
             if (ref.type == Literal::call) {
                 const auto stop = end(ref);
                 for (auto iter = begin(ref); iter != stop; ++iter) {
-                    *iter = replace_lambda_params(ref.new_at(*iter), params);
+                    *iter = replace_lambda_params(ref.at(*iter), params);
                 }
                 //assert(!options.eval_lambdas);
                 //return normalize::outermost(ref, options, lambda_param_offset).res;
             }
             else if (ref.type == Literal::lambda && ref->lambda.transparent) {
                 ref->lambda.definition = 
-                    replace_lambda_params(ref.new_at(ref->lambda.definition), params);
+                    replace_lambda_params(ref.at(ref->lambda.definition), params);
             }
             else if (ref.type == Literal::lambda_param) { 
                 if (ref.index >= params.size()) {
@@ -116,7 +116,7 @@ namespace simp {
                     return NodeIndex(ref.index - params.size(), Literal::lambda_param);
                 }
                 else {
-                    return copy_tree(ref.new_at(params[ref.index]), *ref.store);
+                    return copy_tree(ref.at(params[ref.index]), *ref.store);
                 }
             }
             return ref.typed_idx();
@@ -126,7 +126,7 @@ namespace simp {
         {
             assert(ref.type == Literal::call); //PatternCall is not expected here!
             const Call& call = *ref;
-            const MutRef lambda = ref.new_at(call.function());
+            const MutRef lambda = ref.at(call.function());
             assert(lambda.type == Literal::lambda);
             assert(!lambda->lambda.transparent);
             bmath::intern::StupidBufferVector<NodeIndex, 16> params;
@@ -139,13 +139,13 @@ namespace simp {
             }
             Call::free(*ref.store, ref.index); //only free call itself, neighter lambda nor lambda parameters
             const NodeIndex evaluated = replace_lambda_params(
-                ref.new_at(lambda->lambda.definition), params);
+                ref.at(lambda->lambda.definition), params);
             for (const NodeIndex param : params) {
-                free_tree(ref.new_at(param));
+                free_tree(ref.at(param));
             }
             if (lambda_param_count == params.size()) {
                 ref.store->free_one(lambda.index);
-                return normalize::recursive(ref.new_at(evaluated), options, 0);
+                return normalize::recursive(ref.at(evaluated), options, 0);
             }
             else { //lambda is curried -> keep remaining lambda as lambda
                 assert(lambda_param_count > params.size());
@@ -161,13 +161,13 @@ namespace simp {
             assert(ref.type != PatternCall{});
             if (ref.type == Literal::call) {
                 for (NodeIndex& subterm : ref) {
-                    subterm = add_offset(ref.new_at(subterm), lambda_param_offset);
+                    subterm = add_offset(ref.at(subterm), lambda_param_offset);
                 }
             }
             else if (ref.type == Literal::lambda) {
                 Lambda& lambda = *ref;
                 if (lambda.transparent) {
-                    lambda.definition = add_offset(ref.new_at(lambda.definition), lambda_param_offset);
+                    lambda.definition = add_offset(ref.at(lambda.definition), lambda_param_offset);
                 }
             }
             else if (ref.type == Literal::lambda_param) {
@@ -187,7 +187,7 @@ namespace simp {
             bmath::intern::StupidBufferVector<NodeIndex, 16> merged_calls = { function };
             for (const NodeIndex param : call.parameters()) {
                 if (param.get_type() == Literal::call) {
-                    const MutRef param_ref = ref.new_at(param);
+                    const MutRef param_ref = ref.at(param);
                     if (param_ref->call.function() == function) {
                         found_nested = true;
                         for (const NodeIndex param_param : param_ref->call.parameters()) {
@@ -296,7 +296,7 @@ namespace simp {
                     const std::size_t params_size = params.size();
                     for (std::size_t i = 0; i < params_size; i++) {
                         const nv::Native param_space = param_spaces[i];
-                        if (param_space != Restr::any && !meets_restriction(ref.new_at(params[i]), param_space)) {
+                        if (param_space != Restr::any && !meets_restriction(ref.at(params[i]), param_space)) {
                             return literal_nullptr;
                         }
                     }
@@ -325,8 +325,8 @@ namespace simp {
                 };
                 auto is_ordered_as = [&](const std::strong_ordering od) {
                     assert(call[1].get_type() == Literal::complex && call[2].get_type() == Literal::complex);
-                    const Complex& fst = *ref.new_at(call[1]);
-                    const Complex& snd = *ref.new_at(call[2]);
+                    const Complex& fst = *ref.at(call[1]);
+                    const Complex& snd = *ref.at(call[2]);
                     const bool res = bmath::intern::compare_complex(fst, snd) == od;
                     free_tree(ref);
                     return res;
@@ -334,18 +334,18 @@ namespace simp {
                 //parameters are now guaranteed to meet restriction given in nv::fixed_arity_table
                 //also parameter cout is guaranteed to be correct
                 if (fixed_f.is<CtoC>() && f_arity == 1u) {
-                    return compute_and_replace([&] { return eval_unary_complex(fixed_f.to<CtoC>(), *ref.new_at(call[1u])); });
+                    return compute_and_replace([&] { return eval_unary_complex(fixed_f.to<CtoC>(), *ref.at(call[1u])); });
                 }
                 switch (fixed_f) {
                 case FixedArity(Bool::true_): {
                     const NodeIndex res = call[1];
-                    free_tree(ref.new_at(call[2]));
+                    free_tree(ref.at(call[2]));
                     Call::free(*ref.store, ref.index);
                     return res;
                 } break;
                 case FixedArity(Bool::false_): {
                     const NodeIndex res = call[2];
-                    free_tree(ref.new_at(call[1]));
+                    free_tree(ref.at(call[1]));
                     Call::free(*ref.store, ref.index);
                     return res;
                 } break;
@@ -356,8 +356,8 @@ namespace simp {
                 } break;
                 case FixedArity(CtoC::pow): {
                     return compute_and_replace([&] {
-                        const Complex& base = *ref.new_at(call[1]);
-                        const Complex& expo = *ref.new_at(call[2]);
+                        const Complex& base = *ref.at(call[1]);
+                        const Complex& expo = *ref.at(call[2]);
                         if (expo == 0.5) {
                             return (base.imag() == 0.0 && base.real() >= 0.0) ?
                                 std::sqrt(base.real()) :
@@ -373,8 +373,8 @@ namespace simp {
                 } break;
                 case FixedArity(CtoC::log): {
                     return compute_and_replace([&] {
-                        const Complex& base = *ref.new_at(call[1]);
-                        const Complex& argu = *ref.new_at(call[2]);
+                        const Complex& base = *ref.at(call[1]);
+                        const Complex& argu = *ref.at(call[2]);
                         const Complex num = (argu.imag() == 0.0) ?
                             std::log(argu.real()) :
                             std::log(argu);
@@ -404,7 +404,7 @@ namespace simp {
                     if (search(ref, is_placeholder) != literal_nullptr) {
                         return literal_nullptr;
                     }
-                    const std::strong_ordering ord = compare_tree(ref.new_at(call[1]), ref.new_at(call[2]));
+                    const std::strong_ordering ord = compare_tree(ref.at(call[1]), ref.at(call[2]));
                     free_tree(ref);
                     return bool_to_typed_idx((fixed_f == ToBool::eq) ^ (ord != std::strong_ordering::equal));
                 } break;
@@ -419,8 +419,8 @@ namespace simp {
                 case FixedArity(HaskellFn::fmap): if (options.eval_haskell) {
                     const NodeIndex converter = call[1];
                     const NodeIndex convertee = call[2];
-                    const MutRef converter_ref = ref.new_at(converter);
-                    const MutRef convertee_ref = ref.new_at(convertee);
+                    const MutRef converter_ref = ref.at(converter);
+                    const MutRef convertee_ref = ref.at(convertee);
                     assert(convertee_ref.type == Literal::call);
                     const auto stop = end(convertee_ref);
                     auto iter = begin(convertee_ref);
@@ -429,7 +429,7 @@ namespace simp {
                         const std::size_t call_index = ref.store->allocate_one();
                         const NodeIndex converter_copy = copy_tree(converter_ref, *ref.store);
                         ref.store->at(call_index) = Call({ converter_copy, *iter });
-                        *iter = outermost(ref.new_at(NodeIndex(call_index, Literal::call)), options, lambda_param_offset).res;
+                        *iter = outermost(ref.at(NodeIndex(call_index, Literal::call)), options, lambda_param_offset).res;
                     }
                     static_assert(Call::min_capacity >= 3u, "assumes fmap call to only use one store slot");
                     ref.store->free_one(ref.index); //free call to fmap
@@ -485,12 +485,12 @@ namespace simp {
                         if (iter_1->get_type() != Literal::complex) {
                             break; //complex are ordered in front and sum is sorted
                         }
-                        Complex& acc = *ref.new_at(*iter_1);
+                        Complex& acc = *ref.at(*iter_1);
                         for (auto iter_2 = std::next(iter_1); iter_2 != stop; ++iter_2) {
                             if (iter_2->get_type() != Literal::complex) {
                                 break;
                             }
-                            Complex& summand = *ref.new_at(*iter_2);
+                            Complex& summand = *ref.at(*iter_2);
                             if (maybe_accumulate(acc, summand, std::plus<Complex>())) 
                             {
                                 ref.store->free_one(iter_2->get_index());
@@ -506,11 +506,11 @@ namespace simp {
                     for (auto iter_1 = range.begin(); iter_1 != stop; ++iter_1) {
                         switch (iter_1->get_type()) {
                         case NodeType(Literal::complex): {
-                            Complex& acc = *ref.new_at(*iter_1);
+                            Complex& acc = *ref.at(*iter_1);
                             for (auto iter_2 = std::next(iter_1); iter_2 != stop; ++iter_2) {
                                 switch (iter_2->get_type()) {
                                 case NodeType(Literal::complex): {
-                                    Complex& factor = *ref.new_at(*iter_2);
+                                    Complex& factor = *ref.at(*iter_2);
                                     if (maybe_accumulate(acc, factor, std::multiplies<Complex>()))
                                     {
                                         ref.store->free_one(iter_2->get_index());
@@ -527,9 +527,9 @@ namespace simp {
                 case Variadic(Comm::set): if (call.size() >= 3) { 
                     auto range = call.parameters();
                     auto iter = range.begin();
-                    UnsaveRef fst = ref.new_at(*iter);
+                    UnsaveRef fst = ref.at(*iter);
                     for (++iter; iter != range.end(); ++iter) {
-                        UnsaveRef snd = ref.new_at(*iter); //remove duplicates (remember: already sorted)
+                        UnsaveRef snd = ref.at(*iter); //remove duplicates (remember: already sorted)
                         if (compare_tree(fst, snd) == std::strong_ordering::equal) {
                             ref.store->free_one(iter->get_index());
                             *iter = literal_nullptr;
@@ -599,11 +599,11 @@ namespace simp {
                     Lambda& lambda = *ref;
                     if (!lambda.transparent && lambda_param_offset != 0u) {
                         lambda.transparent = true;
-                        lambda.definition = add_offset(ref.new_at(lambda.definition), lambda_param_offset);
+                        lambda.definition = add_offset(ref.at(lambda.definition), lambda_param_offset);
                         change = true;
                     }
                     if (lambda.definition.get_type() == Literal::lambda) {
-                        const UnsaveRef nested = ref.new_at(lambda.definition);
+                        const UnsaveRef nested = ref.at(lambda.definition);
                         assert(nested->lambda.transparent);
                         lambda.definition = nested->lambda.definition;
                         lambda.param_count += nested->lambda.param_count;
@@ -620,22 +620,22 @@ namespace simp {
             assert(ref.type != PatternCall{});
             if (ref.type == Literal::call) {
                 auto iter = begin(ref);
-                *iter = normalize::recursive(ref.new_at(*iter), options, lambda_param_offset);
+                *iter = normalize::recursive(ref.at(*iter), options, lambda_param_offset);
                 if (nv::is_lazy(*iter)) {
                     const NodeIndex result = normalize::outermost(ref, options, lambda_param_offset).res;
-                    return normalize::recursive(ref.new_at(result), options, lambda_param_offset);
+                    return normalize::recursive(ref.at(result), options, lambda_param_offset);
                 }
                 else [[likely]] {
                     const auto stop = end(ref);
                     for (++iter; iter != stop; ++iter) {
-                        *iter = normalize::recursive(ref.new_at(*iter), options, lambda_param_offset);
+                        *iter = normalize::recursive(ref.at(*iter), options, lambda_param_offset);
                     }
                 }
             }
             if (ref.type == Literal::lambda) {
                 const Lambda lambda = *ref;
                 ref->lambda.definition = normalize::recursive(
-                    ref.new_at(lambda.definition), options, lambda_param_offset + lambda.param_count);
+                    ref.at(lambda.definition), options, lambda_param_offset + lambda.param_count);
             }
             return normalize::outermost(ref, options, lambda_param_offset).res;
         } //recursive
@@ -651,12 +651,12 @@ namespace simp {
             Symbol::free(*ref.store, ref.index);
             return;
         case NodeType(Literal::lambda):
-            free_tree(ref.new_at(ref->lambda.definition));
+            free_tree(ref.at(ref->lambda.definition));
             break;
         case NodeType(Literal::call):
         case NodeType(PatternCall{}):
             for (const NodeIndex subtree : ref) {
-                free_tree(ref.new_at(subtree));
+                free_tree(ref.at(subtree));
             }
             if (ref.type == Literal::call) [[likely]] {
                 Call::free(*ref.store, ref.index);
@@ -667,12 +667,12 @@ namespace simp {
             }
             return;
         case NodeType(SingleMatch::restricted):   
-            free_tree(ref.new_at(ref->single_match.condition));
+            free_tree(ref.at(ref->single_match.condition));
             break;
         case NodeType(SpecialMatch::multi):
             break;
         case NodeType(SpecialMatch::value):
-            free_tree(ref.new_at(ref->value_match.match_index));
+            free_tree(ref.at(ref->value_match.match_index));
             break;
         default:
             assert(!is_stored_node(ref.type));
@@ -701,7 +701,7 @@ namespace simp {
         } break;
         case NodeType(Literal::lambda): {
             Lambda lambda = *src_ref;
-            lambda.definition = copy_tree(src_ref.new_at(lambda.definition), dst_store);
+            lambda.definition = copy_tree(src_ref.at(lambda.definition), dst_store);
             return insert_node(lambda, src_ref.type);
         } break;
         case NodeType(Literal::call):
@@ -709,7 +709,7 @@ namespace simp {
             bmath::intern::StupidBufferVector<NodeIndex, 16> dst_subterms;
             const auto stop = end(src_ref);
             for (auto iter = begin(src_ref); iter != stop; ++iter) {
-                dst_subterms.push_back(copy_tree(src_ref.new_at(*iter), dst_store));
+                dst_subterms.push_back(copy_tree(src_ref.at(*iter), dst_store));
             }
             if (src_ref.type == PatternCall{}) { //also copy variadic metadata
                 const std::size_t call_capacity = Call::smallest_fit_capacity(dst_subterms.size());
@@ -727,14 +727,14 @@ namespace simp {
         } break;
         case NodeType(SingleMatch::restricted): {
             RestrictedSingleMatch var = *src_ref;
-            var.condition = copy_tree(src_ref.new_at(var.condition), dst_store);
+            var.condition = copy_tree(src_ref.at(var.condition), dst_store);
             return insert_node(var, src_ref.type);
         } break;
         case NodeType(SpecialMatch::multi):
             return insert_node(*src_ref, src_ref.type);
         case NodeType(SpecialMatch::value): {
             ValueMatch var = *src_ref;
-            var.match_index = copy_tree(src_ref.new_at(var.match_index), dst_store);
+            var.match_index = copy_tree(src_ref.at(var.match_index), dst_store);
             return insert_node(var, src_ref.type);
         } break;
         default:
@@ -784,7 +784,7 @@ namespace simp {
             auto snd_iter = snd->call.begin();
             for (; fst_iter != fst_end && snd_iter != snd_end; ++fst_iter, ++snd_iter) {
                 const std::strong_ordering cmp = 
-                    compare_tree(fst.new_at(*fst_iter), snd.new_at(*snd_iter));
+                    compare_tree(fst.at(*fst_iter), snd.at(*snd_iter));
                 if (cmp != std::strong_ordering::equal) {
                     return cmp;
                 }
@@ -803,7 +803,7 @@ namespace simp {
             if (fst_lambda.transparent != snd_lambda.transparent) {
                 return fst_lambda.transparent <=> snd_lambda.transparent;
             }
-            return compare_tree(fst.new_at(fst_lambda.definition), snd.new_at(snd_lambda.definition));
+            return compare_tree(fst.at(fst_lambda.definition), snd.at(snd_lambda.definition));
         } break;
         case NodeType(SingleMatch::restricted): 
             return fst->single_match.match_data_index <=> single_match_index(snd);
@@ -837,7 +837,7 @@ namespace simp {
         case NodeType(Literal::call): {
             const NodeIndex fst_f = fst->call.function();
             const NodeIndex snd_f = snd->call.function();            
-            if (const auto cmp_fs = unsure_compare_tree(fst.new_at(fst_f), snd.new_at(snd_f)); 
+            if (const auto cmp_fs = unsure_compare_tree(fst.at(fst_f), snd.at(snd_f)); 
                 cmp_fs != std::partial_ordering::equivalent)
             {   return cmp_fs;
             }
@@ -850,7 +850,7 @@ namespace simp {
             auto snd_iter = snd->call.parameters().begin();
             for (; fst_iter != fst_end && snd_iter != snd_end; ++fst_iter, ++snd_iter) {
                 const std::partial_ordering cmp =
-                    unsure_compare_tree(fst.new_at(*fst_iter), snd.new_at(*snd_iter));
+                    unsure_compare_tree(fst.at(*fst_iter), snd.at(*snd_iter));
                 if (cmp != std::partial_ordering::equivalent) {
                     return cmp;
                 }
@@ -869,7 +869,7 @@ namespace simp {
             if (fst_lambda.transparent != snd_lambda.transparent) {
                 return fst_lambda.transparent <=> snd_lambda.transparent;
             }
-            return unsure_compare_tree(fst.new_at(fst_lambda.definition), snd.new_at(snd_lambda.definition));
+            return unsure_compare_tree(fst.at(fst_lambda.definition), snd.at(snd_lambda.definition));
         } break;
         case NodeType(SpecialMatch::value):
             return std::partial_ordering::unordered;
@@ -902,7 +902,7 @@ namespace simp {
             const auto optimize = [](const MutRef r) {
                 if (r.type == SingleMatch::restricted) {
                     r->single_match.condition =
-                        shallow_apply_ruleset(rules, r.new_at(r->single_match.condition));
+                        shallow_apply_ruleset(rules, r.at(r->single_match.condition));
                 }
             };
             transform(MutRef(store, heads.lhs), optimize);
@@ -938,7 +938,7 @@ namespace simp {
                     Call& call = *r;
                     assert(call[1].get_type().is<PatternUnsigned>());
                     const std::uint32_t match_data_index = call[1].get_index();
-                    const NodeIndex domain = shallow_apply_ruleset(to_domain, r.new_at(call[2]));
+                    const NodeIndex domain = shallow_apply_ruleset(to_domain, r.at(call[2]));
                     const NodeIndex match_index = call[3];
                     if (domain.get_type() != Literal::native || !to_native(domain).is<nv::ComplexSubset>()) {
                         throw TypeError{ "value match restrictions may only be of form \"<value match> :<complex subset>\"", r };
@@ -992,10 +992,10 @@ namespace simp {
                     Call& call = *ref;
                     for (NodeIndex& param : call.parameters()) {
                         if (param.get_type() == SpecialMatch::multi) {
-                            const unsigned identifier = ref.new_at(param)->multi_match.match_data_index;
+                            const unsigned identifier = ref.at(param)->multi_match.match_data_index;
                             multi_changes.emplace_back(identifier, 
                                 MultiMatch{ this_pattern_index, commutative ? -1u : pos_mod_multis });
-                            free_tree(ref.new_at(param));
+                            free_tree(ref.at(param));
                             param = literal_nullptr;
                             if (commutative) {
                                 this_call_data.has_multi_match_variable = true;
@@ -1055,12 +1055,12 @@ namespace simp {
                 const auto stop = end(ref);
                 for (auto iter = begin(ref); iter != stop; ++iter) {
                     *iter = build_lhs_multis_and_pattern_calls(
-                        ref.new_at(*iter), multi_changes, pattern_call_index);
+                        ref.at(*iter), multi_changes, pattern_call_index);
                 }
             }
             else if (ref.type == Literal::lambda) {
                 ref->lambda.definition = build_lhs_multis_and_pattern_calls(
-                    ref.new_at(ref->lambda.definition), multi_changes, pattern_call_index);
+                    ref.at(ref->lambda.definition), multi_changes, pattern_call_index);
             }
             return ref.typed_idx();
         } //build_lhs_multis_and_pattern_calls
@@ -1181,7 +1181,7 @@ namespace simp {
                 auto fst_iter = fst->call.begin();
                 auto snd_iter = snd->call.begin();
                 for (; fst_iter != fst_end && snd_iter != snd_end; ++fst_iter, ++snd_iter) {
-                    if (!equivalent(fst.new_at(*fst_iter), snd.new_at(*snd_iter), eq)) {
+                    if (!equivalent(fst.at(*fst_iter), snd.at(*snd_iter), eq)) {
                         return false;
                     }
                 }
@@ -1192,7 +1192,7 @@ namespace simp {
                 const Lambda snd_lambda = *snd;
                 return fst_lambda.param_count == snd_lambda.param_count &&
                     fst_lambda.transparent == snd_lambda.transparent &&
-                    equivalent(fst.new_at(fst_lambda.definition), snd.new_at(snd_lambda.definition), eq);
+                    equivalent(fst.at(fst_lambda.definition), snd.at(snd_lambda.definition), eq);
             }
             else if (fst.type.is<SingleMatch>() && snd.type.is<SingleMatch>()) {
                 return eq[single_match_index(fst)][single_match_index(snd)];
@@ -1241,8 +1241,8 @@ namespace simp {
                     auto& bits = pattern_call_info(r).always_preceeding_next;
                     const auto params = r->call.parameters();
                     for (std::size_t i = 0; i + 1 < params.size(); i++) {
-                        const auto i_ref    = r.new_at(params[i]);
-                        const auto next_ref = r.new_at(params[i + 1]);
+                        const auto i_ref    = r.at(params[i]);
+                        const auto next_ref = r.at(params[i + 1]);
                         bool i_always_preceeding_next =
                             unsure_compare_tree(i_ref, next_ref) == std::partial_ordering::less ||
                             equivalent(i_ref, next_ref, eq_table);
@@ -1270,7 +1270,7 @@ namespace simp {
                     this_info.rematchable_params = 0u;
                     const std::span<NodeIndex> params = r->call.parameters();
                     for (std::size_t i = 0; i < params.size(); i++) {
-                        const NodeIndex rematchable_sub = search(r.new_at(params[i]), [](const UnsaveRef rr) { 
+                        const NodeIndex rematchable_sub = search(r.at(params[i]), [](const UnsaveRef rr) { 
                                 return rr.type == PatternCall{} && pattern_call_info(rr).is_rematchable; 
                             });
                         this_info.rematchable_params.set(i, rematchable_sub != literal_nullptr);
@@ -1283,7 +1283,7 @@ namespace simp {
                             return this_info.preceeded_by_multi.count() > 1;
                         }
                         const auto has_owned_single = [r](const NodeIndex n) {
-                            return search(r.new_at(n), [](const UnsaveRef rr) { 
+                            return search(r.at(n), [](const UnsaveRef rr) { 
                                     return rr.type == SingleMatch::restricted || rr.type == SingleMatch::unrestricted; 
                                 }) != literal_nullptr;
                         };
@@ -1364,7 +1364,7 @@ namespace simp {
                 {
                     return false;
                 }
-                return match_(pn_ref.new_at(pn_lambda.definition), ref.new_at(lambda.definition), match_data);
+                return match_(pn_ref.at(pn_lambda.definition), ref.at(lambda.definition), match_data);
             }
             case NodeType(Literal::call): {
                 const Call& pn_call = *pn_ref;
@@ -1374,7 +1374,7 @@ namespace simp {
                 }
                 const auto stop = call.end();                
                 for (auto pn_iter = pn_call.begin(), iter = call.begin(); iter != stop; ++pn_iter, ++iter) {
-                    if (!match_(pn_ref.new_at(*pn_iter), ref.new_at(*iter), match_data)) {
+                    if (!match_(pn_ref.at(*pn_iter), ref.at(*iter), match_data)) {
                         return false;
                     }
                 }
@@ -1384,13 +1384,12 @@ namespace simp {
                 if (ref.type != Literal::call) {
                     return false;
                 }
-                const UnsaveRef pn_function_ref = pn_ref.new_at(pn_ref->call.function());
-                if (!match_(pn_function_ref, ref.new_at(ref->call.function()), match_data)) {
+                if (!match_(pn_ref.at(pn_ref->call.function()), ref.at(ref->call.function()), match_data)) {
                     return false;
                 }
                 return pattern_call_info(pn_ref).is_commutative ?
                     find_permutation(pn_ref, ref, match_data, 0u, 0u) :
-                    find_dilation(pn_ref, ref, match_data, 0u, 0u);
+                    find_dilation   (pn_ref, ref, match_data, 0u, 0u);
             }
             case NodeType(SingleMatch::restricted): {
                 const RestrictedSingleMatch var = *pn_ref;
@@ -1399,7 +1398,7 @@ namespace simp {
                 if (var.condition.get_type() == Literal::native) {
                     return meets_restriction(ref, to_native(var.condition));
                 }
-                return test_condition(pn_ref.new_at(var.condition), match_data);
+                return test_condition(pn_ref.at(var.condition), match_data);
             }
             case NodeType(SingleMatch::unrestricted): {
                 match_data.single_vars[pn_ref.index].match_idx = ref.typed_idx();
@@ -1408,14 +1407,14 @@ namespace simp {
             case NodeType(SingleMatch::weak): {
                 const SharedSingleMatchEntry entry = match_data.single_vars[pn_ref.index];
                 assert(entry.is_set());
-                return compare_tree(ref.new_at(entry.match_idx), ref) == std::strong_ordering::equal;
+                return compare_tree(ref.at(entry.match_idx), ref) == std::strong_ordering::equal;
             }
             case NodeType(SpecialMatch::value): {
                 if (ref.type != Literal::complex) { //only this test allows us to pass *ref to evaluate this_value
                     return false;
                 }
                 const ValueMatch& var = *pn_ref;
-                const bmath::intern::OptionalComplex this_value = eval_value_match(pn_ref.new_at(var.match_index), *ref);
+                const bmath::intern::OptionalComplex this_value = eval_value_match(pn_ref.at(var.match_index), *ref);
                 if (!this_value || !in_complex_subset(*this_value, var.domain)) {
                     return false;
                 }
@@ -1459,13 +1458,13 @@ namespace simp {
                 assert(pn_call.size() == call.size());
                 const auto stop = call.end();
                 for (auto pn_iter = pn_call.begin(), iter = call.begin(); iter != stop; ++pn_iter, ++iter) {
-                    if (rematch(pn_ref.new_at(*pn_iter), ref.new_at(*iter), match_data)) {
+                    if (rematch(pn_ref.at(*pn_iter), ref.at(*iter), match_data)) {
                         return true;
                     }
                 }
             }
             else if (pn_ref.type == Literal::lambda) {
-                return rematch(pn_ref.new_at(pn_ref->lambda.definition), ref.new_at(ref->lambda.definition), match_data);
+                return rematch(pn_ref.at(pn_ref->lambda.definition), ref.at(ref->lambda.definition), match_data);
             }
             return false;
         } //rematch
@@ -1499,10 +1498,10 @@ namespace simp {
             }
 
             while (needle_i < needles.size()) {
-                const UnsaveRef needle_ref = pn_ref.new_at(needles[needle_i]);
+                const UnsaveRef needle_ref = pn_ref.at(needles[needle_i]);
                 for (; hay_k < haystack.size(); hay_k++) {
                     if (!currently_matched.test(hay_k) && 
-                        match_(needle_ref, hay_ref.new_at(haystack[hay_k]), match_data)) 
+                        match_(needle_ref, hay_ref.at(haystack[hay_k]), match_data)) 
                     {   goto prepare_next_needle;
                     }
                 }
@@ -1513,7 +1512,7 @@ namespace simp {
                 needle_i--;
                 hay_k = needles_data.match_positions[needle_i];
                 if (!info.rematchable_params.test(needle_i) ||
-                    !rematch(pn_ref.new_at(needles[needle_i]), hay_ref.new_at(haystack[hay_k]), match_data))
+                    !rematch(pn_ref.at(needles[needle_i]), hay_ref.at(haystack[hay_k]), match_data))
                 { //could not rematch last successfully-matched needle-hay pair with each other again
                   //  -> try succeeding elements in haystack in next loop iteration for that needle
                     currently_matched.reset(hay_k);
@@ -1557,11 +1556,11 @@ namespace simp {
             }
 
             while (needle_i < needles.size()) {
-                const UnsaveRef needle_ref = pn_ref.new_at(needles[needle_i]);
+                const UnsaveRef needle_ref = pn_ref.at(needles[needle_i]);
                 if (info.preceeded_by_multi.test(needle_i)) {
                     for (; skip_budget >= 0; hay_k++, skip_budget--) { 
                         assert(hay_k < haystack.size()); //implied by not negative skip budget
-                        if (match_(needle_ref, hay_ref.new_at(haystack[hay_k]), match_data))
+                        if (match_(needle_ref, hay_ref.at(haystack[hay_k]), match_data))
                         {   goto prepare_next_needle;
                         }
                     }
@@ -1572,7 +1571,7 @@ namespace simp {
                 if (skip_budget < 0) {
                     return false;
                 }
-                if (match_(needle_ref, hay_ref.new_at(haystack[hay_k]), match_data)) 
+                if (match_(needle_ref, hay_ref.at(haystack[hay_k]), match_data)) 
                 {   goto prepare_next_needle;
                 }
                 else if (info.preceeded_by_multi.test(needle_i)) {
@@ -1620,7 +1619,7 @@ namespace simp {
         case NodeType(Literal::lambda): {
             Lambda dst_lam = *pn_ref;
             dst_lam.definition = pattern_interpretation(
-                pn_ref.new_at(dst_lam.definition), match_data, src_store, dst_store, lambda_param_offset + dst_lam.param_count);
+                pn_ref.at(dst_lam.definition), match_data, src_store, dst_store, lambda_param_offset + dst_lam.param_count);
             return insert_node(dst_lam, pn_ref.type);
         } break;
         case NodeType(Literal::lambda_param):
@@ -1630,7 +1629,7 @@ namespace simp {
             const auto stop = end(pn_ref);
             for (auto iter = begin(pn_ref); iter != stop; ++iter) {
                 if (iter->get_type() == SpecialMatch::multi) {
-                    const MultiMatch multi = *pn_ref.new_at(*iter);
+                    const MultiMatch multi = *pn_ref.at(*iter);
                     assert(multi.index_in_params == -1u && "only commutative is implemented so far here");
                     const match::SharedPatternCallEntry& entry = match_data.pattern_calls[multi.match_data_index];
                     const Ref donator = Ref(src_store, entry.match_idx);
@@ -1645,7 +1644,7 @@ namespace simp {
                 }
                 else {
                     dst_subterms.push_back(pattern_interpretation(
-                        pn_ref.new_at(*iter), match_data, src_store, dst_store, lambda_param_offset));
+                        pn_ref.at(*iter), match_data, src_store, dst_store, lambda_param_offset));
                 }
             }
             const std::size_t dst_index = Call::build(dst_store, dst_subterms);

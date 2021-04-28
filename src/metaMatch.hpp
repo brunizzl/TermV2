@@ -1137,7 +1137,7 @@ template<Pattern Lhs, Pattern Rhs> constexpr InRelation<name, Lhs, Rhs> op(Lhs, 
 			{
 				const pattern::match::SharedTreeDatum datum = match_data.tree_match_data[I];
 				assert(datum.is_set());
-				return tree::compare(ref, ref.new_at(datum.match_idx)) == std::strong_ordering::equal;
+				return tree::compare(ref, ref.at(datum.match_idx)) == std::strong_ordering::equal;
 			}
 		};
 
@@ -1150,7 +1150,7 @@ template<Pattern Lhs, Pattern Rhs> constexpr InRelation<name, Lhs, Rhs> op(Lhs, 
 			{
 				static constexpr BMATH_FORCE_INLINE bool value(const UnsaveRef function, const MathIdx* const iter, pattern::match::MatchData& match_data) noexcept
 				{
-					const bool matched_first = Match<Param1, MatchedIs, Conditions...>::value(function.new_at(*iter), match_data);
+					const bool matched_first = Match<Param1, MatchedIs, Conditions...>::value(function.at(*iter), match_data);
 					if (!matched_first) {
 						return false;
 					}

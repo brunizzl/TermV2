@@ -11,7 +11,7 @@ namespace bmath::intern {
 		requires(R a, BasicTypedIdx<typename R::marker_type> typed_idx) { 
 		{ a.operator*() } -> std::convertible_to<const typename R::value_type>;
 		{ a.operator->() } -> std::convertible_to<const typename R::value_type*>;
-		{ a.new_at(typed_idx) } -> std::same_as<R>;
+		{ a.at(typed_idx) } -> std::same_as<R>;
 		{ R::is_const };
 	};
 
@@ -52,15 +52,13 @@ namespace bmath::intern {
 		constexpr auto& operator*() const { return store->at(index); }
 		constexpr auto* operator->() const { return &store->at(index); }
 
-		constexpr BasicSaveRef new_at(const BasicTypedIdx<Type_T> elem) const noexcept 
-		{ 
-			return BasicSaveRef(*this->store, elem); 
+		constexpr BasicSaveRef at(const BasicTypedIdx<Type_T> elem) const noexcept 
+		{	return BasicSaveRef(*this->store, elem); 
 		}
 
 		template<typename Own_T>
 		constexpr auto cast() const noexcept 
-		{
-			return BasicNodeRef<Own_T, Store_T>(*this->store, this->index); 
+		{	return BasicNodeRef<Own_T, Store_T>(*this->store, this->index); 
 		}
 	}; //struct BasicSaveRef
 
@@ -92,9 +90,9 @@ namespace bmath::intern {
 
 		constexpr const Union_T* store_data() const noexcept { return this->ptr - this->index; }
 
-		constexpr const Union_T* raw_at(std::uint32_t idx) const noexcept { return this->ptr - this->index + idx; }
+		constexpr const Union_T* raw_at(std::uint32_t idx) const noexcept { return this->store_data() + idx; }
 
-		constexpr BasicUnsaveRef new_at(const BasicTypedIdx<Type_T> elem) const noexcept
+		constexpr BasicUnsaveRef at(const BasicTypedIdx<Type_T> elem) const noexcept
 		{	return BasicUnsaveRef(this->store_data(), elem.get_index(), elem.get_type());
 		}
 	}; //struct BasicSaveRef

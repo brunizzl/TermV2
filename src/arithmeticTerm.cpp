@@ -121,7 +121,7 @@ namespace bmath::intern {
 			default: 
 				assert(ref.type.is<Function>());
 				for (const MathIdx elem : fn::unsave_range(ref)) {
-					tree::free(ref.new_at(elem));
+					tree::free(ref.at(elem));
 				}
 				if (ref.type.is<NamedFn>()) { //also free name
 					const std::uint32_t node_count = ref->parameters.node_count() + fn::named_fn_name(ref).node_count();
@@ -158,7 +158,7 @@ namespace bmath::intern {
 							curry = true;
 						}
 						else if (used_lambda_params.test(index)) {
-							const MathIdx inserted_param = tree::copy(ref.new_at(lambda_params[index]), *ref.store);
+							const MathIdx inserted_param = tree::copy(ref.at(lambda_params[index]), *ref.store);
 							*iter = inserted_param;
 						}
 						else {
@@ -167,7 +167,7 @@ namespace bmath::intern {
 						}
 					}
 					else {
-						curry |= replace_lambda_params(ref.new_at(*iter), lambda_params, used_lambda_params);
+						curry |= replace_lambda_params(ref.at(*iter), lambda_params, used_lambda_params);
 					}
 				}
 				return curry;
@@ -198,10 +198,10 @@ namespace bmath::intern {
 				StupidBufferVector<MathIdx, 16> new_sum;
 
 				for (MathIdx& summand : fn::unsave_range(ref)) {
-					summand = tree::combine(ref.new_at(summand), exact, in_lambda);
+					summand = tree::combine(ref.at(summand), exact, in_lambda);
 					switch (summand.get_type()) {
 					case MathType(Comm::sum):
-						for (const MathIdx nested_summand : fn::unsave_range(ref.new_at(summand))) {
+						for (const MathIdx nested_summand : fn::unsave_range(ref.at(summand))) {
 							new_sum.push_back(nested_summand);
 						}						
 						IndexVector::free(*ref.store, summand.get_index()); //free nested sum, but not nested summands
@@ -209,7 +209,7 @@ namespace bmath::intern {
 					case MathType(Literal::complex):
 						if (const OptionalComplex res = compute([&] { return value_acc + ref.store->at(summand.get_index()).complex; })) {
 							value_acc = res;
-							tree::free(ref.new_at(summand));
+							tree::free(ref.at(summand));
 							break;
 						}
 						[[fallthrough]];
@@ -243,10 +243,10 @@ namespace bmath::intern {
 				StupidBufferVector<MathIdx, 16> new_product;
 
 				for (MathIdx& factor : fn::unsave_range(ref)) {
-					factor = tree::combine(ref.new_at(factor), exact, in_lambda);
+					factor = tree::combine(ref.at(factor), exact, in_lambda);
 					switch (factor.get_type()) {
 					case MathType(Fn::pow): {
-						IndexVector& power = *ref.new_at(factor);
+						IndexVector& power = *ref.at(factor);
 						if (power[0].get_type() == Literal::complex && power[1].get_type() == Literal::complex) {
 							std::array<OptionalComplex, 4> power_params = {
 								ref.store->at(power[0].get_index()).complex,
@@ -256,7 +256,7 @@ namespace bmath::intern {
 								power_params[1] *= -1.0;
 								if (const OptionalComplex res = compute([&] { return divisor_acc * fn::eval(Fn::pow, power_params); })) {
 									divisor_acc = res;
-									tree::free(ref.new_at(factor)); //free whole power
+									tree::free(ref.at(factor)); //free whole power
 									break;
 								}
 							}
@@ -264,7 +264,7 @@ namespace bmath::intern {
 						new_product.push_back(factor);
 					} break;
 					case MathType(Comm::product):
-						for (const MathIdx nested_factor : fn::unsave_range(ref.new_at(factor))) {
+						for (const MathIdx nested_factor : fn::unsave_range(ref.at(factor))) {
 							new_product.push_back(nested_factor);
 						}
 						IndexVector::free(*ref.store, factor.get_index()); //free nested product, but not nested factors
@@ -272,7 +272,7 @@ namespace bmath::intern {
 					case MathType(Literal::complex):
 						if (const OptionalComplex res = compute([&] { return factor_acc * ref.store->at(factor.get_index()).complex; })) {
 							factor_acc = res;
-							tree::free(ref.new_at(factor));
+							tree::free(ref.at(factor));
 							break;
 						}
 						[[fallthrough]];
@@ -318,7 +318,7 @@ namespace bmath::intern {
 			} break;
 			case MathType(Fn::force): {
 				MathIdx& param = ref->parameters[0];
-				param = tree::combine(ref.new_at(param), false, in_lambda);
+				param = tree::combine(ref.at(param), false, in_lambda);
 				if (param.get_type() == Literal::complex) {
 					const MathIdx result_val = param;
 					ref.store->free_one(ref.index);
@@ -327,8 +327,8 @@ namespace bmath::intern {
 			} break;
 			case MathType(NonComm::call): {
 				if (ref->parameters.size()) [[likely]] {
-					const MathIdx lambda_idx = tree::combine(ref.new_at(ref->parameters.front()), exact, false);
-					const MutRef lambda = ref.new_at(lambda_idx);
+					const MathIdx lambda_idx = tree::combine(ref.at(ref->parameters.front()), exact, false);
+					const MutRef lambda = ref.at(lambda_idx);
 					IndexVector& call_params = *ref; //create this reference only after combining lambda as tree::combine could cause store to reallocate
 					if (lambda.type == Fn::lambda) {
 						const MathIdx result = [&call_params, &ref, &lambda, &in_lambda]() {
@@ -358,7 +358,7 @@ namespace bmath::intern {
 								}
 								else {
 									const MathIdx save_definition = definition; //replace_lambda_params might cause store to reallocate (only without garbage collection)
-									if (replace_lambda_params(lambda.new_at(save_definition), lambda_params, used_lambda_params) && !in_lambda) 
+									if (replace_lambda_params(lambda.at(save_definition), lambda_params, used_lambda_params) && !in_lambda) 
 									{
 										return lambda.typed_idx();
 									}
@@ -370,12 +370,12 @@ namespace bmath::intern {
 							}();
 							for (std::size_t i = 0u; i < lambda_params.size(); i++) {
 								if (!used_lambda_params.test(i)) {
-									tree::free(ref.new_at(lambda_params[i]));
+									tree::free(ref.at(lambda_params[i]));
 								}
 							}
 							return evaluated_call;
 						}();
-						return tree::combine(ref.new_at(result), exact, in_lambda);
+						return tree::combine(ref.at(result), exact, in_lambda);
 					}
 					else {
 						call_params.front() = lambda_idx;
@@ -388,7 +388,7 @@ namespace bmath::intern {
 					std::array<OptionalComplex, 4> res_vals = { OptionalComplex{}, {}, {}, {} }; //default initialized to NaN
 					assert(fn::arity(ref.type) <= 4); //else res_vals size to small
 					for (std::size_t i = 0; i < fn::arity(ref.type); i++) {
-						params[i] = tree::combine(ref.new_at(params[i]), exact, ref.type == Fn::lambda);
+						params[i] = tree::combine(ref.at(params[i]), exact, ref.type == Fn::lambda);
 						if (params[i].get_type() == Literal::complex) {
 							res_vals[i] = ref.store->at(params[i].get_index()).complex;
 						}
@@ -401,9 +401,9 @@ namespace bmath::intern {
 				else if (ref.type.is<Variadic>() && fn::is_associative(ref.type)) { //-> flatten nested instances allowed
 					StupidBufferVector<MathIdx, 16> new_parameters;
 					for (const MathIdx param : fn::unsave_range(ref)) {
-						const MathIdx new_param = tree::combine(ref.new_at(param), exact, in_lambda);
+						const MathIdx new_param = tree::combine(ref.at(param), exact, in_lambda);
 						if (new_param.get_type() == ref.type) {
-							for (const MathIdx nested_param : fn::unsave_range(ref.new_at(new_param))) {
+							for (const MathIdx nested_param : fn::unsave_range(ref.at(new_param))) {
 								new_parameters.push_back(nested_param);
 							}
 							IndexVector::free(*ref.store, new_param.get_index()); //free nested variadic itself, but not nested params
@@ -427,7 +427,7 @@ namespace bmath::intern {
 				else {
 					assert(ref.type.is<Variadic>() || ref.type.is<NamedFn>()); 
 					for (MathIdx& param : fn::unsave_range(ref)) {
-						param = tree::combine(ref.new_at(param), exact, in_lambda);
+						param = tree::combine(ref.at(param), exact, in_lambda);
 
 					}
 				}
@@ -452,7 +452,7 @@ namespace bmath::intern {
 			default:
 				if (ref.type.is<Function>()) {
 					for (const MathIdx param : fn::range(ref)) {
-						if (contains_unwrapped_lambda_parameters(ref.new_at(param))) {
+						if (contains_unwrapped_lambda_parameters(ref.at(param))) {
 							return true;
 						}
 					}
@@ -501,7 +501,7 @@ namespace bmath::intern {
 					++iter_1,
 					++iter_2) 
 				{
-					const auto iter_compare = tree::compare(ref_1.new_at(*iter_1), ref_2.new_at(*iter_2));
+					const auto iter_compare = tree::compare(ref_1.at(*iter_1), ref_2.at(*iter_2));
 					if (iter_compare != std::strong_ordering::equal) [[likely]] {
 						return iter_compare;
 					}
@@ -560,7 +560,7 @@ namespace bmath::intern {
 				assert(src_ref.type.is<Function>());
 				StupidBufferVector<MathIdx, 12> dst_parameters;
 				for (const MathIdx src_param : fn::save_range(src_ref)) {
-					const MathIdx dst_param = tree::copy(src_ref.new_at(src_param), dst_store);
+					const MathIdx dst_param = tree::copy(src_ref.at(src_param), dst_store);
 					dst_parameters.push_back(dst_param);
 				}
 				if (src_ref.type.is<NamedFn>()) {
@@ -603,7 +603,7 @@ namespace bmath::intern {
 		MathIdx establish_basic_order(const MutRef ref)
 		{
 			const MathIdx combine_result = tree::combine(ref, true, false);
-			tree::sort(ref.new_at(combine_result));
+			tree::sort(ref.at(combine_result));
 			return combine_result;
 		} //establish_basic_order
 

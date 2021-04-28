@@ -110,9 +110,9 @@ namespace bmath::intern::pattern {
 						const IndexVector& params = *new_ref;
 						assert(params.size() == 2);
 						assert(params[0].get_type() == Literal::complex);
-						assert(in_domain(*new_ref.new_at(params[0]), Domain::natural_0));
+						assert(in_domain(*new_ref.at(params[0]), Domain::natural_0));
 						assert(params[1].get_type() == Literal::symbol);
-						assert(type_of(new_ref.new_at(params[1])->characters).is<TreeMatchOwning>());
+						assert(type_of(new_ref.at(params[1])->characters).is<TreeMatchOwning>());
 						return IntermediateTreeMatch(new_ref);
 					}
 				}
@@ -122,13 +122,13 @@ namespace bmath::intern::pattern {
 			constexpr std::uint32_t match_data_idx() const noexcept
 			{
 				const IndexVector& params = *this->ref;
-				return this->ref.new_at(params[0])->complex.real();
+				return this->ref.at(params[0])->complex.real();
 			}
 
 			constexpr TreeMatchOwning restr() const noexcept
 			{
 				const IndexVector& params = *this->ref;
-				return type_of(this->ref.new_at(params[1])->characters).to<Restriction>();
+				return type_of(this->ref.at(params[1])->characters).to<Restriction>();
 			}
 		}; //class IntermediateTreeMatch
 
@@ -162,9 +162,9 @@ namespace bmath::intern::pattern {
 						const IndexVector& params = *new_ref;
 						assert(params.size() == 2);
 						assert(params[0].get_type() == Literal::complex);
-						assert(in_domain(*new_ref.new_at(params[0]), Domain::natural_0));
+						assert(in_domain(*new_ref.at(params[0]), Domain::natural_0));
 						assert(params[1].get_type() == Literal::symbol);
-						assert(type_of(new_ref.new_at(params[1])->characters).is<Multi>());
+						assert(type_of(new_ref.at(params[1])->characters).is<Multi>());
 						return IntermediateMultiMatch(new_ref);
 					}
 				}
@@ -174,13 +174,13 @@ namespace bmath::intern::pattern {
 			constexpr std::uint32_t index() const noexcept
 			{
 				const IndexVector& params = *this->ref;
-				return this->ref.new_at(params[0])->complex.real();
+				return this->ref.at(params[0])->complex.real();
 			}
 
 			constexpr Multi type() const noexcept
 			{
 				const IndexVector& params = *this->ref;
-				return type_of(this->ref.new_at(params[1])->characters).to<Multi>();
+				return type_of(this->ref.at(params[1])->characters).to<Multi>();
 			}
 		}; //class IntermediateMultiMatch
 
@@ -213,7 +213,7 @@ namespace bmath::intern::pattern {
 						const IndexVector& params = *new_ref;
 						assert(params.size() == 1);
 						assert(params[0].get_type() == Literal::complex);
-						assert(in_domain(*new_ref.new_at(params[0]), Domain::natural_0));
+						assert(in_domain(*new_ref.at(params[0]), Domain::natural_0));
 						return IntermediateValueProxy(new_ref);
 					}
 				}
@@ -223,7 +223,7 @@ namespace bmath::intern::pattern {
 			constexpr std::uint32_t index() const noexcept
 			{
 				const IndexVector& params = *this->ref;
-				return this->ref.new_at(params[0])->complex.real();
+				return this->ref.at(params[0])->complex.real();
 			}
 		}; //class IntermediateValueProxy
 
@@ -259,9 +259,9 @@ namespace bmath::intern::pattern {
 						const IndexVector& params = *new_ref;
 						assert(params.size() == 3);
 						assert(params[1].get_type() == Literal::complex);
-						assert(in_domain(*new_ref.new_at(params[1]), Domain::natural_0));
+						assert(in_domain(*new_ref.at(params[1]), Domain::natural_0));
 						assert(params[2].get_type() == Literal::symbol);
-						assert(type_of(new_ref.new_at(params[2])->characters).is<ValueDomain>());
+						assert(type_of(new_ref.at(params[2])->characters).is<ValueDomain>());
 						return IntermediateValueMatch(new_ref);
 					}
 				}
@@ -273,13 +273,13 @@ namespace bmath::intern::pattern {
 			constexpr std::uint32_t match_data_idx() const noexcept
 			{
 				const IndexVector& params = *this->ref;
-				return this->ref.new_at(params[1])->complex.real();
+				return this->ref.at(params[1])->complex.real();
 			}
 
 			constexpr ValueDomain domain() const noexcept
 			{
 				const IndexVector& params = *this->ref;
-				return type_of(this->ref.new_at(params[2])->characters).to<ValueDomain>();
+				return type_of(this->ref.at(params[2])->characters).to<ValueDomain>();
 			}
 		}; //class IntermediateValueMatch
 	} //namespace math_rep

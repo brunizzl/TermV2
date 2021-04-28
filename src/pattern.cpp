@@ -366,7 +366,7 @@ namespace bmath::intern::pattern {
 				if (ref.type == Fn::pow) {
 					const PnIdxVector& params = *ref;
 					if (params[1].get_type() == Literal::complex) {
-						if (ref.new_at(params[1])->complex == -1.0) {
+						if (ref.at(params[1])->complex == -1.0) {
 							return { params[0] }; //return just base
 						}
 					}
@@ -384,7 +384,7 @@ namespace bmath::intern::pattern {
 			case PnType(Comm::sum): {
 				OptionalComplex result_val = 0.0;
 				for (auto& summand : fn::range(ref)) {
-					if (const OptionalComplex summand_val = eval_value_match(ref.new_at(summand), start_val)) {
+					if (const OptionalComplex summand_val = eval_value_match(ref.at(summand), start_val)) {
 						if (const OptionalComplex res = compute_exact([&] {return result_val + summand_val; })) {
 							result_val = res;
 							continue;
@@ -398,15 +398,15 @@ namespace bmath::intern::pattern {
 				OptionalComplex result_factor = 1.0;
 				OptionalComplex result_divisor = 1.0;
 				for (auto& factor : fn::range(ref)) {
-					if (const std::optional<PnIdx> divisor = get_divisor(ref.new_at(factor))) {
-						if (const OptionalComplex divisor_val = eval_value_match(ref.new_at(*divisor), start_val)) {
+					if (const std::optional<PnIdx> divisor = get_divisor(ref.at(factor))) {
+						if (const OptionalComplex divisor_val = eval_value_match(ref.at(*divisor), start_val)) {
 							if (const OptionalComplex res = compute_exact([&] { return result_divisor * divisor_val; })) {
 								result_divisor = res;
 								continue;
 							}
 						}
 					}
-					if (const OptionalComplex factor_val = eval_value_match(ref.new_at(factor), start_val)) {
+					if (const OptionalComplex factor_val = eval_value_match(ref.at(factor), start_val)) {
 						if (const OptionalComplex res = compute_exact([&] {return result_factor * factor_val; })) {
 							result_factor = res;
 							continue;
@@ -419,7 +419,7 @@ namespace bmath::intern::pattern {
 			default: {
 				assert(ref.type.is<Fn>());
 				if (const std::optional<PnIdx> divisor = get_divisor(ref)) {
-					if (const OptionalComplex divisor_val = eval_value_match(ref.new_at(*divisor), start_val)) {
+					if (const OptionalComplex divisor_val = eval_value_match(ref.at(*divisor), start_val)) {
 						return compute_exact([&] { return 1.0 / *divisor_val; });
 					}
 					else {
@@ -429,7 +429,7 @@ namespace bmath::intern::pattern {
 				const PnIdxVector& params = *ref;
 				std::array<OptionalComplex, 4> res_vals;
 				for (std::size_t i = 0; i < fn::arity(ref.type.to<Function>()); i++) {
-					res_vals[i] = eval_value_match(ref.new_at(params[i]), start_val);
+					res_vals[i] = eval_value_match(ref.at(params[i]), start_val);
 					if (!res_vals[i]) {
 						return {};
 					}
@@ -467,7 +467,7 @@ namespace bmath::intern::pattern {
 				if (convert == Convert::all) {
 					if (const auto value_match = math_rep::IntermediateValueMatch::cast(src_ref)) {
 						if (side == Side::lhs) {
-							const PnIdx mtch_idx = intermediate_to_pattern(src_ref.new_at(value_match->mtch_idx()), dst_store, side, convert, ValueMatch::owning);
+							const PnIdx mtch_idx = intermediate_to_pattern(src_ref.at(value_match->mtch_idx()), dst_store, side, convert, ValueMatch::owning);
 							const std::uint32_t match_data_idx = value_match->match_data_idx();
 							const Domain domain = value_match->domain();
 
@@ -478,7 +478,7 @@ namespace bmath::intern::pattern {
 						else {
 							assert(side == Side::rhs);
 
-							const auto value_proxy = math_rep::IntermediateValueProxy::cast(src_ref.new_at(value_match->mtch_idx()));
+							const auto value_proxy = math_rep::IntermediateValueProxy::cast(src_ref.at(value_match->mtch_idx()));
 							assert(value_proxy);
 							return PnIdx(value_proxy->index(), ValueProxy{});
 						}
@@ -493,7 +493,7 @@ namespace bmath::intern::pattern {
 				assert(src_ref.type.is<Function>());
 				StupidBufferVector<PnIdx, 12> dst_parameters;
 				for (const MathIdx src_param : fn::range(src_ref)) {
-					const PnIdx dst_param = intermediate_to_pattern(src_ref.new_at(src_param), dst_store, side, convert, src_ref.type);
+					const PnIdx dst_param = intermediate_to_pattern(src_ref.at(src_param), dst_store, side, convert, src_ref.type);
 					dst_parameters.push_back(dst_param);
 				}
 				if (src_ref.type.is<NamedFn>()) {
@@ -536,7 +536,7 @@ namespace bmath::intern::pattern {
 				assert(src_ref.type.is<Function>());
 				StupidBufferVector<PnIdx, 12> dst_parameters;
 				for (const PnIdx src_param : fn::save_range(src_ref)) {
-					const PnIdx dst_param = pn_tree::copy(src_ref.new_at(src_param), dst_store);
+					const PnIdx dst_param = pn_tree::copy(src_ref.at(src_param), dst_store);
 					dst_parameters.push_back(dst_param);
 				}
 				if (src_ref.type.is<Variadic>()) {
@@ -567,7 +567,7 @@ namespace bmath::intern::pattern {
 				[[fallthrough]];
 			case PnType(ValueMatch::owning): {
 				const ValueMatchVariable src_var = *src_ref; //copy to avoid illegal access if match_idx creation caused store resize
-				const PnIdx dst_match_idx = pn_tree::copy(src_ref.new_at(src_var.mtch_idx), dst_store);
+				const PnIdx dst_match_idx = pn_tree::copy(src_ref.at(src_var.mtch_idx), dst_store);
 				const std::size_t dst_index = dst_store.allocate_one();
 				dst_store.at(dst_index) = ValueMatchVariable(dst_match_idx, src_var.match_data_idx, src_var.domain);
 				return PnIdx(dst_index, src_ref.type);
@@ -613,7 +613,7 @@ namespace bmath::intern::pattern {
 				const auto stop_1 = fst_vec.end();
 				const auto stop_2 = snd_vec.end();
 				for (; iter_1 != stop_1 && iter_2 != stop_2; ++iter_1, ++iter_2) {
-					const auto iter_cmp = pn_tree::compare(fst.new_at(*iter_1), snd.new_at(*iter_2));
+					const auto iter_cmp = pn_tree::compare(fst.at(*iter_1), snd.at(*iter_2));
 					if (iter_cmp != std::strong_ordering::equal) {
 						return iter_cmp;
 					}
@@ -712,7 +712,7 @@ namespace bmath::intern::pattern {
 					const auto pn_stop = pn_range.end();
 					auto iter = range.begin();
 					for (; pn_iter != pn_stop; ++pn_iter, ++iter) { //iter and pn_iter both go over same number of params
-						if (!match::permutation_equals(pn_ref.new_at(*pn_iter), ref.new_at(*iter), match_data)) {
+						if (!match::permutation_equals(pn_ref.at(*pn_iter), ref.at(*iter), match_data)) {
 							return false;
 						}
 					}
@@ -730,7 +730,7 @@ namespace bmath::intern::pattern {
 						if (pn_iter->get_type().is<MultiMatch>()) {
 							goto found_multi_pn;
 						}
-						else if (!match::permutation_equals(pn_ref.new_at(*pn_iter), ref.new_at(*iter), match_data)) {
+						else if (!match::permutation_equals(pn_ref.at(*pn_iter), ref.at(*iter), match_data)) {
 							return false;
 						}
 					}
@@ -767,7 +767,7 @@ namespace bmath::intern::pattern {
 			case PnType(TreeMatchNonOwning{}): {
 				const SharedTreeDatum match_datum = match_data.tree_match_data[pn_ref.index];
 				assert(match_datum.is_set());
-				return tree::compare(ref, ref.new_at(match_datum.match_idx)) == std::strong_ordering::equal;
+				return tree::compare(ref, ref.at(match_datum.match_idx)) == std::strong_ordering::equal;
 			} break;
 			case PnType(ValueMatch::owning): 
 				[[fallthrough]];
@@ -776,7 +776,7 @@ namespace bmath::intern::pattern {
 					return false;
 				}
 				const ValueMatchVariable& var = *pn_ref;
-				const OptionalComplex this_value = pn_tree::eval_value_match(pn_ref.new_at(var.mtch_idx), *ref);
+				const OptionalComplex this_value = pn_tree::eval_value_match(pn_ref.at(var.mtch_idx), *ref);
 				if (!this_value || !in_domain(*this_value, var.domain)) {
 					return false;
 				}
@@ -830,7 +830,7 @@ namespace bmath::intern::pattern {
 				auto pn_iter = pn_range.begin();
 				auto iter = range.begin();
 				for (; pn_iter != pn_stop; ++pn_iter, ++iter) { //iter and pn_iter both go over same number of params
-					if (match::subsequent_permutation_equals(pn_ref.new_at(*pn_iter), ref.new_at(*iter), match_data)) {
+					if (match::subsequent_permutation_equals(pn_ref.at(*pn_iter), ref.at(*iter), match_data)) {
 						return true;
 					}
 				}
@@ -848,7 +848,7 @@ namespace bmath::intern::pattern {
 			const IndexVector& hay_params = *hay_ref;
 
 			assert(std::is_sorted(hay_params.begin(), hay_params.end(), [&](auto lhs, auto rhs) {
-				return tree::compare(hay_ref.new_at(lhs), hay_ref.new_at(rhs)) == std::strong_ordering::less;
+				return tree::compare(hay_ref.at(lhs), hay_ref.at(rhs)) == std::strong_ordering::less;
 			}));
 
 			SharedVariadicDatum& variadic_datum = match_data.variadic_data[meta_data.match_data_idx];
@@ -860,7 +860,7 @@ namespace bmath::intern::pattern {
 			}
 
 			while (pn_i < pn_params.size()) {
-				const pattern::UnsavePnRef pn_i_ref = pn_ref.new_at(pn_params[pn_i]);
+				const pattern::UnsavePnRef pn_i_ref = pn_ref.at(pn_params[pn_i]);
 				if (pn_i_ref.type.is<MultiMatch>()) [[unlikely]] { //also summands and factors are matched as params
 					assert(pn_i + 1ull == pn_params.size() && "MultiParams is only valid as last element -> only one per variadic");
 					assert(pn_params[pn_i].get_index() == meta_data.match_data_idx); //just out of paranoia
@@ -876,7 +876,7 @@ namespace bmath::intern::pattern {
 						if (currently_matched.test(hay_k)) {
 							continue; //ignore parts of haystack currently already associated with elements in pattern
 						}
-						if (match::permutation_equals(pn_i_ref, hay_ref.new_at(hay_params[hay_k]), match_data)) {
+						if (match::permutation_equals(pn_i_ref, hay_ref.at(hay_params[hay_k]), match_data)) {
 							goto prepare_next_pn_i; //next while iteration
 						}
 					}
@@ -886,7 +886,7 @@ namespace bmath::intern::pattern {
 						if (currently_matched.test(hay_k)) {
 							continue;
 						}
-						if (match::permutation_equals(pn_i_ref, hay_ref.new_at(hay_params[hay_k]), match_data)) {
+						if (match::permutation_equals(pn_i_ref, hay_ref.at(hay_params[hay_k]), match_data)) {
 							goto prepare_next_pn_i;
 						}
 					}
@@ -898,7 +898,7 @@ namespace bmath::intern::pattern {
 
 					//set hay_k to point at first element not smaller than searched element
 					const auto compare = [&hay_ref](const MathIdx fst, const MathIdx snd) {
-						return tree::compare(hay_ref.new_at(fst), hay_ref.new_at(snd)) == std::strong_ordering::less;
+						return tree::compare(hay_ref.at(fst), hay_ref.at(snd)) == std::strong_ordering::less;
 					};
 					hay_k = std::distance(hay_params.begin(), 
 						std::lower_bound(hay_params.begin() + hay_k, hay_params.end(), match_idx, compare));
@@ -908,7 +908,7 @@ namespace bmath::intern::pattern {
 						hay_k++;
 					}
 					if (hay_k < hay_params.size() &&
-						tree::compare(hay_ref.new_at(hay_params[hay_k]), hay_ref.new_at(match_idx)) == std::strong_ordering::equal) 
+						tree::compare(hay_ref.at(hay_params[hay_k]), hay_ref.at(match_idx)) == std::strong_ordering::equal) 
 					{
 						goto prepare_next_pn_i;
 					}
@@ -923,11 +923,11 @@ namespace bmath::intern::pattern {
 					// -> perhaps an element preceding the current one could be matched differently
 					// -> try that
 					pn_i--;
-					const pattern::UnsavePnRef pn_i_ref = pn_ref.new_at(pn_params[pn_i]);
+					const pattern::UnsavePnRef pn_i_ref = pn_ref.at(pn_params[pn_i]);
 					hay_k = variadic_datum.match_positions[pn_i];
 					//try rematching the last successfully matched element in pattern with same part it matched with previously
 					// (but it can not match any way that was already tried, duh)
-					if (subsequent_permutation_equals(pn_i_ref, hay_ref.new_at(hay_params[hay_k]), match_data)) {
+					if (subsequent_permutation_equals(pn_i_ref, hay_ref.at(hay_params[hay_k]), match_data)) {
 						//success -> try matching the element not matchable this while iteration with (perhaps) now differenty set match variables
 						pn_i++;
 						hay_k = 0u;
@@ -973,7 +973,7 @@ namespace bmath::intern::pattern {
 						}
 					}
 					else {
-						const MathIdx dst_param = match::copy(pn_ref.new_at(pn_param), match_data, src_store, dst_store);
+						const MathIdx dst_param = match::copy(pn_ref.at(pn_param), match_data, src_store, dst_store);
 						dst_parameters.push_back(dst_param);
 					}
 				}
@@ -1029,7 +1029,7 @@ namespace bmath::intern::pattern {
 				auto range = fn::range(ref);
 				const auto stop = end(range);
 				for (auto iter = begin(range); iter != stop; ++iter) {
-					const auto [new_elem, matched_deeper] = recursive_match_and_replace(in, out, ref.new_at(*iter));
+					const auto [new_elem, matched_deeper] = recursive_match_and_replace(in, out, ref.at(*iter));
 					if (new_elem) {
 						*iter = *new_elem;
 						return std::make_pair(std::nullopt, true);
@@ -1048,14 +1048,14 @@ namespace bmath::intern::pattern {
 		try_all_rules:
 			for (auto rule = start; rule != stop; ++rule) {
 				const auto [head_match, deeper_match] =
-					recursive_match_and_replace(rule->lhs_ref(), rule->rhs_ref(), ref.new_at(head));
+					recursive_match_and_replace(rule->lhs_ref(), rule->rhs_ref(), ref.at(head));
 				if (head_match) {
 					head = *head_match;
 				}
 				if (head_match || deeper_match) {
-					head = tree::establish_basic_order(ref.new_at(head));
+					head = tree::establish_basic_order(ref.at(head));
 					//std::cout << " rule: " << rule->to_string() << "\n";
-					//std::cout << "  ->   " << print::to_pretty_string(ref.new_at(head)) << "\n\n\n";
+					//std::cout << "  ->   " << print::to_pretty_string(ref.at(head)) << "\n\n\n";
 					goto try_all_rules;
 				}
 			}

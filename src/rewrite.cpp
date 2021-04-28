@@ -148,7 +148,7 @@ namespace simp {
 			bool change = false;
 			const auto stop = end(ref);
 			for (auto subterm = begin(ref); subterm != stop; ++subterm) {
-				const NodeIndex sub_result = recursive_greedy_apply(rules, ref.new_at(*subterm), lambda_param_offset);
+				const NodeIndex sub_result = recursive_greedy_apply(rules, ref.at(*subterm), lambda_param_offset);
 				if (sub_result != literal_nullptr) {
 					*subterm = sub_result;
 					change = true;
@@ -161,7 +161,7 @@ namespace simp {
 		else if (ref.type == Literal::lambda) {
 			const Lambda lambda = *ref;
 			const NodeIndex sub_result = recursive_greedy_apply(
-				rules, ref.new_at(lambda.definition), lambda_param_offset + lambda.param_count);
+				rules, ref.at(lambda.definition), lambda_param_offset + lambda.param_count);
 			if (sub_result != literal_nullptr) {
 				ref->lambda.definition = sub_result;
 				return normalize::outermost(ref, {}, lambda_param_offset).res;

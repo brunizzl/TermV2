@@ -50,7 +50,7 @@ namespace bmath::intern::fold {
 		{
 			if (ref.type.is<Function>()) {
 				for (const auto elem : fn::range(ref)) {
-					const Res_T elem_res = fold::simple_fold<Res_T>(ref.new_at(elem), apply);
+					const Res_T elem_res = fold::simple_fold<Res_T>(ref.at(elem), apply);
 					if constexpr (ReturnEarlyPossible<Res_T>::value) { if (elem_res.return_early()) { return elem_res; } }
 				}
 			}
@@ -76,7 +76,7 @@ namespace bmath::intern::fold {
 			if (ref.type.is<Function>()) {
 				Acc acc(ref, init...);
 				for (const auto elem : fn::range(ref)) {
-					acc.consume(fold::tree_fold<Res_T, Acc>(ref.new_at(elem), leaf_apply, init...));
+					acc.consume(fold::tree_fold<Res_T, Acc>(ref.at(elem), leaf_apply, init...));
 				}
 				return acc.result();
 			}
@@ -96,7 +96,7 @@ namespace bmath::intern::fold {
 				const auto stop = end(range);
 				auto iter = begin(range);
 				for (; iter != stop; ++iter) {
-					*iter = fold::mutate_fold<TypedIdx>(ref.new_at(*iter), apply);
+					*iter = fold::mutate_fold<TypedIdx>(ref.at(*iter), apply);
 				}
 			}
 			return apply(ref);

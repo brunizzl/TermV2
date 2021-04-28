@@ -321,21 +321,21 @@ namespace bmath::intern {
 				const char* seperator = "";
 				for (const auto summand : fn::range(ref)) {
 					str.append(std::exchange(seperator, "+"));
-					print::append_to_string(ref.new_at(summand), str, own_infixr);
+					print::append_to_string(ref.at(summand), str, own_infixr);
 				}
 			} break;
 			case MathType(Comm::product): {
 				const char* seperator = "";
 				for (const auto factor : fn::range(ref)) {
 					str.append(std::exchange(seperator, "*"));
-					print::append_to_string(ref.new_at(factor), str, own_infixr);
+					print::append_to_string(ref.at(factor), str, own_infixr);
 				}
 			} break;
 			case MathType(Fn::pow): {
 				const IndexVector& params = *ref;
-				print::append_to_string(ref.new_at(params[0]), str, own_infixr);
+				print::append_to_string(ref.at(params[0]), str, own_infixr);
 				str.push_back('^');
-				print::append_to_string(ref.new_at(params[1]), str, own_infixr);
+				print::append_to_string(ref.at(params[1]), str, own_infixr);
 			} break;
 			default: {
 				str.pop_back(); //pop '('
@@ -354,7 +354,7 @@ namespace bmath::intern {
 				const char* seperator = "";
 				for (const auto param : fn::range(ref)) {
 					str.append(std::exchange(seperator, ", "));
-					print::append_to_string(ref.new_at(param), str, own_infixr);
+					print::append_to_string(ref.at(param), str, own_infixr);
 				}
 			} break;
 			case MathType(Literal::symbol): {
@@ -394,7 +394,7 @@ namespace bmath::intern {
 			const auto get_pow_neg1 = [get_negative_real](const UnsaveRef ref) -> std::optional<MathIdx> {
 				if (ref.type == Fn::pow) {
 					const IndexVector& params = *ref;
-					if (const auto expo = get_negative_real(ref.new_at(params[1]))) {
+					if (const auto expo = get_negative_real(ref.at(params[1]))) {
 						if (*expo == -1.0) {
 							return { params[0] };
 						}
@@ -411,7 +411,7 @@ namespace bmath::intern {
 					bool found_negative_factor = false;
 					for (const auto factor : fn::range(ref)) {
 						if (!found_negative_factor) {
-							if (const auto negative_val = get_negative_real(ref.new_at(factor))) {
+							if (const auto negative_val = get_negative_real(ref.at(factor))) {
 								negative_factor = *negative_val;
 								found_negative_factor = true;
 								continue;
@@ -429,18 +429,18 @@ namespace bmath::intern {
 			const auto append_product = [get_negative_real, get_pow_neg1, &ref, &str](const auto& vec) {
 				bool first = true;
 				for (const auto elem : vec) {
-					if (auto val = get_negative_real(ref.new_at(elem)); val && first && *val == -1.0) {
+					if (auto val = get_negative_real(ref.at(elem)); val && first && *val == -1.0) {
 						str += "-";
 					}
-					else if (const auto base = get_pow_neg1(ref.new_at(elem))) {
+					else if (const auto base = get_pow_neg1(ref.at(elem))) {
 						str += (first ? "1/" : "/"); 
-						str += print::to_pretty_string(ref.new_at(*base), infixr(Comm::product));
+						str += print::to_pretty_string(ref.at(*base), infixr(Comm::product));
 						first = false;
 					}
 					else {
 						str += (first ? "" : " ");
 						//str += (first ? "" : "*");
-						str += print::to_pretty_string(ref.new_at(elem), infixr(Comm::product));
+						str += print::to_pretty_string(ref.at(elem), infixr(Comm::product));
 						first = false;
 					}
 				}
@@ -451,11 +451,11 @@ namespace bmath::intern {
 			case MathType(Comm::sum): {
 				bool first = true;
 				for (const auto summand : fn::range(ref)) {
-					if (const auto val = get_negative_real(ref.new_at(summand))) {
+					if (const auto val = get_negative_real(ref.at(summand))) {
 						str += (first ? "" : " ");
 						append_real(*val, str);
 					}
-					else if (auto product = get_negative_product(ref.new_at(summand))) {
+					else if (auto product = get_negative_product(ref.at(summand))) {
 						if (product->negative_factor != -1.0) {
 							str += (first ? "" : " ");
 							append_real(product->negative_factor, str);
@@ -471,7 +471,7 @@ namespace bmath::intern {
 					else {
 						str += (first ? "" : " + ");
 						//str += (first ? "" : "+");
-						str += print::to_pretty_string(ref.new_at(summand), infixr(ref.type));
+						str += print::to_pretty_string(ref.at(summand), infixr(ref.type));
 					}
 					first = false;
 				}
@@ -482,18 +482,18 @@ namespace bmath::intern {
 			} break;
 			case MathType(Fn::pow): {
 				const IndexVector& params = *ref;
-				if (const OptionalDouble negative_expo = get_negative_real(ref.new_at(params[1]))) {
+				if (const OptionalDouble negative_expo = get_negative_real(ref.at(params[1]))) {
 					str += "1/";
-					str += print::to_pretty_string(ref.new_at(params[0]), infixr(Fn::pow));
+					str += print::to_pretty_string(ref.at(params[0]), infixr(Fn::pow));
 					if (*negative_expo != -1.0) {
 						str += "^";
 						append_real(-*negative_expo, str);
 					}
 				}
 				else {
-					str += print::to_pretty_string(ref.new_at(params[0]), infixr(ref.type));
+					str += print::to_pretty_string(ref.at(params[0]), infixr(ref.type));
 					str += "^";
-					str += print::to_pretty_string(ref.new_at(params[1]), infixr(ref.type));
+					str += print::to_pretty_string(ref.at(params[1]), infixr(ref.type));
 				}
 			} break;
 			case MathType(NonComm::call): {
@@ -501,12 +501,12 @@ namespace bmath::intern {
 				const char* seperator = "";
 				for (const auto param : fn::range(ref)) {
 					if (std::exchange(first, false)) {
-						str += print::to_pretty_string(ref.new_at(param), infixr(ref.type));
+						str += print::to_pretty_string(ref.at(param), infixr(ref.type));
 						str.push_back('(');
 					}
 					else {
 						str.append(std::exchange(seperator, ", "));
-						str += print::to_pretty_string(ref.new_at(param), infixr(ref.type));
+						str += print::to_pretty_string(ref.at(param), infixr(ref.type));
 					}
 				}
 				if (!first) {
@@ -532,7 +532,7 @@ namespace bmath::intern {
 				const char* separator = "";
 				for (const auto param : fn::range(ref)) {
 					str += std::exchange(separator, ", ");
-					str += print::to_pretty_string(ref.new_at(param), infixr(ref.type));
+					str += print::to_pretty_string(ref.at(param), infixr(ref.type));
 				}
 				str.push_back(')');
 			} break;
@@ -607,7 +607,7 @@ namespace bmath::intern {
 						*current_line += ' '; //pleeeaaasee std::format, where are you? :(
 					}
 					*current_line += std::to_string(elem_idx);
-					print::append_memory_row(ref.new_at(vec[vec_idx]), rows);
+					print::append_memory_row(ref.at(vec[vec_idx]), rows);
 				}
 				*current_line += " }";
 			} break;
@@ -714,7 +714,7 @@ namespace bmath::intern {
 					current_str += fn::name_of(ref.type.to<Variadic>());
 				}
 				for (const MathIdx param : fn::range(ref)) {
-					print::append_tree_row(ref.new_at(param), rows, offset + tab_width);
+					print::append_tree_row(ref.at(param), rows, offset + tab_width);
 				}
 			} break;
 			case MathType(Literal::symbol): {
