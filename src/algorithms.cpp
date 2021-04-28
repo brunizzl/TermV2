@@ -1542,9 +1542,15 @@ namespace simp {
             assert(needle_i == 0u || needles_data.match_idx == hay_ref.typed_idx() && "rematch only with same subterm");
             needles_data.match_idx = hay_ref.typed_idx();
 
+            if (!needles.size()) {
+                assert(info.preceeded_by_multi.count() == 1u);
+                return true;
+            }
+            if (!haystack.size()) {
+                return false;
+            }
             //how may elements of haystack can still be skipped (aka matched with a multi) without matching a (real) needle
-            int skip_budget = haystack.size() - hay_k - needles.size() + needle_i;
-            if (skip_budget < 0) {
+            if (haystack.size() - hay_k - needles.size() + needle_i < 0) {
                 return false;
             }
             //the function rematch calls find_dilation with needle_i set to the last needle in needles and 
@@ -1554,42 +1560,57 @@ namespace simp {
                 needle_i--;
                 hay_k--;
             }
-
-            while (needle_i < needles.size()) {
+        match_current_needle: {
                 const UnsaveRef needle_ref = pn_ref.at(needles[needle_i]);
                 if (info.preceeded_by_multi.test(needle_i)) {
-                    for (; skip_budget >= 0; hay_k++, skip_budget--) { 
+                    //how may elements of haystack can still be skipped (aka matched with a multi) without matching a (real) needle
+                    int skip_budget = haystack.size() - hay_k - needles.size() + needle_i;
+                    while (skip_budget >= 0) {
                         assert(hay_k < haystack.size()); //implied by not negative skip budget
                         if (match_(needle_ref, hay_ref.at(haystack[hay_k]), match_data))
                         {   goto prepare_next_needle;
                         }
+                        hay_k++;
+                        skip_budget--;
                     }
+                    goto rematch_last_needle;
                 }
-                else { //needle can not choose from here to 
-
-                }
-                if (skip_budget < 0) {
-                    return false;
-                }
-                if (match_(needle_ref, hay_ref.at(haystack[hay_k]), match_data)) 
+                else if (match_(needle_ref, hay_ref.at(haystack[hay_k]), match_data))
                 {   goto prepare_next_needle;
                 }
-                else if (info.preceeded_by_multi.test(needle_i)) {
-                    hay_k++;
-                    skip_budget--;
-                    continue;
-                }
-            rematch_last_needle:
-                continue;
-            prepare_next_needle:
-                needles_data.match_positions[needle_i] = hay_k; //already set if needle was rematched
-                hay_k = info.always_preceeding_next.test(needle_i) ?
-                    hay_k + 1u :
-                    0u;
-                needle_i++;
+                goto rematch_last_needle;
             }
-            return false;
-            return skip_budget == 0 || info.preceeded_by_multi.test(needle_i); //eighter we exactly reached the end 
+        rematch_last_needle: {
+                if (needle_i == 0u) {
+                    return false;
+                }
+                needle_i--;
+                hay_k = needles_data.match_positions[needle_i];
+                if (info.rematchable_params.test(needle_i) &&
+                    match_(pn_ref.at(needles[needle_i]), hay_ref.at(haystack[hay_k]), match_data))
+                {   goto prepare_next_needle;
+                }
+                while (!info.preceeded_by_multi.test(needle_i)) {
+                    if (needle_i == 0u) {
+                        return false;
+                    }
+                    needle_i--;
+                }
+                hay_k = needles_data.match_positions[needle_i] + 1u;
+                goto match_current_needle;
+            }
+        prepare_next_needle: {
+                needles_data.match_positions[needle_i] = hay_k; //already set if needle was rematched
+                needle_i++;
+                hay_k++;
+                if (needle_i == needles.size()) {
+                    if (info.preceeded_by_multi.test(needle_i) || hay_k == haystack.size()) {
+                        return true;
+                    }
+                    goto rematch_last_needle;
+                }
+                goto match_current_needle;
+            }
         } //find_dilation
 
     } //namespace match
@@ -1630,14 +1651,22 @@ namespace simp {
             for (auto iter = begin(pn_ref); iter != stop; ++iter) {
                 if (iter->get_type() == SpecialMatch::multi) {
                     const MultiMatch multi = *pn_ref.at(*iter);
-                    assert(multi.index_in_params == -1u && "only commutative is implemented so far here");
-                    const match::SharedPatternCallEntry& entry = match_data.pattern_calls[multi.match_data_index];
-                    const Ref donator = Ref(src_store, entry.match_idx);
-                    const auto donator_stop = end(donator);
-                    auto donator_iter = begin(donator); //currently pointing at function
-                    for (++donator_iter; donator_iter != donator_stop; ++donator_iter) {
-                        if (!entry.index_matched(donator_iter.array_idx - 1u)) { //-1u as we dont want the function itself, only the parameters
-                            const NodeIndex dst_param = copy_tree(Ref(src_store, *donator_iter), dst_store); //call normal copy!
+                    if (multi.index_in_params == -1u) {
+                        const match::SharedPatternCallEntry& entry = match_data.pattern_calls[multi.match_data_index];
+                        const Ref donator = Ref(src_store, entry.match_idx);
+                        const auto donator_stop = end(donator);
+                        auto donator_iter = begin(donator); //currently pointing at function
+                        for (++donator_iter; donator_iter != donator_stop; ++donator_iter) {
+                            if (!entry.index_matched(donator_iter.array_idx - 1u)) { //-1u as we dont want the function itself, only the parameters
+                                const NodeIndex dst_param = copy_tree(Ref(src_store, *donator_iter), dst_store); //call normal copy!
+                                dst_subterms.push_back(dst_param);
+                            }
+                        }
+                    }
+                    else {
+                        match::MultiRange donator = match_data.multi_range(multi);
+                        for (; donator.start != donator.stop; ++donator.start) {
+                            const NodeIndex dst_param = copy_tree(Ref(src_store, *donator.start), dst_store); //call normal copy!
                             dst_subterms.push_back(dst_param);
                         }
                     }

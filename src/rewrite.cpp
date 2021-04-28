@@ -124,7 +124,7 @@ namespace simp {
 	NodeIndex shallow_apply_ruleset(const RuleSet& rules, MutRef ref)
 	{
 	apply_ruleset:
-		match::MatchData match_data = ref.store->data();
+		match::MatchData match_data = *ref.store;
 		RuleApplicationRes result = raw_shallow_apply_ruleset(rules, ref, *ref.store, 0, match_data);
 		if (result.result_term != literal_nullptr) {
 			free_tree(ref);
@@ -137,7 +137,7 @@ namespace simp {
 
 	NodeIndex recursive_greedy_apply(const RuleSet& rules, MutRef ref, const unsigned lambda_param_offset) {
 		{ //try replacing this
-			match::MatchData match_data = ref.store->data();
+			match::MatchData match_data = *ref.store;
 			const RuleApplicationRes applied = raw_shallow_apply_ruleset(rules, ref, *ref.store, lambda_param_offset, match_data);
 			if (applied.result_term != literal_nullptr) {
 				free_tree(ref);

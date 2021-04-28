@@ -719,13 +719,25 @@ namespace simp {
 			}
 		}; //SharedCallEntry
 
+		//range of values matched to a multi mtch variable
+		struct MultiRange
+		{
+			decltype(begin(std::declval<Ref>())) start;
+			decltype(end(std::declval<Ref>())) stop;
+
+			constexpr auto begin() const noexcept { return this->start; }
+			constexpr auto end() const noexcept { return this->stop; }
+		};
+
 		//to allow a constant RewriteRule to be matched against, all match info is stored here
 		struct MatchData
 		{
-			const TermNode* haystack_data; //pointer to .data() of haystack store
-			constexpr UnsaveRef make_ref(const NodeIndex n) const noexcept 
-			{	const std::uint32_t i = n.get_index(); 
-				return UnsaveRef(this->haystack_data, i, n.get_type()); 
+			const Store* haystack; //pointer to .data() of haystack store
+
+			constexpr MatchData(const Store& haystack_) noexcept :haystack(&haystack_) {}
+
+			constexpr Ref make_ref(const NodeIndex n) const noexcept 
+			{	return Ref(*this->haystack, n); 
 			}
 
 			//maximal number of unrelated single match variables allowed per pattern
@@ -757,7 +769,27 @@ namespace simp {
 				return this->pattern_calls[pattern_call_info(ref).match_data_index];
 			}
 
-			constexpr MatchData(const TermNode* data_) noexcept :haystack_data(data_) {}
+			constexpr MultiRange multi_range(const MultiMatch& multi) const noexcept
+			{
+				assert(multi.index_in_params != -1u); 
+				const SharedPatternCallEntry& owning_entry = this->pattern_calls[multi.match_data_index];
+				const Ref matched_ref = this->make_ref(owning_entry.match_idx);
+				assert(matched_ref.type == Literal::call);
+				const Call& matched_call = *matched_ref;
+
+				const std::uint32_t begin_params_index =
+					multi.index_in_params > 0 ?
+					//+1u because we only want the thingies after the match listed here
+					owning_entry.match_positions[multi.index_in_params - 1u] + 1u :
+					0u;
+				const std::uint32_t end_params_index =
+					owning_entry.match_positions[multi.index_in_params] != SharedPatternCallEntry::MatchPos_T(-1) ?
+					owning_entry.match_positions[multi.index_in_params] :
+					matched_call.parameters().size();
+				assert(begin_params_index < 10000 && end_params_index < 10000);
+				//+ 1u in both cases, because the function itself resides at index 0
+				return MultiRange{ { *matched_ref.store, matched_ref.index, begin_params_index + 1u }, { end_params_index + 1u } };
+			}
 		}; //MatchData
 
 	} //namespace match

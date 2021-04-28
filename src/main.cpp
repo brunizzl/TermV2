@@ -196,6 +196,8 @@ int main()
 
 			{ "ffoldr(f, acc, list())         = acc" },
 			{ "ffoldr(f, acc, list(x, xs...)) = f(x, ffoldr(f, acc, list(xs...)))" },
+
+			{ "pair(list(as..., 1, b, c, 4, ds..., e, 6, fs...), list(b, c, e)) = list('as'(as...), 1, b, c, 4, 'ds'(ds...), e, 6, 'fs'(fs...))" },
 		};
 		for (const simp::RuleRef rule : rules) {
 			std::cout << rule.to_string() << "\n\n";

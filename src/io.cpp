@@ -524,10 +524,10 @@ namespace simp {
 
 		void append_pattern_call_info(const PatternCallInfo& data, const std::size_t param_count, std::string& str)
 		{
-			const auto to_string = [param_count](const auto bitset) {
+			const auto to_string = [](const auto bitset, const std::size_t size) {
 				std::string string = std::bitset<32>(bitset).to_string();
 				std::reverse(string.begin(), string.end());
-				string.resize(param_count);
+				string.resize(size);
 				return string;
 			};
 			str.append("[");
@@ -537,9 +537,9 @@ namespace simp {
 				(data.has_multi_match_variable ? "M" : "_") : 
 				(data.preceeded_by_multi.any() ? "M" : "_"));
 			str.append(data.is_rematchable ? "R " : "_ ");
-			str.append(to_string(data.rematchable_params));
+			str.append(to_string(data.rematchable_params, param_count));
 			str.append(" ");
-			str.append(to_string(data.preceeded_by_multi));
+			str.append(to_string(data.preceeded_by_multi, param_count + !data.is_commutative));
 			str.append("]");
 		}
 
