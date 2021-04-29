@@ -100,9 +100,6 @@ namespace simp {
         if (pred(ref)) {
             return ref.typed_idx();
         }
-        else if (ref.type == Literal::lambda) {
-            return search(ref.at(ref->lambda.definition), pred);
-        }
         else if (ref.type == Literal::call || ref.type == PatternCall{}) {
             for (const NodeIndex subterm : ref->call) {
                 const NodeIndex sub_res = search(ref.at(subterm), pred);
@@ -110,6 +107,9 @@ namespace simp {
                     return sub_res;
                 }
             }
+        }
+        else if (ref.type == Literal::lambda) {
+            return search(ref.at(ref->lambda.definition), pred);
         }
         return literal_nullptr;
     } //search
@@ -148,35 +148,26 @@ namespace simp {
     namespace build_rule {
 
         //turns "_Xn[_Xn' :<some_type>]" into "_Xn[<some_type>]"
-        RuleHead optimize_single_conditions(Store& store, RuleHead head);
+        [[nodiscard]] RuleHead optimize_single_conditions(Store& store, RuleHead head);
 
         //value match variables intermediary form are bubbled up as high as possible
         //intermediary is converted to final form and ownership is decided (thus sorts bevore that)
-        RuleHead prime_value(Store& store, RuleHead head);
+        [[nodiscard]] RuleHead prime_value(Store& store, RuleHead head);
 
         // - every function call to nv::Comm in lhs is converted to PatternCall
         // - if a call in lhs contains at least one multi match, the call is converted to PatternCall
         // - multi match variables are primed
         //note: as after this procedure there may be PatterCall instances present, this may be done as last real transformation
-        RuleHead prime_call(Store& store, RuleHead head);
+        [[nodiscard]] RuleHead prime_call(Store& store, RuleHead head);
 
         //if the outermost node of lhs is associative and 
         //  eighter commutative and does not contain a multi match variable
         //  or non-commutative and multi match variables are not present in the front and back
         //these missing multi match variables are added
-        RuleHead add_implicit_multis(Store& store, RuleHead head);
-
-        //sets /unsets bits in data of PatternCall
-        //note: will only change something if prime_call has already run
-        void set_always_preceeding_next(const MutRef head_lhs);
-
-        //sets /unsets bits in data of PatternCall
-        //note: will only change something if prime_call has already run
-        //note2: for less conservative results, first run set_always_preceeding_next()
-        void set_rematchable(const MutRef head_lhs);
+        [[nodiscard]] RuleHead add_implicit_multis(Store& store, RuleHead head);
 
         //returns a fully assembled rule
-        RuleHead build_everything(Store& store, std::string& name);
+        [[nodiscard]] RuleHead build_everything(Store& store, std::string& name);
 
     } //namespace build_rule
 

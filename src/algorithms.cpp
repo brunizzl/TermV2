@@ -886,6 +886,7 @@ namespace simp {
         {
             const auto build_very_basic_pattern = [](Store& s, std::string& name) {
                 RuleHead h = parse::raw_rule(s, name, parse::IAmInformedThisRuleIsNotUsableYet{});
+                h = build_rule::prime_call(s, h);
                 return h;
             };
             static const auto rules = RuleSet({
@@ -974,131 +975,110 @@ namespace simp {
             return heads;
         } //prime_value
 
-        struct MultiChange
+        //turns every call in lhs into a PatternCall, but nothing is changed from the default values
+        //note: after this step, no more manipulation on the raw pattern via patterns are possible
+        NodeIndex swap_lhs_calls(const MutRef lhs_ref)
         {
-            std::uint32_t identifier; //original creation index
-            MultiMatch new_;
-        };
-
-        //changes call to pattern call if appropriate and change multis to multi_marker
-        [[nodiscard]] NodeIndex build_lhs_multis_and_pattern_calls(MutRef ref, std::vector<MultiChange>& multi_changes, unsigned& pattern_call_index) 
-        {
-            if (ref.type == Literal::call) {
-                //build current
-                const std::size_t this_multi_count = std::count_if(ref->call.begin(), ref->call.end(),
-                    [](const NodeIndex i) { return i.get_type() == SpecialMatch::multi; });
-                const auto [convert, commutative] = [&] {
-                    const NodeIndex f = ref->call.function();
-                    if (f.get_type() == Literal::native) {
-                        using namespace nv;
-                        const Native native_f = to_native(f);
-                        if (native_f.is<Comm>()) {
-                            if (this_multi_count > 1) 
-                                throw TypeError{ "too many multis in commutative", ref };
-                            return std::tuple{ true, true };
-                        }
-                        if (native_f.is<FixedArity>() && this_multi_count > 0)
-                            throw TypeError{ "multi match illegal in fixed arity", ref };
+            const auto swap_call = [](const MutRef ref) {
+                if (ref.type == Literal::call) {
+                    bmath::intern::StupidBufferVector<NodeIndex, 16> subterms;
+                    for (const NodeIndex sub : ref) {
+                        subterms.push_back(sub);
                     }
-                    return std::tuple{ this_multi_count > 0u, false };
-                } ();
-                if (convert) {
-                    const unsigned this_pattern_index = pattern_call_index++;
-                    auto this_call_data = PatternCallInfo{ .match_data_index = this_pattern_index,
-                                                           .is_commutative = commutative };
-                    { //change multis in call
-                        std::uint32_t pos_mod_multis = 0; //only is incremented, when no multi is encountered
-                        Call& call = *ref;
-                        for (NodeIndex& param : call.parameters()) {
-                            if (param.get_type() == SpecialMatch::multi) {
-                                const unsigned identifier = ref.at(param)->multi_match.match_data_index;
-                                multi_changes.emplace_back(identifier,
-                                    MultiMatch{ this_pattern_index, commutative ? -1u : pos_mod_multis });
-                                free_tree(ref.at(param));
-                                param = literal_nullptr;
-                                if (this_call_data.preceeded_by_multi.test(pos_mod_multis)) {
-                                    throw TypeError{ "two multis in direct succession are illegal in lhs", ref };
-                                }
-                                this_call_data.preceeded_by_multi.set(commutative ? 0 : pos_mod_multis);
-                            }
-                            else {
-                                pos_mod_multis++;
-                            }
-                        }
-                        const auto new_end = std::remove(call.begin(), call.end(), literal_nullptr);
-                        call.size() = new_end - call.begin();
-                    }
-                    { //change call
-                        bmath::intern::StupidBufferVector<NodeIndex, 16> subterms;
-                        for (const NodeIndex sub : ref->call) {
-                            subterms.push_back(sub);
-                        }
-                        Call::free(*ref.store, ref.index);
-                        const std::size_t call_capacity = Call::smallest_fit_capacity(subterms.size());
-                        const std::size_t nr_call_nodes = Call::_node_count(call_capacity);
+                    Call::free(*ref.store, ref.index);
+                    const std::size_t call_capacity = Call::smallest_fit_capacity(subterms.size());
+                    const std::size_t nr_call_nodes = Call::_node_count(call_capacity);
 
-                        ref.type = PatternCall{};
-                        ref.index = ref.store->allocate_n(1u + nr_call_nodes) + 1u;
-                        ref.store->at(ref.index - 1u) = this_call_data;
-                        Call::emplace(ref.store->at(ref.index), subterms, call_capacity);
-                    }
+                    const std::size_t res_index = ref.store->allocate_n(1u + nr_call_nodes) + 1u;
+                    ref.store->at(res_index - 1u) = PatternCallInfo{};
+                    Call::emplace(ref.store->at(res_index), subterms, call_capacity);
+                    return NodeIndex(res_index, PatternCall{});
                 }
-                //build subterms
-                const auto stop = end(ref);
-                for (auto iter = begin(ref); iter != stop; ++iter) {
-                    *iter = build_lhs_multis_and_pattern_calls(
-                        ref.at(*iter), multi_changes, pattern_call_index);
-                }
-            }
-            else if (ref.type == Literal::lambda) {
-                ref->lambda.definition = build_lhs_multis_and_pattern_calls(
-                    ref.at(ref->lambda.definition), multi_changes, pattern_call_index);
-            }
-            return ref.typed_idx();
-        } //build_lhs_multis_and_pattern_calls
-
-        RuleHead prime_call(Store& store, RuleHead heads)
-        {
-            std::vector<MultiChange> multi_changes;
-            unsigned pattern_call_index = 0; //keeps track of how many conversions to PatternCall have already been made 
-
-            heads.lhs = build_lhs_multis_and_pattern_calls(
-                MutRef(store, heads.lhs), multi_changes, pattern_call_index);
-            if (pattern_call_index > match::MatchData::max_pattern_call_count) {
-                throw TypeError{ "too many pattern calls", Ref(store, heads.lhs) };
-            }
-
-            const auto prime_rhs = [&multi_changes](const MutRef r) {
-                if (r.type == SpecialMatch::multi) {
-                    const unsigned identifier = r->multi_match.match_data_index;
-                    const auto data = std::find_if(multi_changes.begin(), multi_changes.end(),
-                        [identifier](const MultiChange& c) { return c.identifier == identifier; });
-                    assert(data != multi_changes.end());
-                    r->multi_match = data->new_;
-                }
+                return ref.typed_idx();
             };
-            transform(MutRef(store, heads.rhs), prime_rhs);
+            return transform(lhs_ref, swap_call);
+        } //swap_lhs_calls
 
-            return heads;
-        } //prime_call
+        //to be rematchable one has to eighter contain a rematchable subterm or be 
+        //a pattern call with at least one of the following properties:
+        //   - in a non-commutative call at least two parameters are multi match variables 
+        //     e.g. "list(xs..., 1, 2, ys...)" but not "list(xs..., 1, 2, list(ys...))"
+        //   - in a commutative call a multi match and one or more parameters containing an owned single match are held
+        //     e.g. "a + bs..." or "2 a + bs..." but not "2 + bs..."
+        //   - in a commutative call two or more parameters hold an owned single match and are relatively unordered
+        //     e.g. "a^2 + b^2" or "a^2 + b" but not "a^2 + 2 b"
+        //note: "relatively unordered" refers to the bits set by set_always_preceeding_next
+        bool is_rematchable(const UnsaveRef ref)
+        {
+            const auto call_is_rematchable = [](const UnsaveRef r) {
+                if (r.type == PatternCall{}) {
+                    const auto info = pattern_call_info(r);
+                    switch (info.strategy) {
+                    case MatchStrategy::permutation: {
+                        const auto has_owned_single = [r](const NodeIndex n) {
+                            return search(r.at(n), [](const UnsaveRef rr) {
+                                return rr.type == SingleMatch::restricted || rr.type == SingleMatch::unrestricted;
+                                }) != literal_nullptr;
+                        };
+                        const std::span<const NodeIndex> params = r->call.parameters();
+                        if (info.preceeded_by_multi) {
+                            return std::count_if(params.begin(), params.end(), has_owned_single) > 0;
+                        }
+                        std::array<bool, match::SharedPatternCallEntry::max_params_count> single_owners = {};
+                        for (std::size_t i = 0; i < params.size(); i++) {
+                            single_owners[i] = has_owned_single(params[i]);
+                        }
+                        for (std::size_t i = 0; i < params.size(); i++) {
+                            if (!single_owners[i]) continue;
+                            if (info.always_preceeding_next.test(i)) continue;
+                            for (std::size_t k = i + 1u; k < params.size(); k++) {
+                                if (single_owners[k]) return true;
+                            }
+                        }
+                        return false;
+                    } break;
+                    case MatchStrategy::dilation:
+                        return info.preceeded_by_multi.count() > 1;
+                    case MatchStrategy::rematchable:
+                        return true;
+                    case MatchStrategy::linear:
+                        return false;
+                    }
+                }
+                return false;
+            };
+            return search(ref, call_is_rematchable) != literal_nullptr;
+        } //is_rematchable
 
-        using EquivalenceTable = std::array<std::array<bool, match::MatchData::max_single_match_count>, 
+        using EquivalenceTable = std::array<std::array<bool, match::MatchData::max_single_match_count>,
             match::MatchData::max_single_match_count>;
 
-        void debug_print_table(const EquivalenceTable& t) {
+        std::string eq_table_to_string(const EquivalenceTable& t) {
+            std::size_t max_interesting = 0;
             for (std::size_t i = 0; i < t.size(); i++) {
                 for (std::size_t k = 0; k < t.size(); k++) {
-                    std::cout << (t[i][k] ? 'x' : ' ') << ' ';
+                    if (t[i][k] && i != k) 
+                        max_interesting = std::max({ max_interesting, i + 1, k + 1 });
                 }
-                std::cout << "\n";
             }
-            std::cout << "\n";
-        } //debug_print_table
+            if (max_interesting == 0) {
+                return "";
+            }
+            std::string res;
+            for (std::size_t i = 0; i < max_interesting; i++) {
+                for (std::size_t k = 0; k < max_interesting; k++) {
+                    res += (t[i][k] ? 'x' : ' ');
+                    res += ' ';
+                }
+                res += "\n";
+            }
+            return res;
+        } //eq_table_to_string
 
         //two single match variables are equivalent, if swapping instances in whole pattern out for another, 
         //  the same pattern results.
         //idea: copy whole pattern, swap pairs of single match variables, test if pattern is unchanged, then variables are equivalent 
-        EquivalenceTable build_equivalence_table(const UnsaveRef lhs_ref) 
+        EquivalenceTable build_equivalence_table(const UnsaveRef lhs_ref)
         {
             constexpr std::size_t max_singles = match::MatchData::max_single_match_count;
             std::array<bool, max_singles> occurs_unrestricted = {};
@@ -1114,6 +1094,7 @@ namespace simp {
 
             const auto swap_singles = [&](const std::size_t i, const std::size_t k) {
                 const auto swap_single = [i, k](MutRef r) {
+                    assert(r.type != PatternCall{});
                     if (r.type.is<SingleMatch>()) {
                         const auto replace_with = [&r](const std::size_t new_idx) {
                             if (r.type == SingleMatch::restricted) r->single_match.match_data_index = new_idx;
@@ -1123,10 +1104,11 @@ namespace simp {
                         if (current == i) replace_with(k);
                         if (current == k) replace_with(i);
                     }
-                    else if (r.type == PatternCall{} && 
-                        r->call.function().get_type() == Literal::native && 
-                        to_native(r->call.function()).is<nv::Comm>()) 
-                    {   normalize::sort(r);
+                    else if (r.type == Literal::call &&
+                        r->call.function().get_type() == Literal::native &&
+                        to_native(r->call.function()).is<nv::Comm>())
+                    {
+                        normalize::sort(r);
                     }
                     return r.typed_idx();
                 };
@@ -1154,18 +1136,12 @@ namespace simp {
         //determines if fst and second are equivalent, if single match variables are considered equivalent as in eq
         bool equivalent(const UnsaveRef fst, const UnsaveRef snd, const EquivalenceTable& eq)
         {
-            const auto is_call = [](const NodeType t) { return t == Literal::call || t == PatternCall{}; };
-            if (is_call(fst.type) && is_call(snd.type)) {
-                if (fst.type != snd.type) {
-                    return false;
-                }
-                if (fst.type == PatternCall{}) { //compare if multis occur in equivalent places
-                    const PatternCallInfo fst_info = pattern_call_info(fst);
-                    const PatternCallInfo snd_info = pattern_call_info(snd);
-                    if (fst_info.is_commutative           != snd_info.is_commutative           ||
-                        fst_info.preceeded_by_multi       != snd_info.preceeded_by_multi) 
-                    {   return false;
-                    }
+            assert(fst.type != Literal::call && snd.type != Literal::call);
+            if (fst.type == PatternCall{} && snd.type == PatternCall{}) {
+                const PatternCallInfo fst_info = pattern_call_info(fst);
+                const PatternCallInfo snd_info = pattern_call_info(snd);
+                if (fst_info.preceeded_by_multi != snd_info.preceeded_by_multi)
+                {   return false;
                 }
                 const auto fst_end = fst->call.end();
                 const auto snd_end = snd->call.end();
@@ -1190,6 +1166,144 @@ namespace simp {
             }
             return compare_tree(fst, snd) == std::strong_ordering::equal;
         } //equivalent
+
+        void shallow_set_always_preceeding_next(const MutRef r, const EquivalenceTable& eq)
+        {
+            if (r.type == PatternCall{} && pattern_call_info(r).strategy == MatchStrategy::permutation) {
+                auto& bits = pattern_call_info(r).always_preceeding_next;
+                const auto params = r->call.parameters();
+                for (std::size_t i = 0; i + 1 < params.size(); i++) {
+                    const auto i_ref = r.at(params[i]);
+                    const auto next_ref = r.at(params[i + 1]);
+                    bool i_always_preceeding_next =
+                        unsure_compare_tree(i_ref, next_ref) == std::partial_ordering::less ||
+                        equivalent(i_ref, next_ref, eq);
+                    bits.set(i, i_always_preceeding_next);
+                }
+            }
+        } //shallow_set_always_preceeding_next
+
+        struct MultiChange
+        {
+            std::uint32_t identifier; //original creation index
+            MultiMatch new_;
+        };
+
+        //changes call to pattern call if appropriate and change multis to multi_marker
+        [[nodiscard]] NodeIndex build_lhs_multis_and_pattern_calls(MutRef ref, std::vector<MultiChange>& multi_changes, 
+            unsigned& pattern_call_index, const EquivalenceTable& eq) 
+        {
+            assert(ref.type != Literal::call && "run swap_lhs_calls bevor running this function");
+            if (ref.type == PatternCall{}) {
+                //build subterms
+                const auto stop = end(ref);
+                for (auto iter = begin(ref); iter != stop; ++iter) {
+                    *iter = build_lhs_multis_and_pattern_calls(
+                        ref.at(*iter), multi_changes, pattern_call_index, eq);
+                }
+                //build current
+                const std::size_t this_multi_count = std::count_if(ref->call.begin(), ref->call.end(),
+                    [](const NodeIndex i) { return i.get_type() == SpecialMatch::multi; });
+
+                auto& call_info = pattern_call_info(ref);
+
+                const auto [prime, commuts] = [&] {
+                    const NodeIndex f = ref->call.function();
+                    if (f.get_type() == Literal::native) {
+                        using namespace nv;
+                        const Native native_f = to_native(f);
+                        if (native_f.is<Comm>()) {
+                            if (this_multi_count > 1) 
+                                throw TypeError{ "too many multis in commutative", ref };
+                            call_info.strategy = MatchStrategy::permutation;
+                            return std::tuple{ true, true };
+                        }
+                        if (native_f.is<FixedArity>() && this_multi_count > 0)
+                            throw TypeError{ "multi match illegal in fixed arity", ref };
+                    }
+                    if (this_multi_count > 0u) {
+                        call_info.strategy = MatchStrategy::dilation;
+                        return std::tuple{ true, false };
+                    }
+                    else if (is_rematchable(ref)) {
+                        call_info.strategy = MatchStrategy::rematchable;
+                    }
+                    else {
+                        call_info.strategy = MatchStrategy::linear;
+                    }
+                    return std::tuple{ false, false };
+                } ();
+                //relies on the lambda above to set the strategy
+                shallow_set_always_preceeding_next(ref, eq);
+
+                { //set rematchable_params
+                    const std::span<NodeIndex> params = ref->call.parameters();
+                    call_info.rematchable_params = 0;
+                    for (std::size_t i = 0; i < params.size(); i++) {
+                        call_info.rematchable_params.set(i, is_rematchable(ref.at(params[i])));
+                    }
+                    assert(call_info.strategy != MatchStrategy::linear || call_info.rematchable_params.none());
+                }
+                if (prime) {
+                    const unsigned this_pattern_index = pattern_call_index++;
+                    call_info.match_data_index = this_pattern_index;
+                    std::uint32_t pos_mod_multis = 0; //only is incremented, when no multi is encountered
+                    Call& call = *ref;
+                    for (NodeIndex& param : call.parameters()) {
+                        if (param.get_type() == SpecialMatch::multi) {
+                            const unsigned identifier = ref.at(param)->multi_match.match_data_index;
+                            multi_changes.emplace_back(identifier,
+                                MultiMatch{ this_pattern_index, commuts ? -1u : pos_mod_multis });
+                            free_tree(ref.at(param));
+                            param = literal_nullptr;
+                            if (call_info.preceeded_by_multi.test(pos_mod_multis)) {
+                                throw TypeError{ "two multis in direct succession are illegal in lhs", ref };
+                            }
+                            call_info.preceeded_by_multi.set(commuts ? 0 : pos_mod_multis);
+                        }
+                        else {
+                            pos_mod_multis++;
+                        }
+                    }
+                    const auto new_end = std::remove(call.begin(), call.end(), literal_nullptr);
+                    call.size() = new_end - call.begin();
+                }
+            }
+            else if (ref.type == Literal::lambda) {
+                ref->lambda.definition = build_lhs_multis_and_pattern_calls(
+                    ref.at(ref->lambda.definition), multi_changes, pattern_call_index, eq);
+            }
+            return ref.typed_idx();
+        } //build_lhs_multis_and_pattern_calls
+
+        RuleHead prime_call(Store& store, RuleHead head)
+        {
+            const EquivalenceTable eq_table = build_equivalence_table(Ref(store, head.lhs));
+
+            head.lhs = build_rule::swap_lhs_calls(MutRef(store, head.lhs));
+
+            std::vector<MultiChange> multi_changes;
+            unsigned pattern_call_index = 0; //keeps track of how many conversions to PatternCall have already been made 
+
+            head.lhs = build_lhs_multis_and_pattern_calls(
+                MutRef(store, head.lhs), multi_changes, pattern_call_index, eq_table);
+            if (pattern_call_index > match::MatchData::max_pattern_call_count) {
+                throw TypeError{ "too many pattern calls", Ref(store, head.lhs) };
+            }
+
+            const auto prime_rhs = [&multi_changes](const MutRef r) {
+                if (r.type == SpecialMatch::multi) {
+                    const unsigned identifier = r->multi_match.match_data_index;
+                    const auto data = std::find_if(multi_changes.begin(), multi_changes.end(),
+                        [identifier](const MultiChange& c) { return c.identifier == identifier; });
+                    assert(data != multi_changes.end());
+                    r->multi_match = data->new_;
+                }
+            };
+            transform(MutRef(store, head.rhs), prime_rhs);
+
+            return head;
+        } //prime_call
 
         RuleHead add_implicit_multis(Store& store, RuleHead head)
         {
@@ -1224,81 +1338,6 @@ namespace simp {
             return head;
         } //add_implicit_multis
 
-        void set_always_preceeding_next(const MutRef head_lhs)
-        {
-            const EquivalenceTable eq_table = build_equivalence_table(head_lhs);
-            const auto set_bits = [&eq_table](const MutRef r) {
-                if (r.type == PatternCall{} && pattern_call_info(r).is_commutative) {
-                    auto& bits = pattern_call_info(r).always_preceeding_next;
-                    const auto params = r->call.parameters();
-                    for (std::size_t i = 0; i + 1 < params.size(); i++) {
-                        const auto i_ref    = r.at(params[i]);
-                        const auto next_ref = r.at(params[i + 1]);
-                        bool i_always_preceeding_next =
-                            unsure_compare_tree(i_ref, next_ref) == std::partial_ordering::less ||
-                            equivalent(i_ref, next_ref, eq_table);
-                        bits.set(i, i_always_preceeding_next);
-                    }
-                }
-            };
-            transform(head_lhs, set_bits);
-        } //set_always_preceeding_next
-
-        //to be rematchable one has to eighter contain a rematchable subterm or be 
-        //a pattern call with at least one of the following properties:
-        //   - in a non-commutative call at least two parameters are multi match variables 
-        //     e.g. "list(xs..., 1, 2, ys...)" but not "list(xs..., 1, 2, list(ys...))"
-        //   - in a commutative call a multi match and one or more parameters containing an owned single match are held
-        //     e.g. "a + bs..." or "2 a + bs..." but not "2 + bs..."
-        //   - in a commutative call two or more parameters hold an owned single match and are relatively unordered
-        //     e.g. "a^2 + b^2" or "a^2 + b" but not "a^2 + 2 b"
-        //note: "relatively unordered" refers to the bits set by set_always_preceeding_next
-        void set_rematchable(const MutRef head_lhs)
-        {
-            const auto set_pattern_call = [](const MutRef r) {
-                if (r.type == PatternCall{}) {
-                    PatternCallInfo& this_info = pattern_call_info(r);
-                    this_info.rematchable_params = 0u;
-                    const std::span<NodeIndex> params = r->call.parameters();
-                    for (std::size_t i = 0; i < params.size(); i++) {
-                        const NodeIndex rematchable_sub = search(r.at(params[i]), [](const UnsaveRef rr) { 
-                                return rr.type == PatternCall{} && pattern_call_info(rr).is_rematchable; 
-                            });
-                        this_info.rematchable_params.set(i, rematchable_sub != literal_nullptr);
-                    }
-                    this_info.is_rematchable = [&]() {
-                        if (this_info.rematchable_params.any()) {   
-                            return true;
-                        }
-                        if (!this_info.is_commutative) {
-                            return this_info.preceeded_by_multi.count() > 1;
-                        }
-                        const auto has_owned_single = [r](const NodeIndex n) {
-                            return search(r.at(n), [](const UnsaveRef rr) { 
-                                    return rr.type == SingleMatch::restricted || rr.type == SingleMatch::unrestricted; 
-                                }) != literal_nullptr;
-                        };
-                        if (this_info.preceeded_by_multi) {
-                            return std::count_if(params.begin(), params.end(), has_owned_single) > 0;
-                        }
-                        std::array<bool, match::SharedPatternCallEntry::max_params_count> single_owners = {};
-                        for (std::size_t i = 0; i < params.size(); i++) {
-                            single_owners[i] = has_owned_single(params[i]);
-                        }
-                        for (std::size_t i = 0; i < params.size(); i++) {
-                            if (!single_owners[i]) continue;
-                            if (this_info.always_preceeding_next.test(i)) continue;
-                            for (std::size_t k = i + 1u; k < params.size(); k++) {
-                                if (single_owners[k]) return true;
-                            }
-                        }
-                        return false;
-                    }();
-                }
-            };
-            transform(head_lhs, set_pattern_call);
-        } //set_rematchable
-
         RuleHead build_everything(Store& store, std::string& name)
         {
             RuleHead head = parse::raw_rule(store, name, parse::IAmInformedThisRuleIsNotUsableYet{});
@@ -1307,9 +1346,6 @@ namespace simp {
             head = build_rule::prime_call(store, head);
             head = build_rule::add_implicit_multis(store, head);
 
-            const auto lhs_ref = MutRef(store, head.lhs);
-            build_rule::set_always_preceeding_next(lhs_ref);
-            build_rule::set_rematchable(lhs_ref);
             return head;
         } //build_everything
 
@@ -1330,6 +1366,7 @@ namespace simp {
 
         bool match_(const UnsaveRef pn_ref, const UnsaveRef ref, MatchData& match_data)
         {
+            assert(pn_ref.type != Literal::call);
             if (pn_ref.type.is<Literal>() && pn_ref.type != ref.type) {
                 return false;
             }
@@ -1357,20 +1394,6 @@ namespace simp {
                 }
                 return match_(pn_ref.at(pn_lambda.definition), ref.at(lambda.definition), match_data);
             }
-            case NodeType(Literal::call): {
-                const Call& pn_call = *pn_ref;
-                const Call& call = *ref;
-                if (pn_call.size() != call.size()) {
-                    return false;
-                }
-                const auto stop = call.end();                
-                for (auto pn_iter = pn_call.begin(), iter = call.begin(); iter != stop; ++pn_iter, ++iter) {
-                    if (!match_(pn_ref.at(*pn_iter), ref.at(*iter), match_data)) {
-                        return false;
-                    }
-                }
-                return true;
-            }
             case NodeType(PatternCall{}): {
                 if (ref.type != Literal::call) {
                     return false;
@@ -1378,9 +1401,25 @@ namespace simp {
                 if (!match_(pn_ref.at(pn_ref->call.function()), ref.at(ref->call.function()), match_data)) {
                     return false;
                 }
-                return pattern_call_info(pn_ref).is_commutative ?
-                    find_permutation(pn_ref, ref, match_data, 0u, 0u) :
-                    find_dilation   (pn_ref, ref, match_data, 0u, 0u);
+                switch (pattern_call_info(pn_ref).strategy) {
+                case MatchStrategy::permutation:
+                    return find_permutation(pn_ref, ref, match_data, 0u, 0u);
+                case MatchStrategy::dilation:
+                    return find_dilation   (pn_ref, ref, match_data, 0u, 0u);
+                default: //TODO: implement rematching algo
+                    const Call& pn_call = *pn_ref;
+                    const Call& call = *ref;
+                    if (pn_call.size() != call.size()) {
+                        return false;
+                    }
+                    const auto stop = call.end();
+                    for (auto pn_iter = pn_call.begin(), iter = call.begin(); iter != stop; ++pn_iter, ++iter) {
+                        if (!match_(pn_ref.at(*pn_iter), ref.at(*iter), match_data)) {
+                            return false;
+                        }
+                    }
+                    return true;
+                }
             }
             case NodeType(SingleMatch::restricted): {
                 const RestrictedSingleMatch var = *pn_ref;
@@ -1429,29 +1468,35 @@ namespace simp {
 
         bool rematch(const UnsaveRef pn_ref, const UnsaveRef ref, MatchData& match_data)
         {
+            assert(pn_ref.type != Literal::call);
             if (pn_ref.type == PatternCall{}) {
                 assert(ref.type == Literal::call);
-                SharedPatternCallEntry& entry = match_data.call_entry(pn_ref);
-                assert(entry.match_idx == ref.typed_idx());
+                switch (pattern_call_info(pn_ref).strategy) {
+                case MatchStrategy::permutation:
+                case MatchStrategy::dilation: {
+                    SharedPatternCallEntry& entry = match_data.call_entry(pn_ref);
+                    assert(entry.match_idx == ref.typed_idx());
 
-                const auto needle_params = pn_ref->call.parameters();
-                const std::uint32_t needle_i = needle_params.size() - 1u;
-                const std::uint32_t hay_k = entry.match_positions[needle_i] + 1u;
+                    const auto needle_params = pn_ref->call.parameters();
+                    const std::uint32_t needle_i = needle_params.size() - 1u;
+                    const std::uint32_t hay_k = entry.match_positions[needle_i] + 1u;
 
-                return pattern_call_info(pn_ref).is_commutative ?
-                    find_permutation(pn_ref, ref, match_data, needle_i, hay_k) :
-                    find_dilation   (pn_ref, ref, match_data, needle_i, hay_k);
-            }
-            else if (pn_ref.type == Literal::call) {
-                assert(ref.type == Literal::call);
-                const Call& pn_call = *pn_ref;
-                const Call& call = *ref;
-                assert(pn_call.size() == call.size());
-                const auto stop = call.end();
-                for (auto pn_iter = pn_call.begin(), iter = call.begin(); iter != stop; ++pn_iter, ++iter) {
-                    if (rematch(pn_ref.at(*pn_iter), ref.at(*iter), match_data)) {
-                        return true;
+                    return pattern_call_info(pn_ref).strategy == MatchStrategy::permutation ?
+                        find_permutation(pn_ref, ref, match_data, needle_i, hay_k) :
+                        find_dilation   (pn_ref, ref, match_data, needle_i, hay_k);
+                } break;
+                case MatchStrategy::rematchable:
+                case MatchStrategy::linear: {
+                    const Call& pn_call = *pn_ref;
+                    const Call& call = *ref;
+                    assert(pn_call.size() == call.size());
+                    const auto stop = call.end();
+                    for (auto pn_iter = pn_call.begin(), iter = call.begin(); iter != stop; ++pn_iter, ++iter) {
+                        if (rematch(pn_ref.at(*pn_iter), ref.at(*iter), match_data)) {
+                            return true;
+                        }
                     }
+                } break;
                 }
             }
             else if (pn_ref.type == Literal::lambda) {
@@ -1551,7 +1596,60 @@ namespace simp {
                 needle_i--;
                 hay_k--;
             }
-            return false;
+        match_current_needle: 
+            {
+                const UnsaveRef needle_ref = pn_ref.at(needles[needle_i]);
+                if (info.preceeded_by_multi.test(needle_i)) {
+                    //how may elements of haystack can still be skipped (aka matched with a multi) without matching a (real) needle
+                    int skip_budget = haystack.size() - hay_k - needles.size() + needle_i;
+                    while (skip_budget >= 0) {
+                        assert(hay_k < haystack.size()); //implied by not negative skip budget
+                        if (match_(needle_ref, hay_ref.at(haystack[hay_k]), match_data))
+                        {   goto prepare_next_needle;
+                        }
+                        hay_k++;
+                        skip_budget--;
+                    }
+                    goto rematch_last_needle;
+                }
+                else if (match_(needle_ref, hay_ref.at(haystack[hay_k]), match_data))
+                {   goto prepare_next_needle;
+                }
+                goto rematch_last_needle;
+            }
+        rematch_last_needle: 
+            {
+                if (needle_i == 0u) {
+                    return false;
+                }
+                needle_i--;
+                hay_k = needles_data.match_positions[needle_i];
+                if (info.rematchable_params.test(needle_i) &&
+                    match_(pn_ref.at(needles[needle_i]), hay_ref.at(haystack[hay_k]), match_data))
+                {   goto prepare_next_needle;
+                }
+                while (!info.preceeded_by_multi.test(needle_i)) {
+                    if (needle_i == 0u) {
+                        return false;
+                    }
+                    needle_i--;
+                }
+                hay_k = needles_data.match_positions[needle_i] + 1u;
+                goto match_current_needle;
+            }
+        prepare_next_needle: 
+            {
+                needles_data.match_positions[needle_i] = hay_k; //already set if needle was rematched
+                needle_i++;
+                hay_k++;
+                if (needle_i == needles.size()) {
+                    if (info.preceeded_by_multi.test(needle_i) || hay_k == haystack.size()) {
+                        return true;
+                    }
+                    goto rematch_last_needle;
+                }
+                goto match_current_needle;
+            }
         } //find_dilation
 
     } //namespace match

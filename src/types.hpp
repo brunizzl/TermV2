@@ -334,8 +334,23 @@ namespace simp {
 		bool owner;
 	};
 
+	//determines which function is called to match a function call in a pattern with a literal
+	enum class MatchStrategy
+	{
+		permutation,
+		dilation,
+		rematchable,
+		linear,
+	};
+
 	struct PatternCallInfo
 	{
+		//determines what algorithm is choosen to match this call
+		//  permutation: uses all later members, only preceeded_by_multi is degraded to a bool
+		//  dilation:    uses all later members except always_preceeding_next (because that is a tautology here)
+		//  rematchable: uses ONLY rematchable_params (not even uses match_data_index)
+		//  linear:      uses nothing
+		MatchStrategy strategy = MatchStrategy::linear;
 		//indexes in MatchData::variadic_match_data (used in both commutative and non-commutative)
 		std::uint32_t match_data_index = -1u;
 		//bit i dertermines whether parameter i is rematchable (used in both commutative and non-commutative)
@@ -348,9 +363,6 @@ namespace simp {
 		//note: as a multi is also valid as last parameter, a pattern call may only hold up to 15 non-multi parameters!
 		//(used in non-commutative as bitset and in commutative as bool)
 		bmath::intern::BitSet16 preceeded_by_multi = (std::uint16_t)0;
-
-		bool is_commutative = false; //(obviously used in both commutative and non-commutative)
-		bool is_rematchable = true; //(used in both commutative and non-commutative)
 	};
 
 	union TermNode
@@ -410,8 +422,8 @@ namespace simp {
 		assert(ref.type == Literal::call || ref.type == PatternCall{});
 		using TypedIdx_T = std::conditional_t<R::is_const, const NodeIndex, NodeIndex>;
 		using Store_T = std::remove_reference_t<decltype(*ref.store)>;
-		using Iter = bmath::intern::detail_vector::SaveIterator<TypedIdx_T, sizeof(TermNode), Store_T>;
-		return Iter{ *ref.store, ref.index, 0u };
+		using namespace bmath::intern::detail_vector;
+		return SaveIterator<TypedIdx_T, sizeof(TermNode), Store_T>{ *ref.store, ref.index, 0u };
 	}
 
 	//caution: can only be used as a range-based-for-loop, if there is no reallocation possible inside the loop body!

@@ -531,16 +531,36 @@ namespace simp {
 				return string;
 			};
 			str.append("[");
-			str.append(std::to_string(data.match_data_index));
-			str.append(" R:");
-			str.append(to_string(data.rematchable_params, param_count));
-			str.append(" M:");
-			str.append(to_string(data.preceeded_by_multi, data.is_commutative ? 1 : param_count + 1));
-			if (data.is_commutative && param_count > 0u) {
-				str.append(" O:");
-				str.append(to_string(data.always_preceeding_next, param_count - 1));
+			switch (data.strategy) {
+			case MatchStrategy::permutation: 
+				str.append("p");
+				str.append(std::to_string(data.match_data_index));
+				str.append(" R:");
+				str.append(to_string(data.rematchable_params, param_count));
+				str.append(" M:");
+				str.append(to_string(data.preceeded_by_multi, 1));
+				if (param_count > 0) {
+					str.append(" O:");
+					str.append(to_string(data.always_preceeding_next, param_count - 1));
+				}
+				break;
+			case MatchStrategy::dilation:    
+				str.append("d");
+				str.append(std::to_string(data.match_data_index));
+				str.append(" R:");
+				str.append(to_string(data.rematchable_params, param_count));
+				str.append(" M:");
+				str.append(to_string(data.preceeded_by_multi, param_count + 1));
+				break;
+			case MatchStrategy::rematchable: 
+				str.append("r");
+				str.append(" R:");
+				str.append(to_string(data.rematchable_params, param_count));
+				break;
+			case MatchStrategy::linear:      
+				str.append("l");
+				break;
 			}
-			str.append(data.is_rematchable ? " r" : "");
 			str.append("]");
 		}
 
