@@ -14,11 +14,10 @@ TODO:
 
 important:
  - finish match:
-       - fix bug: match will not always succeed, if Literal::call in pattern holds a rematchable subterm 
-	        (idea: combine set_rematchable and prime_call, problem is, that prime_call has to use preorder, where set_rematchable (currently) uses postorder)
 	   - test_condition
 	   - find_dilation
-	   - adjust rematch to work with implementation of find_dilation
+	   - matching in MatchStrategy::rematch
+	   - factor out rematchable matching in own function depending on i, call in both match_ and rematch
 	   - eval_value_match
  - implement fst, snd, ffilter, fsplit, ...
  - add eval_buildin for min/max to remove values guaranteed to not be minimum / maximum without requiring full evaluation

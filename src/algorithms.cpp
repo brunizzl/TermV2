@@ -1406,19 +1406,41 @@ namespace simp {
                     return find_permutation(pn_ref, ref, match_data, 0u, 0u);
                 case MatchStrategy::dilation:
                     return find_dilation   (pn_ref, ref, match_data, 0u, 0u);
-                default: //TODO: implement rematching algo
-                    const Call& pn_call = *pn_ref;
-                    const Call& call = *ref;
-                    if (pn_call.size() != call.size()) {
+                case MatchStrategy::rematchable: {
+                    const std::span<const NodeIndex> pn_params = pn_ref->call.parameters();
+                    const std::span<const NodeIndex> params = ref->call.parameters();
+                    if (pn_params.size() != params.size()) {
                         return false;
                     }
-                    const auto stop = call.end();
-                    for (auto pn_iter = pn_call.begin(), iter = call.begin(); iter != stop; ++pn_iter, ++iter) {
+                    const auto rematchable_params = pattern_call_info(pn_ref).rematchable_params;
+                    std::size_t i = 0u; 
+                    for (;;) {
+                        while (match_(pn_ref.at(pn_params[i]), ref.at(params[i]), match_data)) {
+                            i++;
+                            if (i == pn_params.size()) return true;
+                        }
+                        do {
+                            if (i == 0u) return false;
+                            i--;
+                        } while (!rematchable_params.test(i) ||
+                            !rematch(pn_ref.at(pn_params[i]), ref.at(params[i]), match_data));
+                        i++;
+                    }
+                } break;
+                case MatchStrategy::linear: {
+                    const std::span<const NodeIndex> pn_params = pn_ref->call.parameters();
+                    const std::span<const NodeIndex> params = ref->call.parameters();
+                    if (pn_params.size() != params.size()) {
+                        return false;
+                    }
+                    const auto stop = params.end();
+                    for (auto pn_iter = pn_params.begin(), iter = params.begin(); iter != stop; ++pn_iter, ++iter) {
                         if (!match_(pn_ref.at(*pn_iter), ref.at(*iter), match_data)) {
                             return false;
                         }
                     }
                     return true;
+                } break;
                 }
             }
             case NodeType(SingleMatch::restricted): {
