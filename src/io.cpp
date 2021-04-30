@@ -618,7 +618,9 @@ namespace simp {
 				break;
 			case NodeType(Literal::lambda): {
 				const Lambda& lambda = *ref;
-				str.append(lambda.transparent ? "(\\" : "{\\");
+				str.append(lambda.transparent ? "([" : "{[");
+				str.append(std::to_string(lambda.param_count));
+				str.append("]\\");
 				append_to_string(ref.at(lambda.definition), str, max_infixr);
 				str.push_back(lambda.transparent ? ')' : '}');
 			} break;

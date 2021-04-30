@@ -280,7 +280,7 @@ namespace simp {
             return {};
         } //eval_unary_complex
 
-        NodeIndex BMATH_FORCE_INLINE eval_buildin(const MutRef ref, const Options options, const NodeIndex function, const unsigned lambda_param_offset)
+        NodeIndex BMATH_FORCE_INLINE eval_native(const MutRef ref, const Options options, const NodeIndex function, const unsigned lambda_param_offset)
         {
             using namespace nv;
             assert(function.get_type() == Literal::native);
@@ -486,6 +486,11 @@ namespace simp {
                             break; //complex are ordered in front and sum is sorted
                         }
                         Complex& acc = *ref.at(*iter_1);
+                        if (acc == 0.0) {
+                            ref.store->free_one(iter_1->get_index());
+                            *iter_1 = literal_nullptr;
+                            continue;
+                        }
                         for (auto iter_2 = std::next(iter_1); iter_2 != stop; ++iter_2) {
                             if (iter_2->get_type() != Literal::complex) {
                                 break;
@@ -507,6 +512,11 @@ namespace simp {
                         switch (iter_1->get_type()) {
                         case NodeType(Literal::complex): {
                             Complex& acc = *ref.at(*iter_1);
+                            if (acc == 1.0) {
+                                ref.store->free_one(iter_1->get_index());
+                                *iter_1 = literal_nullptr;
+                                continue;
+                            }
                             for (auto iter_2 = std::next(iter_1); iter_2 != stop; ++iter_2) {
                                 switch (iter_2->get_type()) {
                                 case NodeType(Literal::complex): {
@@ -541,7 +551,7 @@ namespace simp {
                 }
             } //end variadic
             return literal_nullptr;
-        } //eval_buildin
+        } //eval_native
 
         void BMATH_FORCE_INLINE sort(MutRef ref)
         {
@@ -569,7 +579,7 @@ namespace simp {
                     if (buildin_type.is<nv::Comm>()) {
                         sort(ref);
                     }
-                    if (const NodeIndex res = eval_buildin(ref, options, function, lambda_param_offset);
+                    if (const NodeIndex res = eval_native(ref, options, function, lambda_param_offset);
                         res != literal_nullptr) 
                     {
                         //if the function could be fully evaluated, the following step(s) can no longer be executed -> return

@@ -19,7 +19,7 @@ important:
 	   - rematching in MatchStrategy::bachtracking
 	   - eval_value_match
  - implement fst, snd, ffilter, fsplit, ...
- - add eval_buildin for min/max to remove values guaranteed to not be minimum / maximum without requiring full evaluation
+ - add eval_native for min/max to remove values guaranteed to not be minimum / maximum without requiring full evaluation
  - only test subset of rulerange (requires rule iterator to become random access)
  - remove "0" from sum, "1" from product
  - type checking (extended: keep track of what restrictions apply to match variable in lhs, use in rhs)
@@ -29,6 +29,7 @@ important:
 	  - enable implicit outer multi
 
 nice to have:
+ - add neutral element to associative functions
  - add "dont care" pattern
  - use ref-counting in store instead of always copy
  - store symbols in program wide map, only use hashes (aka. index in map) in every term
@@ -114,8 +115,6 @@ int main()
 			{ "'Y' = \\f n. f(f, n)" },
 			
 			{ "0 xs... = 0" },
-			{ "0 + xs... = sum(xs...)" },
-			{ "1 * xs... = product(xs...)" },
 			{ "0^x     = 0" },
 			{ "x^0     = 1" },
 			{ "x^1     = x" },
