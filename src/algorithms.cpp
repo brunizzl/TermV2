@@ -1418,8 +1418,7 @@ namespace simp {
                         while (match_(pn_ref.at(pn_params[i]), ref.at(params[i]), match_data)) {
                             i++;
                             if (i == pn_params.size()) return true;
-                        }
-                        do {
+                        } do {
                             if (i == 0u) return false;
                             i--;
                         } while (!rematchable_params.test(i) ||

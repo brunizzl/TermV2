@@ -14,6 +14,7 @@ TODO:
 
 important:
  - finish match:
+       - fix multi match not copying the associated values
 	   - test_condition
 	   - find_dilation
 	   - matching in MatchStrategy::rematch
@@ -209,7 +210,7 @@ int main()
 			{ "ffoldr(f, acc, list())         = acc" },
 			{ "ffoldr(f, acc, list(x, xs...)) = f(x, ffoldr(f, acc, list(xs...)))" },
 
-			{ "pair('test_'(ws..., a, b, c, xs...), 'test'(ys..., a, b, c, zs...)) = pair('found'(ws..., a, b, c, xs...), 'found'(ys..., a, b, c, zs...))" },
+			{ "pair('test_'(ws..., a, b, c, xs...), 'test_'(ys..., a, b, c, zs...)) = list(ws..., 'found'(a, b, c), xs..., '_space_', ys..., 'found'(a, b, c), zs...)" },
 			{ "pair(a + b, list(b, a)) = 'success'('a_is', a, 'and_b_is', b)" },
 		};
 		for (const simp::RuleRef rule : rules) {
@@ -224,7 +225,6 @@ int main()
 			try {
 				auto term = simp::LiteralTerm(name);
 				term.normalize();
-				//std::cout << " = " << term.to_string() << "\n\n";
 				term.head = simp::greedy_apply_ruleset(rules, term.mut_ref());
 				std::cout << " = " << term.to_string() << "\n\n";
 			}
