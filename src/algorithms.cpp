@@ -1039,7 +1039,7 @@ namespace simp {
                     } break;
                     case MatchStrategy::dilation:
                         return info.preceeded_by_multi.count() > 1;
-                    case MatchStrategy::rematchable:
+                    case MatchStrategy::backtracking:
                         return true;
                     case MatchStrategy::linear:
                         return false;
@@ -1226,7 +1226,7 @@ namespace simp {
                         return std::tuple{ true, false };
                     }
                     else if (is_rematchable(ref)) {
-                        call_info.strategy = MatchStrategy::rematchable;
+                        call_info.strategy = MatchStrategy::backtracking;
                     }
                     else {
                         call_info.strategy = MatchStrategy::linear;
@@ -1244,7 +1244,7 @@ namespace simp {
                     }
                     assert(call_info.strategy != MatchStrategy::linear || call_info.rematchable_params.none());
                 }
-                if (prime) {
+                if (prime) { //give current own match data index and change multis to final form
                     const unsigned this_pattern_index = pattern_call_index++;
                     call_info.match_data_index = this_pattern_index;
                     std::uint32_t pos_mod_multis = 0; //only is incremented, when no multi is encountered
@@ -1301,7 +1301,6 @@ namespace simp {
                 }
             };
             transform(MutRef(store, head.rhs), prime_rhs);
-
             return head;
         } //prime_call
 
@@ -1323,8 +1322,9 @@ namespace simp {
             auto& info = pattern_call_info(lhs_ref);
             if (f_variadic.is<nv::Comm>() && !info.preceeded_by_multi) {
                 info.preceeded_by_multi = 1;
+                const auto multi_parent = info.match_data_index;
                 const std::size_t rhs_multi_index = store.allocate_one();
-                store.at(rhs_multi_index) = MultiMatch{ .match_data_index = 0, .index_in_params = -1u };
+                store.at(rhs_multi_index) = MultiMatch{ .match_data_index = multi_parent, .index_in_params = -1u };
                 const std::size_t temp_head_rhs_index = 
                     Call::build(store, std::to_array({ f, head.rhs, NodeIndex(rhs_multi_index, SpecialMatch::multi) }));
                 head.rhs = normalize::outermost(
@@ -1406,7 +1406,7 @@ namespace simp {
                     return find_permutation(pn_ref, ref, match_data, 0u, 0u);
                 case MatchStrategy::dilation:
                     return find_dilation   (pn_ref, ref, match_data, 0u, 0u);
-                case MatchStrategy::rematchable: {
+                case MatchStrategy::backtracking: {
                     const std::span<const NodeIndex> pn_params = pn_ref->call.parameters();
                     const std::span<const NodeIndex> params = ref->call.parameters();
                     if (pn_params.size() != params.size()) {
@@ -1506,7 +1506,7 @@ namespace simp {
                         find_permutation(pn_ref, ref, match_data, needle_i, hay_k) :
                         find_dilation   (pn_ref, ref, match_data, needle_i, hay_k);
                 } break;
-                case MatchStrategy::rematchable:
+                case MatchStrategy::backtracking:
                 case MatchStrategy::linear: {
                     const Call& pn_call = *pn_ref;
                     const Call& call = *ref;

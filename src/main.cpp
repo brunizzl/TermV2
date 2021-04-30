@@ -14,11 +14,9 @@ TODO:
 
 important:
  - finish match:
-       - fix multi match not copying the associated values
 	   - test_condition
 	   - find_dilation
-	   - matching in MatchStrategy::rematch
-	   - factor out rematchable matching in own function depending on i, call in both match_ and rematch
+	   - rematching in MatchStrategy::bachtracking
 	   - eval_value_match
  - implement fst, snd, ffilter, fsplit, ...
  - add eval_buildin for min/max to remove values guaranteed to not be minimum / maximum without requiring full evaluation
@@ -31,6 +29,7 @@ important:
 	  - enable implicit outer multi
 
 nice to have:
+ - add "dont care" pattern
  - use ref-counting in store instead of always copy
  - store symbols in program wide map, only use hashes (aka. index in map) in every term
  - implement meta_pn::match function for variadic patterns
@@ -195,7 +194,7 @@ int main()
 			{ "'sort'(list())                               = list()" },
 			{ "'sort'(list(x))                              = list(x)" },
 			{ "'sort'(list(x, xs...))                       = 'sort_h1'(fsplit(\\y .y < x, list(xs...)), x)" },
-			{ "'sort_h1'(pair(list(xs...), list(ys...)), x) = 'sort_h2'('sort'(xs...), x, 'sort'(ys...))" },
+			{ "'sort_h1'(pair(list(xs...), list(ys...)), x) = 'sort_h2'('sort'(list(xs...)), x, 'sort'(list(ys...)))" },
 			{ "'sort_h2'(list(xs...), x, list(ys...))       = list(xs..., x, ys...)" },
 			
 			{ "union(set(xs...), set(ys...)) = set(xs..., ys...)" },

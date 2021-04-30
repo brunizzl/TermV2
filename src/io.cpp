@@ -552,8 +552,8 @@ namespace simp {
 				str.append(" M:");
 				str.append(to_string(data.preceeded_by_multi, param_count + 1));
 				break;
-			case MatchStrategy::rematchable: 
-				str.append("r");
+			case MatchStrategy::backtracking: 
+				str.append("b");
 				str.append(" R:");
 				str.append(to_string(data.rematchable_params, param_count));
 				break;
@@ -666,8 +666,11 @@ namespace simp {
 				str.append("U");
 				break;
 			default:
-				BMATH_UNREACHABLE;
-				assert(false);
+				str.append("(ERROR:");
+				str.append(std::to_string((unsigned)ref.type));
+				str.append(":");
+				str.append(std::to_string(ref.index));
+				str.append(")");
 			}
 		} //append_to_string
 

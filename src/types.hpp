@@ -339,7 +339,7 @@ namespace simp {
 	{
 		permutation,
 		dilation,
-		rematchable,
+		backtracking,
 		linear,
 	};
 
@@ -348,7 +348,7 @@ namespace simp {
 		//determines what algorithm is choosen to match this call
 		//  permutation: uses all later members, only preceeded_by_multi is degraded to a bool
 		//  dilation:    uses all later members except always_preceeding_next (because that is a tautology here)
-		//  rematchable: uses ONLY rematchable_params (not even uses match_data_index)
+		//  backtracking: uses ONLY rematchable_params (not even uses match_data_index)
 		//  linear:      uses nothing
 		MatchStrategy strategy = MatchStrategy::linear;
 		//indexes in MatchData::variadic_match_data (used in both commutative and non-commutative)
@@ -546,8 +546,8 @@ namespace simp {
 			{ HaskellFn::fmap           , "fmap"      , 2u, { Restr::callable, Literal::call }, Literal::call    },
 			{ HaskellFn::ffilter        , "ffilter"   , 2u, { Restr::callable, Literal::call }, Literal::call    },
 			{ HaskellFn::fsplit         , "fsplit"    , 2u, { Restr::callable, Literal::call }, MiscFn::pair     },
-			{ HaskellFn::ffoldl         , "ffoldl"    , 2u, { Restr::callable, Restr::any, Literal::call }, Restr::any }, //foldl f z (x:xs) = foldl f (f z x) xs
-			{ HaskellFn::ffoldr         , "ffoldr"    , 2u, { Restr::callable, Restr::any, Literal::call }, Restr::any }, //foldr f z (x:xs) = f x (foldr f z xs) 
+			{ HaskellFn::ffoldl         , "ffoldl"    , 3u, { Restr::callable, Restr::any, Literal::call }, Restr::any }, //foldl f z (x:xs) = foldl f (f z x) xs
+			{ HaskellFn::ffoldr         , "ffoldr"    , 3u, { Restr::callable, Restr::any, Literal::call }, Restr::any }, //foldr f z (x:xs) = f x (foldr f z xs) 
 			{ PatternAuxFn::value_match , "_VM"       , 3u, { PatternUnsigned{}, Restr::any, Restr::any }, Restr::any }, //layout as in ValueMatch (minus .owner)
 			{ PatternAuxFn::of_type     , "_Of_T"     , 2u, { Restr::any, Literal::native }, Restr::boolean      },
 		});
