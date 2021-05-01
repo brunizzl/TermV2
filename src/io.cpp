@@ -35,7 +35,8 @@ namespace simp {
 					{ token::bang,         Arity::unary  },
 					{ token::unary_minus,  Arity::unary  },
 					});
-				for (std::size_t i = 0u; i < operators.size(); i++) {
+				std::size_t i = 0u;
+				while (i < operators.size()) {
 					std::size_t pos = find_last_of_skip_pars(token_view, operators[i].tok);
 					if (pos != TokenView::npos) {
 						//as we search in reverse, this loop adjust pos to point at first part of token
@@ -48,6 +49,9 @@ namespace simp {
 						else { //found unary operation in middle of view -> return binary operation bevore it
 							token_view.remove_suffix(token_view.size() - pos);
 						}
+					}
+					else {
+						i++;
 					}
 				}
 				return TokenView::npos;
@@ -368,7 +372,7 @@ namespace simp {
 
 			heads.lhs = normalize::recursive(MutRef(store, heads.lhs), {}, 0);
 			heads.lhs = normalize::recursive(MutRef(store, heads.lhs), 
-				{ .eval_haskell = false, .remove_unary_assoc = false }, 0);
+				{ .remove_unary_assoc = false }, 0);
 
 			//extra condition concerning single match variables (might set multiple in relation)
 			struct SingleCondition

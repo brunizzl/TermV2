@@ -31,7 +31,7 @@ important:
 nice to have:
  - add neutral element to associative functions
  - add "dont care" pattern
- - use ref-counting in store instead of always copy
+ - use ref-counting in store instead of always copy (-> normalize::eval_native no longer has to do as much memory management)
  - store symbols in program wide map, only use hashes (aka. index in map) in every term
  - implement meta_pn::match function for variadic patterns
  - achieve feature parity between compile time pattern and run time pattern (add value match to ct)
@@ -42,6 +42,7 @@ nice to have:
  - allow to restrict a variables domain (split Literal::symbol in own enum?)
 
 idea status:
+ - allow PatternCall in rhs to indicate, that a call of lhs can be "stolen" e.g. the parameter count in rhs is guaranteed to be lower than the one in lhs -> the old allocation can be reused
  - let each RewriteRule have a name in form of a constant c-string (not what pattern is constructed from, but name of rule, e.g. "differentiation: product rule" or something)
  - always keep -1 at some known index in store and never allocate new -1 in build_negated and build_inverted (problem: identify bevore copy, solution: you know the index)
  - sort pattern with care for match variables
@@ -74,7 +75,7 @@ int main()
 		}
 		std::cout << "\n\n";
 	}
-	if (false) {
+	if (true) {
 		const auto names = std::to_array<std::string>({
 			{ "list(conj(3-i), conj(4+3i), conj(8), conj(-i))" },
 			{ "(\\f n. f(f, n))(\\f n.(n <= 1)(1, n * f(f, -1 + n)), 5)" },
@@ -102,10 +103,10 @@ int main()
 			std::cout << name << "\n";
 			auto term = simp::LiteralTerm(name);
 			std::cout << "  ->  " << term.to_string() << "\n";
-			std::cout << term.to_memory_layout() << "\n";
+			//std::cout << term.to_memory_layout() << "\n";
 			term.normalize();
 			std::cout << "  ->  " << term.to_string() << "\n";
-			std::cout << term.to_memory_layout() << "\n";
+			//std::cout << term.to_memory_layout() << "\n";
 			std::cout << "\n";
 		}
 		std::cout << "\n\n\n";
@@ -132,10 +133,10 @@ int main()
 			{ "a bs... + a cs... | !(a :complex)      = a (product(bs...) + product(cs...))" },
 			{ "a bs... + a       | !(a :complex)      = a (product(bs...) + 1)" },
 			{ "a       + a       | !(a :complex)      = 2 a" },
-			{ "a b               | a :complex, b :sum = fmap(\\x .a x, b)" },
+			{ "a b               | a :complex, b :sum = fmap(sum, \\x .a x, b)" },
 			
-			{ "-a     | a :sum     = fmap(\\x. -x    , a)" },
-			{ "a^(-1) | a :product = fmap(\\x. x^(-1), a)" },
+			{ "-a     | a :sum     = fmap(sum    , \\x. -x    , a)" },
+			{ "a^(-1) | a :product = fmap(product, \\x. x^(-1), a)" },
 			
 			{ "sin(x)^2 + cos(x)^2 = 1" },
 			
@@ -156,7 +157,7 @@ int main()
 			{ "diff(f^a, x)     | a :complex = diff(f, x) a f^(a-1)" },
 			{ "diff(a^f, x)     | a :complex = diff(f, x) ln(a) a^f" },
 			{ "diff(g^h, x)                  = (diff(h, x) ln(g) + h diff(g, x)/g) g^h" },
-			{ "diff(a, x)       | a :sum     = fmap(\\f .diff(f, x), a)" },
+			{ "diff(a, x)       | a :sum     = fmap(sum, \\f .diff(f, x), a)" },
 			{ "diff(u vs..., x)              = diff(u, x) vs... + u diff(product(vs...), x)" },
 			{ "diff(f(y), x)                 = diff(y, x) fdiff(f)(y)" },
 			
@@ -180,12 +181,12 @@ int main()
 				//{ "n :nat, a, b, tail :list... | list_fibs(n, list{a, b, tail}) = list_fibs(n - 1, list{force(a + b), a, b, tail})" },
 				//{ "              tail :list... | list_fibs(0, list{tail})       = list{tail}" },
 			
-			{ "ffilter(p, f(xs...)) = 'take_true'(f(), fmap(\\x .pair(p(x), x), f(xs...)))" },
+			{ "ffilter(f, p, f(xs...)) = 'take_true'(f(), fmap(f, \\x .pair(p(x), x), f(xs...)))" },
 			{ "'take_true'(f(xs...), f(pair(true, x), ys...)) = 'take_true'(f(xs..., x), f(ys...))" },
 			{ "'take_true'(f(xs...), f(pair(_   , x), ys...)) = 'take_true'(f(xs...), f(ys...))" },
 			{ "'take_true'(fxs, f())                          = fxs" },
 			
-			{ "fsplit(p, f(xs...)) = 'split_hlp'(f(), f(), fmap(\\x .pair(p(x), x), f(xs...)))" },
+			{ "fsplit(f, p, f(xs...)) = 'split_hlp'(f(), f(), fmap(f, \\x .pair(p(x), x), f(xs...)))" },
 			{ "'split_hlp'(f(xs...), f(ys...), f(pair(true, z), zs...)) = 'split_hlp'(f(xs..., z), f(ys...), f(zs...))" },
 			{ "'split_hlp'(f(xs...), f(ys...), f(pair(_   , z), zs...)) = 'split_hlp'(f(xs...), f(ys..., z), f(zs...))" },
 			{ "'split_hlp'(fxs, fys, f())                               = pair(fxs, fys)" },
@@ -205,11 +206,15 @@ int main()
 			{ "min{x, y} | x :real, y :real, x > y = y" },
 			{ "max{x, y} | x :real, y :real, x > y = x" },
 			
-			{ "ffoldr(f, acc, list())         = acc" },
-			{ "ffoldr(f, acc, list(x, xs...)) = f(x, ffoldr(f, acc, list(xs...)))" },
+			{ "ffoldr(f, g, acc, f())         = acc" },
+			{ "ffoldr(f, g, acc, f(x, xs...)) = g(x, ffoldr(f, g, acc, f(xs...)))" },
 
 			{ "pair('test_'(ws..., a, b, c, xs...), 'test_'(ys..., a, b, c, zs...)) = list(ws..., 'found'(a, b, c), xs..., '_space_', ys..., 'found'(a, b, c), zs...)" },
 			{ "pair(a + b, list(b, a)) = 'success'('a_is', a, 'and_b_is', b)" },
+
+			{ "'make_ints'(a, b) = 'make_ints_h'(b, list(a))" },
+			{ "'make_ints_h'(b, list(xs..., b)) = list(xs..., b)" },
+			{ "'make_ints_h'(b, list(xs..., x)) = 'make_ints_h'(b, list(xs..., x, x + 1))" },
 		};
 		for (const simp::RuleRef rule : rules) {
 			std::cout << rule.to_string() << "\n\n";

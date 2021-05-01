@@ -285,14 +285,14 @@ namespace simp {
             using namespace nv;
             assert(function.get_type() == Literal::native);
             assert(ref.type == Literal::call); //PatternCall is not expected here!
+            assert(ref->call.function() == function);
+
             const Native f = to_native(function);
-            Call& call = *ref;
-            assert(call.function() == function);
+            const auto params = ref->call.parameters();
             if (f.is<FixedArity>()) {
                 const FixedArity fixed_f = f.to<FixedArity>();
                 {
                     const FixedInputSpace param_spaces = input_space(fixed_f);
-                    const auto params = call.parameters();
                     const std::size_t params_size = params.size();
                     for (std::size_t i = 0; i < params_size; i++) {
                         const nv::Native param_space = param_spaces[i];
@@ -302,7 +302,8 @@ namespace simp {
                     }
                 }
                 const std::size_t f_arity = arity(fixed_f);
-                if (f_arity + 1u != call.size()) [[unlikely]]
+                assert(f_arity > 0u); //that would not make sense in a purely functional laguage
+                if (f_arity != params.size()) [[unlikely]]
                     throw TypeError{ "wrong number of parameters in function call", ref };
 
                 const auto compute_and_replace = [&](auto compute) -> NodeIndex {
@@ -312,52 +313,56 @@ namespace simp {
                         return literal_nullptr;
                     }
                     //free all but last parameter of call
-                    for (std::size_t i = 1; i < f_arity; i++) {
-                        assert(call[i].get_type() == Literal::complex);
-                        ref.store->free_one(call[i].get_index());
+                    for (std::size_t i = 0; i < f_arity - 1u; i++) {
+                        assert(params[i].get_type() == Literal::complex);
+                        ref.store->free_one(params[i].get_index());
                     }
                     //store result in last parameter
-                    const NodeIndex result_idx = call[f_arity];
+                    const NodeIndex result_idx = params[f_arity - 1u];
                     assert(result_idx.get_type() == Literal::complex);
                     ref.store->at(result_idx.get_index()) = result;
                     Call::free(*ref.store, ref.index); //free call itself
                     return result_idx;
                 };
-                auto is_ordered_as = [&](const std::strong_ordering od) {
-                    assert(call[1].get_type() == Literal::complex && call[2].get_type() == Literal::complex);
-                    const Complex& fst = *ref.at(call[1]);
-                    const Complex& snd = *ref.at(call[2]);
+                const auto is_ordered_as = [&](const std::strong_ordering od) {
+                    assert(params[0].get_type() == Literal::complex && params[1].get_type() == Literal::complex);
+                    const Complex& fst = *ref.at(params[0]);
+                    const Complex& snd = *ref.at(params[1]);
                     const bool res = bmath::intern::compare_complex(fst, snd) == od;
                     free_tree(ref);
                     return res;
                 };
+                const auto allow_haskell_call = [&](const NodeIndex callable, const NodeIndex call) {
+                    assert(call.get_type() == Literal::call);
+                    return compare_tree(ref.at(callable), ref.at(ref.at(call)->call.function())) == std::strong_ordering::equal;
+                };
                 //parameters are now guaranteed to meet restriction given in nv::fixed_arity_table
                 //also parameter cout is guaranteed to be correct
                 if (fixed_f.is<CtoC>() && f_arity == 1u) {
-                    return compute_and_replace([&] { return eval_unary_complex(fixed_f.to<CtoC>(), *ref.at(call[1u])); });
+                    return compute_and_replace([&] { return eval_unary_complex(fixed_f.to<CtoC>(), *ref.at(params[0u])); });
                 }
                 switch (fixed_f) {
                 case FixedArity(Bool::true_): {
-                    const NodeIndex res = call[1];
-                    free_tree(ref.at(call[2]));
+                    const NodeIndex res = params[0];
+                    free_tree(ref.at(params[1]));
                     Call::free(*ref.store, ref.index);
                     return res;
                 } break;
                 case FixedArity(Bool::false_): {
-                    const NodeIndex res = call[2];
-                    free_tree(ref.at(call[1]));
+                    const NodeIndex res = params[1];
+                    free_tree(ref.at(params[0]));
                     Call::free(*ref.store, ref.index);
                     return res;
                 } break;
                 case FixedArity(MiscFn::id): {
-                    const NodeIndex res = call[1];
+                    const NodeIndex res = params[0];
                     Call::free(*ref.store, ref.index);
                     return res;
                 } break;
                 case FixedArity(CtoC::pow): {
                     return compute_and_replace([&] {
-                        const Complex& base = *ref.at(call[1]);
-                        const Complex& expo = *ref.at(call[2]);
+                        const Complex& base = *ref.at(params[0]);
+                        const Complex& expo = *ref.at(params[1]);
                         if (expo == 0.5) {
                             return (base.imag() == 0.0 && base.real() >= 0.0) ?
                                 std::sqrt(base.real()) :
@@ -373,8 +378,8 @@ namespace simp {
                 } break;
                 case FixedArity(CtoC::log): {
                     return compute_and_replace([&] {
-                        const Complex& base = *ref.at(call[1]);
-                        const Complex& argu = *ref.at(call[2]);
+                        const Complex& base = *ref.at(params[0]);
+                        const Complex& argu = *ref.at(params[1]);
                         const Complex num = (argu.imag() == 0.0) ?
                             std::log(argu.real()) :
                             std::log(argu);
@@ -385,7 +390,7 @@ namespace simp {
                     });
                 } break;
                 case FixedArity(ToBool::not_): {
-                    const NodeIndex param = call[1u];
+                    const NodeIndex param = params[0];
                     if (param == literal_false) {
                         ref.store->free_one(ref.index);
                         return literal_true;
@@ -404,7 +409,7 @@ namespace simp {
                     if (search(ref, is_placeholder) != literal_nullptr) {
                         return literal_nullptr;
                     }
-                    const std::strong_ordering ord = compare_tree(ref.at(call[1]), ref.at(call[2]));
+                    const std::strong_ordering ord = compare_tree(ref.at(params[0]), ref.at(params[1]));
                     free_tree(ref);
                     return bool_to_typed_idx((fixed_f == ToBool::eq) ^ (ord != std::strong_ordering::equal));
                 } break;
@@ -416,11 +421,9 @@ namespace simp {
                     return bool_to_typed_idx(!is_ordered_as(std::strong_ordering::less));
                 case FixedArity(ToBool::smaller_eq):
                     return bool_to_typed_idx(!is_ordered_as(std::strong_ordering::greater));
-                case FixedArity(HaskellFn::fmap): if (options.eval_haskell) {
-                    const NodeIndex converter = call[1];
-                    const NodeIndex convertee = call[2];
-                    const MutRef converter_ref = ref.at(converter);
-                    const MutRef convertee_ref = ref.at(convertee);
+                case FixedArity(HaskellFn::fmap): if (allow_haskell_call(params[0], params[2])) {
+                    const MutRef converter_ref = ref.at(params[1]);
+                    const MutRef convertee_ref = ref.at(params[2]);
                     assert(convertee_ref.type == Literal::call);
                     const auto stop = end(convertee_ref);
                     auto iter = begin(convertee_ref);
@@ -440,12 +443,12 @@ namespace simp {
             } //end fixed arity
             else {
                 assert(f.is<Variadic>());
+                //note: params last elements become invalid after calling this function
                 const auto remove_shallow_value = [&](const NodeIndex to_remove) {
-                    const auto range = call.parameters();
-                    const auto new_end = std::remove(range.begin(), range.end(), to_remove);
-                    const std::size_t new_size = new_end - range.begin();
+                    const auto new_end = std::remove(params.begin(), params.end(), to_remove);
+                    const std::size_t new_size = new_end - params.begin();
                     static_assert(Call::values_per_node - Call::min_capacity == 1u);
-                    call.size() = new_size + 1u; //+1 for function info itself
+                    ref->call.size() = new_size + 1u; //+1 for function info itself
                     return new_size;
                 };
                 const auto eval_bool = [&](const NodeIndex neutral_value, const NodeIndex short_circuit_value) {
@@ -454,9 +457,8 @@ namespace simp {
                         return neutral_value;
                     }                    
                     { //evaluate if possible
-                        const auto range = call.parameters();
-                        const auto first_short_circuit = std::find(range.begin(), range.end(), short_circuit_value);
-                        if (first_short_circuit != range.end()) {
+                        const auto first_short_circuit = std::find(params.begin(), params.end(), short_circuit_value);
+                        if (first_short_circuit != params.end()) {
                             free_tree(ref);
                             return short_circuit_value;
                         }
@@ -479,9 +481,7 @@ namespace simp {
                 case Variadic(Comm::or_):
                     return eval_bool(literal_false, literal_true);
                 case Variadic(Comm::sum): {
-                    auto range = call.parameters();
-                    const auto stop = range.end();
-                    for (auto iter_1 = range.begin(); iter_1 != stop; ++iter_1) {
+                    for (auto iter_1 = params.begin(); iter_1 != params.end(); ++iter_1) {
                         if (iter_1->get_type() != Literal::complex) {
                             break; //complex are ordered in front and sum is sorted
                         }
@@ -491,7 +491,7 @@ namespace simp {
                             *iter_1 = literal_nullptr;
                             continue;
                         }
-                        for (auto iter_2 = std::next(iter_1); iter_2 != stop; ++iter_2) {
+                        for (auto iter_2 = std::next(iter_1); iter_2 != params.end(); ++iter_2) {
                             if (iter_2->get_type() != Literal::complex) {
                                 break;
                             }
@@ -506,9 +506,7 @@ namespace simp {
                     remove_shallow_value(literal_nullptr);
                 } break;
                 case Variadic(Comm::product): { //TODO: evaluate exact division / normalize two divisions
-                    auto range = call.parameters();
-                    const auto stop = range.end();
-                    for (auto iter_1 = range.begin(); iter_1 != stop; ++iter_1) {
+                    for (auto iter_1 = params.begin(); iter_1 != params.end(); ++iter_1) {
                         switch (iter_1->get_type()) {
                         case NodeType(Literal::complex): {
                             Complex& acc = *ref.at(*iter_1);
@@ -517,7 +515,7 @@ namespace simp {
                                 *iter_1 = literal_nullptr;
                                 continue;
                             }
-                            for (auto iter_2 = std::next(iter_1); iter_2 != stop; ++iter_2) {
+                            for (auto iter_2 = std::next(iter_1); iter_2 != params.end(); ++iter_2) {
                                 switch (iter_2->get_type()) {
                                 case NodeType(Literal::complex): {
                                     Complex& factor = *ref.at(*iter_2);
@@ -534,11 +532,10 @@ namespace simp {
                     }
                     remove_shallow_value(literal_nullptr);
                 } break;
-                case Variadic(Comm::set): if (call.size() >= 3) { 
-                    auto range = call.parameters();
-                    auto iter = range.begin();
+                case Variadic(Comm::set): if (params.size() >= 2) { 
+                    auto iter = params.begin();
                     UnsaveRef fst = ref.at(*iter);
-                    for (++iter; iter != range.end(); ++iter) {
+                    for (++iter; iter != params.end(); ++iter) {
                         UnsaveRef snd = ref.at(*iter); //remove duplicates (remember: already sorted)
                         if (compare_tree(fst, snd) == std::strong_ordering::equal) {
                             ref.store->free_one(iter->get_index());
@@ -1339,7 +1336,7 @@ namespace simp {
                     Call::build(store, std::to_array({ f, head.rhs, NodeIndex(rhs_multi_index, SpecialMatch::multi) }));
                 head.rhs = normalize::outermost(
                     MutRef(store, temp_head_rhs_index, Literal::call), 
-                    { .eval_haskell = false, .remove_unary_assoc = false }, 0).res;
+                    { .remove_unary_assoc = false }, 0).res;
                 return head;
             }
             if (f_variadic.is<nv::NonComm>()) {
@@ -1421,6 +1418,9 @@ namespace simp {
                     const std::span<const NodeIndex> params = ref->call.parameters();
                     if (pn_params.size() != params.size()) {
                         return false;
+                    }
+                    if (pn_params.size() == 0u) {
+                        return true;
                     }
                     const auto rematchable_params = pattern_call_info(pn_ref).rematchable_params;
                     std::size_t i = 0u; 

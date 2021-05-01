@@ -19,7 +19,6 @@ namespace simp {
         struct Options 
         {
             bool exact = true; //true: only exact operations are permitted
-            bool eval_haskell = true; //true: functions in nv::HaskellFn are evaluated
             bool normalize_lambdas = true; //true: all nested lambdas become transparent & unessecary indirections are removed
             bool remove_unary_assoc = true; //true: "f(a) -> a" for all associative f (e.g. sum, product, and...)
         };

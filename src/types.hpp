@@ -194,10 +194,11 @@ namespace simp {
 		};
 
 		//as in haskell, but applicable to any function call, not just lists:
+		//the first parameter (params[0]) is always a callable, defining on a call to which function the transformation should be performed
 		enum class HaskellFn
 		{
-			fmap, //params[0] := unary lambda, params[1] := function call (evaluates "fmap(f, g(xs...)) -> g(f(xs)...)")
-			ffilter, //params[0] := unary lambda returning bool, params[1] := function call (leaves only parameters of params[1] where params[0] returns true)
+			fmap, //params[1] := unary lambda, params[2] := function call (evaluates "fmap(g, f, g(xs...)) -> g(f(xs)...)")
+			ffilter, //params[1] := unary lambda returning bool, params[2] := function call (leaves only parameters of params[2] where params[1] returns true)
 			fsplit, //as ffilter, but returns both subsets (predicate true and else) as pair
 			ffoldl, //folds call from left
 			ffoldr, //folds call from right
@@ -350,7 +351,7 @@ namespace simp {
 		//  dilation:    uses all later members except always_preceeding_next (because that is a tautology here)
 		//  backtracking: uses ONLY rematchable_params (not even uses match_data_index)
 		//  linear:      uses nothing
-		MatchStrategy strategy = MatchStrategy::linear;
+		MatchStrategy strategy = MatchStrategy::backtracking;
 		//indexes in MatchData::variadic_match_data (used in both commutative and non-commutative)
 		std::uint32_t match_data_index = -1u;
 		//bit i dertermines whether parameter i is rematchable (used in both commutative and non-commutative)
@@ -543,11 +544,11 @@ namespace simp {
 			{ MiscFn::pair              , "pair"      , 2u, {}                     , MiscFn::pair                },
 			{ MiscFn::fst               , "fst"       , 1u, { MiscFn::pair        }, Restr::any                  },
 			{ MiscFn::snd               , "snd"       , 1u, { MiscFn::pair        }, Restr::any                  },
-			{ HaskellFn::fmap           , "fmap"      , 2u, { Restr::callable, Literal::call }, Literal::call    },
-			{ HaskellFn::ffilter        , "ffilter"   , 2u, { Restr::callable, Literal::call }, Literal::call    },
-			{ HaskellFn::fsplit         , "fsplit"    , 2u, { Restr::callable, Literal::call }, MiscFn::pair     },
-			{ HaskellFn::ffoldl         , "ffoldl"    , 3u, { Restr::callable, Restr::any, Literal::call }, Restr::any }, //foldl f z (x:xs) = foldl f (f z x) xs
-			{ HaskellFn::ffoldr         , "ffoldr"    , 3u, { Restr::callable, Restr::any, Literal::call }, Restr::any }, //foldr f z (x:xs) = f x (foldr f z xs) 
+			{ HaskellFn::fmap           , "fmap"      , 3u, { Restr::callable, Restr::callable, Literal::call }, Literal::call    },
+			{ HaskellFn::ffilter        , "ffilter"   , 3u, { Restr::callable, Restr::callable, Literal::call }, Literal::call    },
+			{ HaskellFn::fsplit         , "fsplit"    , 3u, { Restr::callable, Restr::callable, Literal::call }, MiscFn::pair     },
+			{ HaskellFn::ffoldl         , "ffoldl"    , 4u, { Restr::callable, Restr::callable, Restr::any, Literal::call }, Restr::any }, //foldl f z (x:xs) = foldl f (f z x) xs
+			{ HaskellFn::ffoldr         , "ffoldr"    , 4u, { Restr::callable, Restr::callable, Restr::any, Literal::call }, Restr::any }, //foldr f z (x:xs) = f x (foldr f z xs) 
 			{ PatternAuxFn::value_match , "_VM"       , 3u, { PatternUnsigned{}, Restr::any, Restr::any }, Restr::any }, //layout as in ValueMatch (minus .owner)
 			{ PatternAuxFn::of_type     , "_Of_T"     , 2u, { Restr::any, Literal::native }, Restr::boolean      },
 		});
