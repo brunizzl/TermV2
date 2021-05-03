@@ -351,7 +351,7 @@ namespace simp {
 		//  dilation:    uses all later members except always_preceeding_next (because that is a tautology here)
 		//  backtracking: uses ONLY rematchable_params (not even uses match_data_index)
 		//  linear:      uses nothing
-		MatchStrategy strategy = MatchStrategy::backtracking;
+		MatchStrategy strategy = MatchStrategy::linear; //default required as linear in build_rume::build_lhs_multis_and_pattern_calls
 		//indexes in MatchData::variadic_match_data (used in both commutative and non-commutative)
 		std::uint32_t match_data_index = -1u;
 		//bit i dertermines whether parameter i is rematchable (used in both commutative and non-commutative)

@@ -1228,6 +1228,7 @@ namespace simp {
                         if (native_f.is<FixedArity>() && this_multi_count > 0)
                             throw TypeError{ "multi match illegal in fixed arity", ref };
                     }
+
                     if (this_multi_count > 0u) {
                         call_info.strategy = MatchStrategy::dilation;
                         return std::tuple{ true, false };
@@ -1235,8 +1236,8 @@ namespace simp {
                     else if (is_rematchable(ref)) {
                         call_info.strategy = MatchStrategy::backtracking;
                     }
-                    else {
-                        call_info.strategy = MatchStrategy::linear;
+                    else {//required as default, as otherwise is_rematchable above will always return true
+                        assert(call_info.strategy == MatchStrategy::linear);
                     }
                     return std::tuple{ false, false };
                 } ();
@@ -1250,6 +1251,7 @@ namespace simp {
                         call_info.rematchable_params.set(i, is_rematchable(ref.at(params[i])));
                     }
                     assert(call_info.strategy != MatchStrategy::linear || call_info.rematchable_params.none());
+                    assert(call_info.strategy != MatchStrategy::backtracking || call_info.rematchable_params.any());
                 }
                 if (prime) { //give current own match data index and change multis to final form
                     const unsigned this_pattern_index = pattern_call_index++;
@@ -1419,9 +1421,7 @@ namespace simp {
                     if (pn_params.size() != params.size()) {
                         return false;
                     }
-                    if (pn_params.size() == 0u) {
-                        return true;
-                    }
+                    assert(pn_params.size() > 0u); //where ele would the rematch be? in the function? dont be silly.
                     const auto rematchable_params = pattern_call_info(pn_ref).rematchable_params;
                     std::size_t i = 0u; 
                     for (;;) {
@@ -1516,18 +1516,27 @@ namespace simp {
                         find_permutation(pn_ref, ref, match_data, needle_i, hay_k) :
                         find_dilation   (pn_ref, ref, match_data, needle_i, hay_k);
                 } break;
-                case MatchStrategy::backtracking:
-                case MatchStrategy::linear: {
-                    const Call& pn_call = *pn_ref;
-                    const Call& call = *ref;
-                    assert(pn_call.size() == call.size());
-                    const auto stop = call.end();
-                    for (auto pn_iter = pn_call.begin(), iter = call.begin(); iter != stop; ++pn_iter, ++iter) {
-                        if (rematch(pn_ref.at(*pn_iter), ref.at(*iter), match_data)) {
-                            return true;
-                        }
+                case MatchStrategy::backtracking: {
+                    const std::span<const NodeIndex> pn_params = pn_ref->call.parameters();
+                    const std::span<const NodeIndex> params = ref->call.parameters();
+                    assert(pn_params.size() == params.size());
+                    assert(pn_params.size() > 0u);
+                    const auto rematchable_params = pattern_call_info(pn_ref).rematchable_params;
+                    std::size_t i = pn_params.size();
+                    for (;;) {
+                        i--;
+                        while (!rematchable_params.test(i) ||
+                            !rematch(pn_ref.at(pn_params[i]), ref.at(params[i]), match_data)) 
+                        {   if (i == 0u) return false;
+                            i--;
+                        } do {
+                            i++;
+                            if (i == pn_params.size()) return true;
+                        } while(match_(pn_ref.at(pn_params[i]), ref.at(params[i]), match_data));
                     }
                 } break;
+                case MatchStrategy::linear:
+                    assert(false); //why would one rematch something not rematchable?
                 }
             }
             else if (pn_ref.type == Literal::lambda) {
