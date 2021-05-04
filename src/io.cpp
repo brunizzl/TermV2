@@ -185,7 +185,7 @@ namespace simp {
 				}
 				else if (name.starts_with('$')) {
 					const std::size_t res_index = Call::build(store, std::to_array({
-						from_native(nv::PatternAuxFn::value_match),               //function type
+						from_native(nv::PatternFn::value_match),               //function type
 						NodeIndex(infos.value_matches.size(), PatternUnsigned{}), //.match_data_index
 						from_native(nv::ComplexSubset::complex),                  //.domain
 						value_proxy                                               //.match_index
@@ -274,7 +274,7 @@ namespace simp {
 			case Head::Type::times:      return to_buildin_call(1, nv::Comm::product);
 			case Head::Type::divided:    return to_inverse_buildin_call(nv::Comm::product, build_inverted<Store>);
 			case Head::Type::power:      return to_buildin_call(1, nv::CtoC::pow);
-			case Head::Type::of_type:    return to_buildin_call(1, nv::PatternAuxFn::of_type);
+			case Head::Type::of_type:    return to_buildin_call(1, nv::PatternFn::of_type);
 			case Head::Type::not_: {
 				view.remove_prefix(1u);  //remove '!'
 				const NodeIndex to_negate = parse::build(store, infos, view);
@@ -400,7 +400,7 @@ namespace simp {
 				const bool contains_single = simp::search(cond_ref, 
 					[](const UnsaveRef r) { return r.type == SingleMatch::weak; }) != literal_nullptr;
 				const bool contains_value = simp::search(cond_ref,
-					[](const UnsaveRef r) { return r.typed_idx() == from_native(nv::PatternAuxFn::value_match); }) != literal_nullptr;
+					[](const UnsaveRef r) { return r.typed_idx() == from_native(nv::PatternFn::value_match); }) != literal_nullptr;
 				const bool contains_multi = simp::search(cond_ref,
 					[](const UnsaveRef r) { return r.type == SpecialMatch::multi; }) != literal_nullptr; 
 				const bool contains_lambda = simp::search(cond_ref,
@@ -436,7 +436,7 @@ namespace simp {
 					const NodeIndex value_call_idx = simp::search(cond_ref,
 						[](const UnsaveRef r) { 
 							return r.type == Literal::call && 
-							r->call.function() == from_native(nv::PatternAuxFn::value_match); 
+							r->call.function() == from_native(nv::PatternFn::value_match); 
 						});
 					assert(value_call_idx != literal_nullptr);
 					Call& value_call = *MutRef(store, value_call_idx);
@@ -446,7 +446,7 @@ namespace simp {
 			{ //give value conditions to value match variables
 				const auto restrict_value = [&value_conditions](const MutRef r) {
 					if (r.type == Literal::call && 
-						r->call.function() == from_native(nv::PatternAuxFn::value_match) && //call to _VM
+						r->call.function() == from_native(nv::PatternFn::value_match) && //call to _VM
 						//if call contains no match variables itself and holds only shallow parameters, 
 						//  it is assumed to stem from name_lookup::build_symbol
 						std::none_of(r->call.begin(), r->call.end(),
@@ -599,7 +599,7 @@ namespace simp {
 						case Native(ToBool::greater_eq):    return { "" , " >= " };
 						case Native(ToBool::smaller_eq):    return { "" , " <= " };
 						case Native(ToBool::not_):          return { "!", ""     };
-						case Native(PatternAuxFn::of_type): return { "" , " :"   };
+						case Native(PatternFn::of_type): return { "" , " :"   };
 						}
 					}
 					append_to_string(ref.at(function), str, max_infixr);

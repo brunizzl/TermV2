@@ -57,7 +57,7 @@ namespace simp {
 				std::vector<NameInfo> lambda_params = {};  //only contains instances of Literal::lambda_param -> always shallow
 				std::vector<NameInfo> single_matches = {}; //stored as SingleMatch::weak
 				std::vector<NameInfo> multi_matches = {};  //stored as MultiMatch node with .match_data_index currently holding the identification number
-				std::vector<NameInfo> value_matches = {};  //stored as call to nv::PatternAuxFn::value_match
+				std::vector<NameInfo> value_matches = {};  //stored as call to nv::PatternFn::value_match
 				bool parse_match = true; //set to false after match is parsed
 			};
 			struct LiteralInfos

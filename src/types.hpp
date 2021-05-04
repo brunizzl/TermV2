@@ -177,6 +177,7 @@ namespace simp {
 			smaller,
 			greater_eq,
 			smaller_eq,
+			contains, //true if fst contains snd
 			COUNT
 		};
 
@@ -190,6 +191,7 @@ namespace simp {
 			pair,   //two parameters, no evaluation
 			fst, //access pair elements
 			snd, //access pair elements
+			replace, //"replace(x, list(y, ys...), list(z, zs...))" returns x, but all occurences of y are replaced by z and so on
 			COUNT
 		};
 
@@ -197,16 +199,16 @@ namespace simp {
 		//the first parameter (params[0]) is always a callable, defining on a call to which function the transformation should be performed
 		enum class HaskellFn
 		{
-			fmap, //params[1] := unary lambda, params[2] := function call (evaluates "fmap(g, f, g(xs...)) -> g(f(xs)...)")
-			ffilter, //params[1] := unary lambda returning bool, params[2] := function call (leaves only parameters of params[2] where params[1] returns true)
-			fsplit, //as ffilter, but returns both subsets (predicate true and else) as pair
-			ffoldl, //folds call from left
-			ffoldr, //folds call from right
+			map, //params[1] := unary lambda, params[2] := function call (evaluates "map(g, f, g(xs...)) -> g(f(xs)...)")
+			filter, //params[1] := unary lambda returning bool, params[2] := function call (leaves only parameters of params[2] where params[1] returns true)
+			split, //as ffilter, but returns both subsets (predicate true and else) as pair
+			foldl, //folds call from left
+			foldr, //folds call from right
 			COUNT
 		};
 
 		//helpers for pattern construction
-		enum class PatternAuxFn
+		enum class PatternFn
 		{
 			value_match, //used to represent all of ValueMatch during build process and final ValueMatch in rhs
 			of_type, //returns true if fst is element of snd
@@ -217,7 +219,7 @@ namespace simp {
 		//behavior for every specific element in FixedArity is (at least) defined at array nv::fn_props_table specifying name and arity
 		// if the element in Fn is of order one (no functions as arguments / results), 
 		//  function nv::eval specifies how to evaluate
-		using FixedArity = SumEnum<PatternAuxFn, HaskellFn, MiscFn, CtoC, ToBool, Bool>;
+		using FixedArity = SumEnum<PatternFn, HaskellFn, MiscFn, CtoC, ToBool, Bool>;
 
 		//everything callable
 		using Function_ = SumEnum<Variadic, FixedArity>;
@@ -504,53 +506,55 @@ namespace simp {
 		};
 
 		constexpr auto fixed_arity_table = std::to_array<FixedArityProps>({
-			{ Bool::false_              , "false"     , 2u, { Restr::any          }, Restr::any                  },
-			{ Bool::true_               , "true"      , 2u, { Restr::any          }, Restr::any                  },
-			{ ToBool::not_              , "not"       , 1u, { Restr::boolean      }, Restr::boolean              },
-			{ ToBool::eq                , "eq"        , 2u, { Restr::any          }, Restr::boolean              },
-			{ ToBool::neq               , "neq"       , 2u, { Restr::any          }, Restr::boolean              },
-			{ ToBool::greater           , "greater"   , 2u, { ComplexSubset::real }, Restr::boolean              },
-			{ ToBool::smaller           , "smaller"   , 2u, { ComplexSubset::real }, Restr::boolean              },
-			{ ToBool::greater_eq        , "greater_eq", 2u, { ComplexSubset::real }, Restr::boolean              },
-			{ ToBool::smaller_eq        , "smaller_eq", 2u, { ComplexSubset::real }, Restr::boolean              },
-			{ CtoC::pow                 , "pow"       , 2u, { Literal::complex    }, Literal::complex            },
-			{ CtoC::log                 , "log"       , 2u, { Literal::complex    }, Literal::complex            },
-			{ CtoC::sqrt                , "sqrt"      , 1u, { Literal::complex    }, Literal::complex            },
-			{ CtoC::exp                 , "exp"       , 1u, { Literal::complex    }, Literal::complex            },
-			{ CtoC::ln                  , "ln"        , 1u, { Literal::complex    }, Literal::complex            },
-			{ CtoC::sin                 , "sin"       , 1u, { Literal::complex    }, Literal::complex            },
-			{ CtoC::cos                 , "cos"       , 1u, { Literal::complex    }, Literal::complex            },
-			{ CtoC::tan                 , "tan"       , 1u, { Literal::complex    }, Literal::complex            },
-			{ CtoC::sinh                , "sinh"      , 1u, { Literal::complex    }, Literal::complex            },
-			{ CtoC::cosh                , "cosh"      , 1u, { Literal::complex    }, Literal::complex            },
-			{ CtoC::tanh                , "tanh"      , 1u, { Literal::complex    }, Literal::complex            },
-			{ CtoC::asin                , "asin"      , 1u, { Literal::complex    }, Literal::complex            },
-			{ CtoC::acos                , "acos"      , 1u, { Literal::complex    }, Literal::complex            },
-			{ CtoC::atan                , "atan"      , 1u, { Literal::complex    }, Literal::complex            },
-			{ CtoC::asinh               , "asinh"     , 1u, { Literal::complex    }, Literal::complex            },
-			{ CtoC::acosh               , "acosh"     , 1u, { Literal::complex    }, Literal::complex            },
-			{ CtoC::atanh               , "atanh"     , 1u, { Literal::complex    }, Literal::complex            },
-			{ CtoC::abs                 , "abs"       , 1u, { Literal::complex    }, ComplexSubset::not_negative },
-			{ CtoC::arg                 , "arg"       , 1u, { Literal::complex    }, ComplexSubset::not_negative },
-			{ CtoC::re                  , "re"        , 1u, { Literal::complex    }, ComplexSubset::real         },
-			{ CtoC::im                  , "im"        , 1u, { Literal::complex    }, ComplexSubset::real         },
-			{ CtoC::conj                , "conj"      , 1u, { Literal::complex    }, Literal::complex            },
-			{ CtoC::floor               , "floor"     , 1u, { ComplexSubset::real }, ComplexSubset::integer      },
-			{ CtoC::ceil                , "ceil"      , 1u, { ComplexSubset::real }, ComplexSubset::integer      },
-			{ MiscFn::id                , "id"        , 1u, { Restr::any          }, Restr::any                  },
-			{ MiscFn::force             , "force"     , 1u, { Literal::complex    }, Literal::complex            },
-			{ MiscFn::diff              , "diff"      , 2u, { Restr::any, Literal::symbol }, Restr::any          },
-			{ MiscFn::fdiff             , "fdiff"     , 1u, { Restr::callable     }, Restr::callable             },
-			{ MiscFn::pair              , "pair"      , 2u, {}                     , MiscFn::pair                },
-			{ MiscFn::fst               , "fst"       , 1u, { MiscFn::pair        }, Restr::any                  },
-			{ MiscFn::snd               , "snd"       , 1u, { MiscFn::pair        }, Restr::any                  },
-			{ HaskellFn::fmap           , "fmap"      , 3u, { Restr::callable, Restr::callable, Literal::call }, Literal::call    },
-			{ HaskellFn::ffilter        , "ffilter"   , 3u, { Restr::callable, Restr::callable, Literal::call }, Literal::call    },
-			{ HaskellFn::fsplit         , "fsplit"    , 3u, { Restr::callable, Restr::callable, Literal::call }, MiscFn::pair     },
-			{ HaskellFn::ffoldl         , "ffoldl"    , 4u, { Restr::callable, Restr::callable, Restr::any, Literal::call }, Restr::any }, //foldl f z (x:xs) = foldl f (f z x) xs
-			{ HaskellFn::ffoldr         , "ffoldr"    , 4u, { Restr::callable, Restr::callable, Restr::any, Literal::call }, Restr::any }, //foldr f z (x:xs) = f x (foldr f z xs) 
-			{ PatternAuxFn::value_match , "_VM"       , 3u, { PatternUnsigned{}, Restr::any, Restr::any }, Restr::any }, //layout as in ValueMatch (minus .owner)
-			{ PatternAuxFn::of_type     , "_Of_T"     , 2u, { Restr::any, Literal::native }, Restr::boolean      },
+			{ Bool::false_           , "false"     , 2u, { Restr::any          }, Restr::any                  },
+			{ Bool::true_            , "true"      , 2u, { Restr::any          }, Restr::any                  },
+			{ ToBool::not_           , "not"       , 1u, { Restr::boolean      }, Restr::boolean              },
+			{ ToBool::eq             , "eq"        , 2u, { Restr::any          }, Restr::boolean              },
+			{ ToBool::neq            , "neq"       , 2u, { Restr::any          }, Restr::boolean              },
+			{ ToBool::greater        , "greater"   , 2u, { ComplexSubset::real }, Restr::boolean              },
+			{ ToBool::smaller        , "smaller"   , 2u, { ComplexSubset::real }, Restr::boolean              },
+			{ ToBool::greater_eq     , "greater_eq", 2u, { ComplexSubset::real }, Restr::boolean              },
+			{ ToBool::smaller_eq     , "smaller_eq", 2u, { ComplexSubset::real }, Restr::boolean              },
+			{ ToBool::contains       , "contains"  , 2u, { Restr::any          }, Restr::boolean              },
+			{ CtoC::pow              , "pow"       , 2u, { Literal::complex    }, Literal::complex            },
+			{ CtoC::log              , "log"       , 2u, { Literal::complex    }, Literal::complex            },
+			{ CtoC::sqrt             , "sqrt"      , 1u, { Literal::complex    }, Literal::complex            },
+			{ CtoC::exp              , "exp"       , 1u, { Literal::complex    }, Literal::complex            },
+			{ CtoC::ln               , "ln"        , 1u, { Literal::complex    }, Literal::complex            },
+			{ CtoC::sin              , "sin"       , 1u, { Literal::complex    }, Literal::complex            },
+			{ CtoC::cos              , "cos"       , 1u, { Literal::complex    }, Literal::complex            },
+			{ CtoC::tan              , "tan"       , 1u, { Literal::complex    }, Literal::complex            },
+			{ CtoC::sinh             , "sinh"      , 1u, { Literal::complex    }, Literal::complex            },
+			{ CtoC::cosh             , "cosh"      , 1u, { Literal::complex    }, Literal::complex            },
+			{ CtoC::tanh             , "tanh"      , 1u, { Literal::complex    }, Literal::complex            },
+			{ CtoC::asin             , "asin"      , 1u, { Literal::complex    }, Literal::complex            },
+			{ CtoC::acos             , "acos"      , 1u, { Literal::complex    }, Literal::complex            },
+			{ CtoC::atan             , "atan"      , 1u, { Literal::complex    }, Literal::complex            },
+			{ CtoC::asinh            , "asinh"     , 1u, { Literal::complex    }, Literal::complex            },
+			{ CtoC::acosh            , "acosh"     , 1u, { Literal::complex    }, Literal::complex            },
+			{ CtoC::atanh            , "atanh"     , 1u, { Literal::complex    }, Literal::complex            },
+			{ CtoC::abs              , "abs"       , 1u, { Literal::complex    }, ComplexSubset::not_negative },
+			{ CtoC::arg              , "arg"       , 1u, { Literal::complex    }, ComplexSubset::not_negative },
+			{ CtoC::re               , "re"        , 1u, { Literal::complex    }, ComplexSubset::real         },
+			{ CtoC::im               , "im"        , 1u, { Literal::complex    }, ComplexSubset::real         },
+			{ CtoC::conj             , "conj"      , 1u, { Literal::complex    }, Literal::complex            },
+			{ CtoC::floor            , "floor"     , 1u, { ComplexSubset::real }, ComplexSubset::integer      },
+			{ CtoC::ceil             , "ceil"      , 1u, { ComplexSubset::real }, ComplexSubset::integer      },
+			{ MiscFn::id             , "id"        , 1u, { Restr::any          }, Restr::any                  },
+			{ MiscFn::force          , "force"     , 1u, { Literal::complex    }, Literal::complex            },
+			{ MiscFn::diff           , "diff"      , 2u, { Restr::any, Literal::symbol }, Restr::any          },
+			{ MiscFn::fdiff          , "fdiff"     , 1u, { Restr::callable     }, Restr::callable             },
+			{ MiscFn::pair           , "pair"      , 2u, {}                     , MiscFn::pair                },
+			{ MiscFn::fst            , "fst"       , 1u, { MiscFn::pair        }, Restr::any                  },
+			{ MiscFn::snd            , "snd"       , 1u, { MiscFn::pair        }, Restr::any                  },
+			{ MiscFn::replace        , "replace"   , 3u, { Restr::any, NonComm::list, NonComm::list        }, Restr::any       },
+			{ HaskellFn::map         , "map"       , 3u, { Restr::callable, Restr::callable, Literal::call }, Literal::call    },
+			{ HaskellFn::filter      , "filter"    , 3u, { Restr::callable, Restr::callable, Literal::call }, Literal::call    },
+			{ HaskellFn::split       , "split"     , 3u, { Restr::callable, Restr::callable, Literal::call }, MiscFn::pair     },
+			{ HaskellFn::foldl       , "ffoldl"    , 4u, { Restr::callable, Restr::callable, Restr::any, Literal::call }, Restr::any }, //foldl f z (x:xs) = foldl f (f z x) xs
+			{ HaskellFn::foldr       , "ffoldr"    , 4u, { Restr::callable, Restr::callable, Restr::any, Literal::call }, Restr::any }, //foldr f z (x:xs) = f x (foldr f z xs) 
+			{ PatternFn::value_match , "_VM"       , 3u, { PatternUnsigned{}, Restr::any, Restr::any }, Restr::any }, //layout as in ValueMatch (minus .owner)
+			{ PatternFn::of_type     , "_Of_T"     , 2u, { Restr::any, Literal::native }, Restr::boolean      },
 		});
 		static_assert(static_cast<unsigned>(fixed_arity_table.front().type) == 0u);
 		static_assert(bmath::intern::is_sorted_by(fixed_arity_table, &FixedArityProps::type));

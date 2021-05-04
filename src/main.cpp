@@ -14,21 +14,22 @@ TODO:
 
 important:
  - finish match:
-	   - test_condition
-	   - find_dilation
-	   - rematching in MatchStrategy::bachtracking
-	   - eval_value_match
- - implement fst, snd, ffilter, fsplit, ...
- - add eval_native for min/max to remove values guaranteed to not be minimum / maximum without requiring full evaluation
+	  - test_condition (only allow calls to functions returning bool for now)
+	  - find_dilation
+	  - rematching in MatchStrategy::bachtracking
+	  - eval_value_match
  - only test subset of rulerange (requires rule iterator to become random access)
- - remove "0" from sum, "1" from product
+ - implement "contains" and "replace"
  - type checking (extended: keep track of what restrictions apply to match variable in lhs, use in rhs)
  - finnish building / verifying pattern:
       - (depends on type checking) verify whole patterns
       - check PatternCall to each not exceed maximal length and check numer of PatternCall in pattern not more than allowed 
 	  - enable implicit outer multi
+	  - allow only function calls returning bool in test_condition 
 
 nice to have:
+ - implement fst, snd, filter, split, ...
+ - add eval_native for min/max to remove values guaranteed to not be minimum / maximum without requiring full evaluation
  - add neutral element to associative functions
  - add "dont care" pattern
  - use ref-counting in store instead of always copy (-> normalize::eval_native no longer has to do as much memory management)
@@ -93,7 +94,7 @@ int main()
 			{ "(\\x y z. list(x, y, z))(a)(4, sin(x))" },
 			{ "4^(0.5)" },
 			{ "2^(0.5)" },
-			{ "fmap(\\x. -x, sum(a, b, sin(x), 3, 5))" },
+			{ "map(\\x. -x, sum(a, b, sin(x), 3, 5))" },
 			{ "berb && frobbl && true && (false || !false || schmenck) && true && !alf" },
 			{ "10/5" },
 			{ "set(1, 100, a, b, 50 + 2 * 25, a, (\\x.2 x)(50))" },
@@ -133,10 +134,10 @@ int main()
 			{ "a bs... + a cs... | !(a :complex)      = a (product(bs...) + product(cs...))" },
 			{ "a bs... + a       | !(a :complex)      = a (product(bs...) + 1)" },
 			{ "a       + a       | !(a :complex)      = 2 a" },
-			{ "a b               | a :complex, b :sum = fmap(sum, \\x .a x, b)" },
+			{ "a b               | a :complex, b :sum = map(sum, \\x .a x, b)" },
 			
-			{ "-a     | a :sum     = fmap(sum    , \\x. -x    , a)" },
-			{ "a^(-1) | a :product = fmap(product, \\x. x^(-1), a)" },
+			{ "-a     | a :sum     = map(sum    , \\x. -x    , a)" },
+			{ "a^(-1) | a :product = map(product, \\x. x^(-1), a)" },
 			
 			{ "sin(x)^2 + cos(x)^2 = 1" },
 			
@@ -151,15 +152,14 @@ int main()
 			{ "sin((2 $k + 1.5) 'pi') | $k :int = -1" },
 			
 				//differentiation rules:
-			{ "diff(x, x)                    = 1" },
-			{ "diff(a, x)       | a :complex = 0" },
-			{ "diff(a, x)       | a :symbol  = 0" },
-			{ "diff(f^a, x)     | a :complex = diff(f, x) a f^(a-1)" },
-			{ "diff(a^f, x)     | a :complex = diff(f, x) ln(a) a^f" },
-			{ "diff(g^h, x)                  = (diff(h, x) ln(g) + h diff(g, x)/g) g^h" },
-			{ "diff(a, x)       | a :sum     = fmap(sum, \\f .diff(f, x), a)" },
-			{ "diff(u vs..., x)              = diff(u, x) vs... + u diff(product(vs...), x)" },
-			{ "diff(f(y), x)                 = diff(y, x) fdiff(f)(y)" },
+			{ "diff(x, x)                         = 1" },
+			{ "diff(a, x)       | !contains(a, x) = 0" },
+			{ "diff(f^a, x)     | !contains(a, x) = diff(f, x) a f^(a-1)" },
+			{ "diff(a^f, x)     | !contains(a, x) = diff(f, x) ln(a) a^f" },
+			{ "diff(g^h, x)                       = (diff(h, x) ln(g) + h diff(g, x)/g) g^h" },
+			{ "diff(a, x)       | a :sum          = map(sum, \\f .diff(f, x), a)" },
+			{ "diff(u vs..., x)                   = diff(u, x) vs... + u diff(product(vs...), x)" },
+			{ "diff(f(y), x)                      = diff(y, x) fdiff(f)(y)" },
 			
 			{ "fdiff(\\x .y) = \\x .diff(y, x)" },
 			{ "fdiff(sin)    = cos" },
@@ -168,7 +168,7 @@ int main()
 			{ "fdiff(ln)     = \\x .x^(-1)" },
 			{ "fdiff(tan)    = \\x .cos(x)^(-2)" },
 			
-				//exponential runtime fibonacci implementation:
+			//exponential runtime fibonacci implementation:
 			{ "'fib'(n) | n >= 0 = (n < 2)(n, 'fib'(n - 1) + 'fib'(n - 2))" },
 			
 				////reversing a list:
@@ -181,19 +181,19 @@ int main()
 				//{ "n :nat, a, b, tail :list... | list_fibs(n, list{a, b, tail}) = list_fibs(n - 1, list{force(a + b), a, b, tail})" },
 				//{ "              tail :list... | list_fibs(0, list{tail})       = list{tail}" },
 			
-			{ "ffilter(f, p, f(xs...)) = 'take_true'(f(), fmap(f, \\x .pair(p(x), x), f(xs...)))" },
+			{ "filter(f, p, f(xs...)) = 'take_true'(f(), map(f, \\x .pair(p(x), x), f(xs...)))" },
 			{ "'take_true'(f(xs...), f(pair(true, x), ys...)) = 'take_true'(f(xs..., x), f(ys...))" },
 			{ "'take_true'(f(xs...), f(pair(_   , x), ys...)) = 'take_true'(f(xs...), f(ys...))" },
 			{ "'take_true'(fxs, f())                          = fxs" },
 			
-			{ "fsplit(f, p, f(xs...)) = 'split_hlp'(f(), f(), fmap(f, \\x .pair(p(x), x), f(xs...)))" },
+			{ "split(f, p, f(xs...)) = 'split_hlp'(f(), f(), map(f, \\x .pair(p(x), x), f(xs...)))" },
 			{ "'split_hlp'(f(xs...), f(ys...), f(pair(true, z), zs...)) = 'split_hlp'(f(xs..., z), f(ys...), f(zs...))" },
 			{ "'split_hlp'(f(xs...), f(ys...), f(pair(_   , z), zs...)) = 'split_hlp'(f(xs...), f(ys..., z), f(zs...))" },
 			{ "'split_hlp'(fxs, fys, f())                               = pair(fxs, fys)" },
 			
 			{ "'sort'(list())                               = list()" },
 			{ "'sort'(list(x))                              = list(x)" },
-			{ "'sort'(list(x, xs...))                       = 'sort_h1'(fsplit(\\y .y < x, list(xs...)), x)" },
+			{ "'sort'(list(x, xs...))                       = 'sort_h1'(split(\\y .y < x, list(xs...)), x)" },
 			{ "'sort_h1'(pair(list(xs...), list(ys...)), x) = 'sort_h2'('sort'(list(xs...)), x, 'sort'(list(ys...)))" },
 			{ "'sort_h2'(list(xs...), x, list(ys...))       = list(xs..., x, ys...)" },
 			
@@ -206,8 +206,8 @@ int main()
 			{ "min{x, y} | x :real, y :real, x > y = y" },
 			{ "max{x, y} | x :real, y :real, x > y = x" },
 			
-			{ "ffoldr(f, g, acc, f())         = acc" },
-			{ "ffoldr(f, g, acc, f(x, xs...)) = g(x, ffoldr(f, g, acc, f(xs...)))" },
+			{ "foldr(f, g, acc, f())         = acc" },
+			{ "foldr(f, g, acc, f(x, xs...)) = g(x, foldr(f, g, acc, f(xs...)))" },
 
 			{ "pair('test_'(ws..., a, b, c, xs...), 'test_'(ys..., a, b, c, zs...)) = list(ws..., 'found'(a, b, c), xs..., '_space_', ys..., 'found'(a, b, c), zs...)" },
 			{ "pair(a + b, list(b, a)) = 'success'('a_is', a, 'and_b_is', b)" },

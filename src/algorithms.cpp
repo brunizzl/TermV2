@@ -280,6 +280,34 @@ namespace simp {
             return {};
         } //eval_unary_complex
 
+        struct ReplaceItem
+        {
+            NodeIndex from, to;
+        };
+
+        NodeIndex replace(const MutRef ref, const Options options, const unsigned lambda_param_offset, 
+            const bmath::intern::StupidBufferVector<ReplaceItem, 16>& replace_items)
+        {
+            assert(ref.type != PatternCall{});
+            for (const ReplaceItem replace_item : replace_items) {
+                if (compare_tree(ref.at(replace_item.from), ref) == std::strong_ordering::equal) {
+                    free_tree(ref);
+                    return copy_tree(ref.at(replace_item.to), *ref.store);
+                }
+            }
+            if (ref.type == Literal::call) {
+                const auto stop = end(ref);
+                for (auto iter = begin(ref); iter != stop; ++iter) {
+                    *iter = replace(ref.at(*iter), options, lambda_param_offset, replace_items);
+                }
+                return normalize::outermost(ref, options, lambda_param_offset).res;
+            }
+            if (ref.type == Literal::lambda) {
+                ref->lambda.definition = replace(ref.at(ref->lambda.definition), options, lambda_param_offset, replace_items);
+            }
+            return ref.typed_idx();
+        } //find_and_replace
+
         NodeIndex BMATH_FORCE_INLINE eval_native(const MutRef ref, const Options options, const NodeIndex function, const unsigned lambda_param_offset)
         {
             using namespace nv;
@@ -303,8 +331,7 @@ namespace simp {
                 }
                 const std::size_t f_arity = arity(fixed_f);
                 assert(f_arity > 0u); //that would not make sense in a purely functional laguage
-                if (f_arity != params.size()) [[unlikely]]
-                    throw TypeError{ "wrong number of parameters in function call", ref };
+                if (params.size() != f_arity) return literal_nullptr;
 
                 const auto compute_and_replace = [&](auto compute) -> NodeIndex {
                     std::feclearexcept(FE_ALL_EXCEPT);
@@ -421,7 +448,7 @@ namespace simp {
                     return bool_to_typed_idx(!is_ordered_as(std::strong_ordering::less));
                 case FixedArity(ToBool::smaller_eq):
                     return bool_to_typed_idx(!is_ordered_as(std::strong_ordering::greater));
-                case FixedArity(HaskellFn::fmap): if (allow_haskell_call(params[0], params[2])) {
+                case FixedArity(HaskellFn::map): if (allow_haskell_call(params[0], params[2])) {
                     const MutRef converter_ref = ref.at(params[1]);
                     const MutRef convertee_ref = ref.at(params[2]);
                     assert(convertee_ref.type == Literal::call);
@@ -434,10 +461,25 @@ namespace simp {
                         ref.store->at(call_index) = Call({ converter_copy, *iter });
                         *iter = outermost(ref.at(NodeIndex(call_index, Literal::call)), options, lambda_param_offset).res;
                     }
-                    static_assert(Call::min_capacity >= 3u, "assumes fmap call to only use one store slot");
-                    ref.store->free_one(ref.index); //free call to fmap
+                    static_assert(Call::min_capacity >= 3u, "assumes map call to only use one store slot");
+                    ref.store->free_one(ref.index); //free call to map
                     free_tree(converter_ref); //free function to map
                     return outermost(convertee_ref, options, lambda_param_offset).res;
+                } break;
+                case FixedArity(MiscFn::replace): if (options.replace) {
+                    bmath::intern::StupidBufferVector<ReplaceItem, 16> replace_items;
+                    assert(params[1].get_type() == Literal::call);
+                    assert(params[2].get_type() == Literal::call);
+                    const auto from_range = ref.at(params[1])->call.parameters();
+                    const auto to_range = ref.at(params[2])->call.parameters();
+                    const auto min_size = std::min(from_range.size(), to_range.size());
+                    for (std::size_t i = 0; i < min_size; i++) {
+                        replace_items.emplace_back(from_range[i], to_range[i]);
+                    }
+                    const NodeIndex res = replace(ref.at(params[0]), options, lambda_param_offset, replace_items);
+                    params[0] = literal_nullptr;
+                    free_tree(ref);
+                    return res;
                 } break;
                 }
             } //end fixed arity
@@ -799,9 +841,9 @@ namespace simp {
                 if (fst_iter == fst_end) 
                     return snd_iter == snd_end ? 
                         std::strong_ordering::equal : 
-                        std::strong_ordering::greater;
+                        std::strong_ordering::less;
                 if (snd_iter == snd_end) 
-                    return std::strong_ordering::less;
+                    return std::strong_ordering::greater;
             }
         } break;
         case NodeType(Literal::lambda): {
@@ -900,15 +942,14 @@ namespace simp {
                 return h;
             };
             static const auto rules = RuleSet({
-                //{ "x :t | x :_SingleMatch = t" }, //TODO: make this work (and add restriction to other rules here)
-                { "x :t          = t" },
-                { "x < 0         = _Negative" },
-                { "x > 0         = _Positive" },
-                { "x <= 0        = _NotPositive" },
-                { "x >= 0        = _NotNegative" },
-                { "!(x :complex) = _NoValue" },
-                { "x != 1        = _NotNeg1" },
-                { "x != 0        = _Not0" },
+                { "x :t          | x :_SingleMatch, t :native = t" },
+                { "x < 0         | x :_SingleMatch            = _Negative" },
+                { "x > 0         | x :_SingleMatch            = _Positive" },
+                { "x <= 0        | x :_SingleMatch            = _NotPositive" },
+                { "x >= 0        | x :_SingleMatch            = _NotNegative" },
+                { "!(x :complex) | x :_SingleMatch            = _NoValue" },
+                { "x != 1        | x :_SingleMatch            = _NotNeg1" },
+                { "x != 0        | x :_SingleMatch            = _Not0" },
                 }, build_very_basic_pattern);
             const auto optimize = [](const MutRef r) {
                 if (r.type == SingleMatch::restricted) {
@@ -945,7 +986,7 @@ namespace simp {
                 { "v >= 0 = _NotNegative" },
                 }, build_basic_pattern);
             const auto build_value_match = [](const MutRef r) {
-                if (r.type == Literal::call && r->call.function() == from_native(nv::PatternAuxFn::value_match)) {
+                if (r.type == Literal::call && r->call.function() == from_native(nv::PatternFn::value_match)) {
                     Call& call = *r;
                     assert(call[1].get_type().is<PatternUnsigned>());
                     const std::uint32_t match_data_index = call[1].get_index();
@@ -1369,6 +1410,36 @@ namespace simp {
         //decides if a condition appended to a single match variable is met with the current match data
         bool test_condition(const UnsaveRef cond, const MatchData& match_data)
         {
+            const auto make_ref = [&](const NodeIndex i) -> UnsaveRef {
+                const UnsaveRef i_ref = cond.at(i);
+                if (i_ref.type == SingleMatch::weak) {
+                    const auto entry = match_data.single_vars[i_ref.index];
+                    assert(entry.is_set());
+                    return match_data.make_ref(entry.match_idx);
+                }
+                assert(i_ref.type.is<Literal>());
+                return i_ref;
+            };
+
+            assert(cond.type == Literal::call);
+            const Call& call = *cond;
+            using namespace nv;
+            const Native f = to_native(call.function());
+            const auto params = call.parameters();
+            switch (f) {
+            case Native(PatternFn::of_type): 
+                return meets_restriction(make_ref(params[0]), to_native(params[1]));
+            case Native(ToBool::contains): {
+                const UnsaveRef snd_ref = make_ref(params[1]);
+                const auto is_snd = [&](const UnsaveRef r) { 
+                    return compare_tree(snd_ref, r) == std::strong_ordering::equal;
+                };
+                return search(make_ref(params[0]), is_snd) != literal_nullptr;
+            } break;
+            case Native(ToBool::not_): {
+                return !test_condition(make_ref(params[0]), match_data);
+            }
+            }
             return false;
         } //test_condition
 
