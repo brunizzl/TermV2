@@ -789,17 +789,20 @@ namespace simp {
             const auto snd_end = snd->call.end();
             auto fst_iter = fst->call.begin();
             auto snd_iter = snd->call.begin();
-            for (; fst_iter != fst_end && snd_iter != snd_end; ++fst_iter, ++snd_iter) {
-                const std::strong_ordering cmp = 
-                    compare_tree(fst.at(*fst_iter), snd.at(*snd_iter));
-                if (cmp != std::strong_ordering::equal) {
-                    return cmp;
+            for (;;) {
+                if (const auto cmp = compare_tree(fst.at(*fst_iter), snd.at(*snd_iter)); 
+                    cmp != std::strong_ordering::equal) 
+                {   return cmp;
                 }
+                ++fst_iter;
+                ++snd_iter;
+                if (fst_iter == fst_end) 
+                    return snd_iter == snd_end ? 
+                        std::strong_ordering::equal : 
+                        std::strong_ordering::greater;
+                if (snd_iter == snd_end) 
+                    return std::strong_ordering::less;
             }
-            if (fst_iter != fst_end || snd_iter != snd_end) {
-                return fst->call.size() <=> snd->call.size();
-            }
-            return std::strong_ordering::equal;
         } break;
         case NodeType(Literal::lambda): {
             const Lambda fst_lambda = *fst;
@@ -1363,188 +1366,24 @@ namespace simp {
 
     namespace match {
 
+        //decides if a condition appended to a single match variable is met with the current match data
         bool test_condition(const UnsaveRef cond, const MatchData& match_data)
         {
             return false;
         } //test_condition
 
+        //(transiently) evaluates .match_index of ValueMatch for a given start_val
         bmath::intern::OptionalComplex eval_value_match(const UnsaveRef ref, const Complex& start_val)
         {
             return bmath::intern::OptionalComplex();
         } //eval_value_match
 
-        bool match_(const UnsaveRef pn_ref, const UnsaveRef ref, MatchData& match_data)
-        {
-            assert(pn_ref.type != Literal::call);
-            if (pn_ref.type.is<Literal>() && pn_ref.type != ref.type) {
-                return false;
-            }
-            switch (pn_ref.type) {
-            case NodeType(Literal::complex): {
-                const Complex& pn_complex = *pn_ref;
-                const Complex& complex = *ref;
-                return bmath::intern::compare_complex(complex, pn_complex) == std::strong_ordering::equal;
-            }
-            case NodeType(Literal::symbol): {
-                const Symbol& pn_var = *pn_ref;
-                const Symbol& var = *ref;
-                return std::string_view(pn_var) == std::string_view(var);
-            }
-            case NodeType(Literal::native):
-            case NodeType(Literal::lambda_param):
-                return pn_ref.index == ref.index;
-            case NodeType(Literal::lambda): {
-                const Lambda pn_lambda = *pn_ref;
-                const Lambda lambda = *ref;
-                if (pn_lambda.param_count != lambda.param_count || 
-                    pn_lambda.transparent != lambda.transparent) 
-                {
-                    return false;
-                }
-                return match_(pn_ref.at(pn_lambda.definition), ref.at(lambda.definition), match_data);
-            }
-            case NodeType(PatternCall{}): {
-                if (ref.type != Literal::call) {
-                    return false;
-                }
-                if (!match_(pn_ref.at(pn_ref->call.function()), ref.at(ref->call.function()), match_data)) {
-                    return false;
-                }
-                switch (pattern_call_info(pn_ref).strategy) {
-                case MatchStrategy::permutation:
-                    return find_permutation(pn_ref, ref, match_data, 0u, 0u);
-                case MatchStrategy::dilation:
-                    return find_dilation   (pn_ref, ref, match_data, 0u, 0u);
-                case MatchStrategy::backtracking: {
-                    const std::span<const NodeIndex> pn_params = pn_ref->call.parameters();
-                    const std::span<const NodeIndex> params = ref->call.parameters();
-                    if (pn_params.size() != params.size()) {
-                        return false;
-                    }
-                    assert(pn_params.size() > 0u); //where ele would the rematch be? in the function? dont be silly.
-                    const auto rematchable_params = pattern_call_info(pn_ref).rematchable_params;
-                    std::size_t i = 0u; 
-                    for (;;) {
-                        while (match_(pn_ref.at(pn_params[i]), ref.at(params[i]), match_data)) {
-                            i++;
-                            if (i == pn_params.size()) return true;
-                        } do {
-                            if (i == 0u) return false;
-                            i--;
-                        } while (!rematchable_params.test(i) ||
-                            !rematch(pn_ref.at(pn_params[i]), ref.at(params[i]), match_data));
-                        i++;
-                    }
-                } break;
-                case MatchStrategy::linear: {
-                    const std::span<const NodeIndex> pn_params = pn_ref->call.parameters();
-                    const std::span<const NodeIndex> params = ref->call.parameters();
-                    if (pn_params.size() != params.size()) {
-                        return false;
-                    }
-                    const auto stop = params.end();
-                    for (auto pn_iter = pn_params.begin(), iter = params.begin(); iter != stop; ++pn_iter, ++iter) {
-                        if (!match_(pn_ref.at(*pn_iter), ref.at(*iter), match_data)) {
-                            return false;
-                        }
-                    }
-                    return true;
-                } break;
-                }
-            }
-            case NodeType(SingleMatch::restricted): {
-                const RestrictedSingleMatch var = *pn_ref;
-                SharedSingleMatchEntry& entry = match_data.single_vars[var.match_data_index];
-                entry.match_idx = ref.typed_idx();
-                if (var.condition.get_type() == Literal::native) {
-                    return meets_restriction(ref, to_native(var.condition));
-                }
-                return test_condition(pn_ref.at(var.condition), match_data);
-            }
-            case NodeType(SingleMatch::unrestricted): {
-                match_data.single_vars[pn_ref.index].match_idx = ref.typed_idx();
-                return true;
-            }
-            case NodeType(SingleMatch::weak): {
-                const SharedSingleMatchEntry entry = match_data.single_vars[pn_ref.index];
-                assert(entry.is_set());
-                return compare_tree(ref.at(entry.match_idx), ref) == std::strong_ordering::equal;
-            }
-            case NodeType(SpecialMatch::value): {
-                if (ref.type != Literal::complex) { //only this test allows us to pass *ref to evaluate this_value
-                    return false;
-                }
-                const ValueMatch& var = *pn_ref;
-                const bmath::intern::OptionalComplex this_value = eval_value_match(pn_ref.at(var.match_index), *ref);
-                if (!this_value || !in_complex_subset(*this_value, var.domain)) {
-                    return false;
-                }
-                else {
-                    auto& match_info = match_data.value_entry(var);
-                    if (var.owner) {
-                        match_info.value = *this_value;
-                        return true;
-                    }
-                    assert(match_info.is_set());
-                    return *this_value == match_info.value;
-                }
-            } break;
-            case NodeType(SpecialMatch::multi): //multi is matched in PatternCall, not here
-            default:
-                assert(false);
-                BMATH_UNREACHABLE;
-                return false;
-            }
-        } //match_
-
-        bool rematch(const UnsaveRef pn_ref, const UnsaveRef ref, MatchData& match_data)
-        {
-            assert(pn_ref.type != Literal::call);
-            if (pn_ref.type == PatternCall{}) {
-                assert(ref.type == Literal::call);
-                switch (pattern_call_info(pn_ref).strategy) {
-                case MatchStrategy::permutation:
-                case MatchStrategy::dilation: {
-                    SharedPatternCallEntry& entry = match_data.call_entry(pn_ref);
-                    assert(entry.match_idx == ref.typed_idx());
-
-                    const auto needle_params = pn_ref->call.parameters();
-                    const std::uint32_t needle_i = needle_params.size() - 1u;
-                    const std::uint32_t hay_k = entry.match_positions[needle_i] + 1u;
-
-                    return pattern_call_info(pn_ref).strategy == MatchStrategy::permutation ?
-                        find_permutation(pn_ref, ref, match_data, needle_i, hay_k) :
-                        find_dilation   (pn_ref, ref, match_data, needle_i, hay_k);
-                } break;
-                case MatchStrategy::backtracking: {
-                    const std::span<const NodeIndex> pn_params = pn_ref->call.parameters();
-                    const std::span<const NodeIndex> params = ref->call.parameters();
-                    assert(pn_params.size() == params.size());
-                    assert(pn_params.size() > 0u);
-                    const auto rematchable_params = pattern_call_info(pn_ref).rematchable_params;
-                    std::size_t i = pn_params.size();
-                    for (;;) {
-                        i--;
-                        while (!rematchable_params.test(i) ||
-                            !rematch(pn_ref.at(pn_params[i]), ref.at(params[i]), match_data)) 
-                        {   if (i == 0u) return false;
-                            i--;
-                        } do {
-                            i++;
-                            if (i == pn_params.size()) return true;
-                        } while(match_(pn_ref.at(pn_params[i]), ref.at(params[i]), match_data));
-                    }
-                } break;
-                case MatchStrategy::linear:
-                    assert(false); //why would one rematch something not rematchable?
-                }
-            }
-            else if (pn_ref.type == Literal::lambda) {
-                return rematch(pn_ref.at(pn_ref->lambda.definition), ref.at(ref->lambda.definition), match_data);
-            }
-            return false;
-        } //rematch
-
+        //determines weather there is a way to match needle_ref in hay_ref (thus needle_ref is assumed to part of a pattern)
+        //needle_i is the index of the first element in needle_ref to be matched. 
+        //if needle_i is not zero, it is assumed, that all previous elements in needle_ref are already matched (=> the call happens in a rematch).
+        //the first haystack_k elements of hay_ref will be skipped for the first match attemt.
+        //it is assumed, that needle_ref and hay_ref are both calls to the same nv::Comm, where pn_ref is a PatternCall
+        //returns true if a match was found
         bool find_permutation(const UnsaveRef pn_ref, const UnsaveRef hay_ref, MatchData& match_data, std::uint32_t needle_i, std::uint32_t hay_k)
         {
             assert(pn_ref.type == PatternCall{} && hay_ref.type == Literal::call);
@@ -1576,9 +1415,10 @@ namespace simp {
             while (needle_i < needles.size()) {
                 const UnsaveRef needle_ref = pn_ref.at(needles[needle_i]);
                 for (; hay_k < haystack.size(); hay_k++) {
-                    if (!currently_matched.test(hay_k) && 
-                        match_(needle_ref, hay_ref.at(haystack[hay_k]), match_data)) 
-                    {   goto prepare_next_needle;
+                    if (!currently_matched.test(hay_k) &&
+                        match_(needle_ref, hay_ref.at(haystack[hay_k]), match_data) == std::partial_ordering::equivalent)
+                    {
+                        goto prepare_next_needle; //TODO: abort early if match_ returns std::partial_ordering::greater
                     }
                 }
             rematch_last_needle:
@@ -1598,14 +1438,15 @@ namespace simp {
             prepare_next_needle:
                 currently_matched.set(hay_k);                   //already set if needle was rematched
                 needles_data.match_positions[needle_i] = hay_k; //already set if needle was rematched
-                hay_k = info.always_preceeding_next.test(needle_i) ? 
-                    hay_k + 1u : 
+                hay_k = info.always_preceeding_next.test(needle_i) ?
+                    hay_k + 1u :
                     0u;
                 needle_i++;
             }
             return true;
         } //find_permutation
 
+        //analogous to find_permutation, but for non commutative pattern containing at least one multi_marker
         bool find_dilation(const UnsaveRef pn_ref, const UnsaveRef hay_ref, MatchData& match_data, std::uint32_t needle_i, std::uint32_t hay_k)
         {
             assert(pn_ref.type == PatternCall{} && hay_ref.type == Literal::call);
@@ -1636,7 +1477,7 @@ namespace simp {
                 needle_i--;
                 hay_k--;
             }
-        match_current_needle: 
+        match_current_needle:
             {
                 const UnsaveRef needle_ref = pn_ref.at(needles[needle_i]);
                 if (info.preceeded_by_multi.test(needle_i)) {
@@ -1644,20 +1485,22 @@ namespace simp {
                     int skip_budget = haystack.size() - hay_k - needles.size() + needle_i;
                     while (skip_budget >= 0) {
                         assert(hay_k < haystack.size()); //implied by not negative skip budget
-                        if (match_(needle_ref, hay_ref.at(haystack[hay_k]), match_data))
-                        {   goto prepare_next_needle;
+                        if (matches(needle_ref, hay_ref.at(haystack[hay_k]), match_data))
+                        {
+                            goto prepare_next_needle;
                         }
                         hay_k++;
                         skip_budget--;
                     }
                     goto rematch_last_needle;
                 }
-                else if (match_(needle_ref, hay_ref.at(haystack[hay_k]), match_data))
-                {   goto prepare_next_needle;
+                else if (matches(needle_ref, hay_ref.at(haystack[hay_k]), match_data))
+                {
+                    goto prepare_next_needle;
                 }
                 goto rematch_last_needle;
             }
-        rematch_last_needle: 
+        rematch_last_needle:
             {
                 if (needle_i == 0u) {
                     return false;
@@ -1665,8 +1508,9 @@ namespace simp {
                 needle_i--;
                 hay_k = needles_data.match_positions[needle_i];
                 if (info.rematchable_params.test(needle_i) &&
-                    match_(pn_ref.at(needles[needle_i]), hay_ref.at(haystack[hay_k]), match_data))
-                {   goto prepare_next_needle;
+                    matches(pn_ref.at(needles[needle_i]), hay_ref.at(haystack[hay_k]), match_data))
+                {
+                    goto prepare_next_needle;
                 }
                 while (!info.preceeded_by_multi.test(needle_i)) {
                     if (needle_i == 0u) {
@@ -1677,7 +1521,7 @@ namespace simp {
                 hay_k = needles_data.match_positions[needle_i] + 1u;
                 goto match_current_needle;
             }
-        prepare_next_needle: 
+        prepare_next_needle:
             {
                 needles_data.match_positions[needle_i] = hay_k; //already set if needle was rematched
                 needle_i++;
@@ -1691,6 +1535,189 @@ namespace simp {
                 goto match_current_needle;
             }
         } //find_dilation
+
+        //assumes the first (i - 1) params to already be matched, starts backtracking by remaching param (i - 1)
+        //returns true if backtracking was succesfull
+        bool BMATH_FORCE_INLINE track_back(const UnsaveRef pn_ref, const UnsaveRef ref, const std::span<const NodeIndex> pn_params,
+            const std::span<const NodeIndex> params, MatchData& match_data, std::uint32_t i)
+        {
+            assert(pn_params.size() == params.size());
+            assert(pn_params.size() > 0u);
+            assert(i > 0u);
+            const auto rematchable = pattern_call_info(pn_ref).rematchable_params;
+            for (;;) {
+                i--;
+                while (!rematchable.test(i) ||
+                    !rematch(pn_ref.at(pn_params[i]), ref.at(params[i]), match_data))
+                {
+                    if (i == 0u) return false;
+                    i--;
+                } do {
+                    i++;
+                    if (i == pn_params.size()) return true;
+                }                 
+                while (matches(pn_ref.at(pn_params[i]), ref.at(params[i]), match_data));
+            }
+        } //track_back
+
+        std::partial_ordering match_(const UnsaveRef pn_ref, const UnsaveRef ref, MatchData& match_data)
+        {
+            assert(pn_ref.type != Literal::call);
+            if (pn_ref.type.is<Literal>() && pn_ref.type != ref.type) {
+                return shallow_order(pn_ref) <=> shallow_order(ref);
+            }
+
+            const auto to_order = [](const bool b) { return b ?
+                std::partial_ordering::equivalent :
+                std::partial_ordering::unordered; };
+
+            switch (pn_ref.type) {
+            case NodeType(Literal::complex):
+                return bmath::intern::compare_complex(pn_ref->complex, ref->complex);
+            case NodeType(Literal::symbol):
+                return std::string_view(pn_ref->symbol) <=> std::string_view(ref->symbol);
+            case NodeType(Literal::native):
+            case NodeType(Literal::lambda_param):
+                return pn_ref.index <=> ref.index;
+            case NodeType(Literal::lambda): {
+                const Lambda pn_lambda = *pn_ref;
+                const Lambda lambda = *ref;
+                if (pn_lambda.param_count != lambda.param_count) {
+                    return pn_lambda.param_count <=> lambda.param_count;
+                }
+                if (pn_lambda.transparent != lambda.transparent) {
+                    return pn_lambda.transparent <=> lambda.transparent;
+                }
+                return match_(pn_ref.at(pn_lambda.definition), ref.at(lambda.definition), match_data);
+            }
+            case NodeType(PatternCall{}): {
+                if (ref.type != Literal::call) {
+                    constexpr int call_order = shallow_order(UnsaveRef(nullptr, 0, Literal::call));
+                    return call_order <=> shallow_order(ref);
+                }
+                if (const auto cmp = match_(pn_ref.at(pn_ref->call.function()), ref.at(ref->call.function()), match_data);
+                    cmp != std::partial_ordering::equivalent)
+                {   return cmp;
+                }
+
+                const MatchStrategy strat = pattern_call_info(pn_ref).strategy;
+                switch (strat) {
+                case MatchStrategy::permutation:
+                    return to_order(find_permutation(pn_ref, ref, match_data, 0u, 0u));
+                case MatchStrategy::dilation:
+                    return to_order(find_dilation(pn_ref, ref, match_data, 0u, 0u));
+                default: {
+                    assert(strat == MatchStrategy::linear || strat == MatchStrategy::backtracking);
+                    const std::span<const NodeIndex> pn_params = pn_ref->call.parameters();
+                    const std::span<const NodeIndex> params = ref->call.parameters();
+                    if (pn_params.size() != params.size()) {
+                        return std::partial_ordering::unordered;
+                    }
+                    auto pn_iter = pn_params.begin();
+                    const std::partial_ordering cmp = [&] {
+                        const auto stop = params.end();
+                        for (auto iter = params.begin(); iter != stop; ++pn_iter, ++iter) {
+                            const auto cmp = match_(pn_ref.at(*pn_iter), ref.at(*iter), match_data);
+                            if (cmp != std::partial_ordering::equivalent)
+                                return cmp;
+                        }
+                        return std::partial_ordering::equivalent;
+                    }();
+
+                    const auto pn_start = pn_params.begin();
+                    if (strat == MatchStrategy::backtracking && pn_iter != pn_start &&
+                        cmp != std::partial_ordering::equivalent) [[unlikely]]
+                    {
+                        return to_order(track_back(pn_ref, ref, pn_params, params,
+                            match_data, pn_iter - pn_start));
+                    }
+                    return cmp;
+                }
+                }
+            }
+            case NodeType(SingleMatch::restricted): {
+                const RestrictedSingleMatch var = *pn_ref;
+                SharedSingleMatchEntry& entry = match_data.single_vars[var.match_data_index];
+                entry.match_idx = ref.typed_idx();
+                const bool restriction_fulfilled = [&] {
+                    return var.condition.get_type() == Literal::native ?
+                        meets_restriction(ref, to_native(var.condition)) :
+                        test_condition(pn_ref.at(var.condition), match_data);
+                }();
+                return to_order(restriction_fulfilled);
+            }
+            case NodeType(SingleMatch::unrestricted): {
+                match_data.single_vars[pn_ref.index].match_idx = ref.typed_idx();
+                return std::partial_ordering::equivalent;
+            }
+            case NodeType(SingleMatch::weak): {
+                const SharedSingleMatchEntry entry = match_data.single_vars[pn_ref.index];
+                assert(entry.is_set());
+                return compare_tree(ref.at(entry.match_idx), ref);
+            }
+            case NodeType(SpecialMatch::value): {
+                if (ref.type != Literal::complex) { //only this test allows us to pass *ref to evaluate this_value
+                    constexpr int value_order = shallow_order(UnsaveRef(nullptr, 0, Literal::complex));
+                    return value_order <=> shallow_order(ref);
+                }
+                const ValueMatch& var = *pn_ref;
+                const bmath::intern::OptionalComplex this_value = eval_value_match(pn_ref.at(var.match_index), *ref);
+                if (!this_value || !in_complex_subset(*this_value, var.domain)) {
+                    return std::partial_ordering::unordered;
+                }
+                else {
+                    auto& match_info = match_data.value_entry(var);
+                    if (var.owner) {
+                        match_info.value = *this_value;
+                        return std::partial_ordering::equivalent;
+                    }
+                    assert(match_info.is_set());
+                    return bmath::intern::compare_complex(*this_value, match_info.value);
+                }
+            } break;
+            case NodeType(SpecialMatch::multi): //multi is matched in PatternCall, not here
+            default:
+                assert(false);
+                BMATH_UNREACHABLE;
+                return std::partial_ordering::unordered;
+            }
+        } //match_
+
+        bool rematch(const UnsaveRef pn_ref, const UnsaveRef ref, MatchData& match_data)
+        {
+            assert(pn_ref.type != Literal::call);
+            if (pn_ref.type == PatternCall{}) {
+                assert(ref.type == Literal::call);
+                const MatchStrategy strat = pattern_call_info(pn_ref).strategy;
+                switch (strat) {
+                case MatchStrategy::permutation:
+                case MatchStrategy::dilation: {
+                    SharedPatternCallEntry& entry = match_data.call_entry(pn_ref);
+                    assert(entry.match_idx == ref.typed_idx());
+
+                    const auto needle_params = pn_ref->call.parameters();
+                    const std::uint32_t needle_i = needle_params.size() - 1u;
+                    const std::uint32_t hay_k = entry.match_positions[needle_i] + 1u;
+
+                    return strat == MatchStrategy::permutation ?
+                        find_permutation(pn_ref, ref, match_data, needle_i, hay_k) :
+                        find_dilation   (pn_ref, ref, match_data, needle_i, hay_k);
+                } break;
+                case MatchStrategy::backtracking: {
+                    const std::span<const NodeIndex> pn_params = pn_ref->call.parameters();
+                    const std::span<const NodeIndex> params = ref->call.parameters();
+                    return track_back(pn_ref, ref, pn_params, params, match_data, pn_params.size());
+                } break;
+                case MatchStrategy::linear:
+                    assert(false); //why would one try to rematch something not rematchable?
+                    BMATH_UNREACHABLE;
+                }
+            }
+            else if (pn_ref.type == Literal::lambda) {
+                return rematch(pn_ref.at(pn_ref->lambda.definition), ref.at(ref->lambda.definition), match_data);
+            }
+            return false;
+        } //rematch
 
     } //namespace match
 

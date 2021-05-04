@@ -112,7 +112,7 @@ namespace simp {
 		const RuleSetIter stop = applicable_rules.end();
 		for (RuleSetIter iter = applicable_rules.begin(); iter != stop; ++iter) {
 			const RuleRef rule = *iter;
-			if (match::match_(rule.lhs, ref, match_data)) {
+			if (match::matches(rule.lhs, ref, match_data)) {
 				const NodeIndex res = pattern_interpretation(
 					rule.rhs, match_data, *ref.store, dst_store, lambda_param_offset);
 				return { res, iter };
