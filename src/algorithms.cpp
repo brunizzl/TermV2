@@ -1415,11 +1415,12 @@ namespace simp {
             while (needle_i < needles.size()) {
                 const UnsaveRef needle_ref = pn_ref.at(needles[needle_i]);
                 for (; hay_k < haystack.size(); hay_k++) {
-                    if (!currently_matched.test(hay_k) &&
-                        match_(needle_ref, hay_ref.at(haystack[hay_k]), match_data) == std::partial_ordering::equivalent)
-                    {
-                        goto prepare_next_needle; //TODO: abort early if match_ returns std::partial_ordering::greater
-                    }
+                    if (currently_matched.test(hay_k)) continue;
+
+                    const auto cmp = match_(needle_ref, hay_ref.at(haystack[hay_k]), match_data);
+                    if (cmp == std::partial_ordering::equivalent) goto prepare_next_needle;
+                    //current needle is smaller than current hay, but hay will only get bigger -> no chance
+                    if (cmp == std::partial_ordering::less)       goto rematch_last_needle;
                 }
             rematch_last_needle:
                 if (needle_i == 0u) {
