@@ -394,27 +394,42 @@ namespace bmath::intern {
 
 
 
-	template <typename Payload_T, template <typename> class Alloc_T = std::allocator>
+	template <typename Payload_T, std::size_t buffer_size = 0, template <typename> class Alloc_T = std::allocator>
 		requires Allocator<Alloc_T>
 	class [[nodiscard]] BasicMonotonicStore 
 	{
+		static_assert(std::is_trivially_copyable_v<Payload_T>);
+		static_assert(std::is_trivially_destructible_v<Payload_T>);
+
 		std::size_t size_ = 0;
-		std::size_t capacity = 0;
+		std::size_t capacity = buffer_size;
 
 		struct Memory :Alloc_T<Payload_T>
 		{
 			Payload_T* data_ = nullptr;
 
-			constexpr Memory() noexcept = default;
+			constexpr Memory(Payload_T* local_) noexcept :data_(local_) {}
 
 			template<typename MemoryResource>
-			constexpr Memory(MemoryResource r) noexcept :Alloc_T<Payload_T>(r) {}
+			constexpr Memory(Payload_T* local_, MemoryResource r) noexcept 
+				:data_(local_), Alloc_T<Payload_T>(r) {}
 
 			constexpr Memory(Memory&& snd) noexcept
 				:Alloc_T<Payload_T>(std::move(snd)),
 				data_(std::exchange(snd.data_, nullptr)) {}
-		} memory = {};
+		} memory;
 		static_assert(sizeof(Memory) == sizeof(Payload_T*) || !std::is_empty_v<Alloc_T<Payload_T>>); //use empty base class optimisation for Alloc_T == std::allocator
+
+		union BufferNode
+		{
+			char c;
+			Payload_T payload;
+			constexpr BufferNode() noexcept :c(0) {}
+		};
+		std::array<BufferNode, buffer_size> local_buffer = {};
+
+		constexpr       Payload_T* local_data()       noexcept { return &(this->local_buffer.data()->payload); }
+		constexpr const Payload_T* local_data() const noexcept { return &(this->local_buffer.data()->payload); }
 
 		//unsave, because if new_capacity is smaller than current this->size_, the last elements are lost and size_ is not shrunk -> possible to access invalid memory
 		constexpr void unsave_change_capacity(const std::size_t new_capacity) noexcept
@@ -424,7 +439,7 @@ namespace bmath::intern {
 			Payload_T* const new_data = this->memory.allocate(new_capacity);
 			std::copy_n(this->memory.data_, this->capacity, new_data); 
 
-			if (this->memory.data_ != nullptr) [[likely]] {
+			if (this->memory.data_ != this->local_data()) {
 				this->memory.deallocate(this->memory.data_, this->capacity);
 			}
 
@@ -442,23 +457,38 @@ namespace bmath::intern {
 		constexpr bool valid_idx(std::size_t idx) const noexcept { return idx < this->size_; }
 
 
-		constexpr BasicMonotonicStore() noexcept = default;
+		constexpr BasicMonotonicStore() noexcept :memory(this->local_data()) {}
 
 		template<typename MemoryRecource>
-		constexpr BasicMonotonicStore(MemoryRecource r) noexcept :memory(r) {}
+		constexpr BasicMonotonicStore(MemoryRecource r) noexcept :memory(this->local_data(), r) {}
 
-		constexpr BasicMonotonicStore(const BasicMonotonicStore& snd) noexcept
+		constexpr void reserve(const std::size_t new_capacity) noexcept
 		{
-			this->unsave_change_capacity(snd.capacity);
-			std::copy_n(snd.memory.data_, this->capacity, this->memory.data_);
-			this->size_ = snd.size_;
+			if (new_capacity > this->capacity) {
+				this->unsave_change_capacity(std::bit_ceil(new_capacity));
+			}
+		}
+
+		constexpr BasicMonotonicStore(const BasicMonotonicStore& snd) noexcept 
+			:size_(snd.size_), memory(this->local_data())
+		{
+			this->reserve(snd.size_);
+			std::copy_n(snd.memory.data_, snd.size_, this->memory.data_);
 		}
 		
 		constexpr BasicMonotonicStore(BasicMonotonicStore&& snd) noexcept
-			:size_(std::exchange(snd.size_, 0u))
-			, capacity(std::exchange(snd.capacity, 0u))
-			, memory(std::move(snd.memory))
-		{}
+			:size_(std::exchange(snd.size_, 0u)), 
+			capacity(std::exchange(snd.capacity, buffer_size)), 
+			local_buffer(snd.local_buffer), 
+			memory(std::move(snd.memory))
+		{
+			if (snd.memory.data_ != snd.local_data()) {
+				snd.memory.data_ = snd.local_data();
+			}
+			else {
+				this->memory.data_ = this->local_data();
+			}
+		}
 
 		constexpr BasicMonotonicStore& operator=(const BasicMonotonicStore& snd) noexcept
 		{
@@ -477,13 +507,8 @@ namespace bmath::intern {
 
 		constexpr ~BasicMonotonicStore() noexcept
 		{
-			this->memory.deallocate(this->memory.data_, this->capacity);
-		}
-
-		constexpr void reserve(const std::size_t new_capacity) noexcept
-		{
-			if (new_capacity > this->capacity) {
-				this->unsave_change_capacity(std::bit_ceil(new_capacity));
+			if (this->memory.data_ != this->local_data()) {
+				this->memory.deallocate(this->memory.data_, this->capacity);
 			}
 		}
 
@@ -501,8 +526,8 @@ namespace bmath::intern {
 
 		constexpr [[nodiscard]] std::size_t allocate_one() noexcept
 		{
-			const std::size_t result = this->size_;
-			if (++this->size_ > this->capacity) {
+			const std::size_t result = this->size_++;
+			if (result == this->capacity) {
 				this->unsave_change_capacity(std::max(4ull, 2u * this->capacity));
 			}
 			return result;

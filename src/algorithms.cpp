@@ -220,7 +220,7 @@ namespace simp {
             return ref.type == Literal::lambda;
         }
 
-        Complex BMATH_FORCE_INLINE eval_unary_complex(nv::CtoC f, const Complex param)
+        Complex eval_unary_complex(nv::CtoC f, const Complex param)
         {
             using namespace nv;
             if (param.imag() == 0.0) {
@@ -279,6 +279,38 @@ namespace simp {
             assert(false);
             return {};
         } //eval_unary_complex
+
+        Complex eval_binary_complex(nv::CtoC f, const Complex param1, const Complex param2) 
+        {
+            using namespace nv;
+            switch (f) {
+            case CtoC::divide: //param1 is numerator, param2 is denominator
+                return param1 / param2;
+            case CtoC::pow: //param1 is base, param2 is exponent
+                if (param2 == 0.5) {
+                    return (param1.imag() == 0.0 && param1.real() >= 0.0) ?
+                        std::sqrt(param1.real()) :
+                        std::sqrt(param1);
+                }
+                else if (in_complex_subset(param2, ComplexSubset::integer)) {
+                    const long long int_expo = param2.real();
+                    const Complex res = bmath::intern::nat_pow(param1, std::abs(int_expo));
+                    return int_expo < 0 ? 1.0 / res : res;
+                }
+                return std::pow(param1, param2);
+            case CtoC::log: { //param1 is base, param2 is argument
+                const Complex num = (param2.imag() == 0.0) ?
+                    std::log(param2.real()) :
+                    std::log(param2);
+                const Complex denom = (param1.imag() == 0.0) ?
+                    std::log(param1.real()) :
+                    std::log(param1);
+                return num / denom;
+            }
+            }
+            assert(false);
+            return {};
+        } //eval_binary_complex
 
         struct ReplaceItem
         {
@@ -365,8 +397,15 @@ namespace simp {
                 };
                 //parameters are now guaranteed to meet restriction given in nv::fixed_arity_table
                 //also parameter cout is guaranteed to be correct
-                if (fixed_f.is<CtoC>() && f_arity == 1u) {
-                    return compute_and_replace([&] { return eval_unary_complex(fixed_f.to<CtoC>(), *ref.at(params[0u])); });
+                if (fixed_f.is<CtoC>()) {
+                    if (f_arity == 1u) {
+                        return compute_and_replace([&] { return eval_unary_complex(
+                            fixed_f.to<CtoC>(), *ref.at(params[0u])); });
+                    }
+                    if (f_arity == 2u) {
+                        return compute_and_replace([&] { return eval_binary_complex(
+                            fixed_f.to<CtoC>(), *ref.at(params[0u]), *ref.at(params[1u])); });
+                    }
                 }
                 switch (fixed_f) {
                 case FixedArity(Bool::true_): {
@@ -385,37 +424,7 @@ namespace simp {
                     const NodeIndex res = params[0];
                     Call::free(*ref.store, ref.index);
                     return res;
-                } break;
-                case FixedArity(CtoC::pow): {
-                    return compute_and_replace([&] {
-                        const Complex& base = *ref.at(params[0]);
-                        const Complex& expo = *ref.at(params[1]);
-                        if (expo == 0.5) {
-                            return (base.imag() == 0.0 && base.real() >= 0.0) ?
-                                std::sqrt(base.real()) :
-                                std::sqrt(base);
-                        }
-                        else if (in_complex_subset(expo, ComplexSubset::integer)) {
-                            const long long int_expo = expo.real();
-                            const Complex res = bmath::intern::nat_pow(base, std::abs(int_expo));
-                            return int_expo < 0 ? 1.0 / res : res;
-                        }
-                        return std::pow(base, expo);
-                    });
-                } break;
-                case FixedArity(CtoC::log): {
-                    return compute_and_replace([&] {
-                        const Complex& base = *ref.at(params[0]);
-                        const Complex& argu = *ref.at(params[1]);
-                        const Complex num = (argu.imag() == 0.0) ?
-                            std::log(argu.real()) :
-                            std::log(argu);
-                        const Complex denom = (base.imag() == 0.0) ?
-                            std::log(base.real()) :
-                            std::log(base);
-                        return num / denom;
-                    });
-                } break;
+                } break;                
                 case FixedArity(ToBool::not_): {
                     const NodeIndex param = params[0];
                     if (param == literal_false) {
@@ -934,14 +943,14 @@ namespace simp {
 
     namespace build_rule {
 
-        RuleHead optimize_single_conditions(Store& store, RuleHead heads)
+        RuleHead optimize_single_conditions(Store& store, RuleHead head)
         {
             const auto build_very_basic_pattern = [](Store& s, std::string& name) {
                 RuleHead h = parse::raw_rule(s, name, parse::IAmInformedThisRuleIsNotUsableYet{});
                 h = build_rule::prime_call(s, h);
                 return h;
             };
-            static const auto rules = RuleSet({
+            static const auto buildin_conditions = RuleSet({
                 { "x :t          | x :_SingleMatch, t :native = t" },
                 { "x < 0         | x :_SingleMatch            = _Negative" },
                 { "x > 0         | x :_SingleMatch            = _Positive" },
@@ -950,15 +959,26 @@ namespace simp {
                 { "!(x :complex) | x :_SingleMatch            = _NoValue" },
                 { "x != 1        | x :_SingleMatch            = _NotNeg1" },
                 { "x != 0        | x :_SingleMatch            = _Not0" },
-                }, build_very_basic_pattern);
+            }, build_very_basic_pattern);
+
+            static const auto compute_optimisations = RuleSet({
+                { "_Divide(pow(a, -1) * bs..., c)         = _Divide(product(bs...), a * c)" },
+                { "_Divide(pow(a,  n) * bs..., c) | n < 0 = _Divide(product(bs...), pow(a, -n) * c)" },
+                { "        pow(a, -1) * bs...             = _Divide(product(bs...), a)" },
+                { "        pow(a,  n) * bs...     | n < 0 = _Divide(product(bs...), pow(a, -n))" },
+            }, build_very_basic_pattern);
+
             const auto optimize = [](const MutRef r) {
                 if (r.type == SingleMatch::restricted) {
                     r->single_match.condition =
-                        shallow_apply_ruleset(rules, r.at(r->single_match.condition));
+                        shallow_apply_ruleset(buildin_conditions, r.at(r->single_match.condition));
+                    r->single_match.condition =
+                        greedy_apply_ruleset(compute_optimisations, r.at(r->single_match.condition));
                 }
+                return r.typed_idx();
             };
-            transform(MutRef(store, heads.lhs), optimize);
-            return heads;
+            head.lhs = transform(MutRef(store, head.lhs), optimize);
+            return head;
         } //optimize_single_conditions
 
         RuleHead prime_value(Store& store, RuleHead heads)
@@ -1407,28 +1427,100 @@ namespace simp {
 
     namespace match {
 
-        //decides if a condition appended to a single match variable is met with the current match data
-        bool test_condition(const UnsaveRef cond, const MatchData& match_data)
+        auto make_ref_maker(const MatchData& match_data, const TermNode* const store_data)
         {
-            const auto make_ref = [&](const NodeIndex i) -> UnsaveRef {
-                const UnsaveRef i_ref = cond.at(i);
-                if (i_ref.type == SingleMatch::weak) {
-                    const auto entry = match_data.single_vars[i_ref.index];
+            return [store_data, &match_data](const NodeIndex i) -> UnsaveRef {
+                const NodeType ref_type = i.get_type();
+                const std::uint32_t ref_index = i.get_index();
+                if (ref_type == SingleMatch::weak && store_data != match_data.haystack->data()) {
+                    const auto entry = match_data.single_vars[ref_index];
                     assert(entry.is_set());
                     return match_data.make_ref(entry.match_idx);
                 }
-                assert(i_ref.type.is<Literal>());
-                return i_ref;
+                return UnsaveRef(store_data, ref_index, ref_type);
             };
+        } //make_ref_maker
 
+        using RefMaker = decltype(make_ref_maker(std::declval<MatchData>(), nullptr));
+
+        bmath::intern::OptionalDouble eval_condition(const UnsaveRef cond, const MatchData& match_data)
+        {
+            if (cond.type == Literal::complex) {
+                return cond->complex.imag() == 0.0 ?
+                    cond->complex.real() :
+                    bmath::intern::OptionalDouble{};
+            }
+
+            if (cond.type != Literal::call) return {};
+            const Call& call = *cond;
+            const NodeIndex function = call.function();
+            if (function.get_type() != Literal::native) return {};
+            using namespace nv;
+            const Native f = to_native(function);
+            const auto params = call.parameters();
+            const auto make_ref = make_ref_maker(match_data, cond.store_data());
+
+            if (f == Comm::sum) {
+                bmath::intern::OptionalDouble acc = 0.0;
+                for (const NodeIndex param : params) {
+                    acc += eval_condition(make_ref(param), match_data);
+                    if (!acc) break;
+                }
+                return acc;
+            }
+            else if (f == Comm::product) {
+                bmath::intern::OptionalDouble acc = 1.0;
+                for (const NodeIndex param : params) {
+                    acc *= eval_condition(make_ref(param), match_data);
+                    if (!acc) break;
+                }
+                return acc;
+            }
+            else if (f.is<CtoC>()) {
+                const auto arr = arity(f.to<FixedArity>());
+                if (arr == 1u) {
+                    const auto param = eval_condition(make_ref(params[0]), match_data);
+                    if (!param) return {};
+                    const Complex res = normalize::eval_unary_complex(f.to<CtoC>(), param.val);
+                    return res.imag() == 0.0 ? res.real() : bmath::intern::OptionalDouble{};
+                }
+                if (arr == 2u) {
+                    const auto param1 = eval_condition(make_ref(params[0]), match_data);
+                    if (!param1) return {};
+                    const auto param2 = eval_condition(make_ref(params[1]), match_data);
+                    if (!param2) return {};
+                    const Complex res = normalize::eval_binary_complex(f.to<CtoC>(), param1.val, param2.val);
+                    return res.imag() == 0.0 ? res.real() : bmath::intern::OptionalDouble{};
+                }
+            }
+            return {};
+        } //eval_condition
+
+        //decides if a condition appended to a single match variable is met with the current match data
+        bool test_condition(const UnsaveRef cond, const MatchData& match_data)
+        {
+            const auto make_ref = make_ref_maker(match_data, cond.store_data());
             assert(cond.type == Literal::call);
             const Call& call = *cond;
             using namespace nv;
             const Native f = to_native(call.function());
             const auto params = call.parameters();
+
+            const auto compare_params = [&]() {
+                const bmath::intern::OptionalDouble fst = eval_condition(make_ref(params[0]), match_data);
+                const bmath::intern::OptionalDouble snd = eval_condition(make_ref(params[1]), match_data);
+                return fst.val <=> snd.val;
+            };
+
             switch (f) {
-            case Native(PatternFn::of_type): 
-                return meets_restriction(make_ref(params[0]), to_native(params[1]));
+            case Native(PatternFn::of_type): {
+                const Native restr = to_native(params[1]);
+                if (restr.is<ComplexSubset>()) {
+                    const double to_test = eval_condition(make_ref(params[0]), match_data).val;
+                    return in_complex_subset(to_test, restr.to<ComplexSubset>());
+                }
+                return meets_restriction(make_ref(params[0]), restr);
+            }
             case Native(ToBool::contains): {
                 const UnsaveRef snd_ref = make_ref(params[1]);
                 const auto is_snd = [&](const UnsaveRef r) { 
@@ -1436,10 +1528,35 @@ namespace simp {
                 };
                 return search(make_ref(params[0]), is_snd) != literal_nullptr;
             } break;
-            case Native(ToBool::not_): {
-                return !test_condition(make_ref(params[0]), match_data);
+            case Native(ToBool::not_): 
+                return !test_condition(cond.at(params[0]), match_data);
+            case Native(ToBool::eq):
+                return compare_params() == 0;
+            case Native(ToBool::neq): {
+                const std::partial_ordering res = compare_params();
+                return res != std::partial_ordering::equivalent && res != std::partial_ordering::unordered;
+            } break;
+            case Native(ToBool::greater):
+                return compare_params() > 0;
+            case Native(ToBool::smaller):
+                return compare_params() < 0;
+            case Native(ToBool::greater_eq):
+                return compare_params() >= 0;
+            case Native(ToBool::smaller_eq):
+                return compare_params() <= 0;
+            case Native(Comm::and_): 
+                for (const NodeIndex param : params) {
+                    if (!test_condition(cond.at(param), match_data)) return false;
+                }
+                return true;
+            case Native(Comm::or_): 
+                for (const NodeIndex param : params) {
+                    if (test_condition(cond.at(param), match_data)) return true;
+                }
+                return false;
             }
-            }
+            assert(false);
+            BMATH_UNREACHABLE;
             return false;
         } //test_condition
 

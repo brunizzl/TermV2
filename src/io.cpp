@@ -23,15 +23,15 @@ namespace simp {
 				struct Operator { Token tok; Arity arity; };
 				//order by precedence (low to high)
 				constexpr auto operators = std::to_array<Operator>({
+					{ token::colon,        Arity::binary },
 					{ token::backslash,    Arity::unary  },
 					{ token::or_,          Arity::binary },
 					{ token::and_,         Arity::binary },
 					{ token::relation,     Arity::binary },
 					{ token::sum,          Arity::binary },
-					{ token::product,      Arity::binary },
 					{ token::sticky_space, Arity::binary }, //can also act as multiplication
+					{ token::product,      Arity::binary },
 					{ token::hat,          Arity::binary },
-					{ token::colon,        Arity::binary },
 					{ token::bang,         Arity::unary  },
 					{ token::unary_minus,  Arity::unary  },
 					});

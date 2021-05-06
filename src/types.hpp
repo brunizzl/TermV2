@@ -132,6 +132,7 @@ namespace simp {
 		//these functions take complex values as arguments (the arity may be greater than one) and return complex values
 		enum class CtoC
 		{
+			divide, //usually only encountered in a condition
 			pow,    //params[0] := base      params[1] := expo    
 			log,	//params[0] := base      params[1] := argument
 			sqrt,	
@@ -516,6 +517,7 @@ namespace simp {
 			{ ToBool::greater_eq     , "greater_eq", 2u, { ComplexSubset::real }, Restr::boolean              },
 			{ ToBool::smaller_eq     , "smaller_eq", 2u, { ComplexSubset::real }, Restr::boolean              },
 			{ ToBool::contains       , "contains"  , 2u, { Restr::any          }, Restr::boolean              },
+			{ CtoC::divide           , "_Divide"   , 2u, { Literal::complex    }, Literal::complex            },
 			{ CtoC::pow              , "pow"       , 2u, { Literal::complex    }, Literal::complex            },
 			{ CtoC::log              , "log"       , 2u, { Literal::complex    }, Literal::complex            },
 			{ CtoC::sqrt             , "sqrt"      , 1u, { Literal::complex    }, Literal::complex            },
@@ -748,7 +750,7 @@ namespace simp {
 		//to allow a constant RewriteRule to be matched against, all match info is stored here
 		struct MatchData
 		{
-			const Store* haystack; //pointer to .data() of haystack store
+			const Store* haystack;
 
 			constexpr MatchData(const Store& haystack_) noexcept :haystack(&haystack_) {}
 

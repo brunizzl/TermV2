@@ -129,7 +129,8 @@ int main()
 			
 			{ " a^2 +  2 a b + b^2 =  (a + b)^2" },
 			{ " a^2 -  2 a b + b^2 =  (a - b)^2" },
-			{ "$a^2 + 2 $a b + b^2 = ($a + b)^2" },
+			{ " a'2 +  _2a b + b^2 | 2 sqrt(a'2) == _2a =  (1/2 _2a + b)^2" },
+			//{ "$a^2 + 2 $a b + b^2 = ($a + b)^2" },
 			
 			{ "a bs... + a cs... | !(a :complex)      = a (product(bs...) + product(cs...))" },
 			{ "a bs... + a       | !(a :complex)      = a (product(bs...) + 1)" },
@@ -142,10 +143,18 @@ int main()
 			{ "sin(x)^2 + cos(x)^2 = 1" },
 			
 				//roots and extreme points of sin and cos:
-			{ "cos(             'pi')           = -1" },
-			{ "cos(($k + 0.5)   'pi') | $k :int =  0" },
-			{ "cos((2 $k)       'pi') | $k :int =  1" },
-			{ "cos((2 $k + 1)   'pi') | $k :int = -1" },
+			//{ "cos(             'pi')           = -1" },
+			//{ "cos(($k + 0.5)   'pi') | $k :int =  0" },
+			//{ "cos((2 $k)       'pi') | $k :int =  1" },
+			//{ "cos((2 $k + 1)   'pi') | $k :int = -1" },
+			//{ "sin(             'pi')           =  0" },
+			//{ "sin($k           'pi') | $k :int =  0" },
+			//{ "sin((2 $k + 0.5) 'pi') | $k :int =  1" },
+			//{ "sin((2 $k + 1.5) 'pi') | $k :int = -1" },
+			{ "cos(  'pi')                    = -1" },
+			{ "cos(a 'pi') | a + 1/2     :int =  0" },
+			{ "cos(a 'pi') | a / 2       :int =  1" },
+			{ "cos(a 'pi') | (a - 1) / 2 :int = -1" },
 			{ "sin(             'pi')           =  0" },
 			{ "sin($k           'pi') | $k :int =  0" },
 			{ "sin((2 $k + 0.5) 'pi') | $k :int =  1" },
@@ -215,6 +224,7 @@ int main()
 			{ "'make_ints'(a, b) = 'make_ints_h'(b, list(a))" },
 			{ "'make_ints_h'(b, list(xs..., b)) = list(xs..., b)" },
 			{ "'make_ints_h'(b, list(xs..., x)) = 'make_ints_h'(b, list(xs..., x, x + 1))" },
+			{ "'zfrobbl'(x, y, z) | x + 1/2 :int = 'zfrobbl_res'(x, y, z)" },
 		};
 		for (const simp::RuleRef rule : rules) {
 			std::cout << rule.to_string() << "\n\n";
