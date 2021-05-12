@@ -25,11 +25,11 @@ namespace simp {
 	enum class Literal
 	{
 		complex, //only of Literal never expected as .function() in call
-		symbol, 
-		native,
+		string_symbol, 
+		native_symbol,
 		lambda,
 		lambda_param,
-		call,
+		f_app,
 		COUNT
 	};
 
@@ -39,20 +39,20 @@ namespace simp {
 	//                                             ^.get_index() points here
 	//note 1: the layout is chosen to enable handling of PattenCall and Literal::call as one in most cases 
 	//  and to enable access to PatternCallInfo without first determining how many nodes the call owns.
-	//note 2: a PatternCall may only occur once the appearance of a pattern is finalized, e.g. it should have already been combined
+	//note 2: a PatternFApp may only occur once the appearance of a pattern is finalized, e.g. it should have already been combined
 	//  and it may only occur on the match side of a rule
-	struct PatternCall :SingleSumEnumEntry {}; 
+	struct PatternFApp :SingleSumEnumEntry {}; 
 
 	//acts as unsigned integer type for pattern construction, meaning .get_index() is interpreted as unsigned integer
 	struct PatternUnsigned :SingleSumEnumEntry {};
 
 	enum class SingleMatch
 	{
-		//these two own their entry in MatchData::single_match, meaning they set a new subterm to match the given index.
+		//these two own their entry in match::State::single_match, meaning they set a new subterm to match the given index.
 		restricted,   //.get_index() points at RestrictedSingleMatch node in store
-		unrestricted, //shallow NodeIndex, .get_index() specifies position in MatchData::single_match
-		//does not own MatchData entry
-		weak,  //(shallow) is expected to only be encountered after the .get_index() in MatchData::single_match has already been set
+		unrestricted, //shallow NodeIndex, .get_index() specifies position in match::State::single_match
+		//does not own match::State entry
+		weak,  //(shallow) is expected to only be encountered after the .get_index() in match::State::single_match has already been set
 		COUNT
 	};
 
@@ -65,7 +65,7 @@ namespace simp {
 
 	using MatchVariableType = SumEnum<SpecialMatch, SingleMatch>;
 
-	using PatternNodeType = SumEnum<MatchVariableType, PatternUnsigned, PatternCall>; //(ordered so that PatternCall directly follows Literal::call)
+	using PatternNodeType = SumEnum<MatchVariableType, PatternUnsigned, PatternFApp>; //(ordered so that PatternFApp directly follows Literal::call)
 
 	using NodeType = SumEnum<PatternNodeType, Literal>;
 
@@ -79,12 +79,12 @@ namespace simp {
 	{
 		switch (type) {
 		case NodeType(Literal::complex):           return true;
-		case NodeType(Literal::symbol):            return true;
-		case NodeType(Literal::native):            return false;
+		case NodeType(Literal::string_symbol):     return true;
+		case NodeType(Literal::native_symbol):     return false;
 		case NodeType(Literal::lambda):            return true;
 		case NodeType(Literal::lambda_param):      return false;
-		case NodeType(Literal::call):              return true;
-		case NodeType(PatternCall{}):	           return true;
+		case NodeType(Literal::f_app):             return true;
+		case NodeType(PatternFApp{}):	           return true;
 		case NodeType(PatternUnsigned{}):          return false;
 		case NodeType(SingleMatch::restricted):    return true;
 		case NodeType(SingleMatch::unrestricted):  return false;
@@ -101,13 +101,13 @@ namespace simp {
 
 
 
-	//short for native
+	//short for native_symbol
 	namespace nv {
 		//matching algorithm will try to also match permutations
 		enum class Comm //short for Commutative
 		{
 			sum,
-			product,
+			prod,
 			and_,
 			or_,
 			multiset,
@@ -123,7 +123,7 @@ namespace simp {
 		{
 			list,
 			ordered_sum,
-			ordered_product,
+			ordered_prod,
 			COUNT
 		};
 
@@ -229,8 +229,8 @@ namespace simp {
 		enum class Restr
 		{
 			any, //everything is possible
-			callable, //eighter Literal::lambda or Literal::native with .is<Function_>() or Literal::symbol
-			boolean, //maybe add "types" section to native, handle bool there?
+			callable, //eighter Literal::lambda or Literal::native_symbol with .is<Function_>() or Literal::symbol
+			boolean, //maybe add "types" section to native_symbol, handle bool there?
 			no_value, //all except Literal::complex
 			not_neg_1, //all except the exact value of -1.0 for Literal::complex
 			not_0, //all except the exact value of 0.0 (or differently signed variants) for Literal::complex
@@ -253,7 +253,7 @@ namespace simp {
 
 		enum class PatternConst
 		{
-			value_proxy, //found as offspring of .match_index of ValueMatch
+			value_proxy, //found as offspring of .inverse of ValueMatch
 			COUNT
 		};
 
@@ -263,18 +263,18 @@ namespace simp {
 		//in particular: Bool is not part of Constant, as it can be called
 		using Constant = SumEnum<NodeType, ComplexSubset, Restr, PatternConst>;
 
-		//values of this type are stored in .get_index() of a NodeIndex if .get_type() is Literal::native
+		//values of this type are stored in .get_index() of a NodeIndex if .get_type() is Literal::native_symbol
 		using Native = SumEnum<Constant, Function_>;
 	} //namespace nv
 
 	inline constexpr NodeIndex from_native(const nv::Native type) noexcept
 	{
-		return NodeIndex(static_cast<unsigned>(type), Literal::native);
+		return NodeIndex(static_cast<unsigned>(type), Literal::native_symbol);
 	}
 
 	inline constexpr nv::Native to_native(const NodeIndex idx) noexcept
 	{
-		assert(idx.get_type() == Literal::native);
+		assert(idx.get_type() == Literal::native_symbol);
 		return nv::Native(idx.get_index());
 	}
 
@@ -289,7 +289,7 @@ namespace simp {
 	using Complex = std::complex<double>;
 	using Symbol = StoredVector<char>;
 
-	struct Call :StoredVector<NodeIndex>
+	struct FApp :StoredVector<NodeIndex>
 	{
 		using StoredVector<NodeIndex>::StoredVector;
 
@@ -316,14 +316,14 @@ namespace simp {
 
 	struct RestrictedSingleMatch
 	{
-		std::uint32_t match_data_index; //indexes in MatchData::single_vars
-		NodeIndex condition; //eighter Literal::native, then assumed to be some subset, or call to some testable expression
+		std::uint32_t match_state_index; //indexes in match::State::single_vars
+		NodeIndex condition; //eighter Literal::native_symbol, then assumed to be some subset, or call to some testable expression
 	};
 
 	//only expected in rhs (lhs stores multis only as bool /bits in PatternCallData)
 	struct MultiMatch
 	{
-		std::uint32_t match_data_index; //indexes in MatchData::pattern_calls
+		std::uint32_t match_state_index; //indexes in match::State::pattern_calls
 		//imaginary (as multi match variables are not explicitly in lhs) index in call of lhs, minus the other multis
 		//e.g. in "list(xs..., 1, ys..., list(as..., 2, bs..., 3, cs...)) = list(cs...)" 
 		//  has rhs instance of "cs..." .index_in_params = 2 (preceeded by "2" and "3")
@@ -332,9 +332,9 @@ namespace simp {
 
 	struct ValueMatch
 	{
-		std::uint32_t match_data_index; //indexes in MatchData::value_vars
+		std::uint32_t match_state_index; //indexes in match::State::value_vars
 		nv::ComplexSubset domain = nv::ComplexSubset::complex;
-		NodeIndex match_index;
+		NodeIndex inverse; //in pattern "'sin'(2 $k 'pi')" is "_VP / 2" the inverse needed to compute $k, with _VP representing value_proxy
 		bool owner;
 	};
 
@@ -352,11 +352,11 @@ namespace simp {
 		//determines what algorithm is choosen to match this call
 		//  permutation: uses all later members, only preceeded_by_multi is degraded to a bool
 		//  dilation:    uses all later members except always_preceeding_next (because that is a tautology here)
-		//  backtracking: uses ONLY rematchable_params (not even uses match_data_index)
+		//  backtracking: uses ONLY rematchable_params (not even uses match_state_index)
 		//  linear:      uses nothing
 		MatchStrategy strategy = MatchStrategy::linear; //default required as linear in build_rume::build_lhs_multis_and_pattern_calls
-		//indexes in MatchData::variadic_match_data (used in both commutative and non-commutative)
-		std::uint32_t match_data_index = -1u;
+		//indexes in match::State::variadic_match_data (used in both commutative and non-commutative)
+		std::uint32_t match_state_index = -1u;
 		//bit i dertermines whether parameter i is rematchable (used in both commutative and non-commutative)
 		bmath::intern::BitSet16 rematchable_params = (std::uint16_t)-1;
 		//bit i determines whether parameter i is guaranteed to never have a 
@@ -374,7 +374,7 @@ namespace simp {
 		//nodes valid everywhere:
 		Complex complex;
 		Symbol symbol;
-		Call call;
+		FApp f_app;
 		Lambda lambda;
 
 		//nodes only expected in a pattern:
@@ -385,7 +385,7 @@ namespace simp {
 
 		constexpr TermNode(const Complex              & val) noexcept :complex(val)           {}
 		constexpr TermNode(const Symbol               & val) noexcept :symbol(val)            {}
-		constexpr TermNode(const Call                 & val) noexcept :call(val)              {}
+		constexpr TermNode(const FApp                 & val) noexcept :f_app(val)             {}
 		constexpr TermNode(const Lambda               & val) noexcept :lambda(val)            {}
 		constexpr TermNode(const RestrictedSingleMatch& val) noexcept :single_match(val)      {}
 		constexpr TermNode(const MultiMatch           & val) noexcept :multi_match(val)       {}
@@ -394,7 +394,7 @@ namespace simp {
 
 		constexpr operator const Complex              & () const noexcept { return this->complex;           }
 		constexpr operator const Symbol               & () const noexcept { return this->symbol;            }
-		constexpr operator const Call                 & () const noexcept { return this->call;              }
+		constexpr operator const FApp                 & () const noexcept { return this->f_app;             }
 		constexpr operator const Lambda               & () const noexcept { return this->lambda;            }
 		constexpr operator const RestrictedSingleMatch& () const noexcept { return this->single_match;      }
 		constexpr operator const MultiMatch           & () const noexcept { return this->multi_match;       }
@@ -403,7 +403,7 @@ namespace simp {
 
 		constexpr operator Complex              & () noexcept { return this->complex;           }
 		constexpr operator Symbol               & () noexcept { return this->symbol;            }
-		constexpr operator Call                 & () noexcept { return this->call;              }
+		constexpr operator FApp                 & () noexcept { return this->f_app;             }
 		constexpr operator Lambda               & () noexcept { return this->lambda;            }
 		constexpr operator RestrictedSingleMatch& () noexcept { return this->single_match;      }
 		constexpr operator MultiMatch           & () noexcept { return this->multi_match;       }
@@ -423,7 +423,7 @@ namespace simp {
 	template<bmath::intern::Reference R> requires (requires { R::store; })
 	constexpr auto begin(const R& ref) noexcept
 	{
-		assert(ref.type == Literal::call || ref.type == PatternCall{});
+		assert(ref.type == Literal::f_app || ref.type == PatternFApp{});
 		using TypedIdx_T = std::conditional_t<R::is_const, const NodeIndex, NodeIndex>;
 		using Store_T = std::remove_reference_t<decltype(*ref.store)>;
 		using namespace bmath::intern::detail_vector;
@@ -434,34 +434,34 @@ namespace simp {
 	template<bmath::intern::Reference R> requires (requires { R::store; })
 	constexpr auto end(const R& ref) noexcept
 	{
-		assert(ref.type == Literal::call || ref.type == PatternCall{});
-		return bmath::intern::detail_vector::SaveEndIndicator{ (std::uint32_t)ref->call.size() };
+		assert(ref.type == Literal::f_app || ref.type == PatternFApp{});
+		return bmath::intern::detail_vector::SaveEndIndicator{ (std::uint32_t)ref->f_app.size() };
 	}
 
 	template<bmath::intern::Reference R> requires (!requires { R::store; })
 	constexpr auto begin(const R& ref) noexcept
 	{
-		assert(ref.type == Literal::call || ref.type == PatternCall{});
-		return ref->call.begin();
+		assert(ref.type == Literal::f_app || ref.type == PatternFApp{});
+		return ref->f_app.begin();
 	}
 
 	template<bmath::intern::Reference R> requires (!requires { R::store; })
 	constexpr auto end(const R& ref) noexcept
 	{
-		assert(ref.type == Literal::call || ref.type == PatternCall{});
-		return ref->call.end();
+		assert(ref.type == Literal::f_app || ref.type == PatternFApp{});
+		return ref->f_app.end();
 	}
 
 
 	constexpr inline const PatternCallInfo& pattern_call_info(const UnsaveRef ref)
 	{
-		assert(ref.type == PatternCall{});
+		assert(ref.type == PatternFApp{});
 		return *(ref.ptr - 1u);
 	}
 
 	constexpr inline PatternCallInfo& pattern_call_info(const MutRef ref)
 	{
-		assert(ref.type == PatternCall{});
+		assert(ref.type == PatternFApp{});
 		return *(&ref.store->at(ref.index) - 1u);
 	}
 
@@ -544,19 +544,19 @@ namespace simp {
 			{ CtoC::ceil             , "ceil"      , 1u, { ComplexSubset::real }, ComplexSubset::integer      },
 			{ MiscFn::id             , "id"        , 1u, { Restr::any          }, Restr::any                  },
 			{ MiscFn::force          , "force"     , 1u, { Literal::complex    }, Literal::complex            },
-			{ MiscFn::diff           , "diff"      , 2u, { Restr::any, Literal::symbol }, Restr::any          },
+			{ MiscFn::diff           , "diff"      , 2u, { Restr::any, Literal::string_symbol }, Restr::any   },
 			{ MiscFn::fdiff          , "fdiff"     , 1u, { Restr::callable     }, Restr::callable             },
 			{ MiscFn::pair           , "pair"      , 2u, {}                     , MiscFn::pair                },
 			{ MiscFn::fst            , "fst"       , 1u, { MiscFn::pair        }, Restr::any                  },
 			{ MiscFn::snd            , "snd"       , 1u, { MiscFn::pair        }, Restr::any                  },
 			{ MiscFn::replace        , "replace"   , 3u, { Restr::any, NonComm::list, NonComm::list        }, Restr::any       },
-			{ HaskellFn::map         , "map"       , 3u, { Restr::callable, Restr::callable, Literal::call }, Literal::call    },
-			{ HaskellFn::filter      , "filter"    , 3u, { Restr::callable, Restr::callable, Literal::call }, Literal::call    },
-			{ HaskellFn::split       , "split"     , 3u, { Restr::callable, Restr::callable, Literal::call }, MiscFn::pair     },
-			{ HaskellFn::foldl       , "ffoldl"    , 4u, { Restr::callable, Restr::callable, Restr::any, Literal::call }, Restr::any }, //foldl f z (x:xs) = foldl f (f z x) xs
-			{ HaskellFn::foldr       , "ffoldr"    , 4u, { Restr::callable, Restr::callable, Restr::any, Literal::call }, Restr::any }, //foldr f z (x:xs) = f x (foldr f z xs) 
+			{ HaskellFn::map         , "map"       , 3u, { Restr::callable, Restr::callable, Literal::f_app }, Literal::f_app  },
+			{ HaskellFn::filter      , "filter"    , 3u, { Restr::callable, Restr::callable, Literal::f_app }, Literal::f_app  },
+			{ HaskellFn::split       , "split"     , 3u, { Restr::callable, Restr::callable, Literal::f_app }, MiscFn::pair    },
+			{ HaskellFn::foldl       , "ffoldl"    , 4u, { Restr::callable, Restr::callable, Restr::any, Literal::f_app }, Restr::any }, //foldl f z (x:xs) = foldl f (f z x) xs
+			{ HaskellFn::foldr       , "ffoldr"    , 4u, { Restr::callable, Restr::callable, Restr::any, Literal::f_app }, Restr::any }, //foldr f z (x:xs) = f x (foldr f z xs) 
 			{ PatternFn::value_match , "_VM"       , 3u, { PatternUnsigned{}, Restr::any, Restr::any }, Restr::any }, //layout as in ValueMatch (minus .owner)
-			{ PatternFn::of_type     , "_Of_T"     , 2u, { Restr::any, Literal::native }, Restr::boolean      },
+			{ PatternFn::of_type     , "_Of_T"     , 2u, { Restr::any, Literal::native_symbol }, Restr::boolean      },
 		});
 		static_assert(static_cast<unsigned>(fixed_arity_table.front().type) == 0u);
 		static_assert(bmath::intern::is_sorted_by(fixed_arity_table, &FixedArityProps::type));
@@ -586,9 +586,9 @@ namespace simp {
 		constexpr auto variadic_table = std::to_array<VariadicProps>({
 			{ NonComm::list           , "list"        , false, Restr::any         , NonComm::list       },
 			{ NonComm::ordered_sum    , "sum'"        , true , Restr::any         , Restr::any          },
-			{ NonComm::ordered_product, "product'"    , true , Restr::any         , Restr::any          },
+			{ NonComm::ordered_prod   , "prod'"       , true , Restr::any         , Restr::any          },
 			{ Comm::sum               , "sum"         , true , Literal::complex   , Literal::complex    },
-			{ Comm::product           , "product"     , true , Literal::complex   , Literal::complex    },
+			{ Comm::prod              , "prod"        , true , Literal::complex   , Literal::complex    },
 			{ Comm::and_              , "and"         , true , Restr::boolean     , Restr::boolean      },
 			{ Comm::or_               , "or"          , true , Restr::boolean     , Restr::boolean      },
 			{ Comm::multiset          , "multiset"    , false, Restr::any         , Comm::multiset      },
@@ -624,34 +624,34 @@ namespace simp {
 
 		constexpr auto constant_table = std::to_array<CommonProps>({
 			{ PatternConst::value_proxy  , "_VP"         , PatternConst::value_proxy },
-			{ Restr::any                 , "\\"          , Literal::native }, //can not be constructed from a string
-			{ Restr::callable            , "callable"    , Literal::native },
-			{ Restr::boolean             , "bool"        , Literal::native },
-			{ Restr::no_value            , "_NoValue"    , Literal::native },
-			{ Restr::not_neg_1           , "_NotNeg1"    , Literal::native },
-			{ Restr::not_0               , "_Not0"       , Literal::native },
-			{ ComplexSubset::natural     , "nat"         , Literal::native },
-			{ ComplexSubset::natural_0   , "nat_0"       , Literal::native },
-			{ ComplexSubset::integer     , "int"         , Literal::native },
-			{ ComplexSubset::real        , "real"        , Literal::native },
-			{ ComplexSubset::complex     , "_Complex"    , Literal::native }, 
-			{ ComplexSubset::negative    , "_Negative"   , Literal::native }, //can not be constructed from a string
-			{ ComplexSubset::positive    , "_Positive"   , Literal::native }, //can not be constructed from a string
-			{ ComplexSubset::not_negative, "_NotNegative", Literal::native }, //can not be constructed from a string
-			{ ComplexSubset::not_positive, "_NotPositive", Literal::native }, //can not be constructed from a string
-			{ Literal::complex           , "complex"     , Literal::native },
-			{ Literal::symbol            , "symbol"      , Literal::native },
-			{ Literal::native            , "native"      , Literal::native },
-			{ Literal::lambda            , "lambda"      , Literal::native },
-			{ Literal::lambda_param      , "lambda_param", Literal::native },
-			{ Literal::call              , "call"        , Literal::native },
-			{ PatternCall{}              , "\\"          , Literal::native }, //can not be constructed from a string
-			{ PatternUnsigned{}          , "_UInt"       , Literal::native },
-			{ SingleMatch::restricted    , "\\"          , Literal::native }, //can not be constructed from a string
-			{ SingleMatch::unrestricted  , "\\"          , Literal::native }, //can not be constructed from a string
-			{ SingleMatch::weak          , "_SingleMatch", Literal::native }, //can not be constructed from a string
-			{ SpecialMatch::multi        , "_MultiMatch" , Literal::native }, //can not be constructed from a string
-			{ SpecialMatch::value        , "_ValueMatch" , Literal::native }, //can not be constructed from a string
+			{ Restr::any                 , "\\"          , Literal::native_symbol }, //can not be constructed from a string
+			{ Restr::callable            , "callable"    , Literal::native_symbol },
+			{ Restr::boolean             , "bool"        , Literal::native_symbol },
+			{ Restr::no_value            , "_NoValue"    , Literal::native_symbol },
+			{ Restr::not_neg_1           , "_NotNeg1"    , Literal::native_symbol },
+			{ Restr::not_0               , "_Not0"       , Literal::native_symbol },
+			{ ComplexSubset::natural     , "nat"         , Literal::native_symbol },
+			{ ComplexSubset::natural_0   , "nat_0"       , Literal::native_symbol },
+			{ ComplexSubset::integer     , "int"         , Literal::native_symbol },
+			{ ComplexSubset::real        , "real"        , Literal::native_symbol },
+			{ ComplexSubset::complex     , "_Complex"    , Literal::native_symbol }, 
+			{ ComplexSubset::negative    , "_Negative"   , Literal::native_symbol }, //can not be constructed from a string
+			{ ComplexSubset::positive    , "_Positive"   , Literal::native_symbol }, //can not be constructed from a string
+			{ ComplexSubset::not_negative, "_NotNegative", Literal::native_symbol }, //can not be constructed from a string
+			{ ComplexSubset::not_positive, "_NotPositive", Literal::native_symbol }, //can not be constructed from a string
+			{ Literal::complex           , "complex"     , Literal::native_symbol },
+			{ Literal::string_symbol     , "symbol"      , Literal::native_symbol },
+			{ Literal::native_symbol     , "native"      , Literal::native_symbol },
+			{ Literal::lambda            , "lambda"      , Literal::native_symbol },
+			{ Literal::lambda_param      , "lambda_param", Literal::native_symbol },
+			{ Literal::f_app             , "f_app"       , Literal::native_symbol },
+			{ PatternFApp{}              , "\\"          , Literal::native_symbol }, //can not be constructed from a string
+			{ PatternUnsigned{}          , "_UInt"       , Literal::native_symbol },
+			{ SingleMatch::restricted    , "\\"          , Literal::native_symbol }, //can not be constructed from a string
+			{ SingleMatch::unrestricted  , "\\"          , Literal::native_symbol }, //can not be constructed from a string
+			{ SingleMatch::weak          , "_SingleMatch", Literal::native_symbol }, //can not be constructed from a string
+			{ SpecialMatch::multi        , "_MultiMatch" , Literal::native_symbol }, //can not be constructed from a string
+			{ SpecialMatch::value        , "_ValueMatch" , Literal::native_symbol }, //can not be constructed from a string
 		});
 		static_assert(constant_table.size() == (unsigned)Constant::COUNT);
 		static_assert(bmath::intern::is_sorted_by(constant_table, &CommonProps::type));
@@ -714,11 +714,11 @@ namespace simp {
 
 		struct SharedPatternCallEntry
 		{
-			//no PatternCall may have more parameters than max_params_count many
+			//no PatternFApp may have more parameters than max_params_count many
 			static constexpr std::size_t max_params_count = 10u;
 			static_assert(max_params_count < 16u, "else larger bitsets are needed for PatternCallData");
 
-			using MatchPos_T = decltype(Call::Info::size);
+			using MatchPos_T = decltype(FApp::Info::size);
 
 			//every element in pattern (except all multi match) has own entry which logs, 
 			//  with which element in term to match it currently is associated with.
@@ -748,11 +748,11 @@ namespace simp {
 		};
 
 		//to allow a constant RewriteRule to be matched against, all match info is stored here
-		struct MatchData
+		struct State
 		{
 			const Store* haystack;
 
-			constexpr MatchData(const Store& haystack_) noexcept :haystack(&haystack_) {}
+			constexpr State(const Store& haystack_) noexcept :haystack(&haystack_) {}
 
 			constexpr Ref make_ref(const NodeIndex n) const noexcept 
 			{	return Ref(*this->haystack, n); 
@@ -760,7 +760,7 @@ namespace simp {
 
 			//maximal number of unrelated single match variables allowed per pattern
 			static constexpr std::size_t max_single_match_count = 8u;
-			//maximal number of PatternCall allowed per pattern
+			//maximal number of PatternFApp allowed per pattern
 			static constexpr std::size_t max_pattern_call_count = 4u;
 			//maximal number of unrelated value match variables allowed per pattern
 			static constexpr std::size_t max_value_match_count = 2u;
@@ -770,30 +770,30 @@ namespace simp {
 			std::array<SharedValueMatchEntry, max_value_match_count> value_vars = {};
 
 			constexpr auto& value_entry(const ValueMatch& var) noexcept
-			{	return this->value_vars[var.match_data_index];
+			{	return this->value_vars[var.match_state_index];
 			}
 
 			constexpr auto& value_entry(const ValueMatch& var) const noexcept
-			{	return this->value_vars[var.match_data_index];
+			{	return this->value_vars[var.match_state_index];
 			}
 
 			constexpr auto& call_entry(const UnsaveRef ref) noexcept
-			{	assert(ref.type == PatternCall{});
-				return this->pattern_calls[pattern_call_info(ref).match_data_index];
+			{	assert(ref.type == PatternFApp{});
+				return this->pattern_calls[pattern_call_info(ref).match_state_index];
 			}
 
 			constexpr auto& call_entry(const UnsaveRef ref) const noexcept
-			{	assert(ref.type == PatternCall{});
-				return this->pattern_calls[pattern_call_info(ref).match_data_index];
+			{	assert(ref.type == PatternFApp{});
+				return this->pattern_calls[pattern_call_info(ref).match_state_index];
 			}
 
 			constexpr MultiRange multi_range(const MultiMatch& multi) const noexcept
 			{
 				assert(multi.index_in_params != -1u); 
-				const SharedPatternCallEntry& owning_entry = this->pattern_calls[multi.match_data_index];
+				const SharedPatternCallEntry& owning_entry = this->pattern_calls[multi.match_state_index];
 				const Ref matched_ref = this->make_ref(owning_entry.match_idx);
-				assert(matched_ref.type == Literal::call);
-				const Call& matched_call = *matched_ref;
+				assert(matched_ref.type == Literal::f_app);
+				const FApp& matched_call = *matched_ref;
 
 				const std::uint32_t begin_params_index =
 					multi.index_in_params > 0 ?
@@ -808,7 +808,7 @@ namespace simp {
 				//+ 1u in both cases, because the function itself resides at index 0
 				return MultiRange{ { *matched_ref.store, matched_ref.index, begin_params_index + 1u }, { end_params_index + 1u } };
 			}
-		}; //MatchData
+		}; //State
 
 	} //namespace match
 

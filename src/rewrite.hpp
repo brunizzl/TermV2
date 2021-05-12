@@ -100,7 +100,7 @@ namespace simp {
 	//the old ref is not deleted.
 	//if no match was found, { literal_nullptr, undefined } is returned
 	[[nodiscard]] RuleApplicationRes raw_shallow_apply_ruleset(const RuleSet& rules, const Ref ref,
-		Store& dst_store, const unsigned lambda_param_offset, match::MatchData& match_data);
+		Store& dst_store, const unsigned lambda_param_offset, match::State& match_data);
 
 	//same as above, only handles storage, returns new ref's index.
 	[[nodiscard]] NodeIndex shallow_apply_ruleset(const RuleSet& rules, MutRef ref);

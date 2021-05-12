@@ -34,7 +34,7 @@ namespace simp {
 				real_value,    //where is unspecified
 				imag_value,    //where is unspecified
 				symbol,        //where is unspecified
-				call,          //where specifies position of opening parenthesis
+				f_app,          //where specifies position of opening parenthesis
 				lambda,        //where is unspecified
 				group,         //where is unspecified
 			} type;
@@ -56,7 +56,7 @@ namespace simp {
 			{
 				std::vector<NameInfo> lambda_params = {};  //only contains instances of Literal::lambda_param -> always shallow
 				std::vector<NameInfo> single_matches = {}; //stored as SingleMatch::weak
-				std::vector<NameInfo> multi_matches = {};  //stored as MultiMatch node with .match_data_index currently holding the identification number
+				std::vector<NameInfo> multi_matches = {};  //stored as MultiMatch node with .match_state_index currently holding the identification number
 				std::vector<NameInfo> value_matches = {};  //stored as call to nv::PatternFn::value_match
 				bool parse_match = true; //set to false after match is parsed
 			};
@@ -93,8 +93,8 @@ namespace simp {
 		{
 			const std::size_t result_idx = store.allocate_one();
 			const NodeIndex minus_1 = simp::parse::build_value(store, std::complex<double>{ -1.0, 0.0 });
-			new (&store.at(result_idx)) TermNode(Call{ from_native(nv::Comm::product), minus_1, to_negate });
-			return NodeIndex(result_idx, Literal::call);
+			new (&store.at(result_idx)) TermNode(FApp{ from_native(nv::Comm::prod), minus_1, to_negate });
+			return NodeIndex(result_idx, Literal::f_app);
 		}
 
 		template<bmath::intern::StoreLike Store_T>
@@ -102,8 +102,8 @@ namespace simp {
 		{
 			const std::size_t result_idx = store.allocate_one();
 			const NodeIndex minus_1 = simp::parse::build_value(store, std::complex<double>{ -1.0, 0.0 });
-			new (&store.at(result_idx)) TermNode(Call{ from_native(nv::CtoC::pow), to_invert, minus_1 });
-			return NodeIndex(result_idx, Literal::call);
+			new (&store.at(result_idx)) TermNode(FApp{ from_native(nv::CtoC::pow), to_invert, minus_1 });
+			return NodeIndex(result_idx, Literal::f_app);
 		}
 
 		//returns the tree representation of view in store
@@ -129,7 +129,7 @@ namespace simp {
 
 		void append_to_string(const UnsaveRef ref, std::string& str, const int parent_infixr);
 
-		inline std::string to_string(const UnsaveRef ref)
+		inline [[nodiscard]] std::string to_string(const UnsaveRef ref)
 		{
 			std::string name;
 			print::append_to_string(ref, name, 0);

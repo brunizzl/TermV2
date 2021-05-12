@@ -234,7 +234,7 @@ namespace bmath::intern {
 			{ NonComm::list           , "list"        , false },
 			{ NonComm::ordered_sum    , "sum'"        , true  },
 			{ NonComm::ordered_product, "product'"    , true  },
-			{ NonComm::call           , "call"        , false },
+			{ NonComm::call           , "f_app"        , false },
 			{ Comm::sum               , "sum"         , true  },
 			{ Comm::product           , "product"     , true  },
 			{ Comm::multiset          , "multiset"    , false },

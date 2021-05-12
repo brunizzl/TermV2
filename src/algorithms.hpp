@@ -57,14 +57,14 @@ namespace simp {
         case NodeType(PatternUnsigned{}):          return 4;
         case NodeType(Literal::lambda):            return 8;
         case NodeType(Literal::lambda_param):      return 10;
-        case NodeType(Literal::symbol):            return 2000;
-        case NodeType(Literal::call):              return 2002;
-        case NodeType(PatternCall{}):	           return 2002;
+        case NodeType(Literal::string_symbol):            return 2000;
+        case NodeType(Literal::f_app):              return 2002;
+        case NodeType(PatternFApp{}):	           return 2002;
         case NodeType(SingleMatch::restricted):    return 2100;  //caution: these will compare equal, despite having a different structure in store
         case NodeType(SingleMatch::unrestricted):  return 2100;  //caution: these will compare equal, despite having a different structure in store
         case NodeType(SingleMatch::weak):          return 2100;  //caution: these will compare equal, despite having a different structure in store
         case NodeType(SpecialMatch::multi):        return 3000;
-        case NodeType(Literal::native):
+        case NodeType(Literal::native_symbol):
             using namespace nv;
             static_assert((unsigned)Native::COUNT < 1000, "adjust values >= 2000 to circumvent overlap");
             switch (Native(ref.index)) {
@@ -103,8 +103,8 @@ namespace simp {
         if (pred(ref)) {
             return ref.typed_idx();
         }
-        else if (ref.type == Literal::call || ref.type == PatternCall{}) {
-            for (const NodeIndex subterm : ref->call) {
+        else if (ref.type == Literal::f_app || ref.type == PatternFApp{}) {
+            for (const NodeIndex subterm : ref->f_app) {
                 const NodeIndex sub_res = search(ref.at(subterm), pred);
                 if (sub_res != literal_nullptr) {
                     return sub_res;
@@ -121,7 +121,7 @@ namespace simp {
     template<bmath::intern::Reference R, bmath::intern::CallableTo<NodeIndex, R> F>
     [[nodiscard]] NodeIndex transform(const R ref, F f) 
     {
-        if (ref.type == Literal::call || ref.type == PatternCall{}) {
+        if (ref.type == Literal::f_app || ref.type == PatternFApp{}) {
             const auto stop = end(ref);
             for (auto iter = begin(ref); iter != stop; ++iter) {
                 *iter = transform(ref.at(*iter), f);
@@ -137,7 +137,7 @@ namespace simp {
     template<bmath::intern::Reference R, bmath::intern::Procedure<R> F>
     void transform(const R ref, F f)
     {
-        if (ref.type == Literal::call || ref.type == PatternCall{}) {
+        if (ref.type == Literal::f_app || ref.type == PatternFApp{}) {
             for (const auto sub : ref) {
                 transform(ref.at(sub), f);
             }
@@ -157,8 +157,8 @@ namespace simp {
         //intermediary is converted to final form and ownership is decided (thus sorts bevore that)
         [[nodiscard]] RuleHead prime_value(Store& store, RuleHead head);
 
-        // - every function call to nv::Comm in lhs is converted to PatternCall
-        // - if a call in lhs contains at least one multi match, the call is converted to PatternCall
+        // - every function call to nv::Comm in lhs is converted to PatternFApp
+        // - if a call in lhs contains at least one multi match, the call is converted to PatternFApp
         // - multi match variables are primed
         //note: as after this procedure there may be PatterCall instances present, this may be done as last real transformation
         [[nodiscard]] RuleHead prime_call(Store& store, RuleHead head);
@@ -177,23 +177,23 @@ namespace simp {
     namespace match {
 
         //compares term starting at ref.index in ref.store with pattern starting at pn_ref.index in pn_ref.store
-        //if match is succsessfull, match_data stores what pattern's match variables matched and equivalent is returned.
-        //if match was not successfull, match_data is NOT reset and something else than equivalent is returned
-        std::partial_ordering match_(const UnsaveRef pn_ref, const UnsaveRef ref, MatchData& match_data);
+        //if match is succsessfull, match_state stores what pattern's match variables matched and equivalent is returned.
+        //if match was not successfull, match_state is NOT reset and something else than equivalent is returned
+        std::partial_ordering match_(const UnsaveRef pn_ref, const UnsaveRef ref, State& match_state);
 
-        inline bool matches(const UnsaveRef pn_ref, const UnsaveRef ref, MatchData& match_data)
-        {   return match_(pn_ref, ref, match_data) == std::partial_ordering::equivalent;
+        inline bool matches(const UnsaveRef pn_ref, const UnsaveRef ref, State& match_state)
+        {   return match_(pn_ref, ref, match_state) == std::partial_ordering::equivalent;
         }
 
-        // expects pn_ref to already be matched to ref via match_data
+        // expects pn_ref to already be matched to ref via match_state
         //if one exists, this function finds a different match of pn_ref in ref, appearing after the current one
         //  in all permutations
-        bool rematch(const UnsaveRef pn_ref, const UnsaveRef ref, MatchData & match_data);
+        bool rematch(const UnsaveRef pn_ref, const UnsaveRef ref, State & match_state);
 
     } //namespace match
 
     //copies pn_ref like copy_tree, only match variables are replaced by their matched counterparts from src_store.
-    [[nodiscard]] NodeIndex pattern_interpretation(const UnsaveRef pn_ref, const match::MatchData& match_data,
+    [[nodiscard]] NodeIndex pattern_interpretation(const UnsaveRef pn_ref, const match::State& match_state,
         const Store& src_store, Store& dst_store, const unsigned lambda_param_offset);
     
 } //namespace simp

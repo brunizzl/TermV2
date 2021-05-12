@@ -101,7 +101,7 @@ namespace simp {
 				return Head{ 0u, Head::Type::group };
 			}
 			else { //can be called immediatly -> find opening paren from back
-				return Head{ find_open_par(view.size() - 1u, view.tokens), Head::Type::call };
+				return Head{ find_open_par(view.size() - 1u, view.tokens), Head::Type::f_app };
 			}
 		} //find_head_type
 
@@ -135,7 +135,7 @@ namespace simp {
 				if (!mundane_name(view)) [[unlikely]] {
 					throw bmath::ParseFailure{ view.offset, "ellipses or the dollar symbol are only expected when building a pattern" };
 				}
-				return NodeIndex(Symbol::build(store, name), Literal::symbol);
+				return NodeIndex(Symbol::build(store, name), Literal::string_symbol);
 			}
 
 			NodeIndex build_symbol(Store& store, PatternInfos& infos, bmath::intern::ParseView view)
@@ -157,7 +157,7 @@ namespace simp {
 					return copy_tree(Ref(store, res), store);
 				}
 				if (const nv::Native type = nv::type_of(name); type != nv::Native(nv::Native::COUNT)) {
-					return NodeIndex(static_cast<unsigned>(type), Literal::native);
+					return NodeIndex(static_cast<unsigned>(type), Literal::native_symbol);
 				}
 				if (name.starts_with('\'') && name.ends_with('\'')) {
 					name.remove_prefix(1u);
@@ -168,7 +168,7 @@ namespace simp {
 					if (nv::type_of(name) != nv::Native(nv::Native::COUNT)) [[unlikely]] {
 						throw bmath::ParseFailure{ view.offset, "sneaking in keywords like that is forbidden" };
 					}
-					return NodeIndex(Symbol::build(store, name), Literal::symbol);
+					return NodeIndex(Symbol::build(store, name), Literal::string_symbol);
 				}
 				if (name.find_first_of(' ') != std::string_view::npos) [[unlikely]] {
 						throw bmath::ParseFailure{ view.offset, "leave me some space, but not like that" };
@@ -184,13 +184,13 @@ namespace simp {
 					return result;
 				}
 				else if (name.starts_with('$')) {
-					const std::size_t res_index = Call::build(store, std::to_array({
+					const std::size_t res_index = FApp::build(store, std::to_array({
 						from_native(nv::PatternFn::value_match),               //function type
-						NodeIndex(infos.value_matches.size(), PatternUnsigned{}), //.match_data_index
+						NodeIndex(infos.value_matches.size(), PatternUnsigned{}), //.match_state_index
 						from_native(nv::ComplexSubset::complex),                  //.domain
-						value_proxy                                               //.match_index
+						value_proxy                                               //.inverse
 					}));
-					const NodeIndex result = NodeIndex(res_index, Literal::call);
+					const NodeIndex result = NodeIndex(res_index, Literal::f_app);
 					infos.value_matches.emplace_back(name, result);
 					return result;
 				}
@@ -249,16 +249,16 @@ namespace simp {
 				const NodeIndex fst = parse::build(store, infos, view.substr(0, head.where));
 				const NodeIndex snd = parse::build(store, infos, view.substr(head.where + operator_length));
 				const std::size_t res_index = store.allocate_one();
-				store.at(res_index) = Call{ from_native(type), fst, snd };
-				return NodeIndex(res_index, Literal::call);
+				store.at(res_index) = FApp{ from_native(type), fst, snd };
+				return NodeIndex(res_index, Literal::f_app);
 			};
 			const auto to_inverse_buildin_call = [&](const nv::Native type, auto invert_term) {
 				const NodeIndex fst = parse::build(store, infos, view.substr(0, head.where));
 				const NodeIndex snd_uninverted = build(store, infos, view.substr(head.where + 1));
 				const NodeIndex snd = invert_term(store, snd_uninverted);
 				const std::size_t res_index = store.allocate_one();
-				store.at(res_index) = Call{ from_native(type), fst, snd };
-				return NodeIndex(res_index, Literal::call);
+				store.at(res_index) = FApp{ from_native(type), fst, snd };
+				return NodeIndex(res_index, Literal::f_app);
 			};
 			switch (head.type) {
 			case Head::Type::or_:        return to_buildin_call(2, nv::Comm::or_);
@@ -271,16 +271,16 @@ namespace simp {
 			case Head::Type::smaller_eq: return to_buildin_call(2, nv::ToBool::smaller_eq);
 			case Head::Type::plus:       return to_buildin_call(1, nv::Comm::sum);
 			case Head::Type::minus:      return to_inverse_buildin_call(nv::Comm::sum, build_negated<Store>);
-			case Head::Type::times:      return to_buildin_call(1, nv::Comm::product);
-			case Head::Type::divided:    return to_inverse_buildin_call(nv::Comm::product, build_inverted<Store>);
+			case Head::Type::times:      return to_buildin_call(1, nv::Comm::prod);
+			case Head::Type::divided:    return to_inverse_buildin_call(nv::Comm::prod, build_inverted<Store>);
 			case Head::Type::power:      return to_buildin_call(1, nv::CtoC::pow);
 			case Head::Type::of_type:    return to_buildin_call(1, nv::PatternFn::of_type);
 			case Head::Type::not_: {
 				view.remove_prefix(1u);  //remove '!'
 				const NodeIndex to_negate = parse::build(store, infos, view);
 				const std::size_t res_index = store.allocate_one();
-				store.at(res_index) = Call{ from_native(nv::ToBool::not_), to_negate };
-				return NodeIndex(res_index, Literal::call);
+				store.at(res_index) = FApp{ from_native(nv::ToBool::not_), to_negate };
+				return NodeIndex(res_index, Literal::f_app);
 			} break;
 			case Head::Type::negate: {
 				view.remove_prefix(1u);  //remove minus sign
@@ -299,7 +299,7 @@ namespace simp {
 			case Head::Type::symbol: {
 				return name_lookup::build_symbol(store, infos, view);
 			} break;
-			case Head::Type::call: {
+			case Head::Type::f_app: {
 				bmath::intern::StupidBufferVector<NodeIndex, 12> subterms;
 				subterms.push_back(parse::build(store, infos, view.steal_prefix(head.where)));
 				view.remove_prefix(1u); //remove '('
@@ -315,7 +315,7 @@ namespace simp {
 					const auto param_view = view.steal_prefix(comma);
 					subterms.push_back(parse::build(store, infos, param_view));
 				}
-				return NodeIndex(Call::build(store, subterms), Literal::call);
+				return NodeIndex(FApp::build(store, subterms), Literal::f_app);
 			} break;
 			case Head::Type::lambda: {
 				const bool outermost_lambda = infos.lambda_params.size() == 0u;
@@ -371,7 +371,7 @@ namespace simp {
 			heads.rhs = parse::build(store, infos, rhs_view); 
 
 			heads.lhs = normalize::recursive(MutRef(store, heads.lhs), {}, 0);
-			heads.lhs = normalize::recursive(MutRef(store, heads.lhs), 
+			heads.rhs = normalize::recursive(MutRef(store, heads.rhs), 
 				{ .remove_unary_assoc = false }, 0);
 
 			//extra condition concerning single match variables (might set multiple in relation)
@@ -379,11 +379,11 @@ namespace simp {
 			{
 				NodeIndex head = literal_nullptr;
 				//dependencies[i] is set iff single match i occurs in the condition
-				std::bitset<match::MatchData::max_single_match_count> dependencies = 0; 
+				std::bitset<match::State::max_single_match_count> dependencies = 0; 
 			};
 			std::vector<SingleCondition> single_conditions;
 
-			std::array<NodeIndex, match::MatchData::max_value_match_count> value_conditions;
+			std::array<NodeIndex, match::State::max_value_match_count> value_conditions;
 			value_conditions.fill(from_native(nv::ComplexSubset::complex));
 
 			while (conditions_view.size()) {
@@ -393,7 +393,7 @@ namespace simp {
 				const auto condition_view = conditions_view.steal_prefix(comma);
 				const NodeIndex condition_head = normalize::recursive(
 					MutRef(store, parse::build(store, infos, condition_view)), {}, 0);
-				if (condition_head.get_type() != Literal::call) [[unlikely]] {
+				if (condition_head.get_type() != Literal::f_app) [[unlikely]] {
 					throw ParseFailure{ conditions_view.offset, "please make this condition look a bit more conditiony." };
 				}
 				const auto cond_ref = MutRef(store, condition_head);
@@ -416,8 +416,8 @@ namespace simp {
 						using Res = decltype(SingleCondition::dependencies);
 						Res operator()(const UnsaveRef ref) {
 							Res res = 0u;
-							if (ref.type == Literal::call) {
-								for (const NodeIndex sub : ref->call) {
+							if (ref.type == Literal::f_app) {
+								for (const NodeIndex sub : ref->f_app) {
 									res |= (*this)(ref.at(sub));
 								}
 							}
@@ -435,25 +435,25 @@ namespace simp {
 				if (contains_value) {
 					const NodeIndex value_call_idx = simp::search(cond_ref,
 						[](const UnsaveRef r) { 
-							return r.type == Literal::call && 
-							r->call.function() == from_native(nv::PatternFn::value_match); 
+							return r.type == Literal::f_app && 
+							r->f_app.function() == from_native(nv::PatternFn::value_match); 
 						});
 					assert(value_call_idx != literal_nullptr);
-					Call& value_call = *MutRef(store, value_call_idx);
+					FApp& value_call = *MutRef(store, value_call_idx);
 					value_conditions[value_call[1].get_index()] = condition_head;
 				}
 			}	
 			{ //give value conditions to value match variables
 				const auto restrict_value = [&value_conditions](const MutRef r) {
-					if (r.type == Literal::call && 
-						r->call.function() == from_native(nv::PatternFn::value_match) && //call to _VM
+					if (r.type == Literal::f_app && 
+						r->f_app.function() == from_native(nv::PatternFn::value_match) && //call to _VM
 						//if call contains no match variables itself and holds only shallow parameters, 
 						//  it is assumed to stem from name_lookup::build_symbol
-						std::none_of(r->call.begin(), r->call.end(),
+						std::none_of(r->f_app.begin(), r->f_app.end(),
 							[](auto idx) { return idx.get_type().is<MatchVariableType>() || is_stored_node(idx.get_type()); }))
 					{
-						const std::size_t value_index = r->call[1].get_index();
-						r->call[2] = value_conditions[value_index];
+						const std::size_t value_index = r->f_app[1].get_index();
+						r->f_app[2] = value_conditions[value_index];
 					}
 					return r.typed_idx();
 				};
@@ -486,9 +486,9 @@ namespace simp {
 						}
 						else { //more than one condition -> "and" them
 							relevant_conditions.emplace(relevant_conditions.begin(), from_native(nv::Comm::and_));
-							const std::size_t and_index = Call::build(*r.store, relevant_conditions);
+							const std::size_t and_index = FApp::build(*r.store, relevant_conditions);
 							const std::size_t res_index = r.store->allocate_one();
-							r.store->at(res_index) = RestrictedSingleMatch{ r.index, NodeIndex(and_index, Literal::call) };
+							r.store->at(res_index) = RestrictedSingleMatch{ r.index, NodeIndex(and_index, Literal::f_app) };
 							return NodeIndex(res_index, SingleMatch::restricted);
 						}
 					}
@@ -507,12 +507,12 @@ namespace simp {
 		constexpr int default_infixr = 0;
 
 		constexpr int infixr(const NodeIndex f) {
-			if (f.get_type() != Literal::native) { return default_infixr; }
+			if (f.get_type() != Literal::native_symbol) { return default_infixr; }
 			using namespace nv;
 			switch (to_native(f)) {
 			case Native(ToBool::not_):       return 4000;
 			case Native(CtoC::pow):          return 3000;
-			case Native(Comm::product):      return 2001;
+			case Native(Comm::prod):      return 2001;
 			case Native(Comm::sum):          return 2000;
 			case Native(ToBool::eq):         return 1000;
 			case Native(ToBool::neq):        return 1000;
@@ -538,7 +538,7 @@ namespace simp {
 			switch (data.strategy) {
 			case MatchStrategy::permutation: 
 				str.append("p");
-				str.append(std::to_string(data.match_data_index));
+				str.append(std::to_string(data.match_state_index));
 				str.append(" R:");
 				str.append(to_string(data.rematchable_params, param_count));
 				str.append(" M:");
@@ -550,7 +550,7 @@ namespace simp {
 				break;
 			case MatchStrategy::dilation:    
 				str.append("d");
-				str.append(std::to_string(data.match_data_index));
+				str.append(std::to_string(data.match_state_index));
 				str.append(" R:");
 				str.append(to_string(data.rematchable_params, param_count));
 				str.append(" M:");
@@ -574,21 +574,21 @@ namespace simp {
 			case NodeType(Literal::complex):
 				bmath::intern::print::append_complex(*ref, str, parent_infixr);
 				break;
-			case NodeType(Literal::symbol):
+			case NodeType(Literal::string_symbol):
 				str.append(ref->symbol);
 				break;
-			case NodeType(PatternCall{}): 
-			case NodeType(Literal::call): { 
-				const bool in_pattern_call = ref.type.is<PatternCall>();
-				const Call& call = *ref;
-				const NodeIndex function = call.function();
+			case NodeType(PatternFApp{}): 
+			case NodeType(Literal::f_app): { 
+				const bool in_pattern_call = ref.type.is<PatternFApp>();
+				const FApp& f_app = *ref;
+				const NodeIndex function = f_app.function();
 				const char* replacement_seperator = nullptr;
 				const auto [init, seperator] = [&]() -> std::pair<const char*, const char*> {
 					using namespace nv;
-					if (!in_pattern_call && function.get_type() == Literal::native) {
+					if (!in_pattern_call && function.get_type() == Literal::native_symbol) {
 						switch (to_native(function)) {
 						case Native(Comm::sum):             return { "" , " + "  };
-						case Native(Comm::product):         return { "" , " * "  };
+						case Native(Comm::prod):         return { "" , " "  };
 						case Native(Comm::and_):            return { "" , " && " };
 						case Native(Comm::or_):             return { "" , " || " };
 						case Native(CtoC::pow):             return { "" , " ^ "  };
@@ -604,20 +604,20 @@ namespace simp {
 					}
 					append_to_string(ref.at(function), str, max_infixr);
 					if (in_pattern_call) {
-						append_pattern_call_info(pattern_call_info(ref), ref->call.size() - 1u, str);
+						append_pattern_call_info(pattern_call_info(ref), ref->f_app.size() - 1u, str);
 					}
 					return { "", ", " };
 				}();
 				const int own_infixr = in_pattern_call ? default_infixr : infixr(function);
 				if (own_infixr <= parent_infixr) { str.push_back('('); }				
 				const char* spacer = init;
-				for (const NodeIndex param : call.parameters()) {
+				for (const NodeIndex param : f_app.parameters()) {
 					str.append(std::exchange(spacer, seperator));
 					append_to_string(ref.at(param), str, own_infixr);
 				}
 				if (own_infixr <= parent_infixr) { str.push_back(')'); }
 			} break;
-			case NodeType(Literal::native):
+			case NodeType(Literal::native_symbol):
 				str.append(nv::name_of(nv::Native(ref.index)));
 				break;
 			case NodeType(Literal::lambda): {
@@ -635,7 +635,7 @@ namespace simp {
 			case NodeType(SingleMatch::restricted): {
 				const RestrictedSingleMatch& var = *ref;
 				str.append("_X");
-				str.append(std::to_string(var.match_data_index));
+				str.append(std::to_string(var.match_state_index));
 				str.append("[");
 				append_to_string(ref.at(var.condition), str, default_infixr);
 				str.append("]");
@@ -649,7 +649,7 @@ namespace simp {
 			case NodeType(SpecialMatch::multi): {
 				const MultiMatch& var = *ref;
 				str.append("_M[");
-				str.append(std::to_string(var.match_data_index));
+				str.append(std::to_string(var.match_state_index));
 				str.append(", ");
 				str.append(std::to_string((int)var.index_in_params));
 				str.append("]");
@@ -657,10 +657,10 @@ namespace simp {
 			case NodeType(SpecialMatch::value): {
 				const ValueMatch& var = *ref;
 				str.append("_V");
-				str.append(std::to_string(var.match_data_index));
+				str.append(std::to_string(var.match_state_index));
 				str.append(var.owner ? "" : "'");
 				str.append("[");
-				append_to_string(ref.at(var.match_index), str, default_infixr);
+				append_to_string(ref.at(var.inverse), str, default_infixr);
 				if (var.domain != nv::ComplexSubset::complex) {
 					str.append(", ");
 					str.append(nv::name_of(var.domain));
@@ -702,24 +702,24 @@ namespace simp {
 			case NodeType(Literal::complex): {
 				current_str += "value      : ";
 			} break;
-			case NodeType(Literal::symbol): {
+			case NodeType(Literal::string_symbol): {
 				current_str += "symbol     : ";
 				show_string_nodes(ref.index, false);
 			} break;
-			case NodeType(PatternCall{}): {
+			case NodeType(PatternFApp{}): {
 				std::string& prev_str = rows[ref.index - 1u];
 				prev_str += "meta data  : ";
-				append_pattern_call_info(pattern_call_info(ref), ref->call.size() - 1u, prev_str);
+				append_pattern_call_info(pattern_call_info(ref), ref->f_app.size() - 1u, prev_str);
 			} [[fallthrough]];
-			case NodeType(Literal::call): {
+			case NodeType(Literal::f_app): {
 				//parameters:
 				current_str += "call       :    { ";
 				const char* separator = "";
-				const Call& vec = *ref;
+				const FApp& vec = *ref;
 				std::string* current_line = &current_str; //as we never add a new string to rows, this pointer will not dangle
 				std::size_t vec_idx = 0u;
 				const auto maybe_start_new_line = [&] {
-					if ((vec_idx - Call::min_capacity) % Call::values_per_node == 0) {
+					if ((vec_idx - FApp::min_capacity) % FApp::values_per_node == 0) {
 						*(++current_line) += "  ...        ";
 					}
 				};
@@ -757,7 +757,7 @@ namespace simp {
 
 		std::string to_memory_layout(const Store& store, const std::initializer_list<const NodeIndex> heads)
 		{
-			std::vector<std::string> rows(std::max(store.size(), match::MatchData::max_pattern_call_count), "");
+			std::vector<std::string> rows(std::max(store.size(), match::State::max_pattern_call_count), "");
 
 			std::string result((heads.size() == 1u) ? "  head at index: " : "  heads at indices: ");
 			result.reserve(store.size() * 15);

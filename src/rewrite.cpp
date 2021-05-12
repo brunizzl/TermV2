@@ -106,7 +106,7 @@ namespace simp {
 	} //RuleSet::migrate_rules
 
 	RuleApplicationRes raw_shallow_apply_ruleset(const RuleSet& rules, const Ref ref, Store& dst_store, 
-		const unsigned lambda_param_offset, match::MatchData& match_data)
+		const unsigned lambda_param_offset, match::State& match_data)
 	{
 		const RuleRange applicable_rules = rules.applicable_rules(ref);
 		const RuleSetIter stop = applicable_rules.end();
@@ -124,7 +124,7 @@ namespace simp {
 	NodeIndex shallow_apply_ruleset(const RuleSet& rules, MutRef ref)
 	{
 	apply_ruleset:
-		match::MatchData match_data = *ref.store;
+		match::State match_data = *ref.store;
 		RuleApplicationRes result = raw_shallow_apply_ruleset(rules, ref, *ref.store, 0, match_data);
 		if (result.result_term != literal_nullptr) {
 			free_tree(ref);
@@ -137,14 +137,14 @@ namespace simp {
 
 	NodeIndex recursive_greedy_apply(const RuleSet& rules, MutRef ref, const unsigned lambda_param_offset) {
 		{ //try replacing this
-			match::MatchData match_data = *ref.store;
+			match::State match_data = *ref.store;
 			const RuleApplicationRes applied = raw_shallow_apply_ruleset(rules, ref, *ref.store, lambda_param_offset, match_data);
 			if (applied.result_term != literal_nullptr) {
 				free_tree(ref);
 				return applied.result_term;
 			}
 		}
-		if (ref.type == Literal::call) {
+		if (ref.type == Literal::f_app) {
 			bool change = false;
 			const auto stop = end(ref);
 			for (auto subterm = begin(ref); subterm != stop; ++subterm) {

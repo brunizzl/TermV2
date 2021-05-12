@@ -23,7 +23,7 @@ important:
  - type checking (extended: keep track of what restrictions apply to match variable in lhs, use in rhs)
  - finnish building / verifying pattern:
       - (depends on type checking) verify whole patterns
-      - check PatternCall to each not exceed maximal length and check numer of PatternCall in pattern not more than allowed 
+      - check PatternFApp to each not exceed maximal length and check numer of PatternFApp in pattern not more than allowed 
 	  - enable implicit outer multi
 	  - allow only function calls returning bool in test_condition 
 
@@ -43,7 +43,7 @@ nice to have:
  - allow to restrict a variables domain (split Literal::symbol in own enum?)
 
 idea status:
- - allow PatternCall in rhs to indicate, that a call of lhs can be "stolen" e.g. the parameter count in rhs is guaranteed to be lower than the one in lhs -> the old allocation can be reused
+ - allow PatternFApp in rhs to indicate, that a call of lhs can be "stolen" e.g. the parameter count in rhs is guaranteed to be lower than the one in lhs -> the old allocation can be reused
  - let each RewriteRule have a name in form of a constant c-string (not what pattern is constructed from, but name of rule, e.g. "differentiation: product rule" or something)
  - always keep -1 at some known index in store and never allocate new -1 in build_negated and build_inverted (problem: identify bevore copy, solution: you know the index)
  - sort pattern with care for match variables
@@ -76,7 +76,7 @@ int main()
 		}
 		std::cout << "\n\n";
 	}
-	if (true) {
+	if (false) {
 		const auto names = std::to_array<std::string>({
 			{ "list(conj(3-i), conj(4+3i), conj(8), conj(-i))" },
 			{ "(\\f n. f(f, n))(\\f n.(n <= 1)(1, n * f(f, -1 + n)), 5)" },
@@ -125,20 +125,20 @@ int main()
 			{ "x x     = x^2" },
 			{ "x x^a   = x^(a + 1)" },
 			{ "x^a x^b = x^(a + b)" },
-			{ "exp(product(ln(y), xs...)) = y^(product(xs...))" },
+			{ "exp(prod(ln(y), xs...)) = y^(prod(xs...))" },
 			
 			{ " a^2 +  2 a b + b^2 =  (a + b)^2" },
 			{ " a^2 -  2 a b + b^2 =  (a - b)^2" },
 			{ " a'2 +  _2a b + b^2 | 2 sqrt(a'2) == _2a =  (1/2 _2a + b)^2" },
-			//{ "$a^2 + 2 $a b + b^2 = ($a + b)^2" },
+			{ "$a^2 + 2 $a b + b^2 = ($a + b)^2" },
 			
-			{ "a bs... + a cs... | !(a :complex)      = a (product(bs...) + product(cs...))" },
-			{ "a bs... + a       | !(a :complex)      = a (product(bs...) + 1)" },
+			{ "a bs... + a cs... | !(a :complex)      = a (prod(bs...) + prod(cs...))" },
+			{ "a bs... + a       | !(a :complex)      = a (prod(bs...) + 1)" },
 			{ "a       + a       | !(a :complex)      = 2 a" },
 			{ "a b               | a :complex, b :sum = map(sum, \\x .a x, b)" },
 			
 			{ "-a     | a :sum     = map(sum    , \\x. -x    , a)" },
-			{ "a^(-1) | a :product = map(product, \\x. x^(-1), a)" },
+			{ "a^(-1) | a :prod = map(prod, \\x. x^(-1), a)" },
 			
 			{ "sin(x)^2 + cos(x)^2 = 1" },
 			
@@ -167,7 +167,7 @@ int main()
 			{ "diff(a^f, x)     | !contains(a, x) = diff(f, x) ln(a) a^f" },
 			{ "diff(g^h, x)                       = (diff(h, x) ln(g) + h diff(g, x)/g) g^h" },
 			{ "diff(a, x)       | a :sum          = map(sum, \\f .diff(f, x), a)" },
-			{ "diff(u vs..., x)                   = diff(u, x) vs... + u diff(product(vs...), x)" },
+			{ "diff(u vs..., x)                   = diff(u, x) vs... + u diff(prod(vs...), x)" },
 			{ "diff(f(y), x)                      = diff(y, x) fdiff(f)(y)" },
 			
 			{ "fdiff(\\x .y) = \\x .diff(y, x)" },
