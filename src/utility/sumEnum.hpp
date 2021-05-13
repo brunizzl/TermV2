@@ -317,6 +317,48 @@ namespace bmath::intern {
 	};
 
 
+	//first Enum::COUNT values belong to Enum, the rest to not Enum -> thus no COUNT is needed
+	template<detail_enum::EnumLike Enum>
+	struct FinalSumEnum
+	{
+		enum class Value :unsigned {} value;
+
+		//implicit conversion allows usage in switch case
+		constexpr operator Value() const noexcept { return this->value; }
+
+		constexpr FinalSumEnum(const Enum e) :value(Value(unsigned(e))) {}
+
+		template<typename E>
+		constexpr FinalSumEnum(const E e) noexcept :value(Value(unsigned(Enum(e)))) {}
+
+		explicit constexpr FinalSumEnum(const unsigned u) noexcept :value(static_cast<Value>(u)) {}
+		explicit constexpr operator unsigned() const noexcept { return static_cast<unsigned>(this->value); }
+
+	private:
+		template<typename E>
+		static constexpr Value value_of() { return (Value)unsigned(Enum::template as<E>); }
+
+	public:
+		template<typename E>
+		static constexpr Value as = FinalSumEnum::template value_of<E>();
+
+		template<typename E> requires (!std::is_same_v<Enum, E>)
+		constexpr E to() const noexcept { return Enum((unsigned)this->value).to<E>(); }
+
+		template<typename E> requires (std::is_same_v<Enum, E>)
+		constexpr E to() const noexcept { return Enum((unsigned)this->value); }
+
+		template<typename E> requires (!std::is_same_v<Enum, E>)
+		constexpr bool is() const noexcept { return Enum((unsigned)this->value).is<E>(); }
+
+		template<typename E> requires (std::is_same_v<Enum, E>)
+		constexpr bool is() const noexcept { return (unsigned)this->value < (unsigned)Enum::COUNT; }
+
+		constexpr friend std::strong_ordering operator<=>(const FinalSumEnum&, const FinalSumEnum&) noexcept = default;
+		constexpr friend bool operator==(const FinalSumEnum&, const FinalSumEnum&) noexcept = default;
+	}; //struct FinalSumEnum
+
+
 
 
 	template<
@@ -438,7 +480,6 @@ namespace bmath::intern {
 		template<auto e>
 		static constexpr CaseIdentifier is_value = EnumSwitch::value_identifier<e>();
 	}; //class EnumSwitch
-
 
 
 } //namespace bmath::intern

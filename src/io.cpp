@@ -21,33 +21,60 @@ namespace simp {
 	class Names
 	{
 		//used during parsing: ids.at(name) gives corresponding id
-		static std::unordered_map<std::string, std::uint32_t> ids;
+		static std::unordered_map<std::string, std::uint32_t>& ids() 
+		{
+			static std::unordered_map<std::string, std::uint32_t> ids = [] {
+				std::unordered_map<std::string, std::uint32_t> native_ids;
+				for (std::uint32_t id = 0; id < (unsigned)nv::Native::COUNT; id++) {
+					const std::string_view id_name = nv::name_of(nv::Native(id));
+					native_ids[{id_name.data(), id_name.size()}] = id;
+				}
+				return native_ids;
+			}();
+			return ids;
+		} //ids
 
 		//used during printing: names.at(id) gives the corresponding name
-		static std::vector<std::string> names;
-		static std::mutex mutex;
+		static std::vector<std::string>& names()
+		{
+			static std::vector<std::string> names = [] {
+				std::vector<std::string> native_names;
+				for (std::uint32_t id = 0; id < (unsigned)nv::Native::COUNT; id++) {
+					const std::string_view id_name = nv::name_of(nv::Native(id));
+					native_names.emplace_back(id_name.data(), id_name.size());
+				}
+				return native_names;
+			}();
+			return names;
+		} //names
+
+		static std::mutex& mutex()
+		{
+			static std::mutex mutex;
+			return mutex;
+		} //mutex
 
 	public:
 		static std::uint32_t id_of(const std::string name)
 		{
-			const auto lock = std::lock_guard<std::mutex>(mutex);
-			const auto pos = ids.find(name);
-			if (pos != ids.end()) {
+			const auto lock = std::lock_guard<std::mutex>(mutex());
+			const auto pos = ids().find(name);
+			if (pos != ids().end()) {
 				return pos->second;
 			}
 			else {
-				const std::uint32_t id = names.size();
-				ids[name] = id;
-				names.push_back(name);
+				const std::uint32_t id = names().size();
+				ids()[name] = id;
+				names().push_back(name);
 				return id;
 			}
 		} //id_of
 
 		static const std::string& name_of(const std::uint32_t id)
 		{
-			const auto lock = std::lock_guard<std::mutex>(mutex);
-			assert(id < names.size());
-			return names[id];
+			const auto lock = std::lock_guard<std::mutex>(mutex());
+			assert(id < names().size());
+			return names()[id];
 		} //name_of
 	}; //class Names
 
@@ -167,13 +194,10 @@ namespace simp {
 				if (const NodeIndex res = find_name_in_infos(infos.lambda_params, name); res != literal_nullptr) {
 					return res;
 				}
-				if (const nv::Native type = nv::type_of(name); type != nv::Native(nv::Native::COUNT)) {
-					return from_native(type);
-				}
 				if (!mundane_name(view)) [[unlikely]] {
 					throw bmath::ParseFailure{ view.offset, "ellipses or the dollar symbol are only expected when building a pattern" };
 				}
-				return NodeIndex(Symbol::build(store, name), Literal::string_symbol);
+				return NodeIndex(Names::id_of({name.data(), name.size()}), Literal::symbol);
 			}
 
 			NodeIndex build_symbol(Store& store, PatternInfos& infos, bmath::intern::ParseView view)
@@ -194,19 +218,13 @@ namespace simp {
 				if (const NodeIndex res = find_name_in_infos(infos.value_matches, name); res != literal_nullptr) {
 					return copy_tree(Ref(store, res), store);
 				}
-				if (const nv::Native type = nv::type_of(name); type != nv::Native(nv::Native::COUNT)) {
-					return NodeIndex(static_cast<unsigned>(type), Literal::native_symbol);
-				}
 				if (name.starts_with('\'') && name.ends_with('\'')) {
 					name.remove_prefix(1u);
 					name.remove_suffix(1u);
 					if (!mundane_name(view)) [[unlikely]] { //tests not name, but the '\'' make no difference
 						throw bmath::ParseFailure{ view.offset, "please decide: this looks weird" };
 					}
-					if (nv::type_of(name) != nv::Native(nv::Native::COUNT)) [[unlikely]] {
-						throw bmath::ParseFailure{ view.offset, "sneaking in keywords like that is forbidden" };
-					}
-					return NodeIndex(Symbol::build(store, name), Literal::string_symbol);
+					return NodeIndex(Names::id_of({ name.data(), name.size() }), Literal::symbol);
 				}
 				if (name.find_first_of(' ') != std::string_view::npos) [[unlikely]] {
 						throw bmath::ParseFailure{ view.offset, "leave me some space, but not like that" };
@@ -223,7 +241,7 @@ namespace simp {
 				}
 				else if (name.starts_with('$')) {
 					const std::size_t res_index = FApp::build(store, std::to_array({
-						from_native(nv::PatternFn::value_match),               //function type
+						from_native(nv::PatternFn::value_match),				  //function type
 						NodeIndex(infos.value_matches.size(), PatternUnsigned{}), //.match_state_index
 						from_native(nv::ComplexSubset::complex),                  //.domain
 						value_proxy                                               //.inverse
@@ -545,21 +563,21 @@ namespace simp {
 		constexpr int default_infixr = 0;
 
 		constexpr int infixr(const NodeIndex f) {
-			if (f.get_type() != Literal::native_symbol) { return default_infixr; }
+			if (f.get_type() != Literal::symbol) { return default_infixr; }
 			using namespace nv;
-			switch (to_native(f)) {
-			case Native(ToBool::not_):       return 4000;
-			case Native(CtoC::pow):          return 3000;
-			case Native(Comm::prod):      return 2001;
-			case Native(Comm::sum):          return 2000;
-			case Native(ToBool::eq):         return 1000;
-			case Native(ToBool::neq):        return 1000;
-			case Native(ToBool::greater):    return 1000;
-			case Native(ToBool::smaller):    return 1000;
-			case Native(ToBool::greater_eq): return 1000;
-			case Native(ToBool::smaller_eq): return 1000;
-			case Native(Comm::and_):         return 2;
-			case Native(Comm::or_):          return 1;
+			switch (to_symbol(f)) {
+			case Symbol(ToBool::not_):       return 4000;
+			case Symbol(CtoC::pow):          return 3000;
+			case Symbol(Comm::prod):		 return 2001;
+			case Symbol(Comm::sum):          return 2000;
+			case Symbol(ToBool::eq):         return 1000;
+			case Symbol(ToBool::neq):        return 1000;
+			case Symbol(ToBool::greater):    return 1000;
+			case Symbol(ToBool::smaller):    return 1000;
+			case Symbol(ToBool::greater_eq): return 1000;
+			case Symbol(ToBool::smaller_eq): return 1000;
+			case Symbol(Comm::and_):         return 2;
+			case Symbol(Comm::or_):          return 1;
 			default:                          return default_infixr;
 			}
 		}
@@ -612,8 +630,8 @@ namespace simp {
 			case NodeType(Literal::complex):
 				bmath::intern::print::append_complex(*ref, str, parent_infixr);
 				break;
-			case NodeType(Literal::string_symbol):
-				str.append(ref->symbol);
+			case NodeType(Literal::symbol):
+				str.append(Names::name_of(ref.index));
 				break;
 			case NodeType(PatternFApp{}): 
 			case NodeType(Literal::f_app): { 
@@ -623,21 +641,21 @@ namespace simp {
 				const char* replacement_seperator = nullptr;
 				const auto [init, seperator] = [&]() -> std::pair<const char*, const char*> {
 					using namespace nv;
-					if (!in_pattern_call && function.get_type() == Literal::native_symbol) {
-						switch (to_native(function)) {
-						case Native(Comm::sum):             return { "" , " + "  };
-						case Native(Comm::prod):         return { "" , " "  };
-						case Native(Comm::and_):            return { "" , " && " };
-						case Native(Comm::or_):             return { "" , " || " };
-						case Native(CtoC::pow):             return { "" , " ^ "  };
-						case Native(ToBool::eq):            return { "" , " == " };
-						case Native(ToBool::neq):           return { "" , " != " };
-						case Native(ToBool::greater):       return { "" , " > "  };
-						case Native(ToBool::smaller):       return { "" , " < "  };
-						case Native(ToBool::greater_eq):    return { "" , " >= " };
-						case Native(ToBool::smaller_eq):    return { "" , " <= " };
-						case Native(ToBool::not_):          return { "!", ""     };
-						case Native(PatternFn::of_type): return { "" , " :"   };
+					if (!in_pattern_call && function.get_type() == Literal::symbol) {
+						switch (to_symbol(function)) {
+						case Symbol(Comm::sum):             return { "" , " + "  };
+						case Symbol(Comm::prod):            return { "" , " "  };
+						case Symbol(Comm::and_):            return { "" , " && " };
+						case Symbol(Comm::or_):             return { "" , " || " };
+						case Symbol(CtoC::pow):             return { "" , " ^ "  };
+						case Symbol(ToBool::eq):            return { "" , " == " };
+						case Symbol(ToBool::neq):           return { "" , " != " };
+						case Symbol(ToBool::greater):       return { "" , " > "  };
+						case Symbol(ToBool::smaller):       return { "" , " < "  };
+						case Symbol(ToBool::greater_eq):    return { "" , " >= " };
+						case Symbol(ToBool::smaller_eq):    return { "" , " <= " };
+						case Symbol(ToBool::not_):          return { "!", ""     };
+						case Symbol(PatternFn::of_type):    return { "" , " :"   };
 						}
 					}
 					append_to_string(ref.at(function), str, max_infixr);
@@ -655,9 +673,6 @@ namespace simp {
 				}
 				if (own_infixr <= parent_infixr) { str.push_back(')'); }
 			} break;
-			case NodeType(Literal::native_symbol):
-				str.append(nv::name_of(nv::Native(ref.index)));
-				break;
 			case NodeType(Literal::lambda): {
 				const Lambda& lambda = *ref;
 				str.append(lambda.transparent ? "([" : "{[");
@@ -721,16 +736,6 @@ namespace simp {
 
 		void append_memory_row(const Ref ref, std::vector<std::string>& rows)
 		{
-			const auto show_string_nodes = [&ref, &rows](std::uint32_t idx, bool show_first) {
-				const Symbol& s = ref.store->at(idx);
-				const std::size_t end = idx + s.node_count();
-				if (!show_first) {
-					idx++;
-				}
-				while (idx < end) {
-					rows[idx++] += "...";
-				}
-			};
 			if (!is_stored_node(ref.type)) {
 				return;
 			}
@@ -740,9 +745,8 @@ namespace simp {
 			case NodeType(Literal::complex): {
 				current_str += "value      : ";
 			} break;
-			case NodeType(Literal::string_symbol): {
+			case NodeType(Literal::symbol): {
 				current_str += "symbol     : ";
-				show_string_nodes(ref.index, false);
 			} break;
 			case NodeType(PatternFApp{}): {
 				std::string& prev_str = rows[ref.index - 1u];

@@ -58,9 +58,9 @@ namespace simp {
             case Native(Restr::any):
                 return true;
             case Native(Restr::boolean):
-                return ref.type == Literal::native_symbol && Native(ref.index).is<Bool>();
+                return ref.type == Literal::symbol && Symbol(ref.index).is<Bool>();
             case Native(Restr::callable):
-                return bmath::intern::is_one_of<Literal::lambda, Literal::string_symbol, Literal::native_symbol>(ref.type);
+                return bmath::intern::is_one_of<Literal::lambda, Literal::symbol>(ref.type);
             case Native(Restr::no_value):
                 return ref.type != Literal::complex;
             case Native(Restr::not_neg_1):
@@ -180,8 +180,8 @@ namespace simp {
         bool BMATH_FORCE_INLINE merge_associative_calls(MutRef& ref, const NodeIndex function)
         {
             assert(ref.type == Literal::f_app && //PatternFApp is not wanted here!
-                function.get_type() == Literal::native_symbol &&
-                to_native(function).is<nv::Variadic>());
+                function.get_type() == Literal::symbol &&
+                to_symbol(function).is<nv::Variadic>());
             bool found_nested = false;
             const FApp& f_app = *ref;
             bmath::intern::StupidBufferVector<NodeIndex, 16> merged_calls = { function };
@@ -213,9 +213,9 @@ namespace simp {
 
         constexpr bool is_unary_function(const UnsaveRef ref) 
         { 
-            if (ref.type == Literal::native_symbol) {
-                const nv::Native f = nv::Native(ref.index);
-                return f.is<nv::Variadic>() || nv::arity(f.to<nv::FixedArity>()) == 1u;
+            if (ref.type == Literal::symbol) {
+                const Symbol f = Symbol(ref.index);
+                return f.is<nv::Variadic>() || f.is<nv::FixedArity>() && nv::arity(f.to<nv::FixedArity>()) == 1u;
             }
             return ref.type == Literal::lambda;
         }
@@ -343,11 +343,12 @@ namespace simp {
         NodeIndex BMATH_FORCE_INLINE eval_native(const MutRef ref, const Options options, const NodeIndex function, const unsigned lambda_param_offset)
         {
             using namespace nv;
-            assert(function.get_type() == Literal::native_symbol);
+            assert(function.get_type() == Literal::symbol);
             assert(ref.type == Literal::f_app); //PatternFApp is not expected here!
             assert(ref->f_app.function() == function);
 
-            const Native f = to_native(function);
+            const Symbol f = to_symbol(function);
+            assert(f.is<Native>());
             const auto params = ref->f_app.parameters();
             if (f.is<FixedArity>()) {
                 const FixedArity fixed_f = f.to<FixedArity>();
@@ -604,8 +605,8 @@ namespace simp {
         void BMATH_FORCE_INLINE sort(MutRef ref)
         {
             assert((ref.type == Literal::f_app || ref.type == PatternFApp{}) &&
-                ref->f_app.function().get_type() == Literal::native_symbol && 
-                to_native(ref->f_app.function()).is<nv::Comm>());
+                ref->f_app.function().get_type() == Literal::symbol && 
+                to_symbol(ref->f_app.function()).is<nv::Comm>());
             auto range = ref->f_app.parameters();
             std::sort(range.begin(), range.end(), ordered_less(ref.store->data()));
         } //sort
@@ -617,21 +618,23 @@ namespace simp {
             if (ref.type == Literal::f_app) {  
                 const NodeIndex function = ref->f_app.function();
                 switch (function.get_type()) {
-                case NodeType(Literal::native_symbol): {
-                    const nv::Native buildin_type = to_native(function);
-                    const bool associative = buildin_type.is<nv::Variadic>() && 
-                        nv::is_associative(buildin_type.to<nv::Variadic>());
+                case NodeType(Literal::symbol): {
+                    const Symbol symbol = to_symbol(function);
+                    const bool associative = symbol.is<nv::Variadic>() &&
+                        nv::is_associative(symbol.to<nv::Variadic>());
                     if (associative) {
                         change |= merge_associative_calls(ref, function);
                     }
-                    if (buildin_type.is<nv::Comm>()) {
+                    if (symbol.is<nv::Comm>()) {
                         sort(ref);
                     }
-                    if (const NodeIndex res = eval_native(ref, options, function, lambda_param_offset);
-                        res != literal_nullptr) 
-                    {
-                        //if the function could be fully evaluated, the following step(s) can no longer be executed -> return
-                        return { res, true };
+                    if (symbol.is<nv::Native>()) {
+                        if (const NodeIndex res = eval_native(ref, options, function, lambda_param_offset);
+                            res != literal_nullptr)
+                        {
+                            //if the function could be fully evaluated, the following step(s) can no longer be executed -> return
+                            return { res, true };
+                        }
                     }
                     if (associative && options.remove_unary_assoc) {
                         const FApp& f_app = *ref;
@@ -705,9 +708,6 @@ namespace simp {
         switch (ref.type) {
         case NodeType(Literal::complex):
             break;
-        case NodeType(Literal::string_symbol):
-            Symbol::free(*ref.store, ref.index);
-            return;
         case NodeType(Literal::lambda):
             free_tree(ref.at(ref->lambda.definition));
             break;
@@ -751,12 +751,6 @@ namespace simp {
         switch (src_ref.type) {
         case NodeType(Literal::complex):
             return insert_node(*src_ref, src_ref.type);
-        case NodeType(Literal::string_symbol): {
-            const Symbol& src_var = *src_ref;
-            const auto src_name = std::string(src_var.data(), src_var.size());
-            const std::size_t dst_index = Symbol::build(dst_store, src_name);
-            return NodeIndex(dst_index, src_ref.type);
-        } break;
         case NodeType(Literal::lambda): {
             Lambda lambda = *src_ref;
             lambda.definition = copy_tree(src_ref.at(lambda.definition), dst_store);
@@ -805,14 +799,6 @@ namespace simp {
     template NodeIndex copy_tree(const UnsaveRef, Store&);
     template NodeIndex copy_tree(const UnsaveRef, MonotonicStore&);
 
-    //remove if c++20 catches up
-    constexpr std::strong_ordering operator<=>(std::string_view fst, std::string_view snd)
-    {
-        if (std::operator<(fst, snd)) { return std::strong_ordering::less; }
-        if (std::operator>(fst, snd)) { return std::strong_ordering::greater; }
-        return std::strong_ordering::equal;
-    } //makeshift operator<=>
-
     std::uint32_t single_match_index(const UnsaveRef ref) 
     {
         assert(!is_stored_node(ref.type) || ref.type == SingleMatch::restricted);
@@ -832,8 +818,6 @@ namespace simp {
         switch (fst.type) {
         case NodeType(Literal::complex): 
             return bmath::intern::compare_complex(*fst, *snd);
-        case NodeType(Literal::string_symbol):
-            return std::string_view(fst->symbol) <=> std::string_view(snd->symbol);
         case NodeType(PatternFApp{}):
         case NodeType(Literal::f_app): {
             const auto fst_end = fst->f_app.end();
@@ -892,8 +876,6 @@ namespace simp {
         switch (fst.type) {
         case NodeType(Literal::complex):
             return bmath::intern::compare_complex(*fst, *snd);
-        case NodeType(Literal::string_symbol):
-            return std::string_view(fst->symbol) <=> std::string_view(snd->symbol);
         case NodeType(PatternFApp{}):
         case NodeType(Literal::f_app): {
             const NodeIndex fst_f = fst->f_app.function();
@@ -902,7 +884,7 @@ namespace simp {
                 cmp_fs != std::partial_ordering::equivalent)
             {   return cmp_fs;
             }
-            else if (fst_f.get_type() == Literal::native_symbol && to_native(fst_f).is<nv::Comm>()) {
+            else if (fst_f.get_type() == Literal::symbol && to_symbol(fst_f).is<nv::Comm>()) {
                 return std::partial_ordering::unordered;
             }
             const auto fst_end = fst->f_app.parameters().end();
@@ -951,21 +933,21 @@ namespace simp {
                 return h;
             };
             static const auto buildin_conditions = RuleSet({
-                { "x :t          | x :_SingleMatch, t :native = t" },
-                { "x < 0         | x :_SingleMatch            = _Negative" },
-                { "x > 0         | x :_SingleMatch            = _Positive" },
-                { "x <= 0        | x :_SingleMatch            = _NotPositive" },
-                { "x >= 0        | x :_SingleMatch            = _NotNegative" },
-                { "!(x :complex) | x :_SingleMatch            = _NoValue" },
-                { "x != 1        | x :_SingleMatch            = _NotNeg1" },
-                { "x != 0        | x :_SingleMatch            = _Not0" },
+                { "x :t            | x :'_SingleMatch', t :'symbol' = t" },
+                { "x < 0           | x :'_SingleMatch'              = '_Negative'" },
+                { "x > 0           | x :'_SingleMatch'              = '_Positive'" },
+                { "x <= 0          | x :'_SingleMatch'              = '_NotPositive'" },
+                { "x >= 0          | x :'_SingleMatch'              = '_NotNegative'" },
+                { "!(x :'complex') | x :'_SingleMatch'              = '_NoValue'" },
+                { "x != 1          | x :'_SingleMatch'              = '_NotNeg1'" },
+                { "x != 0          | x :'_SingleMatch'              = '_Not0'" },
             }, build_very_basic_pattern);
 
             static const auto compute_optimisations = RuleSet({
-                { "_Divide(pow(a, -1) * bs..., c)         = _Divide(prod(bs...), a * c)" },
-                { "_Divide(pow(a,  n) * bs..., c) | n < 0 = _Divide(prod(bs...), pow(a, -n) * c)" },
-                { "        pow(a, -1) * bs...             = _Divide(prod(bs...), a)" },
-                { "        pow(a,  n) * bs...     | n < 0 = _Divide(prod(bs...), pow(a, -n))" },
+                { "'_Divide'(a^(-1) * bs..., c)         = '_Divide'('prod'(bs...), a * c)" },
+                { "'_Divide'(a ^  n * bs..., c) | n < 0 = '_Divide'('prod'(bs...), a ^ (-n) * c)" },
+                { "        a ^ (-1) * bs...             = '_Divide'('prod'(bs...), a)" },
+                { "        a ^ n    * bs...     | n < 0 = '_Divide'('prod'(bs...), a ^ (-n))" },
             }, build_very_basic_pattern);
 
             const auto optimize = [](const MutRef r) {
@@ -990,20 +972,20 @@ namespace simp {
                 return h;
             };
             static const auto bubble_up = RuleSet({
-                { "     _VM(idx, domain, match) + a + cs... | a :complex = _VM(idx, domain, match - a) + cs..." },
-                { "     _VM(idx, domain, match) * a * cs... | a :complex = _VM(idx, domain, match / a) * cs..." },
-                { "     _VM(idx, domain, match) ^ 2                      = _VM(idx, domain, sqrt(match))" },
-                { "sqrt(_VM(idx, domain, match))                         = _VM(idx, domain, match ^ 2)" },
+                { "       '_VM'(idx, domain, match) + a + cs... | a :'complex' = '_VM'(idx, domain, match - a) + cs..." },
+                { "       '_VM'(idx, domain, match) * a * cs... | a :'complex' = '_VM'(idx, domain, match / a) * cs..." },
+                { "       '_VM'(idx, domain, match) ^ 2                        = '_VM'(idx, domain, 'sqrt'(match))" },
+                { "'sqrt'('_VM'(idx, domain, match))                           = '_VM'(idx, domain, match ^ 2)" },
                 }, build_basic_pattern);
             heads.lhs = greedy_apply_ruleset(bubble_up, MutRef(store, heads.lhs));
             heads.lhs = normalize::recursive(MutRef(store, heads.lhs), {}, 0); //combine match
 
             static const auto to_domain = RuleSet({
                 { "v :t   = t" },
-                { "v < 0  = _Negative" },
-                { "v > 0  = _Positive" },
-                { "v <= 0 = _NotPositive" },
-                { "v >= 0 = _NotNegative" },
+                { "v < 0  = '_Negative'" },
+                { "v > 0  = '_Positive'" },
+                { "v <= 0 = '_NotPositive'" },
+                { "v >= 0 = '_NotNegative'" },
                 }, build_basic_pattern);
             const auto build_value_match = [](const MutRef r) {
                 if (r.type == Literal::f_app && r->f_app.function() == from_native(nv::PatternFn::value_match)) {
@@ -1012,7 +994,7 @@ namespace simp {
                     const std::uint32_t match_state_index = f_app[1].get_index();
                     const NodeIndex domain = shallow_apply_ruleset(to_domain, r.at(f_app[2]));
                     const NodeIndex inverse = f_app[3];
-                    if (domain.get_type() != Literal::native_symbol || !to_native(domain).is<nv::ComplexSubset>()) {
+                    if (domain.get_type() != Literal::symbol || !to_symbol(domain).is<nv::ComplexSubset>()) {
                         throw TypeError{ "value match restrictions may only be of form \"<value match> :<complex subset>\"", r };
                     }
                     f_app[2] = literal_nullptr;
@@ -1020,7 +1002,7 @@ namespace simp {
                     free_tree(r);
                     const std::size_t result_index = r.store->allocate_one();
                     r.store->at(result_index) = ValueMatch{ .match_state_index = match_state_index,
-                                                            .domain = to_native(domain).to<nv::ComplexSubset>(),
+                                                            .domain = to_symbol(domain).to<nv::ComplexSubset>(),
                                                             .inverse = inverse,
                                                             .owner = false };
                     return NodeIndex(result_index, SpecialMatch::value);
@@ -1176,8 +1158,8 @@ namespace simp {
                         if (current == k) replace_with(i);
                     }
                     else if (r.type == Literal::f_app &&
-                        r->f_app.function().get_type() == Literal::native_symbol &&
-                        to_native(r->f_app.function()).is<nv::Comm>())
+                        r->f_app.function().get_type() == Literal::symbol &&
+                        to_symbol(r->f_app.function()).is<nv::Comm>())
                     {
                         normalize::sort(r);
                     }
@@ -1280,16 +1262,16 @@ namespace simp {
 
                 const auto [prime, commuts] = [&] {
                     const NodeIndex f = ref->f_app.function();
-                    if (f.get_type() == Literal::native_symbol) {
+                    if (f.get_type() == Literal::symbol) {
                         using namespace nv;
-                        const Native native_f = to_native(f);
-                        if (native_f.is<Comm>()) {
+                        const Symbol symbol = to_symbol(f);
+                        if (symbol.is<Comm>()) {
                             if (this_multi_count > 1) 
                                 throw TypeError{ "too many multis in commutative", ref };
                             call_info.strategy = MatchStrategy::permutation;
                             return std::tuple{ true, true };
                         }
-                        if (native_f.is<FixedArity>() && this_multi_count > 0)
+                        if (symbol.is<FixedArity>() && this_multi_count > 0)
                             throw TypeError{ "multi match illegal in fixed arity", ref };
                     }
 
@@ -1383,9 +1365,9 @@ namespace simp {
             if (lhs_ref.type != PatternFApp{})
                 return head;
             const NodeIndex f = lhs_ref->f_app.function();
-            if (f.get_type() != Literal::native_symbol)
+            if (f.get_type() != Literal::symbol)
                 return head;
-            const nv::Native f_native = to_native(f);
+            const Symbol f_native = to_symbol(f);
             if (!f_native.is<nv::Variadic>()) 
                 return head;
             const nv::Variadic f_variadic = f_native.to<nv::Variadic>();
@@ -1454,9 +1436,9 @@ namespace simp {
             if (cond.type != Literal::f_app) return {};
             const FApp& f_app = *cond;
             const NodeIndex function = f_app.function();
-            if (function.get_type() != Literal::native_symbol) return {};
+            if (function.get_type() != Literal::symbol) return {};
             using namespace nv;
-            const Native f = to_native(function);
+            const Symbol f = to_symbol(function);
             const auto params = f_app.parameters();
             const auto make_ref = make_ref_maker(match_state, cond.store_data());
 
@@ -1503,7 +1485,7 @@ namespace simp {
             assert(cond.type == Literal::f_app);
             const FApp& f_app = *cond;
             using namespace nv;
-            const Native f = to_native(f_app.function());
+            const Symbol f = to_symbol(f_app.function());
             const auto params = f_app.parameters();
 
             const auto compare_params = [&]() {
@@ -1513,43 +1495,44 @@ namespace simp {
             };
 
             switch (f) {
-            case Native(PatternFn::of_type): {
-                const Native restr = to_native(params[1]);
+            case Symbol(PatternFn::of_type): {
+                const Symbol restr = to_symbol(params[1]);
                 if (restr.is<ComplexSubset>()) {
                     const double to_test = eval_condition(make_ref(params[0]), match_state).val;
                     return in_complex_subset(to_test, restr.to<ComplexSubset>());
                 }
-                return meets_restriction(make_ref(params[0]), restr);
+                assert(restr.is<Native>());
+                return meets_restriction(make_ref(params[0]), restr.to<Native>());
             }
-            case Native(ToBool::contains): {
+            case Symbol(ToBool::contains): {
                 const UnsaveRef snd_ref = make_ref(params[1]);
                 const auto is_snd = [&](const UnsaveRef r) { 
                     return compare_tree(snd_ref, r) == std::strong_ordering::equal;
                 };
                 return search(make_ref(params[0]), is_snd) != literal_nullptr;
             } break;
-            case Native(ToBool::not_): 
+            case Symbol(ToBool::not_):
                 return !test_condition(cond.at(params[0]), match_state);
-            case Native(ToBool::eq):
+            case Symbol(ToBool::eq):
                 return compare_params() == 0;
-            case Native(ToBool::neq): {
+            case Symbol(ToBool::neq): {
                 const std::partial_ordering res = compare_params();
                 return res != std::partial_ordering::equivalent && res != std::partial_ordering::unordered;
             } break;
-            case Native(ToBool::greater):
+            case Symbol(ToBool::greater):
                 return compare_params() > 0;
-            case Native(ToBool::smaller):
+            case Symbol(ToBool::smaller):
                 return compare_params() < 0;
-            case Native(ToBool::greater_eq):
+            case Symbol(ToBool::greater_eq):
                 return compare_params() >= 0;
-            case Native(ToBool::smaller_eq):
+            case Symbol(ToBool::smaller_eq):
                 return compare_params() <= 0;
-            case Native(Comm::and_): 
+            case Symbol(Comm::and_):
                 for (const NodeIndex param : params) {
                     if (!test_condition(cond.at(param), match_state)) return false;
                 }
                 return true;
-            case Native(Comm::or_): 
+            case Symbol(Comm::or_):
                 for (const NodeIndex param : params) {
                     if (test_condition(cond.at(param), match_state)) return true;
                 }
@@ -1763,9 +1746,7 @@ namespace simp {
             switch (pn_ref.type) {
             case NodeType(Literal::complex):
                 return bmath::intern::compare_complex(pn_ref->complex, ref->complex);
-            case NodeType(Literal::string_symbol):
-                return std::string_view(pn_ref->symbol) <=> std::string_view(ref->symbol);
-            case NodeType(Literal::native_symbol):
+            case NodeType(Literal::symbol):
             case NodeType(Literal::lambda_param):
                 return pn_ref.index <=> ref.index;
             case NodeType(Literal::lambda): {
@@ -1829,9 +1810,11 @@ namespace simp {
                 SharedSingleMatchEntry& entry = match_state.single_vars[var.match_state_index];
                 entry.match_idx = ref.typed_idx();
                 const bool restriction_fulfilled = [&] {
-                    return var.condition.get_type() == Literal::native_symbol ?
-                        meets_restriction(ref, to_native(var.condition)) :
-                        test_condition(pn_ref.at(var.condition), match_state);
+                    if (var.condition.get_type() == Literal::symbol) {
+                        assert(to_symbol(var.condition).is<nv::Native>());
+                        return meets_restriction(ref, to_symbol(var.condition).to<nv::Native>());
+                    }
+                    return test_condition(pn_ref.at(var.condition), match_state);
                 }();
                 return to_order(restriction_fulfilled);
             }
@@ -1924,13 +1907,7 @@ namespace simp {
         case NodeType(Literal::complex): {
             return insert_node(*pn_ref, pn_ref.type);
         } break;
-        case NodeType(Literal::string_symbol): {
-            const Symbol& src_var = *pn_ref;
-            const auto src_name = std::string(src_var.data(), src_var.size());
-            const std::size_t dst_index = Symbol::build(dst_store, src_name);
-            return NodeIndex(dst_index, pn_ref.type);
-        } break;
-        case NodeType(Literal::native_symbol):
+        case NodeType(Literal::symbol):
             return pn_ref.typed_idx();
         case NodeType(Literal::lambda): {
             Lambda dst_lam = *pn_ref;

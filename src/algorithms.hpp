@@ -51,25 +51,25 @@ namespace simp {
 
     //orders node types by their "specificity", meaning that types potentially matching more things are generally sorted to the back
     constexpr int shallow_order(const UnsaveRef ref) {
+        constexpr int after_symbol = std::numeric_limits<int>::max() - 10000;
         switch (ref.type) {
         case NodeType(Literal::complex):           return 0;
         case NodeType(SpecialMatch::value):        return 2;
         case NodeType(PatternUnsigned{}):          return 4;
         case NodeType(Literal::lambda):            return 8;
         case NodeType(Literal::lambda_param):      return 10;
-        case NodeType(Literal::string_symbol):            return 2000;
-        case NodeType(Literal::f_app):              return 2002;
-        case NodeType(PatternFApp{}):	           return 2002;
-        case NodeType(SingleMatch::restricted):    return 2100;  //caution: these will compare equal, despite having a different structure in store
-        case NodeType(SingleMatch::unrestricted):  return 2100;  //caution: these will compare equal, despite having a different structure in store
-        case NodeType(SingleMatch::weak):          return 2100;  //caution: these will compare equal, despite having a different structure in store
-        case NodeType(SpecialMatch::multi):        return 3000;
-        case NodeType(Literal::native_symbol):
-            using namespace nv;
-            static_assert((unsigned)Native::COUNT < 1000, "adjust values >= 2000 to circumvent overlap");
-            switch (Native(ref.index)) {
+        case NodeType(Literal::symbol):
+            static_assert((unsigned)nv::Native::COUNT < 1000, "adjust values >= 2000 to circumvent overlap");
+            assert(ref.index < after_symbol); //overflow of .index happens sooner anyway
+            switch (nv::Native(ref.index)) {
             default:                               return ref.index + 1000;
             }
+        case NodeType(Literal::f_app):             return after_symbol + 100;
+        case NodeType(PatternFApp{}):	           return after_symbol + 100;
+        case NodeType(SingleMatch::restricted):    return after_symbol + 200;  //caution: these will compare equal, despite having a different structure in store
+        case NodeType(SingleMatch::unrestricted):  return after_symbol + 200;  //caution: these will compare equal, despite having a different structure in store
+        case NodeType(SingleMatch::weak):          return after_symbol + 200;  //caution: these will compare equal, despite having a different structure in store
+        case NodeType(SpecialMatch::multi):        return after_symbol + 300;
         default:
             assert(false);
             BMATH_UNREACHABLE;

@@ -25,8 +25,7 @@ namespace simp {
 	enum class Literal
 	{
 		complex, //only of Literal never expected as .function() in call
-		string_symbol, 
-		native_symbol,
+		symbol,
 		lambda,
 		lambda_param,
 		f_app,
@@ -79,8 +78,7 @@ namespace simp {
 	{
 		switch (type) {
 		case NodeType(Literal::complex):           return true;
-		case NodeType(Literal::string_symbol):     return true;
-		case NodeType(Literal::native_symbol):     return false;
+		case NodeType(Literal::symbol):         return false;
 		case NodeType(Literal::lambda):            return true;
 		case NodeType(Literal::lambda_param):      return false;
 		case NodeType(Literal::f_app):             return true;
@@ -267,15 +265,18 @@ namespace simp {
 		using Native = SumEnum<Constant, Function_>;
 	} //namespace nv
 
-	inline constexpr NodeIndex from_native(const nv::Native type) noexcept
+	//if .value is larger than Native::COUNT, the Symbol was added at runtime
+	using Symbol = bmath::intern::FinalSumEnum<nv::Native>;
+
+	inline constexpr NodeIndex from_native(const nv::Native n) noexcept
 	{
-		return NodeIndex(static_cast<unsigned>(type), Literal::native_symbol);
+		return NodeIndex(static_cast<unsigned>(n), Literal::symbol);
 	}
 
-	inline constexpr nv::Native to_native(const NodeIndex idx) noexcept
+	inline constexpr Symbol to_symbol(const NodeIndex idx) noexcept
 	{
-		assert(idx.get_type() == Literal::native_symbol);
-		return nv::Native(idx.get_index());
+		assert(idx.get_type() == Literal::symbol);
+		return Symbol(idx.get_index());
 	}
 
 	constexpr NodeIndex literal_nullptr = NodeIndex();
@@ -287,7 +288,6 @@ namespace simp {
 
 
 	using Complex = std::complex<double>;
-	using Symbol = StoredVector<char>;
 
 	struct FApp :StoredVector<NodeIndex>
 	{
@@ -373,7 +373,6 @@ namespace simp {
 	{
 		//nodes valid everywhere:
 		Complex complex;
-		Symbol symbol;
 		FApp f_app;
 		Lambda lambda;
 
@@ -384,7 +383,6 @@ namespace simp {
 		PatternCallInfo pattern_call_data;
 
 		constexpr TermNode(const Complex              & val) noexcept :complex(val)           {}
-		constexpr TermNode(const Symbol               & val) noexcept :symbol(val)            {}
 		constexpr TermNode(const FApp                 & val) noexcept :f_app(val)             {}
 		constexpr TermNode(const Lambda               & val) noexcept :lambda(val)            {}
 		constexpr TermNode(const RestrictedSingleMatch& val) noexcept :single_match(val)      {}
@@ -393,7 +391,6 @@ namespace simp {
 		constexpr TermNode(const PatternCallInfo      & val) noexcept :pattern_call_data(val) {}
 
 		constexpr operator const Complex              & () const noexcept { return this->complex;           }
-		constexpr operator const Symbol               & () const noexcept { return this->symbol;            }
 		constexpr operator const FApp                 & () const noexcept { return this->f_app;             }
 		constexpr operator const Lambda               & () const noexcept { return this->lambda;            }
 		constexpr operator const RestrictedSingleMatch& () const noexcept { return this->single_match;      }
@@ -402,7 +399,6 @@ namespace simp {
 		constexpr operator const PatternCallInfo      & () const noexcept { return this->pattern_call_data; }
 
 		constexpr operator Complex              & () noexcept { return this->complex;           }
-		constexpr operator Symbol               & () noexcept { return this->symbol;            }
 		constexpr operator FApp                 & () noexcept { return this->f_app;             }
 		constexpr operator Lambda               & () noexcept { return this->lambda;            }
 		constexpr operator RestrictedSingleMatch& () noexcept { return this->single_match;      }
@@ -544,7 +540,7 @@ namespace simp {
 			{ CtoC::ceil             , "ceil"      , 1u, { ComplexSubset::real }, ComplexSubset::integer      },
 			{ MiscFn::id             , "id"        , 1u, { Restr::any          }, Restr::any                  },
 			{ MiscFn::force          , "force"     , 1u, { Literal::complex    }, Literal::complex            },
-			{ MiscFn::diff           , "diff"      , 2u, { Restr::any, Literal::string_symbol }, Restr::any   },
+			{ MiscFn::diff           , "diff"      , 2u, { Restr::any, Literal::symbol }, Restr::any   },
 			{ MiscFn::fdiff          , "fdiff"     , 1u, { Restr::callable     }, Restr::callable             },
 			{ MiscFn::pair           , "pair"      , 2u, {}                     , MiscFn::pair                },
 			{ MiscFn::fst            , "fst"       , 1u, { MiscFn::pair        }, Restr::any                  },
@@ -556,7 +552,7 @@ namespace simp {
 			{ HaskellFn::foldl       , "ffoldl"    , 4u, { Restr::callable, Restr::callable, Restr::any, Literal::f_app }, Restr::any }, //foldl f z (x:xs) = foldl f (f z x) xs
 			{ HaskellFn::foldr       , "ffoldr"    , 4u, { Restr::callable, Restr::callable, Restr::any, Literal::f_app }, Restr::any }, //foldr f z (x:xs) = f x (foldr f z xs) 
 			{ PatternFn::value_match , "_VM"       , 3u, { PatternUnsigned{}, Restr::any, Restr::any }, Restr::any }, //layout as in ValueMatch (minus .owner)
-			{ PatternFn::of_type     , "_Of_T"     , 2u, { Restr::any, Literal::native_symbol }, Restr::boolean      },
+			{ PatternFn::of_type     , "_Of_T"     , 2u, { Restr::any, Literal::symbol }, Restr::boolean      },
 		});
 		static_assert(static_cast<unsigned>(fixed_arity_table.front().type) == 0u);
 		static_assert(bmath::intern::is_sorted_by(fixed_arity_table, &FixedArityProps::type));
@@ -624,34 +620,33 @@ namespace simp {
 
 		constexpr auto constant_table = std::to_array<CommonProps>({
 			{ PatternConst::value_proxy  , "_VP"         , PatternConst::value_proxy },
-			{ Restr::any                 , "\\"          , Literal::native_symbol }, //can not be constructed from a string
-			{ Restr::callable            , "callable"    , Literal::native_symbol },
-			{ Restr::boolean             , "bool"        , Literal::native_symbol },
-			{ Restr::no_value            , "_NoValue"    , Literal::native_symbol },
-			{ Restr::not_neg_1           , "_NotNeg1"    , Literal::native_symbol },
-			{ Restr::not_0               , "_Not0"       , Literal::native_symbol },
-			{ ComplexSubset::natural     , "nat"         , Literal::native_symbol },
-			{ ComplexSubset::natural_0   , "nat_0"       , Literal::native_symbol },
-			{ ComplexSubset::integer     , "int"         , Literal::native_symbol },
-			{ ComplexSubset::real        , "real"        , Literal::native_symbol },
-			{ ComplexSubset::complex     , "_Complex"    , Literal::native_symbol }, 
-			{ ComplexSubset::negative    , "_Negative"   , Literal::native_symbol }, //can not be constructed from a string
-			{ ComplexSubset::positive    , "_Positive"   , Literal::native_symbol }, //can not be constructed from a string
-			{ ComplexSubset::not_negative, "_NotNegative", Literal::native_symbol }, //can not be constructed from a string
-			{ ComplexSubset::not_positive, "_NotPositive", Literal::native_symbol }, //can not be constructed from a string
-			{ Literal::complex           , "complex"     , Literal::native_symbol },
-			{ Literal::string_symbol     , "symbol"      , Literal::native_symbol },
-			{ Literal::native_symbol     , "native"      , Literal::native_symbol },
-			{ Literal::lambda            , "lambda"      , Literal::native_symbol },
-			{ Literal::lambda_param      , "lambda_param", Literal::native_symbol },
-			{ Literal::f_app             , "f_app"       , Literal::native_symbol },
-			{ PatternFApp{}              , "\\"          , Literal::native_symbol }, //can not be constructed from a string
-			{ PatternUnsigned{}          , "_UInt"       , Literal::native_symbol },
-			{ SingleMatch::restricted    , "\\"          , Literal::native_symbol }, //can not be constructed from a string
-			{ SingleMatch::unrestricted  , "\\"          , Literal::native_symbol }, //can not be constructed from a string
-			{ SingleMatch::weak          , "_SingleMatch", Literal::native_symbol }, //can not be constructed from a string
-			{ SpecialMatch::multi        , "_MultiMatch" , Literal::native_symbol }, //can not be constructed from a string
-			{ SpecialMatch::value        , "_ValueMatch" , Literal::native_symbol }, //can not be constructed from a string
+			{ Restr::any                 , "\\"          , Literal::symbol }, //can not be constructed from a string
+			{ Restr::callable            , "callable"    , Literal::symbol },
+			{ Restr::boolean             , "bool"        , Literal::symbol },
+			{ Restr::no_value            , "_NoValue"    , Literal::symbol },
+			{ Restr::not_neg_1           , "_NotNeg1"    , Literal::symbol },
+			{ Restr::not_0               , "_Not0"       , Literal::symbol },
+			{ ComplexSubset::natural     , "nat"         , Literal::symbol },
+			{ ComplexSubset::natural_0   , "nat_0"       , Literal::symbol },
+			{ ComplexSubset::integer     , "int"         , Literal::symbol },
+			{ ComplexSubset::real        , "real"        , Literal::symbol },
+			{ ComplexSubset::complex     , "_Complex"    , Literal::symbol }, 
+			{ ComplexSubset::negative    , "_Negative"   , Literal::symbol }, //can not be constructed from a string
+			{ ComplexSubset::positive    , "_Positive"   , Literal::symbol }, //can not be constructed from a string
+			{ ComplexSubset::not_negative, "_NotNegative", Literal::symbol }, //can not be constructed from a string
+			{ ComplexSubset::not_positive, "_NotPositive", Literal::symbol }, //can not be constructed from a string
+			{ Literal::complex           , "complex"     , Literal::symbol },
+			{ Literal::symbol         , "symbol"      , Literal::symbol },
+			{ Literal::lambda            , "lambda"      , Literal::symbol },
+			{ Literal::lambda_param      , "lambda_param", Literal::symbol },
+			{ Literal::f_app             , "f_app"       , Literal::symbol },
+			{ PatternFApp{}              , "\\"          , Literal::symbol }, //can not be constructed from a string
+			{ PatternUnsigned{}          , "_UInt"       , Literal::symbol },
+			{ SingleMatch::restricted    , "\\"          , Literal::symbol }, //can not be constructed from a string
+			{ SingleMatch::unrestricted  , "\\"          , Literal::symbol }, //can not be constructed from a string
+			{ SingleMatch::weak          , "_SingleMatch", Literal::symbol }, //can not be constructed from a string
+			{ SpecialMatch::multi        , "_MultiMatch" , Literal::symbol }, //can not be constructed from a string
+			{ SpecialMatch::value        , "_ValueMatch" , Literal::symbol }, //can not be constructed from a string
 		});
 		static_assert(constant_table.size() == (unsigned)Constant::COUNT);
 		static_assert(bmath::intern::is_sorted_by(constant_table, &CommonProps::type));
