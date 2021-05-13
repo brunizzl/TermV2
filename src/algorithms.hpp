@@ -58,7 +58,7 @@ namespace simp {
         case NodeType(Literal::lambda_param):      return 10;
         case NodeType(Literal::symbol):
             static_assert((unsigned)nv::Native::COUNT < 1000, "adjust values >= 2000 to circumvent overlap");
-            assert(ref.index < after_symbol); //overflow of .index happens sooner anyway
+            assert(ref.index < after_symbol); //overflow of typed index happens sooner anyway
             switch (nv::Native(ref.index)) {
             default:                               return ref.index + 1000;
             }
@@ -78,21 +78,24 @@ namespace simp {
     //lexicographic ordering extending shallow_order, not meaningful in a math context
     std::strong_ordering compare_tree(const UnsaveRef fst, const UnsaveRef snd);
 
-    //returns a function comparing two NodeIndices assumed their index points in store_data
-    template<std::strong_ordering Ord>
-    constexpr auto ordered(const TermNode* const store_data) 
-    {
-        return [store_data](const NodeIndex fst, const NodeIndex snd) {
-            const UnsaveRef fst_ref = UnsaveRef(store_data, fst.get_index(), fst.get_type());
-            const UnsaveRef snd_ref = UnsaveRef(store_data, snd.get_index(), snd.get_type());
-            return compare_tree(fst_ref, snd_ref) == Ord;
-        };
-    } //compare_in
-    constexpr auto ordered_less = ordered<std::strong_ordering::less>;
-
     //can not differentiate calls to same commutative function from each other
     //  and can not differentiate match variables from anything
     std::partial_ordering unsure_compare_tree(const UnsaveRef fst, const UnsaveRef snd);
+
+    //returns a function comparing two NodeIndices assumed they both point in store_data
+    template<auto Ord, auto compare>
+    constexpr auto ordered(const TermNode* const store_data) 
+    {
+        static_assert((void*)compare == (void*)compare_tree || (void*)compare == (void*)unsure_compare_tree);
+        return [store_data](const NodeIndex fst, const NodeIndex snd) {
+            const UnsaveRef fst_ref = UnsaveRef(store_data, fst.get_index(), fst.get_type());
+            const UnsaveRef snd_ref = UnsaveRef(store_data, snd.get_index(), snd.get_type());
+            return compare(fst_ref, snd_ref) == Ord;
+        };
+    } //ordered
+    constexpr auto ordered_less = ordered<std::strong_ordering::less, compare_tree>;
+
+
 
     //returns first subterm where pred is true, tested in pre-order
     template<std::predicate<UnsaveRef> Pred>

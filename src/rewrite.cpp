@@ -82,12 +82,6 @@ namespace simp {
 		this->migrate_rules(temp_store);
 	} //RuleSet::add
 
-	RuleRange RuleSet::applicable_rules(const UnsaveRef ref) const noexcept
-	{
-		//TODO: binary search start and end
-		return { this->begin(), this->end() };
-	}
-
 	void RuleSet::migrate_rules(const Store& temp_store)
 	{
 		std::stable_sort(this->rules.begin(), this->rules.end(),
@@ -108,14 +102,24 @@ namespace simp {
 	RuleApplicationRes raw_shallow_apply_ruleset(const RuleSet& rules, const Ref ref, Store& dst_store, 
 		match::State& match_data)
 	{
-		const RuleRange applicable_rules = rules.applicable_rules(ref);
-		const RuleSetIter stop = applicable_rules.end();
-		for (RuleSetIter iter = applicable_rules.begin(); iter != stop; ++iter) {
+		const auto stop = rules.end();
+		RuleSetIter iter = [&] {
+			const auto less = [](const RuleRef& rule, const UnsaveRef ref) {
+				return unsure_compare_tree(rule.lhs, ref) == std::partial_ordering::less;
+			};
+			return std::lower_bound(rules.begin(), stop, UnsaveRef(ref), less);
+		}();
+
+		for (; iter != stop; ++iter) {
 			const RuleRef rule = *iter;
-			if (match::matches(rule.lhs, ref, match_data)) {
+			const std::partial_ordering match_res = match::match_(rule.lhs, ref, match_data);
+			if (match_res == std::partial_ordering::equivalent) {
 				const NodeIndex res = pattern_interpretation(
 					rule.rhs, match_data, *ref.store, dst_store);
 				return { res, iter };
+			}
+			if (match_res == std::partial_ordering::greater) {
+				break;
 			}
 		}
 		return { literal_nullptr, stop };

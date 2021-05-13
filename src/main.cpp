@@ -14,18 +14,16 @@ TODO:
 
 important:
  - finish match:
-	  - test_condition (only allow calls to functions returning bool for now)
-	  - find_dilation
-	  - rematching in MatchStrategy::bachtracking
 	  - eval_value_match
  - only test subset of rulerange (requires rule iterator to become random access)
- - implement "contains" and "replace"
+	  - do one binary search to find begin of maybe matching range, continue trying to match until match returns "less"
  - type checking (extended: keep track of what restrictions apply to match variable in lhs, use in rhs)
  - finnish building / verifying pattern:
       - (depends on type checking) verify whole patterns
       - check PatternFApp to each not exceed maximal length and check numer of PatternFApp in pattern not more than allowed 
 	  - enable implicit outer multi
 	  - allow only function calls returning bool in test_condition 
+ - add Literal::options to allow nondeterministic match 
 
 nice to have:
  - implement fst, snd, filter, split, ...

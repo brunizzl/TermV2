@@ -42,13 +42,33 @@ namespace simp {
 		const TermNode* const store_data;
 
 		using value_type = RuleRef;
-		using difference_type = void;
+		using difference_type = std::ptrdiff_t;
 		using pointer = void;
 		using reference = void;
-		using iterator_category = std::forward_iterator_tag; //TODO: make random access iterator
+		using iterator_category = std::contiguous_iterator_tag;
+
+		RuleSetIter(const RuleSetIter& snd) noexcept :iter(snd.iter), store_data(snd.store_data) {}
+		RuleSetIter(const std::vector<RuleHead>::const_iterator iter_, const TermNode* const store_data_) noexcept
+			:iter(iter_), store_data(store_data_) {}
+
+		RuleSetIter& operator=(const RuleSetIter& snd) noexcept
+		{
+			assert(this->store_data == snd.store_data);
+			this->iter = snd.iter;
+			return *this;
+		}
 
 		RuleSetIter& operator++() noexcept { ++this->iter; return *this; }
 		RuleSetIter operator++(int) noexcept { auto result = *this; ++(*this); return result; }
+		RuleSetIter& operator+=(difference_type n) noexcept { this->iter += n; return *this; }
+		RuleSetIter operator+(difference_type n) const noexcept { auto result = *this; result += n; return result; }
+
+		RuleSetIter& operator--() noexcept { --this->iter; return *this; }
+		RuleSetIter operator--(int) noexcept { auto result = *this; --(*this); return result; }
+		RuleSetIter& operator-=(difference_type n) noexcept { this->iter -= n; return *this; }
+		RuleSetIter operator-(difference_type n) const noexcept { auto result = *this; result -= n; return result; }
+
+		difference_type operator-(const RuleSetIter& snd) const noexcept { return this->iter - snd.iter; }
 
 		RuleRef operator*() const 
 		{
@@ -65,13 +85,6 @@ namespace simp {
 		}
 	};
 
-	struct RuleRange 
-	{
-		RuleSetIter start, stop;
-		RuleSetIter begin() const noexcept { return this->start; }
-		RuleSetIter end() const noexcept { return this->stop; }
-	};
-
 	struct RuleSet
 	{
 		MonotonicStore store;
@@ -84,8 +97,6 @@ namespace simp {
 
 		RuleSetIter begin() const noexcept { return { this->rules.begin(), this->store.data() }; }
 		RuleSetIter end() const noexcept { return { this->rules.end(), this->store.data() }; }
-
-		RuleRange applicable_rules(const UnsaveRef ref) const noexcept;
 
 	private:
 		void migrate_rules(const Store& temp_store);

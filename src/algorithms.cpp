@@ -830,7 +830,7 @@ namespace simp {
                 cmp_fs != std::partial_ordering::equivalent)
             {   return cmp_fs;
             }
-            else if (fst_f.get_type() == Literal::symbol && to_symbol(fst_f).is<nv::Comm>()) {
+            else if (fst_f.get_type() == Literal::symbol && to_symbol(fst_f).is<nv::Variadic>()) {
                 return std::partial_ordering::unordered;
             }
             const auto fst_end = fst->f_app.parameters().end();

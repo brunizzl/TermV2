@@ -226,9 +226,6 @@ namespace simp {
 					}
 					return NodeIndex(Names::id_of({ name.data(), name.size() }), Literal::symbol);
 				}
-				if (name.find_first_of(' ') != std::string_view::npos) [[unlikely]] {
-						throw bmath::ParseFailure{ view.offset, "leave me some space, but not like that" };
-				}
 				if (!infos.parse_match) [[unlikely]] {
 					throw bmath::ParseFailure{ view.offset, "match variables need to be introduced in lhs" };
 				}

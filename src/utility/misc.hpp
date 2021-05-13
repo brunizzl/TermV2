@@ -73,6 +73,15 @@ namespace bmath::intern {
 		return f(f, std::forward(args)...);
 	}
 
+	template<typename Func>
+	struct CallOnDelete
+	{
+		Func func;
+		constexpr CallOnDelete(const Func& f) noexcept :func(f) {}
+		constexpr ~CallOnDelete() { this->func(); }
+	};
+	template<typename Func>
+	CallOnDelete(Func) -> CallOnDelete<Func>;
     
 	template <typename Struct_T, std::size_t Size, typename Search_T>
 	[[nodiscard]] constexpr const Struct_T& find(
