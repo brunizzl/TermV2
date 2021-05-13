@@ -5,6 +5,8 @@
 #include <concepts>
 #include <bitset>
 #include <array>
+#include <unordered_map>
+#include <mutex>
 
 #include "utility/vector.hpp"
 #include "utility/misc.hpp"
@@ -13,6 +15,42 @@
 #include "algorithms.hpp"
 
 namespace simp {
+
+	//a symbol name is converted to a symbol id while constructing a term.
+	//the data connecting symbol id and symbol name is found here
+	class Names
+	{
+		//used during parsing: ids.at(name) gives corresponding id
+		static std::unordered_map<std::string, std::uint32_t> ids;
+
+		//used during printing: names.at(id) gives the corresponding name
+		static std::vector<std::string> names;
+		static std::mutex mutex;
+
+	public:
+		static std::uint32_t id_of(const std::string name)
+		{
+			const auto lock = std::lock_guard<std::mutex>(mutex);
+			const auto pos = ids.find(name);
+			if (pos != ids.end()) {
+				return pos->second;
+			}
+			else {
+				const std::uint32_t id = names.size();
+				ids[name] = id;
+				names.push_back(name);
+				return id;
+			}
+		} //id_of
+
+		static const std::string& name_of(const std::uint32_t id)
+		{
+			const auto lock = std::lock_guard<std::mutex>(mutex);
+			assert(id < names.size());
+			return names[id];
+		} //name_of
+	}; //class Names
+
 	namespace parse {
 		Head find_head_type(const bmath::intern::ParseView view)
 		{
