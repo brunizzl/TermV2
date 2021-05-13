@@ -202,7 +202,7 @@ int main()
 			
 			{ "'sort'('list'())                                   = 'list'()" },
 			{ "'sort'('list'(x))                                  = 'list'(x)" },
-			{ "'sort'('list'(x, xs...))                           = 'sort_h1'('split'(\\y .y < x, 'list'(xs...)), x)" },
+			{ "'sort'('list'(x, xs...))                           = 'sort_h1'('split'('list', \\y .y < x, 'list'(xs...)), x)" },
 			{ "'sort_h1'('pair'('list'(xs...), 'list'(ys...)), x) = 'sort_h2'('sort'('list'(xs...)), x, 'sort'('list'(ys...)))" },
 			{ "'sort_h2'('list'(xs...), x, 'list'(ys...))         = 'list'(xs..., x, ys...)" },
 			
@@ -224,7 +224,6 @@ int main()
 			{ "'make_ints'(a, b) = 'make_ints_h'(b, 'list'(a))" },
 			{ "'make_ints_h'(b, 'list'(xs..., b)) = 'list'(xs..., b)" },
 			{ "'make_ints_h'(b, 'list'(xs..., x)) = 'make_ints_h'(b, 'list'(xs..., x, x + 1))" },
-			{ "'zfrobbl'(x, y, z) | x + 1/2 :'int' = 'zfrobbl_res'(x, y, z)" },
 		};
 		for (const simp::RuleRef rule : rules) {
 			std::cout << rule.to_string() << "\n\n";

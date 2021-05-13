@@ -426,9 +426,9 @@ namespace simp {
 			infos.parse_match = false;
 			heads.rhs = parse::build(store, infos, rhs_view); 
 
-			heads.lhs = normalize::recursive(MutRef(store, heads.lhs), {}, 0);
+			heads.lhs = normalize::recursive(MutRef(store, heads.lhs), {});
 			heads.rhs = normalize::recursive(MutRef(store, heads.rhs), 
-				{ .remove_unary_assoc = false }, 0);
+				{ .remove_unary_assoc = false });
 
 			//extra condition concerning single match variables (might set multiple in relation)
 			struct SingleCondition
@@ -448,7 +448,7 @@ namespace simp {
 				const std::size_t comma = find_first_of_skip_pars(conditions_view.tokens, token::comma);
 				const auto condition_view = conditions_view.steal_prefix(comma);
 				const NodeIndex condition_head = normalize::recursive(
-					MutRef(store, parse::build(store, infos, condition_view)), {}, 0);
+					MutRef(store, parse::build(store, infos, condition_view)), {});
 				if (condition_head.get_type() != Literal::f_app) [[unlikely]] {
 					throw ParseFailure{ conditions_view.offset, "please make this condition look a bit more conditiony." };
 				}

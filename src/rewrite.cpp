@@ -106,7 +106,7 @@ namespace simp {
 	} //RuleSet::migrate_rules
 
 	RuleApplicationRes raw_shallow_apply_ruleset(const RuleSet& rules, const Ref ref, Store& dst_store, 
-		const unsigned lambda_param_offset, match::State& match_data)
+		match::State& match_data)
 	{
 		const RuleRange applicable_rules = rules.applicable_rules(ref);
 		const RuleSetIter stop = applicable_rules.end();
@@ -114,7 +114,7 @@ namespace simp {
 			const RuleRef rule = *iter;
 			if (match::matches(rule.lhs, ref, match_data)) {
 				const NodeIndex res = pattern_interpretation(
-					rule.rhs, match_data, *ref.store, dst_store, lambda_param_offset);
+					rule.rhs, match_data, *ref.store, dst_store);
 				return { res, iter };
 			}
 		}
@@ -125,7 +125,7 @@ namespace simp {
 	{
 	apply_ruleset:
 		match::State match_data = *ref.store;
-		RuleApplicationRes result = raw_shallow_apply_ruleset(rules, ref, *ref.store, 0, match_data);
+		RuleApplicationRes result = raw_shallow_apply_ruleset(rules, ref, *ref.store, match_data);
 		if (result.result_term != literal_nullptr) {
 			free_tree(ref);
 			ref.index = result.result_term.get_index();
@@ -135,10 +135,10 @@ namespace simp {
 		return ref.typed_idx();
 	} //shallow_apply_ruleset
 
-	NodeIndex recursive_greedy_apply(const RuleSet& rules, MutRef ref, const unsigned lambda_param_offset) {
+	NodeIndex recursive_greedy_apply(const RuleSet& rules, MutRef ref) {
 		{ //try replacing this
 			match::State match_data = *ref.store;
-			const RuleApplicationRes applied = raw_shallow_apply_ruleset(rules, ref, *ref.store, lambda_param_offset, match_data);
+			const RuleApplicationRes applied = raw_shallow_apply_ruleset(rules, ref, *ref.store, match_data);
 			if (applied.result_term != literal_nullptr) {
 				free_tree(ref);
 				return applied.result_term;
@@ -148,23 +148,14 @@ namespace simp {
 			bool change = false;
 			const auto stop = end(ref);
 			for (auto subterm = begin(ref); subterm != stop; ++subterm) {
-				const NodeIndex sub_result = recursive_greedy_apply(rules, ref.at(*subterm), lambda_param_offset);
+				const NodeIndex sub_result = recursive_greedy_apply(rules, ref.at(*subterm));
 				if (sub_result != literal_nullptr) {
 					*subterm = sub_result;
 					change = true;
 				}
 			}
 			if (change) {
-				return normalize::outermost(ref, {}, lambda_param_offset).res;
-			}
-		}
-		else if (ref.type == Literal::lambda) {
-			const Lambda lambda = *ref;
-			const NodeIndex sub_result = recursive_greedy_apply(
-				rules, ref.at(lambda.definition), lambda_param_offset + lambda.param_count);
-			if (sub_result != literal_nullptr) {
-				ref->lambda.definition = sub_result;
-				return normalize::outermost(ref, {}, lambda_param_offset).res;
+				return normalize::outermost(ref, {}).res;
 			}
 		}
 		return literal_nullptr;
@@ -173,7 +164,7 @@ namespace simp {
 	NodeIndex greedy_apply_ruleset(const RuleSet& rules, MutRef ref)
 	{
 	apply_ruleset:
-		NodeIndex result = recursive_greedy_apply(rules, ref, 0);
+		NodeIndex result = recursive_greedy_apply(rules, ref);
 		if (result != literal_nullptr) {
 			ref.type = result.get_type();
 			ref.index = result.get_index();

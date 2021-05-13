@@ -111,13 +111,8 @@ namespace simp {
                     replace_lambda_params(ref.at(ref->lambda.definition), params);
             }
             else if (ref.type == Literal::lambda_param) { 
-                if (ref.index >= params.size()) {
-                    //function is not fully evaluated but only curried -> new param index = old - (number evaluated)
-                    return NodeIndex(ref.index - params.size(), Literal::lambda_param);
-                }
-                else {
-                    return copy_tree(ref.at(params[ref.index]), *ref.store);
-                }
+                assert(ref.index < params.size());
+                return copy_tree(ref.at(params[ref.index]), *ref.store);
             }
             return ref.typed_idx();
         } //replace_lambda_params
@@ -134,8 +129,8 @@ namespace simp {
                 params.push_back(param);
             }
             const std::uint32_t lambda_param_count = lambda->lambda.param_count;
-            if (lambda_param_count < params.size()) [[unlikely]] {
-                throw TypeError{ "too many arguments for called lambda", ref };
+            if (lambda_param_count != params.size()) [[unlikely]] {
+                throw TypeError{ "wrong number of arguments for called lambda", ref };
             }
             FApp::free(*ref.store, ref.index); //only free call itself, neighter lambda nor lambda parameters
             const NodeIndex evaluated = replace_lambda_params(
@@ -143,39 +138,9 @@ namespace simp {
             for (const NodeIndex param : params) {
                 free_tree(ref.at(param));
             }
-            if (lambda_param_count == params.size()) {
-                ref.store->free_one(lambda.index);
-                return normalize::recursive(ref.at(evaluated), options, 0);
-            }
-            else { //lambda is curried -> keep remaining lambda as lambda
-                assert(lambda_param_count > params.size());
-                lambda->lambda.definition = evaluated;
-                lambda->lambda.param_count -= params.size();
-                return lambda.typed_idx();
-            }           
+            ref.store->free_one(lambda.index);
+            return normalize::recursive(ref.at(evaluated), options);
         } //eval_lambda
-
-
-        [[nodiscard]] NodeIndex add_offset(const MutRef ref, const unsigned lambda_param_offset)
-        {
-            assert(ref.type != PatternFApp{});
-            if (ref.type == Literal::f_app) {
-                for (NodeIndex& subterm : ref) {
-                    subterm = add_offset(ref.at(subterm), lambda_param_offset);
-                }
-            }
-            else if (ref.type == Literal::lambda) {
-                Lambda& lambda = *ref;
-                if (lambda.transparent) {
-                    lambda.definition = add_offset(ref.at(lambda.definition), lambda_param_offset);
-                }
-            }
-            else if (ref.type == Literal::lambda_param) {
-                const std::uint32_t new_index = ref.index + lambda_param_offset;
-                return NodeIndex(new_index, Literal::lambda_param);
-            }
-            return ref.typed_idx();
-        } //add_offset
 
         bool BMATH_FORCE_INLINE merge_associative_calls(MutRef& ref, const NodeIndex function)
         {
@@ -317,7 +282,7 @@ namespace simp {
             NodeIndex from, to;
         };
 
-        NodeIndex replace(const MutRef ref, const Options options, const unsigned lambda_param_offset, 
+        NodeIndex replace(const MutRef ref, const Options options, 
             const bmath::intern::StupidBufferVector<ReplaceItem, 16>& replace_items)
         {
             assert(ref.type != PatternFApp{});
@@ -330,17 +295,17 @@ namespace simp {
             if (ref.type == Literal::f_app) {
                 const auto stop = end(ref);
                 for (auto iter = begin(ref); iter != stop; ++iter) {
-                    *iter = replace(ref.at(*iter), options, lambda_param_offset, replace_items);
+                    *iter = replace(ref.at(*iter), options, replace_items);
                 }
-                return normalize::outermost(ref, options, lambda_param_offset).res;
+                return normalize::outermost(ref, options).res;
             }
             if (ref.type == Literal::lambda) {
-                ref->lambda.definition = replace(ref.at(ref->lambda.definition), options, lambda_param_offset, replace_items);
+                ref->lambda.definition = replace(ref.at(ref->lambda.definition), options, replace_items);
             }
             return ref.typed_idx();
         } //find_and_replace
 
-        NodeIndex BMATH_FORCE_INLINE eval_native(const MutRef ref, const Options options, const NodeIndex function, const unsigned lambda_param_offset)
+        NodeIndex BMATH_FORCE_INLINE eval_native(const MutRef ref, const Options options, const NodeIndex function)
         {
             using namespace nv;
             assert(function.get_type() == Literal::symbol);
@@ -469,12 +434,12 @@ namespace simp {
                         const std::size_t call_index = ref.store->allocate_one();
                         const NodeIndex converter_copy = copy_tree(converter_ref, *ref.store);
                         ref.store->at(call_index) = FApp({ converter_copy, *iter });
-                        *iter = outermost(ref.at(NodeIndex(call_index, Literal::f_app)), options, lambda_param_offset).res;
+                        *iter = outermost(ref.at(NodeIndex(call_index, Literal::f_app)), options).res;
                     }
                     static_assert(FApp::min_capacity >= 3u, "assumes map call to only use one store slot");
                     ref.store->free_one(ref.index); //free call to map
                     free_tree(converter_ref); //free function to map
-                    return outermost(convertee_ref, options, lambda_param_offset).res;
+                    return outermost(convertee_ref, options).res;
                 } break;
                 case FixedArity(MiscFn::replace): if (options.replace) {
                     bmath::intern::StupidBufferVector<ReplaceItem, 16> replace_items;
@@ -486,7 +451,7 @@ namespace simp {
                     for (std::size_t i = 0; i < min_size; i++) {
                         replace_items.emplace_back(from_range[i], to_range[i]);
                     }
-                    const NodeIndex res = replace(ref.at(params[0]), options, lambda_param_offset, replace_items);
+                    const NodeIndex res = replace(ref.at(params[0]), options, replace_items);
                     params[0] = literal_nullptr;
                     free_tree(ref);
                     return res;
@@ -611,11 +576,11 @@ namespace simp {
             std::sort(range.begin(), range.end(), ordered_less(ref.store->data()));
         } //sort
 
-        Result outermost(MutRef ref, const Options options, const unsigned lambda_param_offset)
+        Result outermost(MutRef ref, const Options options)
         {
-            bool change = false;
             assert(ref.type != PatternFApp{});
             if (ref.type == Literal::f_app) {  
+                bool change = false;
                 const NodeIndex function = ref->f_app.function();
                 switch (function.get_type()) {
                 case NodeType(Literal::symbol): {
@@ -629,7 +594,7 @@ namespace simp {
                         sort(ref);
                     }
                     if (symbol.is<nv::Native>()) {
-                        if (const NodeIndex res = eval_native(ref, options, function, lambda_param_offset);
+                        if (const NodeIndex res = eval_native(ref, options, function);
                             res != literal_nullptr)
                         {
                             //if the function could be fully evaluated, the following step(s) can no longer be executed -> return
@@ -646,59 +611,40 @@ namespace simp {
                     }
                 } break;
                 case NodeType(Literal::lambda): {
-                    if (lambda_param_offset == 0u) {
+                    if (!ref.at(function)->lambda.transparent) {
                         const NodeIndex evaluated = eval_lambda(ref, options);
                         return { evaluated, true };
                     }
                 } break;
                 }
-            } //end ref.type == Literal::call
-            else if (ref.type == Literal::lambda) {
-                assert(!ref->lambda.transparent || lambda_param_offset != 0u && 
-                    "no top-level lambda may be transparent"); 
-                if (options.normalize_lambdas) {
-                    Lambda& lambda = *ref;
-                    if (!lambda.transparent && lambda_param_offset != 0u) {
-                        lambda.transparent = true;
-                        lambda.definition = add_offset(ref.at(lambda.definition), lambda_param_offset);
-                        change = true;
-                    }
-                    if (lambda.definition.get_type() == Literal::lambda) {
-                        const UnsaveRef nested = ref.at(lambda.definition);
-                        assert(nested->lambda.transparent);
-                        lambda.definition = nested->lambda.definition;
-                        lambda.param_count += nested->lambda.param_count;
-                        ref.store->free_one(nested.index);
-                        change = true;
-                    }
-                }
-            } //end ref.type == Literal::lambda
-            return { ref.typed_idx(), change };
+                return { ref.typed_idx(), change };
+            }
+            return { ref.typed_idx(), false };
         } //outermost
 
-        NodeIndex recursive(MutRef ref, const Options options, const unsigned lambda_param_offset)
+        NodeIndex recursive(MutRef ref, const Options options)
         {
             assert(ref.type != PatternFApp{});
             if (ref.type == Literal::f_app) {
                 auto iter = begin(ref);
-                *iter = normalize::recursive(ref.at(*iter), options, lambda_param_offset);
+                *iter = normalize::recursive(ref.at(*iter), options);
                 if (nv::is_lazy(*iter)) {
-                    const NodeIndex result = normalize::outermost(ref, options, lambda_param_offset).res;
-                    return normalize::recursive(ref.at(result), options, lambda_param_offset);
+                    const NodeIndex result = normalize::outermost(ref, options).res;
+                    return normalize::recursive(ref.at(result), options);
                 }
                 else [[likely]] {
                     const auto stop = end(ref);
                     for (++iter; iter != stop; ++iter) {
-                        *iter = normalize::recursive(ref.at(*iter), options, lambda_param_offset);
+                        *iter = normalize::recursive(ref.at(*iter), options);
                     }
                 }
             }
             if (ref.type == Literal::lambda) {
                 const Lambda lambda = *ref;
-                ref->lambda.definition = normalize::recursive(
-                    ref.at(lambda.definition), options, lambda_param_offset + lambda.param_count);
+                ref->lambda.definition = 
+                    normalize::recursive(ref.at(lambda.definition), options);
             }
-            return normalize::outermost(ref, options, lambda_param_offset).res;
+            return normalize::outermost(ref, options).res;
         } //recursive
 
     } //namespace normalize
@@ -978,7 +924,7 @@ namespace simp {
                 { "'sqrt'('_VM'(idx, domain, match))                           = '_VM'(idx, domain, match ^ 2)" },
                 }, build_basic_pattern);
             heads.lhs = greedy_apply_ruleset(bubble_up, MutRef(store, heads.lhs));
-            heads.lhs = normalize::recursive(MutRef(store, heads.lhs), {}, 0); //combine match
+            heads.lhs = normalize::recursive(MutRef(store, heads.lhs), {}); //combine match
 
             static const auto to_domain = RuleSet({
                 { "v :t   = t" },
@@ -1011,7 +957,7 @@ namespace simp {
             };
             heads.lhs = transform(MutRef(store, heads.lhs), build_value_match);
             heads.rhs = transform(MutRef(store, heads.rhs), build_value_match);
-            heads.lhs = normalize::recursive(MutRef(store, heads.lhs), {}, 0); //order value match to right positions in commutative
+            heads.lhs = normalize::recursive(MutRef(store, heads.lhs), {}); //order value match to right positions in commutative
 
             std::bitset<match::State::max_value_match_count> encountered = 0;
             const auto set_owner = [&encountered](const MutRef r) {
@@ -1384,7 +1330,7 @@ namespace simp {
                     FApp::build(store, std::to_array({ f, head.rhs, NodeIndex(rhs_multi_index, SpecialMatch::multi) }));
                 head.rhs = normalize::outermost(
                     MutRef(store, temp_head_rhs_index, Literal::f_app), 
-                    { .remove_unary_assoc = false }, 0).res;
+                    { .remove_unary_assoc = false }).res;
                 return head;
             }
             if (f_variadic.is<nv::NonComm>()) {
@@ -1895,7 +1841,7 @@ namespace simp {
 
 
     NodeIndex pattern_interpretation(const UnsaveRef pn_ref, const match::State& match_state, 
-        const Store& src_store, Store& dst_store, const unsigned lambda_param_offset)
+        const Store& src_store, Store& dst_store)
     {
         const auto insert_node = [&](const TermNode node, NodeType type) {
             const std::size_t dst_index = dst_store.allocate_one();
@@ -1912,7 +1858,7 @@ namespace simp {
         case NodeType(Literal::lambda): {
             Lambda dst_lam = *pn_ref;
             dst_lam.definition = pattern_interpretation(
-                pn_ref.at(dst_lam.definition), match_state, src_store, dst_store, lambda_param_offset + dst_lam.param_count);
+                pn_ref.at(dst_lam.definition), match_state, src_store, dst_store);
             return insert_node(dst_lam, pn_ref.type);
         } break;
         case NodeType(Literal::lambda_param):
@@ -1945,11 +1891,11 @@ namespace simp {
                 }
                 else {
                     dst_subterms.push_back(pattern_interpretation(
-                        pn_ref.at(*iter), match_state, src_store, dst_store, lambda_param_offset));
+                        pn_ref.at(*iter), match_state, src_store, dst_store));
                 }
             }
             const std::size_t dst_index = FApp::build(dst_store, dst_subterms);
-            return normalize::outermost(MutRef(dst_store, NodeIndex(dst_index, pn_ref.type)), {}, lambda_param_offset).res;
+            return normalize::outermost(MutRef(dst_store, NodeIndex(dst_index, pn_ref.type)), {}).res;
         } break;
         case NodeType(SingleMatch::weak): {
             const match::SharedSingleMatchEntry& entry = match_state.single_vars[pn_ref.index];

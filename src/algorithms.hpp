@@ -22,7 +22,6 @@ namespace simp {
         struct Options 
         {
             bool exact = true; //true: only exact operations are permitted
-            bool normalize_lambdas = true; //true: all nested lambdas become transparent & unessecary indirections are removed
             bool remove_unary_assoc = true; //true: "f(a) -> a" for all associative f (e.g. sum, product, and...)
             bool replace = true;
         };
@@ -30,15 +29,14 @@ namespace simp {
         struct Result { NodeIndex res; bool change; };
         //will always evaluate exact operations and merge nested calls of an associative operation
         //  (meaning "f(as..., f(bs...), cs...) -> f(as..., bs..., cs...)" for associative f)
-        //lambda_param_offset counts how many parameters all parent lambdas hold together 
         //  example: if subterm "a" would be combined in term "\x.\y z. (a + 7)", lambda_param_offset == 3
         //returns combined ref, might invalidate old one
         //may throw if: a lambda is called with to many parameters or something not callable is called
-        [[nodiscard]] Result outermost(MutRef ref, const Options options, const unsigned lambda_param_offset);
+        [[nodiscard]] Result outermost(MutRef ref, const Options options);
 
         //applies outermost first to children then to itself
         //as an exception, calls to fn if nv::is_lazy(fn) are lazily evaluated 
-        [[nodiscard]] NodeIndex recursive(MutRef ref, const Options options, const unsigned lambda_param_offset);
+        [[nodiscard]] NodeIndex recursive(MutRef ref, const Options options);
     } //namespace normalize
 
 
@@ -194,6 +192,6 @@ namespace simp {
 
     //copies pn_ref like copy_tree, only match variables are replaced by their matched counterparts from src_store.
     [[nodiscard]] NodeIndex pattern_interpretation(const UnsaveRef pn_ref, const match::State& match_state,
-        const Store& src_store, Store& dst_store, const unsigned lambda_param_offset);
+        const Store& src_store, Store& dst_store);
     
 } //namespace simp

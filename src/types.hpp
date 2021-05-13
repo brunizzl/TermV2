@@ -78,7 +78,7 @@ namespace simp {
 	{
 		switch (type) {
 		case NodeType(Literal::complex):           return true;
-		case NodeType(Literal::symbol):         return false;
+		case NodeType(Literal::symbol):            return false;
 		case NodeType(Literal::lambda):            return true;
 		case NodeType(Literal::lambda_param):      return false;
 		case NodeType(Literal::f_app):             return true;
