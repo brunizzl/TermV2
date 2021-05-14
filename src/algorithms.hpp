@@ -31,7 +31,7 @@ namespace simp {
         //  (meaning "f(as..., f(bs...), cs...) -> f(as..., bs..., cs...)" for associative f)
         //  example: if subterm "a" would be combined in term "\x.\y z. (a + 7)", lambda_param_offset == 3
         //returns combined ref, might invalidate old one
-        //may throw if: a lambda is called with to many parameters or something not callable is called
+        //may throw if: a lambda is called with to many parameters or something not applicable is called
         [[nodiscard]] Result outermost(MutRef ref, const Options options);
 
         //applies outermost first to children then to itself
@@ -161,7 +161,7 @@ namespace simp {
         // - if a call in lhs contains at least one multi match, the call is converted to PatternFApp
         // - multi match variables are primed
         //note: as after this procedure there may be PatterCall instances present, this may be done as last real transformation
-        [[nodiscard]] RuleHead prime_call(Store& store, RuleHead head);
+        [[nodiscard]] RuleHead prime_f_app(Store& store, RuleHead head);
 
         //if the outermost node of lhs is associative and 
         //  eighter commutative and does not contain a multi match variable

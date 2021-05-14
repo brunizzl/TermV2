@@ -298,14 +298,14 @@ namespace simp {
 				view.remove_suffix(1u);
 				head = parse::find_head_type(view);
 			}
-			const auto to_buildin_call = [&](const std::size_t operator_length, const nv::Native type) {
+			const auto to_buildin_app = [&](const std::size_t operator_length, const nv::Native type) {
 				const NodeIndex fst = parse::build(store, infos, view.substr(0, head.where));
 				const NodeIndex snd = parse::build(store, infos, view.substr(head.where + operator_length));
 				const std::size_t res_index = store.allocate_one();
 				store.at(res_index) = FApp{ from_native(type), fst, snd };
 				return NodeIndex(res_index, Literal::f_app);
 			};
-			const auto to_inverse_buildin_call = [&](const nv::Native type, auto invert_term) {
+			const auto to_inverse_buildin_app = [&](const nv::Native type, auto invert_term) {
 				const NodeIndex fst = parse::build(store, infos, view.substr(0, head.where));
 				const NodeIndex snd_uninverted = build(store, infos, view.substr(head.where + 1));
 				const NodeIndex snd = invert_term(store, snd_uninverted);
@@ -314,20 +314,20 @@ namespace simp {
 				return NodeIndex(res_index, Literal::f_app);
 			};
 			switch (head.type) {
-			case Head::Type::or_:        return to_buildin_call(2, nv::Comm::or_);
-			case Head::Type::and_:       return to_buildin_call(2, nv::Comm::and_);
-			case Head::Type::equals:     return to_buildin_call(2, nv::ToBool::eq);
-			case Head::Type::not_equals: return to_buildin_call(2, nv::ToBool::neq);
-			case Head::Type::greater:    return to_buildin_call(1, nv::ToBool::greater);
-			case Head::Type::smaller:    return to_buildin_call(1, nv::ToBool::smaller);
-			case Head::Type::greater_eq: return to_buildin_call(2, nv::ToBool::greater_eq);
-			case Head::Type::smaller_eq: return to_buildin_call(2, nv::ToBool::smaller_eq);
-			case Head::Type::plus:       return to_buildin_call(1, nv::Comm::sum);
-			case Head::Type::minus:      return to_inverse_buildin_call(nv::Comm::sum, build_negated<Store>);
-			case Head::Type::times:      return to_buildin_call(1, nv::Comm::prod);
-			case Head::Type::divided:    return to_inverse_buildin_call(nv::Comm::prod, build_inverted<Store>);
-			case Head::Type::power:      return to_buildin_call(1, nv::CtoC::pow);
-			case Head::Type::of_type:    return to_buildin_call(1, nv::PatternFn::of_type);
+			case Head::Type::or_:        return to_buildin_app(2, nv::Comm::or_);
+			case Head::Type::and_:       return to_buildin_app(2, nv::Comm::and_);
+			case Head::Type::equals:     return to_buildin_app(2, nv::ToBool::eq);
+			case Head::Type::not_equals: return to_buildin_app(2, nv::ToBool::neq);
+			case Head::Type::greater:    return to_buildin_app(1, nv::ToBool::greater);
+			case Head::Type::smaller:    return to_buildin_app(1, nv::ToBool::smaller);
+			case Head::Type::greater_eq: return to_buildin_app(2, nv::ToBool::greater_eq);
+			case Head::Type::smaller_eq: return to_buildin_app(2, nv::ToBool::smaller_eq);
+			case Head::Type::plus:       return to_buildin_app(1, nv::Comm::sum);
+			case Head::Type::minus:      return to_inverse_buildin_app(nv::Comm::sum, build_negated<Store>);
+			case Head::Type::times:      return to_buildin_app(1, nv::Comm::prod);
+			case Head::Type::divided:    return to_inverse_buildin_app(nv::Comm::prod, build_inverted<Store>);
+			case Head::Type::power:      return to_buildin_app(1, nv::CtoC::pow);
+			case Head::Type::of_type:    return to_buildin_app(1, nv::PatternFn::of_type);
 			case Head::Type::not_: {
 				view.remove_prefix(1u);  //remove '!'
 				const NodeIndex to_negate = parse::build(store, infos, view);
@@ -487,21 +487,21 @@ namespace simp {
 					single_conditions.emplace_back(condition_head, list_singles(cond_ref));
 				}
 				if (contains_value) {
-					const NodeIndex value_call_idx = simp::search(cond_ref,
+					const NodeIndex value_app_idx = simp::search(cond_ref,
 						[](const UnsaveRef r) { 
 							return r.type == Literal::f_app && 
 							r->f_app.function() == from_native(nv::PatternFn::value_match); 
 						});
-					assert(value_call_idx != literal_nullptr);
-					FApp& value_call = *MutRef(store, value_call_idx);
-					value_conditions[value_call[1].get_index()] = condition_head;
+					assert(value_app_idx != literal_nullptr);
+					FApp& value_app = *MutRef(store, value_app_idx);
+					value_conditions[value_app[1].get_index()] = condition_head;
 				}
 			}	
 			{ //give value conditions to value match variables
 				const auto restrict_value = [&value_conditions](const MutRef r) {
 					if (r.type == Literal::f_app && 
-						r->f_app.function() == from_native(nv::PatternFn::value_match) && //call to _VM
-						//if call contains no match variables itself and holds only shallow parameters, 
+						r->f_app.function() == from_native(nv::PatternFn::value_match) && //f_app of _VM
+						//if f_app contains no match variables itself and holds only shallow parameters, 
 						//  it is assumed to stem from name_lookup::build_symbol
 						std::none_of(r->f_app.begin(), r->f_app.end(),
 							[](auto idx) { return idx.get_type().is<MatchVariableType>() || is_stored_node(idx.get_type()); }))
@@ -580,7 +580,7 @@ namespace simp {
 			}
 		}
 
-		void append_pattern_call_info(const PatternCallInfo& data, const std::size_t param_count, std::string& str)
+		void append_f_app_info(const FAppInfo& info, const std::size_t param_count, std::string& str)
 		{
 			const auto to_string = [](const auto bitset, const std::size_t size) {
 				std::string string = std::bitset<32>(bitset).to_string();
@@ -589,31 +589,31 @@ namespace simp {
 				return string;
 			};
 			str.append("[");
-			switch (data.strategy) {
+			switch (info.strategy) {
 			case MatchStrategy::permutation: 
 				str.append("p");
-				str.append(std::to_string(data.match_state_index));
+				str.append(std::to_string(info.match_state_index));
 				str.append(" R:");
-				str.append(to_string(data.rematchable_params, param_count));
+				str.append(to_string(info.rematchable_params, param_count));
 				str.append(" M:");
-				str.append(to_string(data.preceeded_by_multi, 1));
+				str.append(to_string(info.preceeded_by_multi, 1));
 				if (param_count > 0) {
 					str.append(" O:");
-					str.append(to_string(data.always_preceeding_next, param_count - 1));
+					str.append(to_string(info.always_preceeding_next, param_count - 1));
 				}
 				break;
 			case MatchStrategy::dilation:    
 				str.append("d");
-				str.append(std::to_string(data.match_state_index));
+				str.append(std::to_string(info.match_state_index));
 				str.append(" R:");
-				str.append(to_string(data.rematchable_params, param_count));
+				str.append(to_string(info.rematchable_params, param_count));
 				str.append(" M:");
-				str.append(to_string(data.preceeded_by_multi, param_count + 1));
+				str.append(to_string(info.preceeded_by_multi, param_count + 1));
 				break;
 			case MatchStrategy::backtracking: 
 				str.append("b");
 				str.append(" R:");
-				str.append(to_string(data.rematchable_params, param_count));
+				str.append(to_string(info.rematchable_params, param_count));
 				break;
 			case MatchStrategy::linear:      
 				str.append("l");
@@ -633,13 +633,13 @@ namespace simp {
 				break;
 			case NodeType(PatternFApp{}): 
 			case NodeType(Literal::f_app): { 
-				const bool in_pattern_call = ref.type.is<PatternFApp>();
+				const bool in_pattern = ref.type.is<PatternFApp>();
 				const FApp& f_app = *ref;
 				const NodeIndex function = f_app.function();
 				const char* replacement_seperator = nullptr;
 				const auto [init, seperator] = [&]() -> std::pair<const char*, const char*> {
 					using namespace nv;
-					if (!in_pattern_call && function.get_type() == Literal::symbol) {
+					if (!in_pattern && function.get_type() == Literal::symbol) {
 						switch (to_symbol(function)) {
 						case Symbol(Comm::sum):             return { "" , " + "  };
 						case Symbol(Comm::prod):            return { "" , " "  };
@@ -657,12 +657,12 @@ namespace simp {
 						}
 					}
 					append_to_string(ref.at(function), str, max_infixr);
-					if (in_pattern_call) {
-						append_pattern_call_info(pattern_call_info(ref), ref->f_app.size() - 1u, str);
+					if (in_pattern) {
+						append_f_app_info(f_app_info(ref), ref->f_app.size() - 1u, str);
 					}
 					return { "", ", " };
 				}();
-				const int own_infixr = in_pattern_call ? default_infixr : infixr(function);
+				const int own_infixr = in_pattern ? default_infixr : infixr(function);
 				if (own_infixr <= parent_infixr) { str.push_back('('); }				
 				const char* spacer = init;
 				for (const NodeIndex param : f_app.parameters()) {
@@ -748,12 +748,12 @@ namespace simp {
 			} break;
 			case NodeType(PatternFApp{}): {
 				std::string& prev_str = rows[ref.index - 1u];
-				prev_str += "meta data  : ";
-				append_pattern_call_info(pattern_call_info(ref), ref->f_app.size() - 1u, prev_str);
+				prev_str += "meta info  : ";
+				append_f_app_info(f_app_info(ref), ref->f_app.size() - 1u, prev_str);
 			} [[fallthrough]];
 			case NodeType(Literal::f_app): {
 				//parameters:
-				current_str += "call       :    { ";
+				current_str += "application:     { ";
 				const char* separator = "";
 				const FApp& vec = *ref;
 				std::string* current_line = &current_str; //as we never add a new string to rows, this pointer will not dangle
@@ -796,7 +796,7 @@ namespace simp {
 
 		std::string to_memory_layout(const Store& store, const std::initializer_list<const NodeIndex> heads)
 		{
-			std::vector<std::string> rows(std::max(store.size(), match::State::max_pattern_call_count), "");
+			std::vector<std::string> rows(std::max(store.size(), match::State::max_pattern_f_app_count), "");
 
 			std::string result((heads.size() == 1u) ? "  head at index: " : "  heads at indices: ");
 			result.reserve(store.size() * 15);

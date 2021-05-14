@@ -68,20 +68,27 @@ namespace bmath::intern {
 		return result;
 	}
 
-	template<typename F, typename... Args>
-	constexpr auto y_combinator(F f, Args... args) {
-		return f(f, std::forward(args)...);
-	}
+	template<typename F>
+	struct YCombinate 
+	{
+		F f;
+		template<class...Args>
+		decltype(auto) operator()(Args&&...args) const { return f(*this, std::forward<Args>(args)...); }
+	};
+	template<class F>
+	YCombinate<std::decay_t<F>> y_combinate(F&& f) { return { std::forward<F>(f) }; };
 
-	template<typename Func>
+
+	template<typename F>
 	struct CallOnDelete
 	{
-		Func func;
-		constexpr CallOnDelete(const Func& f) noexcept :func(f) {}
-		constexpr ~CallOnDelete() { this->func(); }
+		F f;
+		constexpr CallOnDelete(F&& f_) noexcept :f(f_) {}
+		constexpr ~CallOnDelete() { this->f(); }
 	};
-	template<typename Func>
-	CallOnDelete(Func) -> CallOnDelete<Func>;
+	template<typename F>
+	CallOnDelete(F) -> CallOnDelete<F>;
+
     
 	template <typename Struct_T, std::size_t Size, typename Search_T>
 	[[nodiscard]] constexpr const Struct_T& find(

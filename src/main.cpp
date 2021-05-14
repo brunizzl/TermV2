@@ -24,6 +24,7 @@ important:
 	  - enable implicit outer multi
 	  - allow only function calls returning bool in test_condition 
  - add Literal::options to allow nondeterministic match 
+ - tests
 
 nice to have:
  - implement fst, snd, filter, split, ...
@@ -31,14 +32,13 @@ nice to have:
  - add neutral element to associative functions
  - add "dont care" pattern
  - use ref-counting in store instead of always copy (-> normalize::eval_native no longer has to do as much memory management)
- - store symbols in program wide map, only use hashes (aka. index in map) in every term
  - implement meta_pn::match function for variadic patterns
  - achieve feature parity between compile time pattern and run time pattern (add value match to ct)
  - enable StupidBufferVector to handle non-trivial destructible types -> change name to BufferVector
  - automate error checking in stupidTests.hpp -> change name to tests.hpp
  - noexceptify everything
  - restructure everything to use modules (basically needed to constexprfy all the things)
- - allow to restrict a variables domain (split Literal::symbol in own enum?)
+ - allow to restrict a variables domain (add to Names map?)
 
 idea status:
  - allow PatternFApp in rhs to indicate, that a call of lhs can be "stolen" e.g. the parameter count in rhs is guaranteed to be lower than the one in lhs -> the old allocation can be reused
@@ -219,7 +219,7 @@ int main()
 			{ "'pair'('test_'(ws..., a, b, c, xs...), 'test_'(ys..., a, b, c, zs...)) = 'list'(ws..., 'found'(a, b, c), xs..., '_space_', ys..., 'found'(a, b, c), zs...)" },
 			{ "'pair'(a + b, 'list'(b, a)) = 'success'('a_is', a, 'and_b_is', b)" },
 
-			{ "'make_ints'(a, b) = 'make_ints_h'(b, 'list'(a))" },
+			{ "'make_ints'(a, b) | a <= b = 'make_ints_h'(b, 'list'(a))" },
 			{ "'make_ints_h'(b, 'list'(xs..., b)) = 'list'(xs..., b)" },
 			{ "'make_ints_h'(b, 'list'(xs..., x)) = 'make_ints_h'(b, 'list'(xs..., x, x + 1))" },
 		};
@@ -237,7 +237,7 @@ int main()
 				term.normalize();
 				term.head = simp::greedy_apply_ruleset(rules, term.mut_ref());
 				std::cout << " = " << term.to_string() << "\n\n";
-				//std::cout << term.to_memory_layout() << "\n\n\n";
+				std::cout << term.to_memory_layout() << "\n\n\n";
 			}
 			catch (bmath::ParseFailure failure) {
 				std::cout << "parse failure: " << failure.what << '\n';

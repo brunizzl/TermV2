@@ -100,7 +100,7 @@ namespace simp {
 	} //RuleSet::migrate_rules
 
 	RuleApplicationRes raw_shallow_apply_ruleset(const RuleSet& rules, const Ref ref, Store& dst_store, 
-		match::State& match_data)
+		match::State& state)
 	{
 		const auto stop = rules.end();
 		RuleSetIter iter = [&] {
@@ -112,10 +112,10 @@ namespace simp {
 
 		for (; iter != stop; ++iter) {
 			const RuleRef rule = *iter;
-			const std::partial_ordering match_res = match::match_(rule.lhs, ref, match_data);
+			const std::partial_ordering match_res = match::match_(rule.lhs, ref, state);
 			if (match_res == std::partial_ordering::equivalent) {
 				const NodeIndex res = pattern_interpretation(
-					rule.rhs, match_data, *ref.store, dst_store);
+					rule.rhs, state, *ref.store, dst_store);
 				return { res, iter };
 			}
 			if (match_res == std::partial_ordering::greater) {
@@ -128,8 +128,8 @@ namespace simp {
 	NodeIndex shallow_apply_ruleset(const RuleSet& rules, MutRef ref)
 	{
 	apply_ruleset:
-		match::State match_data = *ref.store;
-		RuleApplicationRes result = raw_shallow_apply_ruleset(rules, ref, *ref.store, match_data);
+		match::State state = *ref.store;
+		RuleApplicationRes result = raw_shallow_apply_ruleset(rules, ref, *ref.store, state);
 		if (result.result_term != literal_nullptr) {
 			free_tree(ref);
 			ref.index = result.result_term.get_index();
@@ -141,8 +141,8 @@ namespace simp {
 
 	NodeIndex recursive_greedy_apply(const RuleSet& rules, MutRef ref) {
 		{ //try replacing this
-			match::State match_data = *ref.store;
-			const RuleApplicationRes applied = raw_shallow_apply_ruleset(rules, ref, *ref.store, match_data);
+			match::State state = *ref.store;
+			const RuleApplicationRes applied = raw_shallow_apply_ruleset(rules, ref, *ref.store, state);
 			if (applied.result_term != literal_nullptr) {
 				free_tree(ref);
 				return applied.result_term;

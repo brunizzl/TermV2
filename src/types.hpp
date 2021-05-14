@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <string>
 #include <span>
+#include <variant>
 
 #include "utility/sumEnum.hpp"
 #include "utility/misc.hpp"
@@ -24,7 +25,7 @@ namespace simp {
 	//everything that is not exclusively affiliated with patterns
 	enum class Literal
 	{
-		complex, //only of Literal never expected as .function() in call
+		complex, //only of Literal never expected as .function() in f_app
 		symbol,
 		lambda,
 		lambda_param,
@@ -32,12 +33,12 @@ namespace simp {
 		COUNT
 	};
 
-	//is present instead of Literal::call in a match side pattern node representing a call to a Variadic function
-	//acts exactly like Literal::call, only that at .get_index() - 1u an extra PatternCallInfo node is allocated in term
-	//layout in store: [...][...][PatternCallInfo][first call node][more call nodes...][last call node][...] 
-	//                                             ^.get_index() points here
-	//note 1: the layout is chosen to enable handling of PattenCall and Literal::call as one in most cases 
-	//  and to enable access to PatternCallInfo without first determining how many nodes the call owns.
+	//is present instead of Literal::f_app in a match side pattern node representing an application of a Variadic function
+	//acts exactly like Literal::f_app, only that at (.get_index() - 1u) an extra FAppInfo node is allocated in term
+	//layout in store: [...][...][FAppInfo][first f_app node][more f_app nodes...][last f_app node][...] 
+	//                                     ^.get_index() points here
+	//note 1: the layout is chosen to enable handling of PatternFApp and Literal::f_app as one in most cases 
+	//  and to enable access to FAppInfo without first determining how many nodes the function application holds.
 	//note 2: a PatternFApp may only occur once the appearance of a pattern is finalized, e.g. it should have already been combined
 	//  and it may only occur on the match side of a rule
 	struct PatternFApp :SingleSumEnumEntry {}; 
@@ -64,7 +65,7 @@ namespace simp {
 
 	using MatchVariableType = SumEnum<SpecialMatch, SingleMatch>;
 
-	using PatternNodeType = SumEnum<MatchVariableType, PatternUnsigned, PatternFApp>; //(ordered so that PatternFApp directly follows Literal::call)
+	using PatternNodeType = SumEnum<MatchVariableType, PatternUnsigned, PatternFApp>; //(ordered so that PatternFApp directly follows Literal::f_app)
 
 	using NodeType = SumEnum<PatternNodeType, Literal>;
 
@@ -158,7 +159,8 @@ namespace simp {
 			COUNT
 		};
 
-		//no functions in the classical sense, but can be called as in lambda calculus, acting like a ternary (true returns fist, false second
+		//no functions in the classical sense, but can be applied as in lambda calculus, acting like a ternary 
+		//  (true returns fist, false second)
 		enum class Bool
 		{
 			false_,
@@ -184,8 +186,8 @@ namespace simp {
 		enum class MiscFn
 		{
 			id, //unary identity function
-			force,  //params[0] := argument   forces evaluation even if it is unexact
-			diff,   //params[0] := function call  params[1] := variable the derivation is done in respect to
+			force,  //params[0] := argument   (forces evaluation even if it is unexact)
+			diff,   //params[0] := function application params[1] := variable the derivation is done in respect to
 			fdiff, //params[0] := function (e.g. "fdiff(sin) -> cos" or "fdiff(tan) -> \x .1/cos(x)^2" or "fdiff(\x .x^2) -> \x .2 x")
 			pair,   //two parameters, no evaluation
 			fst, //access pair elements
@@ -194,15 +196,15 @@ namespace simp {
 			COUNT
 		};
 
-		//as in haskell, but applicable to any function call, not just lists:
-		//the first parameter (params[0]) is always a callable, defining on a call to which function the transformation should be performed
+		//as in haskell, but applicable to any function application, not just lists:
+		//the first parameter (params[0]) is always an applicative, defining on an application of which function the transformation should be performed
 		enum class HaskellFn
 		{
-			map, //params[1] := unary lambda, params[2] := function call (evaluates "map(g, f, g(xs...)) -> g(f(xs)...)")
-			filter, //params[1] := unary lambda returning bool, params[2] := function call (leaves only parameters of params[2] where params[1] returns true)
+			map, //params[1] := unary lambda, params[2] := function application (evaluates "map(g, f, g(xs...)) -> g(f(xs)...)")
+			filter, //params[1] := unary lambda returning bool, params[2] := function application (leaves only parameters of params[2] where params[1] returns true)
 			split, //as ffilter, but returns both subsets (predicate true and else) as pair
-			foldl, //folds call from left
-			foldr, //folds call from right
+			foldl, //folds application from left
+			foldr, //folds application from right
 			COUNT
 		};
 
@@ -220,14 +222,14 @@ namespace simp {
 		//  function nv::eval specifies how to evaluate
 		using FixedArity = SumEnum<PatternFn, HaskellFn, MiscFn, CtoC, ToBool, Bool>;
 
-		//everything callable
+		//everything applicable
 		using Function_ = SumEnum<Variadic, FixedArity>;
 
 		//intended to be used as restriction in a single match variable, or narrow the return possibilities of a function
 		enum class Restr
 		{
 			any, //everything is possible
-			callable, //eighter Literal::lambda or Literal::native_symbol with .is<Function_>() or Literal::symbol
+			applicable, //eighter Literal::lambda or Literal::symbol with .is<Function_>() or with not .is<Native>()
 			boolean, //maybe add "types" section to native_symbol, handle bool there?
 			no_value, //all except Literal::complex
 			not_neg_1, //all except the exact value of -1.0 for Literal::complex
@@ -257,8 +259,8 @@ namespace simp {
 
 		//mostly used to denote restrictions on allowed types 
 		//  note: NodeType also appears here, but only as restriction, not as indicator of possible indirection
-		//this SumEnum contains everything in Native not callable, although also everything callable is a constant.
-		//in particular: Bool is not part of Constant, as it can be called
+		//this SumEnum contains everything in Native not applicable, although also everything applicable is a constant.
+		//in particular: Bool is not part of Constant, as it can be applied
 		using Constant = SumEnum<NodeType, ComplexSubset, Restr, PatternConst>;
 
 		//values of this type are stored in .get_index() of a NodeIndex if .get_type() is Literal::native_symbol
@@ -293,7 +295,7 @@ namespace simp {
 	{
 		using StoredVector<NodeIndex>::StoredVector;
 
-		//first in array is assumed to be callable
+		//first in array is assumed to be applicable
 		constexpr NodeIndex& function() noexcept { return this->front(); }
 		constexpr const NodeIndex& function() const noexcept { return this->front(); }
 
@@ -317,14 +319,14 @@ namespace simp {
 	struct RestrictedSingleMatch
 	{
 		std::uint32_t match_state_index; //indexes in match::State::single_vars
-		NodeIndex condition; //eighter Literal::native_symbol, then assumed to be some subset, or call to some testable expression
+		NodeIndex condition; //eighter Literal::symbol, then assumed to be native, else some testable expression
 	};
 
 	//only expected in rhs (lhs stores multis only as bool /bits in PatternCallData)
 	struct MultiMatch
 	{
-		std::uint32_t match_state_index; //indexes in match::State::pattern_calls
-		//imaginary (as multi match variables are not explicitly in lhs) index in call of lhs, minus the other multis
+		std::uint32_t match_state_index; //indexes in match::State::f_app_entries
+		//imaginary (as multi match variables are not explicitly in lhs) index in application in lhs, minus the other multis
 		//e.g. in "list(xs..., 1, ys..., list(as..., 2, bs..., 3, cs...)) = list(cs...)" 
 		//  has rhs instance of "cs..." .index_in_params = 2 (preceeded by "2" and "3")
 		std::uint32_t index_in_params; 
@@ -338,8 +340,8 @@ namespace simp {
 		bool owner;
 	};
 
-	//determines which function is called to match a function call in a pattern with a literal
-	enum class MatchStrategy
+	//determines which function is called to match a function application in a pattern with a literal
+	enum class MatchStrategy :char
 	{
 		permutation,
 		dilation,
@@ -347,15 +349,17 @@ namespace simp {
 		linear,
 	};
 
-	struct PatternCallInfo
+	//in a pattern every function application is preceeded by an instance of this
+	//i have tried writing this as std::variant, but failed to keep the boilerplate acceptable in size :(
+	struct FAppInfo
 	{
-		//determines what algorithm is choosen to match this call
-		//  permutation: uses all later members, only preceeded_by_multi is degraded to a bool
-		//  dilation:    uses all later members except always_preceeding_next (because that is a tautology here)
+		//determines what algorithm is choosen to match this application
+		//  permutation:  uses all later members, only preceeded_by_multi is degraded to a bool
+		//  dilation:     uses all later members except always_preceeding_next (because that is a tautology here)
 		//  backtracking: uses ONLY rematchable_params (not even uses match_state_index)
-		//  linear:      uses nothing
-		MatchStrategy strategy = MatchStrategy::linear; //default required as linear in build_rume::build_lhs_multis_and_pattern_calls
-		//indexes in match::State::variadic_match_data (used in both commutative and non-commutative)
+		//  linear:       uses nothing
+		MatchStrategy strategy = MatchStrategy::linear; //default required as linear in build_rume::build_lhs_multis_and_pattern_f_apps
+		//indexes in match::State::f_app_entries (used in both commutative and non-commutative)
 		std::uint32_t match_state_index = -1u;
 		//bit i dertermines whether parameter i is rematchable (used in both commutative and non-commutative)
 		bmath::intern::BitSet16 rematchable_params = (std::uint16_t)-1;
@@ -364,10 +368,10 @@ namespace simp {
 		bmath::intern::BitSet16 always_preceeding_next = (std::uint16_t)0;
 		//bit i determines, wether pattern parameter i comes after a multi match variable
 		// (because the multi match variables are not present in lhs as actual parameters)
-		//note: as a multi is also valid as last parameter, a pattern call may only hold up to 15 non-multi parameters!
+		//note: as a multi is also valid as last parameter, a pattern function application may only hold up to 15 non-multi parameters!
 		//(used in non-commutative as bitset and in commutative as bool)
 		bmath::intern::BitSet16 preceeded_by_multi = (std::uint16_t)0;
-	};
+	}; //struct FAppInfo
 
 	union TermNode
 	{
@@ -380,31 +384,31 @@ namespace simp {
 		RestrictedSingleMatch single_match;
 		MultiMatch multi_match;
 		ValueMatch value_match;
-		PatternCallInfo pattern_call_data;
+		FAppInfo f_app_info;
 
-		constexpr TermNode(const Complex              & val) noexcept :complex(val)           {}
-		constexpr TermNode(const FApp                 & val) noexcept :f_app(val)             {}
-		constexpr TermNode(const Lambda               & val) noexcept :lambda(val)            {}
-		constexpr TermNode(const RestrictedSingleMatch& val) noexcept :single_match(val)      {}
-		constexpr TermNode(const MultiMatch           & val) noexcept :multi_match(val)       {}
-		constexpr TermNode(const ValueMatch           & val) noexcept :value_match(val)       {}
-		constexpr TermNode(const PatternCallInfo      & val) noexcept :pattern_call_data(val) {}
+		constexpr TermNode(const Complex              & val) noexcept :complex(val)      {}
+		constexpr TermNode(const FApp                 & val) noexcept :f_app(val)        {}
+		constexpr TermNode(const Lambda               & val) noexcept :lambda(val)       {}
+		constexpr TermNode(const RestrictedSingleMatch& val) noexcept :single_match(val) {}
+		constexpr TermNode(const MultiMatch           & val) noexcept :multi_match(val)  {}
+		constexpr TermNode(const ValueMatch           & val) noexcept :value_match(val)  {}
+		constexpr TermNode(const FAppInfo             & val) noexcept :f_app_info(val)   {}
 
-		constexpr operator const Complex              & () const noexcept { return this->complex;           }
-		constexpr operator const FApp                 & () const noexcept { return this->f_app;             }
-		constexpr operator const Lambda               & () const noexcept { return this->lambda;            }
-		constexpr operator const RestrictedSingleMatch& () const noexcept { return this->single_match;      }
-		constexpr operator const MultiMatch           & () const noexcept { return this->multi_match;       }
-		constexpr operator const ValueMatch           & () const noexcept { return this->value_match;       }
-		constexpr operator const PatternCallInfo      & () const noexcept { return this->pattern_call_data; }
+		constexpr operator const Complex              & () const noexcept { return this->complex;      }
+		constexpr operator const FApp                 & () const noexcept { return this->f_app;        }
+		constexpr operator const Lambda               & () const noexcept { return this->lambda;       }
+		constexpr operator const RestrictedSingleMatch& () const noexcept { return this->single_match; }
+		constexpr operator const MultiMatch           & () const noexcept { return this->multi_match;  }
+		constexpr operator const ValueMatch           & () const noexcept { return this->value_match;  }
+		constexpr operator const FAppInfo             & () const noexcept { return this->f_app_info;   }
 
-		constexpr operator Complex              & () noexcept { return this->complex;           }
-		constexpr operator FApp                 & () noexcept { return this->f_app;             }
-		constexpr operator Lambda               & () noexcept { return this->lambda;            }
-		constexpr operator RestrictedSingleMatch& () noexcept { return this->single_match;      }
-		constexpr operator MultiMatch           & () noexcept { return this->multi_match;       }
-		constexpr operator ValueMatch           & () noexcept { return this->value_match;       }
-		constexpr operator PatternCallInfo      & () noexcept { return this->pattern_call_data; }
+		constexpr operator Complex              & () noexcept { return this->complex;      }
+		constexpr operator FApp                 & () noexcept { return this->f_app;        }
+		constexpr operator Lambda               & () noexcept { return this->lambda;       }
+		constexpr operator RestrictedSingleMatch& () noexcept { return this->single_match; }
+		constexpr operator MultiMatch           & () noexcept { return this->multi_match;  }
+		constexpr operator ValueMatch           & () noexcept { return this->value_match;  }
+		constexpr operator FAppInfo             & () noexcept { return this->f_app_info;   }
 	}; //TermNode
 	static_assert(sizeof(TermNode) == sizeof(Complex));
 
@@ -449,13 +453,13 @@ namespace simp {
 	}
 
 
-	constexpr inline const PatternCallInfo& pattern_call_info(const UnsaveRef ref)
+	constexpr inline const FAppInfo& f_app_info(const UnsaveRef ref)
 	{
 		assert(ref.type == PatternFApp{});
 		return *(ref.ptr - 1u);
 	}
 
-	constexpr inline PatternCallInfo& pattern_call_info(const MutRef ref)
+	constexpr inline FAppInfo& f_app_info(const MutRef ref)
 	{
 		assert(ref.type == PatternFApp{});
 		return *(&ref.store->at(ref.index) - 1u);
@@ -541,16 +545,16 @@ namespace simp {
 			{ MiscFn::id             , "id"        , 1u, { Restr::any          }, Restr::any                  },
 			{ MiscFn::force          , "force"     , 1u, { Literal::complex    }, Literal::complex            },
 			{ MiscFn::diff           , "diff"      , 2u, { Restr::any, Literal::symbol }, Restr::any   },
-			{ MiscFn::fdiff          , "fdiff"     , 1u, { Restr::callable     }, Restr::callable             },
+			{ MiscFn::fdiff          , "fdiff"     , 1u, { Restr::applicable     }, Restr::applicable             },
 			{ MiscFn::pair           , "pair"      , 2u, {}                     , MiscFn::pair                },
 			{ MiscFn::fst            , "fst"       , 1u, { MiscFn::pair        }, Restr::any                  },
 			{ MiscFn::snd            , "snd"       , 1u, { MiscFn::pair        }, Restr::any                  },
 			{ MiscFn::replace        , "replace"   , 3u, { Restr::any, NonComm::list, NonComm::list        }, Restr::any       },
-			{ HaskellFn::map         , "map"       , 3u, { Restr::callable, Restr::callable, Literal::f_app }, Literal::f_app  },
-			{ HaskellFn::filter      , "filter"    , 3u, { Restr::callable, Restr::callable, Literal::f_app }, Literal::f_app  },
-			{ HaskellFn::split       , "split"     , 3u, { Restr::callable, Restr::callable, Literal::f_app }, MiscFn::pair    },
-			{ HaskellFn::foldl       , "ffoldl"    , 4u, { Restr::callable, Restr::callable, Restr::any, Literal::f_app }, Restr::any }, //foldl f z (x:xs) = foldl f (f z x) xs
-			{ HaskellFn::foldr       , "ffoldr"    , 4u, { Restr::callable, Restr::callable, Restr::any, Literal::f_app }, Restr::any }, //foldr f z (x:xs) = f x (foldr f z xs) 
+			{ HaskellFn::map         , "map"       , 3u, { Restr::applicable, Restr::applicable, Literal::f_app }, Literal::f_app  },
+			{ HaskellFn::filter      , "filter"    , 3u, { Restr::applicable, Restr::applicable, Literal::f_app }, Literal::f_app  },
+			{ HaskellFn::split       , "split"     , 3u, { Restr::applicable, Restr::applicable, Literal::f_app }, MiscFn::pair    },
+			{ HaskellFn::foldl       , "ffoldl"    , 4u, { Restr::applicable, Restr::applicable, Restr::any, Literal::f_app }, Restr::any }, //foldl f z (x:xs) = foldl f (f z x) xs
+			{ HaskellFn::foldr       , "ffoldr"    , 4u, { Restr::applicable, Restr::applicable, Restr::any, Literal::f_app }, Restr::any }, //foldr f z (x:xs) = f x (foldr f z xs) 
 			{ PatternFn::value_match , "_VM"       , 3u, { PatternUnsigned{}, Restr::any, Restr::any }, Restr::any }, //layout as in ValueMatch (minus .owner)
 			{ PatternFn::of_type     , "_Of_T"     , 2u, { Restr::any, Literal::symbol }, Restr::boolean      },
 		});
@@ -621,7 +625,7 @@ namespace simp {
 		constexpr auto constant_table = std::to_array<CommonProps>({
 			{ PatternConst::value_proxy  , "_VP"         , PatternConst::value_proxy },
 			{ Restr::any                 , "\\"          , Literal::symbol }, //can not be constructed from a string
-			{ Restr::callable            , "callable"    , Literal::symbol },
+			{ Restr::applicable          , "applicable"  , Literal::symbol },
 			{ Restr::boolean             , "bool"        , Literal::symbol },
 			{ Restr::no_value            , "_NoValue"    , Literal::symbol },
 			{ Restr::not_neg_1           , "_NotNeg1"    , Literal::symbol },
@@ -636,7 +640,7 @@ namespace simp {
 			{ ComplexSubset::not_negative, "_NotNegative", Literal::symbol }, //can not be constructed from a string
 			{ ComplexSubset::not_positive, "_NotPositive", Literal::symbol }, //can not be constructed from a string
 			{ Literal::complex           , "complex"     , Literal::symbol },
-			{ Literal::symbol         , "symbol"      , Literal::symbol },
+			{ Literal::symbol            , "symbol"      , Literal::symbol },
 			{ Literal::lambda            , "lambda"      , Literal::symbol },
 			{ Literal::lambda_param      , "lambda_param", Literal::symbol },
 			{ Literal::f_app             , "f_app"       , Literal::symbol },
@@ -707,7 +711,7 @@ namespace simp {
 			bool is_set() const noexcept { return !std::isnan(this->value.real()); } //debugging
 		};
 
-		struct SharedPatternCallEntry
+		struct SharedFAppEntry
 		{
 			//no PatternFApp may have more parameters than max_params_count many
 			static constexpr std::size_t max_params_count = 10u;
@@ -721,7 +725,7 @@ namespace simp {
 
 			NodeIndex match_idx = literal_nullptr; //indexes in Term to simplify (the haystack)
 
-			constexpr SharedPatternCallEntry() noexcept { this->match_positions.fill(-1u); }
+			constexpr SharedFAppEntry() noexcept { this->match_positions.fill(-1u); }
 
 			//checks this->match_positions if needle is contained
 			//use with care: might check more than actually contained in specific pattern!
@@ -755,12 +759,12 @@ namespace simp {
 
 			//maximal number of unrelated single match variables allowed per pattern
 			static constexpr std::size_t max_single_match_count = 8u;
-			//maximal number of PatternFApp allowed per pattern
-			static constexpr std::size_t max_pattern_call_count = 4u;
+			//maximal number of PatternFApp with Strategy permutation oder dilation allowed per pattern
+			static constexpr std::size_t max_pattern_f_app_count = 4u;
 			//maximal number of unrelated value match variables allowed per pattern
 			static constexpr std::size_t max_value_match_count = 2u;
 
-			std::array<SharedPatternCallEntry, max_pattern_call_count> pattern_calls = {};
+			std::array<SharedFAppEntry, max_pattern_f_app_count> f_app_entries = {};
 			std::array<SharedSingleMatchEntry, max_single_match_count> single_vars = {};
 			std::array<SharedValueMatchEntry, max_value_match_count> value_vars = {};
 
@@ -772,23 +776,23 @@ namespace simp {
 			{	return this->value_vars[var.match_state_index];
 			}
 
-			constexpr auto& call_entry(const UnsaveRef ref) noexcept
+			constexpr auto& f_app_entry(const UnsaveRef ref) noexcept
 			{	assert(ref.type == PatternFApp{});
-				return this->pattern_calls[pattern_call_info(ref).match_state_index];
+				return this->f_app_entries[f_app_info(ref).match_state_index];
 			}
 
-			constexpr auto& call_entry(const UnsaveRef ref) const noexcept
+			constexpr auto& f_app_entry(const UnsaveRef ref) const noexcept
 			{	assert(ref.type == PatternFApp{});
-				return this->pattern_calls[pattern_call_info(ref).match_state_index];
+				return this->f_app_entries[f_app_info(ref).match_state_index];
 			}
 
 			constexpr MultiRange multi_range(const MultiMatch& multi) const noexcept
 			{
 				assert(multi.index_in_params != -1u); 
-				const SharedPatternCallEntry& owning_entry = this->pattern_calls[multi.match_state_index];
+				const SharedFAppEntry& owning_entry = this->f_app_entries[multi.match_state_index];
 				const Ref matched_ref = this->make_ref(owning_entry.match_idx);
 				assert(matched_ref.type == Literal::f_app);
-				const FApp& matched_call = *matched_ref;
+				const FApp& matched_app = *matched_ref;
 
 				const std::uint32_t begin_params_index =
 					multi.index_in_params > 0 ?
@@ -796,9 +800,9 @@ namespace simp {
 					owning_entry.match_positions[multi.index_in_params - 1u] + 1u :
 					0u;
 				const std::uint32_t end_params_index =
-					owning_entry.match_positions[multi.index_in_params] != SharedPatternCallEntry::MatchPos_T(-1) ?
+					owning_entry.match_positions[multi.index_in_params] != SharedFAppEntry::MatchPos_T(-1) ?
 					owning_entry.match_positions[multi.index_in_params] :
-					matched_call.parameters().size();
+					matched_app.parameters().size();
 				assert(begin_params_index < 10000 && end_params_index < 10000);
 				//+ 1u in both cases, because the function itself resides at index 0
 				return MultiRange{ { *matched_ref.store, matched_ref.index, begin_params_index + 1u }, { end_params_index + 1u } };

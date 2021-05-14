@@ -59,7 +59,7 @@ namespace simp {
                 return true;
             case Native(Restr::boolean):
                 return ref.type == Literal::symbol && Symbol(ref.index).is<Bool>();
-            case Native(Restr::callable):
+            case Native(Restr::applicable):
                 return bmath::intern::is_one_of<Literal::lambda, Literal::symbol>(ref.type);
             case Native(Restr::no_value):
                 return ref.type != Literal::complex;
@@ -130,9 +130,9 @@ namespace simp {
             }
             const std::uint32_t lambda_param_count = lambda->lambda.param_count;
             if (lambda_param_count != params.size()) [[unlikely]] {
-                throw TypeError{ "wrong number of arguments for called lambda", ref };
+                throw TypeError{ "wrong number of arguments for applied lambda", ref };
             }
-            FApp::free(*ref.store, ref.index); //only free call itself, neighter lambda nor lambda parameters
+            FApp::free(*ref.store, ref.index); //only free app itself, neighter lambda nor lambda parameters
             const NodeIndex evaluated = replace_lambda_params(
                 ref.at(lambda->lambda.definition), params);
             for (const NodeIndex param : params) {
@@ -142,39 +142,39 @@ namespace simp {
             return normalize::recursive(ref.at(evaluated), options);
         } //eval_lambda
 
-        bool BMATH_FORCE_INLINE merge_associative_calls(MutRef& ref, const NodeIndex function)
+        bool BMATH_FORCE_INLINE merge_associative_apps(MutRef& ref, const NodeIndex function)
         {
             assert(ref.type == Literal::f_app && //PatternFApp is not wanted here!
                 function.get_type() == Literal::symbol &&
                 to_symbol(function).is<nv::Variadic>());
             bool found_nested = false;
             const FApp& f_app = *ref;
-            bmath::intern::StupidBufferVector<NodeIndex, 16> merged_calls = { function };
+            bmath::intern::StupidBufferVector<NodeIndex, 16> merged_apps = { function };
             for (const NodeIndex param : f_app.parameters()) {
                 if (param.get_type() == Literal::f_app) {
                     const MutRef param_ref = ref.at(param);
                     if (param_ref->f_app.function() == function) {
                         found_nested = true;
                         for (const NodeIndex param_param : param_ref->f_app.parameters()) {
-                            merged_calls.push_back(param_param);
+                            merged_apps.push_back(param_param);
                         }
-                        FApp::free(*ref.store, param_ref.index); //only free call itself not the (now copied) params
+                        FApp::free(*ref.store, param_ref.index); //only free application itself not the (now copied) params
                         continue;
                     }
                 }
-                merged_calls.push_back(param);
+                merged_apps.push_back(param);
             }
             if (found_nested) {
-                if (f_app.capacity() >= merged_calls.size()) {
-                    FApp::emplace(*ref, merged_calls, f_app.capacity());
+                if (f_app.capacity() >= merged_apps.size()) {
+                    FApp::emplace(*ref, merged_apps, f_app.capacity());
                 }
                 else {
-                    FApp::free(*ref.store, ref.index); //only free old call, not its parameters
-                    ref.index = FApp::build(*ref.store, merged_calls);
+                    FApp::free(*ref.store, ref.index); //only free old application, not its parameters
+                    ref.index = FApp::build(*ref.store, merged_apps);
                 }
             }
             return found_nested;
-        } //merge_associative_calls
+        } //merge_associative_apps
 
         constexpr bool is_unary_function(const UnsaveRef ref) 
         { 
@@ -337,7 +337,7 @@ namespace simp {
                     if (options.exact && std::fetestexcept(FE_ALL_EXCEPT)) { //operation failed to be exact
                         return literal_nullptr;
                     }
-                    //free all but last parameter of call
+                    //free all but last parameter of app
                     for (std::size_t i = 0; i < f_arity - 1u; i++) {
                         assert(params[i].get_type() == Literal::complex);
                         ref.store->free_one(params[i].get_index());
@@ -346,7 +346,7 @@ namespace simp {
                     const NodeIndex result_idx = params[f_arity - 1u];
                     assert(result_idx.get_type() == Literal::complex);
                     ref.store->at(result_idx.get_index()) = result;
-                    FApp::free(*ref.store, ref.index); //free call itself
+                    FApp::free(*ref.store, ref.index); //free app itself
                     return result_idx;
                 };
                 const auto is_ordered_as = [&](const std::strong_ordering od) {
@@ -357,9 +357,9 @@ namespace simp {
                     free_tree(ref);
                     return res;
                 };
-                const auto allow_haskell_call = [&](const NodeIndex callable, const NodeIndex f_app) {
+                const auto allow_haskell_app = [&](const NodeIndex applicable, const NodeIndex f_app) {
                     assert(f_app.get_type() == Literal::f_app);
-                    return compare_tree(ref.at(callable), ref.at(ref.at(f_app)->f_app.function())) == std::strong_ordering::equal;
+                    return compare_tree(ref.at(applicable), ref.at(ref.at(f_app)->f_app.function())) == std::strong_ordering::equal;
                 };
                 //parameters are now guaranteed to meet restriction given in nv::fixed_arity_table
                 //also parameter cout is guaranteed to be correct
@@ -423,21 +423,21 @@ namespace simp {
                     return bool_to_typed_idx(!is_ordered_as(std::strong_ordering::less));
                 case FixedArity(ToBool::smaller_eq):
                     return bool_to_typed_idx(!is_ordered_as(std::strong_ordering::greater));
-                case FixedArity(HaskellFn::map): if (allow_haskell_call(params[0], params[2])) {
+                case FixedArity(HaskellFn::map): if (allow_haskell_app(params[0], params[2])) {
                     const MutRef converter_ref = ref.at(params[1]);
                     const MutRef convertee_ref = ref.at(params[2]);
                     assert(convertee_ref.type == Literal::f_app);
                     const auto stop = end(convertee_ref);
                     auto iter = begin(convertee_ref);
                     for (++iter; iter != stop; ++iter) {
-                        static_assert(FApp::min_capacity >= 2u, "assumes call to only use one store slot");
-                        const std::size_t call_index = ref.store->allocate_one();
+                        static_assert(FApp::min_capacity >= 2u, "assumes application to only use one store slot");
+                        const std::size_t app_index = ref.store->allocate_one();
                         const NodeIndex converter_copy = copy_tree(converter_ref, *ref.store);
-                        ref.store->at(call_index) = FApp({ converter_copy, *iter });
-                        *iter = outermost(ref.at(NodeIndex(call_index, Literal::f_app)), options).res;
+                        ref.store->at(app_index) = FApp({ converter_copy, *iter });
+                        *iter = outermost(ref.at(NodeIndex(app_index, Literal::f_app)), options).res;
                     }
-                    static_assert(FApp::min_capacity >= 3u, "assumes map call to only use one store slot");
-                    ref.store->free_one(ref.index); //free call to map
+                    static_assert(FApp::min_capacity >= 3u, "assumes map application to only use one store slot");
+                    ref.store->free_one(ref.index); //free app of map
                     free_tree(converter_ref); //free function to map
                     return outermost(convertee_ref, options).res;
                 } break;
@@ -588,7 +588,7 @@ namespace simp {
                     const bool associative = symbol.is<nv::Variadic>() &&
                         nv::is_associative(symbol.to<nv::Variadic>());
                     if (associative) {
-                        change |= merge_associative_calls(ref, function);
+                        change |= merge_associative_apps(ref, function);
                     }
                     if (symbol.is<nv::Comm>()) {
                         sort(ref);
@@ -710,12 +710,12 @@ namespace simp {
                 dst_subterms.push_back(copy_tree(src_ref.at(*iter), dst_store));
             }
             if (src_ref.type == PatternFApp{}) { //also copy variadic metadata
-                const std::size_t call_capacity = FApp::smallest_fit_capacity(dst_subterms.size());
-                const std::size_t nr_call_nodes = FApp::_node_count(call_capacity);
+                const std::size_t app_capacity = FApp::smallest_fit_capacity(dst_subterms.size());
+                const std::size_t nr_app_nodes = FApp::_node_count(app_capacity);
 
-                const std::size_t dst_index = dst_store.allocate_n(1u + nr_call_nodes) + 1u;
-                dst_store.at(dst_index - 1u) = pattern_call_info(src_ref);
-                FApp::emplace(dst_store.at(dst_index), dst_subterms, call_capacity);
+                const std::size_t dst_index = dst_store.allocate_n(1u + nr_app_nodes) + 1u;
+                dst_store.at(dst_index - 1u) = f_app_info(src_ref);
+                FApp::emplace(dst_store.at(dst_index), dst_subterms, app_capacity);
                 return NodeIndex(dst_index, src_ref.type);
             }
             else {
@@ -875,7 +875,7 @@ namespace simp {
         {
             const auto build_very_basic_pattern = [](Store& s, std::string& name) {
                 RuleHead h = parse::raw_rule(s, name, parse::IAmInformedThisRuleIsNotUsableYet{});
-                h = build_rule::prime_call(s, h);
+                h = build_rule::prime_f_app(s, h);
                 return h;
             };
             static const auto buildin_conditions = RuleSet({
@@ -914,7 +914,7 @@ namespace simp {
             const auto build_basic_pattern = [](Store& s, std::string& name) {
                 RuleHead h = parse::raw_rule(s, name, parse::IAmInformedThisRuleIsNotUsableYet{});
                 h = build_rule::optimize_single_conditions(s, h);
-                h = build_rule::prime_call(s, h);
+                h = build_rule::prime_f_app(s, h);
                 return h;
             };
             static const auto bubble_up = RuleSet({
@@ -974,44 +974,44 @@ namespace simp {
             return heads;
         } //prime_value
 
-        //turns every call in lhs into a PatternFApp, but nothing is changed from the default values
+        //turns every f_app in lhs into a PatternFApp, but nothing is changed from the default values
         //note: after this step, no more manipulation on the raw pattern via patterns are possible
-        NodeIndex swap_lhs_calls(const MutRef lhs_ref)
+        NodeIndex swap_lhs_f_apps(const MutRef lhs_ref)
         {
-            const auto swap_call = [](const MutRef ref) {
+            const auto swap_app = [](const MutRef ref) {
                 if (ref.type == Literal::f_app) {
                     bmath::intern::StupidBufferVector<NodeIndex, 16> subterms;
                     for (const NodeIndex sub : ref) {
                         subterms.push_back(sub);
                     }
                     FApp::free(*ref.store, ref.index);
-                    const std::size_t call_capacity = FApp::smallest_fit_capacity(subterms.size());
-                    const std::size_t nr_call_nodes = FApp::_node_count(call_capacity);
+                    const std::size_t app_capacity = FApp::smallest_fit_capacity(subterms.size());
+                    const std::size_t nr_app_nodes = FApp::_node_count(app_capacity);
 
-                    const std::size_t res_index = ref.store->allocate_n(1u + nr_call_nodes) + 1u;
-                    ref.store->at(res_index - 1u) = PatternCallInfo{};
-                    FApp::emplace(ref.store->at(res_index), subterms, call_capacity);
+                    const std::size_t res_index = ref.store->allocate_n(1u + nr_app_nodes) + 1u;
+                    ref.store->at(res_index - 1u) = FAppInfo{};
+                    FApp::emplace(ref.store->at(res_index), subterms, app_capacity);
                     return NodeIndex(res_index, PatternFApp{});
                 }
                 return ref.typed_idx();
             };
-            return transform(lhs_ref, swap_call);
-        } //swap_lhs_calls
+            return transform(lhs_ref, swap_app);
+        } //swap_lhs_f_apps
 
         //to be rematchable one has to eighter contain a rematchable subterm or be 
-        //a pattern call with at least one of the following properties:
-        //   - in a non-commutative call at least two parameters are multi match variables 
+        //a pattern f_app with at least one of the following properties:
+        //   - in a non-commutative f_app at least two parameters are multi match variables 
         //     e.g. "list(xs..., 1, 2, ys...)" but not "list(xs..., 1, 2, list(ys...))"
-        //   - in a commutative call a multi match and one or more parameters containing an owned single match are held
+        //   - in a commutative f_app a multi match and one or more parameters containing an owned single match are held
         //     e.g. "a + bs..." or "2 a + bs..." but not "2 + bs..."
-        //   - in a commutative call two or more parameters hold an owned single match and are relatively unordered
+        //   - in a commutative f_app two or more parameters hold an owned single match and are relatively unordered
         //     e.g. "a^2 + b^2" or "a^2 + b" but not "a^2 + 2 b"
         //note: "relatively unordered" refers to the bits set by set_always_preceeding_next
         bool is_rematchable(const UnsaveRef ref)
         {
-            const auto call_is_rematchable = [](const UnsaveRef r) {
+            const auto app_is_rematchable = [](const UnsaveRef r) {
                 if (r.type == PatternFApp{}) {
-                    const auto info = pattern_call_info(r);
+                    const auto info = f_app_info(r);
                     switch (info.strategy) {
                     case MatchStrategy::permutation: {
                         const auto has_owned_single = [r](const NodeIndex n) {
@@ -1023,7 +1023,7 @@ namespace simp {
                         if (info.preceeded_by_multi) {
                             return std::count_if(params.begin(), params.end(), has_owned_single) > 0;
                         }
-                        std::array<bool, match::SharedPatternCallEntry::max_params_count> single_owners = {};
+                        std::array<bool, match::SharedFAppEntry::max_params_count> single_owners = {};
                         for (std::size_t i = 0; i < params.size(); i++) {
                             single_owners[i] = has_owned_single(params[i]);
                         }
@@ -1046,7 +1046,7 @@ namespace simp {
                 }
                 return false;
             };
-            return search(ref, call_is_rematchable) != literal_nullptr;
+            return search(ref, app_is_rematchable) != literal_nullptr;
         } //is_rematchable
 
         using EquivalenceTable = std::array<std::array<bool, match::State::max_single_match_count>,
@@ -1137,8 +1137,8 @@ namespace simp {
         {
             assert(fst.type != Literal::f_app && snd.type != Literal::f_app);
             if (fst.type == PatternFApp{} && snd.type == PatternFApp{}) {
-                const PatternCallInfo fst_info = pattern_call_info(fst);
-                const PatternCallInfo snd_info = pattern_call_info(snd);
+                const FAppInfo fst_info = f_app_info(fst);
+                const FAppInfo snd_info = f_app_info(snd);
                 if (fst_info.preceeded_by_multi != snd_info.preceeded_by_multi)
                 {   return false;
                 }
@@ -1168,8 +1168,8 @@ namespace simp {
 
         void shallow_set_always_preceeding_next(const MutRef r, const EquivalenceTable& eq)
         {
-            if (r.type == PatternFApp{} && pattern_call_info(r).strategy == MatchStrategy::permutation) {
-                auto& bits = pattern_call_info(r).always_preceeding_next;
+            if (r.type == PatternFApp{} && f_app_info(r).strategy == MatchStrategy::permutation) {
+                auto& bits = f_app_info(r).always_preceeding_next;
                 const auto params = r->f_app.parameters();
                 for (std::size_t i = 0; i + 1 < params.size(); i++) {
                     const auto i_ref = r.at(params[i]);
@@ -1188,23 +1188,23 @@ namespace simp {
             MultiMatch new_;
         };
 
-        //changes call to pattern call if appropriate and change multis to multi_marker
-        [[nodiscard]] NodeIndex build_lhs_multis_and_pattern_calls(MutRef ref, std::vector<MultiChange>& multi_changes, 
-            unsigned& pattern_call_index, const EquivalenceTable& eq) 
+        //changes f_app to pattern f_app if appropriate and change multis to multi_marker
+        [[nodiscard]] NodeIndex build_lhs_multis_and_pattern_f_apps(MutRef ref, std::vector<MultiChange>& multi_changes, 
+            unsigned& pattern_app_index, const EquivalenceTable& eq) 
         {
-            assert(ref.type != Literal::f_app && "run swap_lhs_calls bevor running this function");
+            assert(ref.type != Literal::f_app && "run swap_lhs_f_apps bevor running this function");
             if (ref.type == PatternFApp{}) {
                 //build subterms
                 const auto stop = end(ref);
                 for (auto iter = begin(ref); iter != stop; ++iter) {
-                    *iter = build_lhs_multis_and_pattern_calls(
-                        ref.at(*iter), multi_changes, pattern_call_index, eq);
+                    *iter = build_lhs_multis_and_pattern_f_apps(
+                        ref.at(*iter), multi_changes, pattern_app_index, eq);
                 }
                 //build current
                 const std::size_t this_multi_count = std::count_if(ref->f_app.begin(), ref->f_app.end(),
                     [](const NodeIndex i) { return i.get_type() == SpecialMatch::multi; });
 
-                auto& call_info = pattern_call_info(ref);
+                auto& info = f_app_info(ref);
 
                 const auto [prime, commuts] = [&] {
                     const NodeIndex f = ref->f_app.function();
@@ -1214,7 +1214,7 @@ namespace simp {
                         if (symbol.is<Comm>()) {
                             if (this_multi_count > 1) 
                                 throw TypeError{ "too many multis in commutative", ref };
-                            call_info.strategy = MatchStrategy::permutation;
+                            info.strategy = MatchStrategy::permutation;
                             return std::tuple{ true, true };
                         }
                         if (symbol.is<FixedArity>() && this_multi_count > 0)
@@ -1222,14 +1222,14 @@ namespace simp {
                     }
 
                     if (this_multi_count > 0u) {
-                        call_info.strategy = MatchStrategy::dilation;
+                        info.strategy = MatchStrategy::dilation;
                         return std::tuple{ true, false };
                     }
                     else if (is_rematchable(ref)) {
-                        call_info.strategy = MatchStrategy::backtracking;
+                        info.strategy = MatchStrategy::backtracking;
                     }
                     else {//required as default, as otherwise is_rematchable above will always return true
-                        assert(call_info.strategy == MatchStrategy::linear);
+                        assert(info.strategy == MatchStrategy::linear);
                     }
                     return std::tuple{ false, false };
                 } ();
@@ -1238,16 +1238,16 @@ namespace simp {
 
                 { //set rematchable_params
                     const std::span<NodeIndex> params = ref->f_app.parameters();
-                    call_info.rematchable_params = 0;
+                    info.rematchable_params = 0;
                     for (std::size_t i = 0; i < params.size(); i++) {
-                        call_info.rematchable_params.set(i, is_rematchable(ref.at(params[i])));
+                        info.rematchable_params.set(i, is_rematchable(ref.at(params[i])));
                     }
-                    assert(call_info.strategy != MatchStrategy::linear || call_info.rematchable_params.none());
-                    assert(call_info.strategy != MatchStrategy::backtracking || call_info.rematchable_params.any());
+                    assert(info.strategy != MatchStrategy::linear || info.rematchable_params.none());
+                    assert(info.strategy != MatchStrategy::backtracking || info.rematchable_params.any());
                 }
                 if (prime) { //give current own match data index and change multis to final form
-                    const unsigned this_pattern_index = pattern_call_index++;
-                    call_info.match_state_index = this_pattern_index;
+                    const unsigned this_pattern_index = pattern_app_index++;
+                    info.match_state_index = this_pattern_index;
                     std::uint32_t pos_mod_multis = 0; //only is incremented, when no multi is encountered
                     FApp& f_app = *ref;
                     for (NodeIndex& param : f_app.parameters()) {
@@ -1257,10 +1257,10 @@ namespace simp {
                                 MultiMatch{ this_pattern_index, commuts ? -1u : pos_mod_multis });
                             free_tree(ref.at(param));
                             param = literal_nullptr;
-                            if (call_info.preceeded_by_multi.test(pos_mod_multis)) {
+                            if (info.preceeded_by_multi.test(pos_mod_multis)) {
                                 throw TypeError{ "two multis in direct succession are illegal in lhs", ref };
                             }
-                            call_info.preceeded_by_multi.set(commuts ? 0 : pos_mod_multis);
+                            info.preceeded_by_multi.set(commuts ? 0 : pos_mod_multis);
                         }
                         else {
                             pos_mod_multis++;
@@ -1271,25 +1271,25 @@ namespace simp {
                 }
             }
             else if (ref.type == Literal::lambda) {
-                ref->lambda.definition = build_lhs_multis_and_pattern_calls(
-                    ref.at(ref->lambda.definition), multi_changes, pattern_call_index, eq);
+                ref->lambda.definition = build_lhs_multis_and_pattern_f_apps(
+                    ref.at(ref->lambda.definition), multi_changes, pattern_app_index, eq);
             }
             return ref.typed_idx();
-        } //build_lhs_multis_and_pattern_calls
+        } //build_lhs_multis_and_pattern_f_apps
 
-        RuleHead prime_call(Store& store, RuleHead head)
+        RuleHead prime_f_app(Store& store, RuleHead head)
         {
             const EquivalenceTable eq_table = build_equivalence_table(Ref(store, head.lhs));
 
-            head.lhs = build_rule::swap_lhs_calls(MutRef(store, head.lhs));
+            head.lhs = build_rule::swap_lhs_f_apps(MutRef(store, head.lhs));
 
             std::vector<MultiChange> multi_changes;
-            unsigned pattern_call_index = 0; //keeps track of how many conversions to PatternFApp have already been made 
+            unsigned pattern_app_count = 0; //keeps track of how many conversions to PatternFApp using State have already been made 
 
-            head.lhs = build_lhs_multis_and_pattern_calls(
-                MutRef(store, head.lhs), multi_changes, pattern_call_index, eq_table);
-            if (pattern_call_index > match::State::max_pattern_call_count) {
-                throw TypeError{ "too many pattern calls", Ref(store, head.lhs) };
+            head.lhs = build_lhs_multis_and_pattern_f_apps(
+                MutRef(store, head.lhs), multi_changes, pattern_app_count, eq_table);
+            if (pattern_app_count > match::State::max_pattern_f_app_count) {
+                throw TypeError{ "too many pattern applications using State", Ref(store, head.lhs) };
             }
 
             const auto prime_rhs = [&multi_changes](const MutRef r) {
@@ -1303,7 +1303,7 @@ namespace simp {
             };
             transform(MutRef(store, head.rhs), prime_rhs);
             return head;
-        } //prime_call
+        } //prime_f_app
 
         RuleHead add_implicit_multis(Store& store, RuleHead head)
         {
@@ -1320,7 +1320,7 @@ namespace simp {
             if (!nv::is_associative(f_variadic))
                 return head;
 
-            auto& info = pattern_call_info(lhs_ref);
+            auto& info = f_app_info(lhs_ref);
             if (f_variadic.is<nv::Comm>() && !info.preceeded_by_multi) {
                 info.preceeded_by_multi = 1;
                 const auto multi_parent = info.match_state_index;
@@ -1344,7 +1344,7 @@ namespace simp {
             RuleHead head = parse::raw_rule(store, name, parse::IAmInformedThisRuleIsNotUsableYet{});
             head = build_rule::optimize_single_conditions(store, head);
             head = build_rule::prime_value(store, head);
-            head = build_rule::prime_call(store, head);
+            head = build_rule::prime_f_app(store, head);
             head = build_rule::add_implicit_multis(store, head);
 
             return head;
@@ -1499,19 +1499,19 @@ namespace simp {
         //needle_i is the index of the first element in needle_ref to be matched. 
         //if needle_i is not zero, it is assumed, that all previous elements in needle_ref are already matched (=> the call happens in a rematch).
         //the first haystack_k elements of hay_ref will be skipped for the first match attemt.
-        //it is assumed, that needle_ref and hay_ref are both calls to the same nv::Comm, where pn_ref is a PatternFApp
+        //it is assumed, that needle_ref and hay_ref are both applications of the same nv::Comm, where pn_ref is a PatternFApp
         //returns true if a match was found
         bool find_permutation(const UnsaveRef pn_ref, const UnsaveRef hay_ref, State& match_state, std::uint32_t needle_i, std::uint32_t hay_k)
         {
             assert(pn_ref.type == PatternFApp{} && hay_ref.type == Literal::f_app);
-            assert(pn_ref->f_app.function() == hay_ref->f_app.function()); //maybe too strict if the future allows to search unordered in unknown calls
+            assert(pn_ref->f_app.function() == hay_ref->f_app.function()); //maybe too strict if the future allows to search unordered in unknown apps
 
             const std::span<const NodeIndex> needles = pn_ref->f_app.parameters();
             const std::span<const NodeIndex> haystack = hay_ref->f_app.parameters();
             assert(std::is_sorted(needles.begin(), needles.end(), ordered_less(pn_ref.store_data())));
             assert(std::is_sorted(haystack.begin(), haystack.end(), ordered_less(hay_ref.store_data())));
 
-            const PatternCallInfo info = pattern_call_info(pn_ref);
+            const FAppInfo info = f_app_info(pn_ref);
             if (info.preceeded_by_multi) {
                 if (needles.size() > haystack.size()) {
                     return false;
@@ -1520,7 +1520,7 @@ namespace simp {
             else if (needles.size() != haystack.size()) {
                 return false;
             }
-            SharedPatternCallEntry& needles_data = match_state.pattern_calls[info.match_state_index];
+            SharedFAppEntry& needles_data = match_state.f_app_entries[info.match_state_index];
             assert(needle_i == 0u || needles_data.match_idx == hay_ref.typed_idx() && "rematch only with same subterm");
             needles_data.match_idx = hay_ref.typed_idx();
 
@@ -1571,9 +1571,9 @@ namespace simp {
 
             const std::span<const NodeIndex> needles = pn_ref->f_app.parameters();
             const std::span<const NodeIndex> haystack = hay_ref->f_app.parameters();
-            const PatternCallInfo info = pattern_call_info(pn_ref);
+            const FAppInfo info = f_app_info(pn_ref);
 
-            SharedPatternCallEntry& needles_data = match_state.pattern_calls[info.match_state_index];
+            SharedFAppEntry& needles_data = match_state.f_app_entries[info.match_state_index];
             assert(needle_i == 0u || needles_data.match_idx == hay_ref.typed_idx() && "rematch only with same subterm");
             needles_data.match_idx = hay_ref.typed_idx();
 
@@ -1662,7 +1662,7 @@ namespace simp {
             assert(pn_params.size() == params.size());
             assert(pn_params.size() > 0u);
             assert(i > 0u);
-            const auto rematchable = pattern_call_info(pn_ref).rematchable_params;
+            const auto rematchable = f_app_info(pn_ref).rematchable_params;
             for (;;) {
                 i--;
                 while (!rematchable.test(i) ||
@@ -1708,15 +1708,15 @@ namespace simp {
             }
             case NodeType(PatternFApp{}): {
                 if (ref.type != Literal::f_app) {
-                    constexpr int call_order = shallow_order(UnsaveRef(nullptr, 0, Literal::f_app));
-                    return call_order <=> shallow_order(ref);
+                    constexpr int app_order = shallow_order(UnsaveRef(nullptr, 0, Literal::f_app));
+                    return app_order <=> shallow_order(ref);
                 }
                 if (const auto cmp = match_(pn_ref.at(pn_ref->f_app.function()), ref.at(ref->f_app.function()), match_state);
                     cmp != std::partial_ordering::equivalent)
                 {   return cmp;
                 }
 
-                const MatchStrategy strat = pattern_call_info(pn_ref).strategy;
+                const MatchStrategy strat = f_app_info(pn_ref).strategy;
                 switch (strat) {
                 case MatchStrategy::permutation:
                     return to_order(find_permutation(pn_ref, ref, match_state, 0u, 0u));
@@ -1806,11 +1806,11 @@ namespace simp {
             assert(pn_ref.type != Literal::f_app);
             if (pn_ref.type == PatternFApp{}) {
                 assert(ref.type == Literal::f_app);
-                const MatchStrategy strat = pattern_call_info(pn_ref).strategy;
+                const MatchStrategy strat = f_app_info(pn_ref).strategy;
                 switch (strat) {
                 case MatchStrategy::permutation:
                 case MatchStrategy::dilation: {
-                    SharedPatternCallEntry& entry = match_state.call_entry(pn_ref);
+                    SharedFAppEntry& entry = match_state.f_app_entry(pn_ref);
                     assert(entry.match_idx == ref.typed_idx());
 
                     const auto needle_params = pn_ref->f_app.parameters();
@@ -1870,7 +1870,7 @@ namespace simp {
                 if (iter->get_type() == SpecialMatch::multi) {
                     const MultiMatch multi = *pn_ref.at(*iter);
                     if (multi.index_in_params == -1u) {
-                        const match::SharedPatternCallEntry& entry = match_state.pattern_calls[multi.match_state_index];
+                        const match::SharedFAppEntry& entry = match_state.f_app_entries[multi.match_state_index];
                         const Ref donator = Ref(src_store, entry.match_idx);
                         const auto donator_stop = end(donator);
                         auto donator_iter = begin(donator); //currently pointing at function
