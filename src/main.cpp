@@ -103,7 +103,7 @@ int main()
 			auto term = simp::LiteralTerm(name);
 			std::cout << "  ->  " << term.to_string() << "\n";
 			//std::cout << term.to_memory_layout() << "\n";
-			term.normalize();
+			term.normalize({});
 			std::cout << "  ->  " << term.to_string() << "\n";
 			//std::cout << term.to_memory_layout() << "\n";
 			std::cout << "\n";
@@ -114,10 +114,12 @@ int main()
 		const simp::RuleSet rules = {
 			{ "'Y' = \\f n. f(f, n)" },
 			
-			{ "0 xs... = 0" },
-			{ "0^x     = 0" },
-			{ "x^0     = 1" },
-			{ "x^1     = x" },
+			{ "0 xs...  = 0" },
+			{ "'sum'()  = 0" },
+			{ "'prod'() = 1" },
+			{ "0^x      = 0" },
+			{ "x^0      = 1" },
+			{ "x^1      = x" },
 			
 			{ "(x^a)^b = x^(a b)" },
 			{ "x x     = x^2" },
@@ -178,15 +180,15 @@ int main()
 			//exponential runtime fibonacci implementation:
 			{ "'fib'(n) | n >= 0 = (n < 2)(n, 'fib'(n - 1) + 'fib'(n - 2))" },
 			
-				////reversing a list:
-				//{ "xs :list...                 | reverse(list{xs}) = reverse'(list{}, list{xs})" },
-				//{ "xs :list..., y, ys :list... | reverse'(list{xs}, list{y, ys}) = reverse'(list{y, xs}, list{ys})" },
-				//{ "xs :list...,                | reverse'(list{xs}, list{})      = list{xs}" },
-				//
-				////listing first n fibonacci numbers:
-				//{ "n :nat0                     | fib_n(n + 2)                   = reverse(list_fibs(n, list{1, 0}))" },
-				//{ "n :nat, a, b, tail :list... | list_fibs(n, list{a, b, tail}) = list_fibs(n - 1, list{force(a + b), a, b, tail})" },
-				//{ "              tail :list... | list_fibs(0, list{tail})       = list{tail}" },
+			//reversing parameters in application of f:
+			{ "'reverse'(f, f(xs...)) = 'reverse_h'(f(), f(xs...))" },
+			{ "'reverse_h'(f(xs...), f(y, ys...)) = 'reverse_h'(f(y, xs...), f(ys...))" },
+			{ "'reverse_h'(fxs, f())              = fxs" },
+			
+			//listing first n fibonacci numbers:
+			{ "'fib_n'(n)  |  n >= 2                       = 'reverse'('list', 'list_fibs'(n - 2, 'list'(1, 0)))" },
+			{ "'list_fibs'(n, 'list'(a, b, bs...)) | n > 0 = 'list_fibs'(n - 1, 'list'(a + b, a, b, bs...))" },
+			{ "'list_fibs'(n, res)                         = res" },
 			
 			{ "'filter'(f, p, f(xs...)) = 'take_true'(f(), 'map'(f, \\x .'pair'(p(x), x), f(xs...)))" },
 			{ "'take_true'(f(xs...), f('pair'('true', x), ys...)) = 'take_true'(f(xs..., x), f(ys...))" },
@@ -205,13 +207,13 @@ int main()
 			{ "'sort_h2'('list'(xs...), x, 'list'(ys...))         = 'list'(xs..., x, ys...)" },
 			
 			{ "'union'('set'(xs...), 'set'(ys...)) = 'set'(xs..., ys...)" },
-			{ "'union'()                       = 'set'()" },
+			{ "'union'()                           = 'set'()" },
 			
 			{ "'intersection'('set'(x, xs...), 'set'(x, ys...)) = 'union'('set'(x), 'intersection'('set'(xs...), 'set'(ys...)))" },
-			{ "'intersection'(x, xs...)                     = 'set'()" },
+			{ "'intersection'(x, xs...)                         = 'set'()" },
 			
-			{ "'min'{x, y} | x > y = y" },
-			{ "'max'{x, y} | x > y = x" },
+			{ "'min'(x, y) | x > y = y" },
+			{ "'max'(x, y) | x > y = x" },
 			
 			{ "'foldr'(f, g, acc, f())         = acc" },
 			{ "'foldr'(f, g, acc, f(x, xs...)) = g(x, 'foldr'(f, g, acc, f(xs...)))" },
@@ -222,6 +224,8 @@ int main()
 			{ "'make_ints'(a, b) | a <= b = 'make_ints_h'(b, 'list'(a))" },
 			{ "'make_ints_h'(b, 'list'(xs..., b)) = 'list'(xs..., b)" },
 			{ "'make_ints_h'(b, 'list'(xs..., x)) = 'make_ints_h'(b, 'list'(xs..., x, x + 1))" },
+
+			{ "'change'(from, to, from(xs...)) = to(xs...)" },
 		};
 		for (const simp::RuleRef rule : rules) {
 			std::cout << rule.to_string() << "\n\n";
@@ -234,10 +238,10 @@ int main()
 			std::getline(std::cin, name);
 			try {
 				auto term = simp::LiteralTerm(name);
-				term.normalize();
-				term.head = simp::greedy_apply_ruleset(rules, term.mut_ref());
+				term.normalize({ .exact = false });
+				term.head = simp::greedy_apply_ruleset(rules, term.mut_ref(), { .exact = false });
 				std::cout << " = " << term.to_string() << "\n\n";
-				std::cout << term.to_memory_layout() << "\n\n\n";
+				//std::cout << term.to_memory_layout() << "\n\n\n";
 			}
 			catch (bmath::ParseFailure failure) {
 				std::cout << "parse failure: " << failure.what << '\n';

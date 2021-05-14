@@ -64,7 +64,7 @@ namespace bmath::intern {
 	constexpr BMATH_FORCE_INLINE T change_field(const T& original, U T::* field, const U& replacement)
 	{
 		T result = original;
-		original.*field = replacement;
+		result.*field = replacement;
 		return result;
 	}
 

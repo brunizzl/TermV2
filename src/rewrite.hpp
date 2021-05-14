@@ -22,9 +22,8 @@ namespace simp {
 
 		constexpr MutRef mut_ref() noexcept { return MutRef(this->store, this->head); }
 
-		void normalize(const normalize::Options o = {})
-		{
-			this->head = normalize::recursive(this->mut_ref(), o);
+		void normalize(const Options options)
+		{	this->head = normalize::recursive(this->mut_ref(), options);
 		}
 	}; //struct LiteralTerm
 
@@ -110,13 +109,13 @@ namespace simp {
 	//tries to match every maybe applicable rule, returns first succesfull rule application,
 	//the old ref is not deleted.
 	//if no match was found, { literal_nullptr, undefined } is returned
-	[[nodiscard]] RuleApplicationRes raw_shallow_apply_ruleset(const RuleSet& rules, const Ref ref,
-		Store& dst_store, match::State& state);
+	[[nodiscard]] RuleApplicationRes raw_apply_ruleset(const RuleSet& rules, const Ref ref,
+		Store& dst_store, match::State& state, const Options options);
 
 	//same as above, only handles storage, returns new ref's index.
-	[[nodiscard]] NodeIndex shallow_apply_ruleset(const RuleSet& rules, MutRef ref);
+	[[nodiscard]] NodeIndex shallow_apply_ruleset(const RuleSet& rules, MutRef ref, const Options options);
 
 	//lazyliy applies first rule applicable in depth first search in ref until no further rules can be applied
-	[[nodiscard]] NodeIndex greedy_apply_ruleset(const RuleSet& rules, MutRef ref);
+	[[nodiscard]] NodeIndex greedy_apply_ruleset(const RuleSet& rules, MutRef ref, const Options options);
 
 } //namespace simp

@@ -185,8 +185,7 @@ namespace simp {
 		//various functions only sharing their property of not beeing variadic
 		enum class MiscFn
 		{
-			id, //unary identity function
-			force,  //params[0] := argument   (forces evaluation even if it is unexact)
+			id, //identity function
 			diff,   //params[0] := function application params[1] := variable the derivation is done in respect to
 			fdiff, //params[0] := function (e.g. "fdiff(sin) -> cos" or "fdiff(tan) -> \x .1/cos(x)^2" or "fdiff(\x .x^2) -> \x .2 x")
 			pair,   //two parameters, no evaluation
@@ -543,20 +542,19 @@ namespace simp {
 			{ CtoC::floor            , "floor"     , 1u, { ComplexSubset::real }, ComplexSubset::integer      },
 			{ CtoC::ceil             , "ceil"      , 1u, { ComplexSubset::real }, ComplexSubset::integer      },
 			{ MiscFn::id             , "id"        , 1u, { Restr::any          }, Restr::any                  },
-			{ MiscFn::force          , "force"     , 1u, { Literal::complex    }, Literal::complex            },
-			{ MiscFn::diff           , "diff"      , 2u, { Restr::any, Literal::symbol }, Restr::any   },
-			{ MiscFn::fdiff          , "fdiff"     , 1u, { Restr::applicable     }, Restr::applicable             },
+			{ MiscFn::diff           , "diff"      , 2u, { Restr::any, Literal::symbol }, Restr::any          },
+			{ MiscFn::fdiff          , "fdiff"     , 1u, { Restr::applicable   }, Restr::applicable           },
 			{ MiscFn::pair           , "pair"      , 2u, {}                     , MiscFn::pair                },
 			{ MiscFn::fst            , "fst"       , 1u, { MiscFn::pair        }, Restr::any                  },
 			{ MiscFn::snd            , "snd"       , 1u, { MiscFn::pair        }, Restr::any                  },
-			{ MiscFn::replace        , "replace"   , 3u, { Restr::any, NonComm::list, NonComm::list        }, Restr::any       },
-			{ HaskellFn::map         , "map"       , 3u, { Restr::applicable, Restr::applicable, Literal::f_app }, Literal::f_app  },
-			{ HaskellFn::filter      , "filter"    , 3u, { Restr::applicable, Restr::applicable, Literal::f_app }, Literal::f_app  },
-			{ HaskellFn::split       , "split"     , 3u, { Restr::applicable, Restr::applicable, Literal::f_app }, MiscFn::pair    },
-			{ HaskellFn::foldl       , "ffoldl"    , 4u, { Restr::applicable, Restr::applicable, Restr::any, Literal::f_app }, Restr::any }, //foldl f z (x:xs) = foldl f (f z x) xs
-			{ HaskellFn::foldr       , "ffoldr"    , 4u, { Restr::applicable, Restr::applicable, Restr::any, Literal::f_app }, Restr::any }, //foldr f z (x:xs) = f x (foldr f z xs) 
-			{ PatternFn::value_match , "_VM"       , 3u, { PatternUnsigned{}, Restr::any, Restr::any }, Restr::any }, //layout as in ValueMatch (minus .owner)
-			{ PatternFn::of_type     , "_Of_T"     , 2u, { Restr::any, Literal::symbol }, Restr::boolean      },
+			{ MiscFn::replace        , "replace"   , 3u, { Restr::any, NonComm::list, NonComm::list                         }, Restr::any      },
+			{ HaskellFn::map         , "map"       , 3u, { Restr::applicable, Restr::applicable, Literal::f_app             }, Literal::f_app  },
+			{ HaskellFn::filter      , "filter"    , 3u, { Restr::applicable, Restr::applicable, Literal::f_app             }, Literal::f_app  },
+			{ HaskellFn::split       , "split"     , 3u, { Restr::applicable, Restr::applicable, Literal::f_app             }, MiscFn::pair    },
+			{ HaskellFn::foldl       , "ffoldl"    , 4u, { Restr::applicable, Restr::applicable, Restr::any, Literal::f_app }, Restr::any      }, //foldl f z (x:xs) = foldl f (f z x) xs
+			{ HaskellFn::foldr       , "ffoldr"    , 4u, { Restr::applicable, Restr::applicable, Restr::any, Literal::f_app }, Restr::any      }, //foldr f z (x:xs) = f x (foldr f z xs) 
+			{ PatternFn::value_match , "_VM"       , 3u, { PatternUnsigned{}, Restr::any, Restr::any                        }, Restr::any      }, //layout as in ValueMatch (minus .owner)
+			{ PatternFn::of_type     , "_Of_T"     , 2u, { Restr::any, Literal::symbol                                      }, Restr::boolean  },
 		});
 		static_assert(static_cast<unsigned>(fixed_arity_table.front().type) == 0u);
 		static_assert(bmath::intern::is_sorted_by(fixed_arity_table, &FixedArityProps::type));

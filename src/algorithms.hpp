@@ -18,13 +18,15 @@ namespace simp {
     //only interested in final results -> a function call guaranteed to return something meeting restr results in false
     bool meets_restriction(const UnsaveRef ref, const nv::Native restr);
 
+    //functions in namespace normalize behave differently depending on these values
+    struct Options 
+    {
+        bool exact = true; //true: only exact operations are permitted
+        bool remove_unary_assoc = true; //true: "f(a) -> a" for all associative f (e.g. sum, product, and...)
+        bool eval_special = true; //replace is evaluated
+    };
+
     namespace normalize {
-        struct Options 
-        {
-            bool exact = true; //true: only exact operations are permitted
-            bool remove_unary_assoc = true; //true: "f(a) -> a" for all associative f (e.g. sum, product, and...)
-            bool replace = true;
-        };
 
         struct Result { NodeIndex res; bool change; };
         //will always evaluate exact operations and merge nested calls of an associative operation
@@ -51,6 +53,7 @@ namespace simp {
     constexpr int shallow_order(const UnsaveRef ref) {
         constexpr int after_symbol = std::numeric_limits<int>::max() - 10000;
         switch (ref.type) {
+        case NodeType::COUNT:                      return -1;
         case NodeType(Literal::complex):           return 0;
         case NodeType(SpecialMatch::value):        return 2;
         case NodeType(PatternUnsigned{}):          return 4;
@@ -194,6 +197,6 @@ namespace simp {
 
     //copies pn_ref like copy_tree, only match variables are replaced by their matched counterparts from src_store.
     [[nodiscard]] NodeIndex pattern_interpretation(const UnsaveRef pn_ref, const match::State& match_state,
-        const Store& src_store, Store& dst_store);
+        const Store& src_store, Store& dst_store, const Options options);
     
 } //namespace simp

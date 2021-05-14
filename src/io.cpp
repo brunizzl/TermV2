@@ -426,7 +426,7 @@ namespace simp {
 
 			heads.lhs = normalize::recursive(MutRef(store, heads.lhs), {});
 			heads.rhs = normalize::recursive(MutRef(store, heads.rhs), 
-				{ .remove_unary_assoc = false });
+				{ .remove_unary_assoc = false, .eval_special = false });
 
 			//extra condition concerning single match variables (might set multiple in relation)
 			struct SingleCondition
@@ -767,9 +767,6 @@ namespace simp {
 					*current_line += std::exchange(separator, ", ");
 					maybe_start_new_line();
 					*current_line += [&] {
-						if (!is_stored_node(vec[vec_idx].get_type())) {
-							return std::string("  -");
-						}
 						const std::string elem_idx = std::to_string(vec[vec_idx].get_index());
 						return std::string(std::min(2ull, elem_idx.size()), ' ') + elem_idx;
 					}();

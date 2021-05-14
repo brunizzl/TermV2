@@ -390,7 +390,7 @@ namespace simp {
                     const NodeIndex res = params[0];
                     FApp::free(*ref.store, ref.index);
                     return res;
-                } break;                
+                } break;
                 case FixedArity(ToBool::not_): {
                     const NodeIndex param = params[0];
                     if (param == literal_false) {
@@ -441,7 +441,7 @@ namespace simp {
                     free_tree(converter_ref); //free function to map
                     return outermost(convertee_ref, options).res;
                 } break;
-                case FixedArity(MiscFn::replace): if (options.replace) {
+                case FixedArity(MiscFn::replace): if (options.eval_special) {
                     bmath::intern::StupidBufferVector<ReplaceItem, 16> replace_items;
                     assert(params[1].get_type() == Literal::f_app);
                     assert(params[2].get_type() == Literal::f_app);
@@ -498,55 +498,54 @@ namespace simp {
                 case Variadic(Comm::or_):
                     return eval_bool(literal_false, literal_true);
                 case Variadic(Comm::sum): {
-                    for (auto iter_1 = params.begin(); iter_1 != params.end(); ++iter_1) {
-                        if (iter_1->get_type() != Literal::complex) {
-                            break; //complex are ordered in front and sum is sorted
-                        }
-                        Complex& acc = *ref.at(*iter_1);
-                        if (acc == 0.0) {
+                    const auto end_complex = std::find_if(params.begin(), params.end(),
+                        [](const NodeIndex i) { return i.get_type() != Literal::complex; });
+
+                    for (auto iter_1 = params.begin(); iter_1 != end_complex; ++iter_1) {
+                        const Complex& summand_1 = *ref.at(*iter_1);
+                        if (summand_1 == 0.0) {
                             ref.store->free_one(iter_1->get_index());
                             *iter_1 = literal_nullptr;
-                            continue;
+                            goto advance_summand_1;
                         }
-                        for (auto iter_2 = std::next(iter_1); iter_2 != params.end(); ++iter_2) {
-                            if (iter_2->get_type() != Literal::complex) {
-                                break;
-                            }
-                            Complex& summand = *ref.at(*iter_2);
-                            if (maybe_accumulate(acc, summand, std::plus<Complex>())) 
+                        for (auto iter_2 = std::next(iter_1); iter_2 != end_complex; ++iter_2) {
+                            Complex& summand_2 = *ref.at(*iter_2);
+                            if (maybe_accumulate(summand_2, summand_1, std::plus<Complex>()))
                             {
-                                ref.store->free_one(iter_2->get_index());
-                                *iter_2 = literal_nullptr;
+                                ref.store->free_one(iter_1->get_index());
+                                *iter_1 = literal_nullptr;
+                                goto advance_summand_1;
                             }
                         }
+                    advance_summand_1:;
                     }
+                    std::sort(params.begin(), end_complex, ordered_less(ref.store->data()));
                     remove_shallow_value(literal_nullptr);
                 } break;
                 case Variadic(Comm::prod): { //TODO: evaluate exact division / normalize two divisions
-                    for (auto iter_1 = params.begin(); iter_1 != params.end(); ++iter_1) {
-                        switch (iter_1->get_type()) {
-                        case NodeType(Literal::complex): {
-                            Complex& acc = *ref.at(*iter_1);
-                            if (acc == 1.0) {
+
+                    const auto end_complex = std::find_if(params.begin(), params.end(),
+                        [](const NodeIndex i) { return i.get_type() != Literal::complex; });
+
+                    for (auto iter_1 = params.begin(); iter_1 != end_complex; ++iter_1) {
+                        const Complex& factor_1 = *ref.at(*iter_1);
+                        if (factor_1 == 1.0) {
+                            ref.store->free_one(iter_1->get_index());
+                            *iter_1 = literal_nullptr;
+                            goto advance_factor_1;
+                        }
+                        for (auto iter_2 = std::next(iter_1); iter_2 != end_complex; ++iter_2) {
+                            Complex& factor_2 = *ref.at(*iter_2);
+                            if (maybe_accumulate(factor_2, factor_1, std::multiplies<Complex>()))
+                            {
                                 ref.store->free_one(iter_1->get_index());
                                 *iter_1 = literal_nullptr;
-                                continue;
+                                goto advance_factor_1;
                             }
-                            for (auto iter_2 = std::next(iter_1); iter_2 != params.end(); ++iter_2) {
-                                switch (iter_2->get_type()) {
-                                case NodeType(Literal::complex): {
-                                    Complex& factor = *ref.at(*iter_2);
-                                    if (maybe_accumulate(acc, factor, std::multiplies<Complex>()))
-                                    {
-                                        ref.store->free_one(iter_2->get_index());
-                                        *iter_2 = literal_nullptr;
-                                    }
-                                } break;
-                                } //switch iter_2
-                            }
-                        } break;
-                        } //switch iter_1
+                        }
+                    advance_factor_1:;
                     }
+                    std::sort(params.begin(), end_complex, ordered_less(ref.store->data()));
                     remove_shallow_value(literal_nullptr);
                 } break;
                 case Variadic(Comm::set): if (params.size() >= 2) { 
@@ -622,17 +621,17 @@ namespace simp {
             return { ref.typed_idx(), false };
         } //outermost
 
-        NodeIndex recursive(MutRef ref, const Options options)
+        NodeIndex recursive(const MutRef ref, const Options options)
         {
             assert(ref.type != PatternFApp{});
             if (ref.type == Literal::f_app) {
                 auto iter = begin(ref);
                 *iter = normalize::recursive(ref.at(*iter), options);
-                if (nv::is_lazy(*iter)) {
+                if (nv::is_lazy(*iter)) [[unlikely]] {
                     const NodeIndex result = normalize::outermost(ref, options).res;
                     return normalize::recursive(ref.at(result), options);
                 }
-                else [[likely]] {
+                else {
                     const auto stop = end(ref);
                     for (++iter; iter != stop; ++iter) {
                         *iter = normalize::recursive(ref.at(*iter), options);
@@ -899,9 +898,9 @@ namespace simp {
             const auto optimize = [](const MutRef r) {
                 if (r.type == SingleMatch::restricted) {
                     r->single_match.condition =
-                        shallow_apply_ruleset(buildin_conditions, r.at(r->single_match.condition));
+                        shallow_apply_ruleset(buildin_conditions, r.at(r->single_match.condition), {});
                     r->single_match.condition =
-                        greedy_apply_ruleset(compute_optimisations, r.at(r->single_match.condition));
+                        greedy_apply_ruleset(compute_optimisations, r.at(r->single_match.condition), {});
                 }
                 return r.typed_idx();
             };
@@ -923,7 +922,7 @@ namespace simp {
                 { "       '_VM'(idx, domain, match) ^ 2                        = '_VM'(idx, domain, 'sqrt'(match))" },
                 { "'sqrt'('_VM'(idx, domain, match))                           = '_VM'(idx, domain, match ^ 2)" },
                 }, build_basic_pattern);
-            heads.lhs = greedy_apply_ruleset(bubble_up, MutRef(store, heads.lhs));
+            heads.lhs = greedy_apply_ruleset(bubble_up, MutRef(store, heads.lhs), {});
             heads.lhs = normalize::recursive(MutRef(store, heads.lhs), {}); //combine match
 
             static const auto to_domain = RuleSet({
@@ -938,7 +937,7 @@ namespace simp {
                     FApp& f_app = *r;
                     assert(f_app[1].get_type().is<PatternUnsigned>());
                     const std::uint32_t match_state_index = f_app[1].get_index();
-                    const NodeIndex domain = shallow_apply_ruleset(to_domain, r.at(f_app[2]));
+                    const NodeIndex domain = shallow_apply_ruleset(to_domain, r.at(f_app[2]), {});
                     const NodeIndex inverse = f_app[3];
                     if (domain.get_type() != Literal::symbol || !to_symbol(domain).is<nv::ComplexSubset>()) {
                         throw TypeError{ "value match restrictions may only be of form \"<value match> :<complex subset>\"", r };
@@ -1309,6 +1308,8 @@ namespace simp {
         {
             const MutRef lhs_ref = MutRef(store, head.lhs);
             if (lhs_ref.type != PatternFApp{})
+                return head;
+            if (!lhs_ref->f_app.parameters().size())
                 return head;
             const NodeIndex f = lhs_ref->f_app.function();
             if (f.get_type() != Literal::symbol)
@@ -1841,7 +1842,7 @@ namespace simp {
 
 
     NodeIndex pattern_interpretation(const UnsaveRef pn_ref, const match::State& match_state, 
-        const Store& src_store, Store& dst_store)
+        const Store& src_store, Store& dst_store, const Options options)
     {
         const auto insert_node = [&](const TermNode node, NodeType type) {
             const std::size_t dst_index = dst_store.allocate_one();
@@ -1858,7 +1859,7 @@ namespace simp {
         case NodeType(Literal::lambda): {
             Lambda dst_lam = *pn_ref;
             dst_lam.definition = pattern_interpretation(
-                pn_ref.at(dst_lam.definition), match_state, src_store, dst_store);
+                pn_ref.at(dst_lam.definition), match_state, src_store, dst_store, options);
             return insert_node(dst_lam, pn_ref.type);
         } break;
         case NodeType(Literal::lambda_param):
@@ -1891,11 +1892,11 @@ namespace simp {
                 }
                 else {
                     dst_subterms.push_back(pattern_interpretation(
-                        pn_ref.at(*iter), match_state, src_store, dst_store));
+                        pn_ref.at(*iter), match_state, src_store, dst_store, options));
                 }
             }
             const std::size_t dst_index = FApp::build(dst_store, dst_subterms);
-            return normalize::outermost(MutRef(dst_store, NodeIndex(dst_index, pn_ref.type)), {}).res;
+            return normalize::outermost(MutRef(dst_store, NodeIndex(dst_index, pn_ref.type)), options).res;
         } break;
         case NodeType(SingleMatch::weak): {
             const match::SharedSingleMatchEntry& entry = match_state.single_vars[pn_ref.index];
