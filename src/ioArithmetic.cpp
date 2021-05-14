@@ -262,42 +262,22 @@ namespace bmath::intern {
 		void append_complex(const std::complex<double> val, std::string& dest, int parent_infixr)
 		{
 			std::stringstream buffer;
-
-			enum class Flag { showpos, noshowpos };
-			const auto add_im_to_stream = [&buffer](const double im, Flag flag) {
-				if (im == -1.0) {
-					buffer << '-';
+			const bool parentheses = [&] {
+				if (val.real() != 0.0 && val.imag() != 0.0) {
+					buffer << val.real() << std::showpos << val.imag() << 'i';
+					return parent_infixr > infixr(MathType(Comm::sum));
 				}
-				else if (im == 1.0) {
-					if (flag == Flag::showpos) {
-						buffer << '+';
-					}
+				else if (val.real() != 0.0 && val.imag() == 0.0) {
+					buffer << val.real();
+					return val.real() < 0.0 && parent_infixr >= infixr(MathType(Comm::sum));	//leading '-'
 				}
-				else {
-					buffer << (flag == Flag::showpos ? std::showpos : std::noshowpos) << im;
+				else if (val.real() == 0.0 && val.imag() != 0.0) {
+					buffer << val.imag() << 'i';
+					return val.imag() < 0.0 && parent_infixr >= infixr(MathType(Comm::sum));	//leading '-'	
 				}
-				buffer << 'i';
-			};
-
-			bool parentheses = false;
-
-			if (val.real() != 0.0 && val.imag() != 0.0) {
-				parentheses = parent_infixr > infixr(MathType(Comm::sum));
-				buffer << val.real();
-				add_im_to_stream(val.imag(), Flag::showpos);
-			}
-			else if (val.real() != 0.0 && val.imag() == 0.0) {
-				parentheses = val.real() < 0.0 && parent_infixr >= infixr(MathType(Comm::sum));	//leading '-'
-				buffer << val.real();
-			}
-			else if (val.real() == 0.0 && val.imag() != 0.0) {
-				parentheses = val.imag() < 0.0 && parent_infixr >= infixr(MathType(Comm::sum));	//leading '-'	
-				parentheses |= parent_infixr > infixr(MathType(Comm::product));	//*i
-				add_im_to_stream(val.imag(), Flag::noshowpos);
-			}
-			else {
 				buffer << '0';
-			}
+				return false;
+			}();
 
 			if (parentheses) {
 				dest.push_back('(');

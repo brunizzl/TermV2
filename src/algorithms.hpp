@@ -57,7 +57,6 @@ namespace simp {
         case NodeType(Literal::lambda):            return 8;
         case NodeType(Literal::lambda_param):      return 10;
         case NodeType(Literal::symbol):
-            static_assert((unsigned)nv::Native::COUNT < 1000, "adjust values >= 2000 to circumvent overlap");
             assert(ref.index < after_symbol); //overflow of typed index happens sooner anyway
             switch (nv::Native(ref.index)) {
             default:                               return ref.index + 1000;

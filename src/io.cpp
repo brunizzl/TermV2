@@ -345,9 +345,10 @@ namespace simp {
 			} break;
 			case Head::Type::imag_value: {
 				view.remove_suffix(1u); //remove token::imag_unit
-				return view.size() ?
-					parse::build_value(store, Complex(0.0, parse_value(view))):
-					parse::build_value(store, Complex(0.0, 1.0));
+				if (!view.size()) [[unlikely]] {
+					throw ParseFailure { view.offset, "token \"i\" is forbidden: write \"1i\" for imaginary unit" };
+				}
+				return parse::build_value(store, Complex(0.0, parse_value(view)));
 			} break;
 			case Head::Type::symbol: {
 				return name_lookup::build_symbol(store, infos, view);
@@ -765,14 +766,13 @@ namespace simp {
 				for (; vec_idx < vec.size(); vec_idx++) {
 					*current_line += std::exchange(separator, ", ");
 					maybe_start_new_line();
-					const std::size_t elem_idx = vec[vec_idx].get_index();
-					if (elem_idx < 10) {
-						*current_line += ' '; //pleeeaaasee std::format, where are you? :(
-					}
-					if (elem_idx < 100) {
-						*current_line += ' '; //pleeeaaasee std::format, where are you? :(
-					}
-					*current_line += std::to_string(elem_idx);
+					*current_line += [&] {
+						if (!is_stored_node(vec[vec_idx].get_type())) {
+							return std::string("  -");
+						}
+						const std::string elem_idx = std::to_string(vec[vec_idx].get_index());
+						return std::string(std::min(2ull, elem_idx.size()), ' ') + elem_idx;
+					}();
 					print::append_memory_row(ref.at(vec[vec_idx]), rows);
 				}
 				*current_line += " }";
