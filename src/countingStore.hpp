@@ -74,38 +74,34 @@ namespace simp {
 
 
 
-	struct RefCount
+	template<typename Index_T>
+	struct NodeManageEntry
 	{
-		std::int8_t data = 0;
-
-		constexpr operator std::int8_t() const noexcept { return this->data; }
-
-		constexpr RefCount& operator=(const std::int8_t i) noexcept { this->data = i; return *this; }
-
-		constexpr std::int8_t sign() const noexcept { return this->data < 0 ? -1 : 1; }
-
-		constexpr RefCount& operator++() noexcept { this->data += this->sign(); return *this; }
-		constexpr RefCount& operator--() noexcept { this->data -= this->sign(); return *this; }
-	}; //struct RefCount
+		std::int32_t ref_count = 0;
+		Index_T replacement_index = Index_T();
+	}; //struct NodeManageEntry
 
 
 
 	//adds reference counting to bmath::intern::BasicStore
-	template<typename Payload_T, template<typename> class Alloc_T = std::allocator>
+	template<typename Payload_T, typename Index_T, template<typename> class Alloc_T = std::allocator>
 	class BasicCountingStore
 	{
 		bmath::intern::BasicStore<Payload_T, Alloc_T> store;
 
-		//an allocated block starting at i of size n is counted at count[i], the follwing n-1 count entries are undefined
-		ResizeableArray<RefCount, Alloc_T> count;
+		//an allocated block starting at i of size n is reference counted at management[i].ref_count, the follwing n-1 count entries are undefined
+		//if a match for this block is found, the old version of the block is kept, as long as .ref_count > 0.
+		//the .ref_count shall only be incremented if the node has not moved, meaning .new_index == Index_T()
+		ResizeableArray<NodeManageEntry<Index_T>, Alloc_T> management;
+		static_assert(sizeof(Index_T) != 4 || sizeof(NodeManageEntry<Index_T>) == 8); //a 32 bit index causes whole management to allign to 64 bit
 
 	public:
 		using value_type = Payload_T;
 
-		constexpr BasicCountingStore() noexcept :store(), count() {}
+		constexpr BasicCountingStore() noexcept :store(), management() {}
 
 		template<typename MemoryRecource>
-		constexpr BasicCountingStore(MemoryRecource r) noexcept :store(r), count() {}
+		constexpr BasicCountingStore(MemoryRecource r) noexcept :store(r), management() {}
 
 		constexpr [[nodiscard]]       Payload_T& at(const std::size_t n)       noexcept { return this->store.at(n); }
 		constexpr [[nodiscard]] const Payload_T& at(const std::size_t n) const noexcept { return this->store.at(n); }
@@ -114,53 +110,82 @@ namespace simp {
 		constexpr [[nodiscard]]      std::size_t size()                  const noexcept { return this->store.size(); }
 		constexpr [[nodiscard]]      std::size_t nr_used_slots()         const noexcept { return this->store.nr_used_slots(); }
 		constexpr [[nodiscard]]      std::size_t nr_free_slots()         const noexcept { return this->store.nr_free_slots(); }
+		constexpr [[nodiscard]]             auto storage_occupancy()     const noexcept { return this->store.storage_occupancy(); }
 
-		constexpr [[nodiscard]] bmath::intern::BitVector storage_occupancy() const noexcept { return this->store.storage_occupancy(); }
-
-		constexpr bool valid_idx(const std::size_t n) const noexcept { return this->store.valid_idx(n) && this->count[n] != 0; }
+		constexpr bool valid_idx(const std::size_t n) const noexcept { return this->store.valid_idx(n) && this->management[n].ref_count > 0; }
 
 		constexpr std::size_t allocate_one() noexcept
 		{
 			const std::size_t res = this->store.allocate_one();
-			if (res + 1u > this->count.size()) [[unlikely]] {
-				this->count.enlarge(res + 1u);
+			if (res + 1u > this->management.size()) [[unlikely]] {
+				this->management.enlarge(res + 1u);
 			}
-			assert(this->count[res] == 0);
-			this->count[res] = 1;
+			assert(this->management[res].ref_count == 0);
+			this->management[res] = { 1, Index_T() };
 			return res;
 		} //allocate_one
 
 		constexpr std::size_t allocate_n(const std::size_t n) noexcept
 		{
 			const std::size_t res = this->store.allocate_n(n);
-			if (res + n > this->count.size()) [[unlikely]] {
-				this->count.enlarge(res + n);
+			if (res + n > this->management.size()) [[unlikely]] {
+				this->management.enlarge(res + n);
 			}
-			assert(this->count[res] == 0);
-			this->count[res] = 1;
+			assert(this->management[res].ref_count == 0);
+			this->management[res] = { 1, Index_T() };
 			return res;
 		} //allocate_n
 
 		constexpr void free_one(const std::size_t idx) noexcept
 		{
-			assert(std::abs(this->count[idx]) == 0);
+			assert(this->management[idx].ref_count == 0);
 			this->store.free_one(idx);
 		} //free_one
 
 		constexpr void free_n(const std::size_t idx, const std::size_t n) noexcept
 		{
-			assert(std::abs(this->count[idx]) == 0);
+			assert(this->management[idx].ref_count == 0);
 			this->store.free_n(idx, n);
 		} //free_n
 
 		constexpr void free_all() noexcept 
 		{ 
 			this->store.free_all();
-			BMATH_IF_DEBUG(std::fill_n(this->count.data(), this->count.size(), 0));
+			BMATH_IF_DEBUG(std::fill_n(this->management.data(), this->management.size(), NodeManageEntry<Index_T>{}));
 		} //free_all
 
-		constexpr       RefCount& count_at(const std::size_t n)       noexcept { assert(this->valid_idx(n)); return this->count[n]; }
-		constexpr const RefCount& count_at(const std::size_t n) const noexcept { assert(this->valid_idx(n)); return this->count[n]; }
+
+		constexpr std::int32_t decr_at(const std::size_t idx) noexcept
+		{
+			assert(this->valid_idx(idx));
+			return --this->management[idx].ref_count;
+		} //decr_at
+
+		constexpr std::int32_t incr_at(const std::size_t idx) noexcept
+		{
+			assert(this->valid_idx(idx));
+			assert(this->management[idx].replacement_index == Index_T());
+			return ++this->management[idx].ref_count;
+		} //incr_at
+
+		constexpr std::int32_t incr_at_by(const std::size_t idx, const std::int32_t by) noexcept
+		{
+			assert(this->valid_idx(idx));
+			assert(this->management[idx].replacement_index == Index_T());
+			return this->management[idx].ref_count += by;
+		} //incr_at_by
+
+		constexpr const Index_T& replacement_index(const std::size_t idx) const noexcept
+		{
+			assert(this->valid_idx(idx));
+			return this->management[idx].replacement_index;
+		} //new_index
+
+		constexpr Index_T& replacement_index(const std::size_t idx) noexcept
+		{
+			assert(this->valid_idx(idx));
+			return this->management[idx].replacement_index;
+		} //new_index
 
 	}; //class BasicCountingStore
 

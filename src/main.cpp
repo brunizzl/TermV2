@@ -97,7 +97,7 @@ int main()
 			{ "(\\f n. f(f, n))(\\f n.(n <= 1)(1, n * f(f, -1 + n)), 5)" },
 			{ "(\\f n. f(f, n))(\\f n.(n == 1)(1, n * f(f, -1 + n)), 5)" },
 		});
-		constexpr bool show = false;
+		constexpr bool show = true;
 		for (const auto& name : names) {
 			if (show) std::cout << name << "\n";
 			auto term = simp::LiteralTerm(name);
@@ -112,7 +112,7 @@ int main()
 		}
 		std::cout << "\n\n\n";
 	}
-	{
+	if (true) {
 		const simp::RuleSet rules = {			
 			{ "0 xs...  = 0" },
 			{ "'sum'()  = 0" },
@@ -142,7 +142,7 @@ int main()
 			
 			{ "'sin'(x)^2 + 'cos'(x)^2 = 1" },
 			
-				//roots and extreme points of sin and cos:
+			//roots and extreme points of sin and cos:
 			//{ "'cos'(             'pi')             = -1" },
 			//{ "'cos'(($k + 0.5)   'pi') | $k :'int' =  0" },
 			//{ "'cos'((2 $k)       'pi') | $k :'int' =  1" },
@@ -151,6 +151,7 @@ int main()
 			//{ "'sin'($k           'pi') | $k :'int' =  0" },
 			//{ "'sin'((2 $k + 0.5) 'pi') | $k :'int' =  1" },
 			//{ "'sin'((2 $k + 1.5) 'pi') | $k :'int' = -1" },
+
 			{ "'cos'(  'pi')                      = -1" },
 			{ "'cos'(a 'pi') | a + 1/2     :'int' =  0" },
 			{ "'cos'(a 'pi') | a / 2       :'int' =  1" },
@@ -160,7 +161,7 @@ int main()
 			{ "'sin'((2 $k + 0.5) 'pi') | $k :'int' =  1" },
 			{ "'sin'((2 $k + 1.5) 'pi') | $k :'int' = -1" },
 			
-				//differentiation rules:
+			//differentiation rules:
 			{ "'diff'(x, x)                           = 1" },
 			{ "'diff'(a, x)       | !'contains'(a, x) = 0" },
 			{ "'diff'(f^a, x)     | !'contains'(a, x) = 'diff'(f, x) a f^(a-1)" },
@@ -217,14 +218,14 @@ int main()
 			
 			{ "'foldr'(f, g, acc, f())         = acc" },
 			{ "'foldr'(f, g, acc, f(x, xs...)) = g(x, 'foldr'(f, g, acc, f(xs...)))" },
-
+			
 			{ "'pair'('test_'(ws..., a, b, c, xs...), 'test_'(ys..., a, b, c, zs...)) = 'list'(ws..., 'found'(a, b, c), xs..., '_space_', ys..., 'found'(a, b, c), zs...)" },
 			{ "'pair'(a + b, 'list'(b, a)) = 'success'('a_is', a, 'and_b_is', b)" },
-
+			
 			{ "'make_ints'(a, b) | a <= b = 'make_ints_h'(b, 'list'(a))" },
 			{ "'make_ints_h'(b, 'list'(xs..., b)) = 'list'(xs..., b)" },
 			{ "'make_ints_h'(b, 'list'(xs..., x)) = 'make_ints_h'(b, 'list'(xs..., x, x + 1))" },
-
+			
 			{ "'change'(from, to, from(xs...)) = to(xs...)" },
 		};
 		for (const simp::RuleRef rule : rules) {
@@ -238,11 +239,11 @@ int main()
 			std::getline(std::cin, name);
 			try {
 				auto term = simp::LiteralTerm(name);
-				std::cout << term.to_memory_layout() << "\n\n\n";
+				//std::cout << term.to_memory_layout() << "\n\n\n";
 				term.normalize({ .exact = false });
 				term.head = simp::greedy_apply_ruleset(rules, term.mut_ref(), { .exact = false });
 				std::cout << " = " << term.to_string() << "\n\n";
-				std::cout << term.to_memory_layout() << "\n\n\n";
+				//std::cout << term.to_memory_layout() << "\n\n\n";
 
 				assert((simp::free_tree(term.mut_ref()), term.store.nr_used_slots() == 0u));
 			}

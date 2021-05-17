@@ -411,7 +411,7 @@ namespace simp {
 	}; //TermNode
 	static_assert(sizeof(TermNode) == sizeof(Complex));
 
-	using Store = BasicCountingStore<TermNode>;
+	using Store = BasicCountingStore<TermNode, NodeIndex>;
 	using MonotonicStore = bmath::intern::BasicMonotonicStore<TermNode>;
 
 	using Ref = bmath::intern::BasicSaveRef<NodeType, const Store>;

@@ -115,7 +115,7 @@ namespace simp {
 			const std::partial_ordering match_res = match::match_(rule.lhs, ref, state);
 			if (match_res == std::partial_ordering::equivalent) {
 				const NodeIndex res = pattern_interpretation(rule.rhs, state, *ref.store, options);
-				//std::cout << "from   " << print::to_string(ref) << "   to   " << print::to_string(Ref(*ref.store, res)) << "\n";
+				std::cout << "   from   " << print::to_string(ref) << "\n\n   to   " << print::to_string(Ref(*ref.store, res)) << "\n\n\n\n";
 				return { res, iter };
 			}
 			if (match_res == std::partial_ordering::greater) {

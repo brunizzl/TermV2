@@ -17,22 +17,22 @@ namespace bmath::intern {
 		static_assert(std::is_unsigned_v<UnderlyingType>);
 		static_assert(detail_enum::EnumLike<TypesEnum>);
 
-		UnderlyingType data;
-
 		static constexpr std::size_t index_offset = std::bit_width((unsigned long long)TypesEnum::COUNT);
 		static constexpr UnderlyingType enum_mask = (1ull << index_offset) - 1ull;
 		static constexpr UnderlyingType index_mask = ~enum_mask;
 
+		UnderlyingType data = index_mask | static_cast<UnderlyingType>(TypesEnum::COUNT);
+
 	public:
 		static constexpr std::size_t max_index = index_mask >> index_offset;
 
-		explicit constexpr BasicTypedIdx_Bitmask() noexcept :data(-1u) {}
+		explicit constexpr BasicTypedIdx_Bitmask() noexcept {}
 
 		constexpr BasicTypedIdx_Bitmask(const std::size_t index, const TypesEnum type)
 			: data(static_cast<UnderlyingType>(index << index_offset) | static_cast<UnderlyingType>(type))
 		{
 			throw_if(index > max_index, "TypedIdx has recieved index bigger than max_index");
-			throw_if(type >= TypesEnum::COUNT, "recieved enum value outside allowed range");
+			throw_if(static_cast<UnderlyingType>(type) >= static_cast<UnderlyingType>(TypesEnum::COUNT), "recieved enum value outside allowed range");
 		}
 
 		[[nodiscard]] constexpr auto get_index() const noexcept { return data >> index_offset; }
@@ -62,7 +62,7 @@ namespace bmath::intern {
 	public:
 		static constexpr std::size_t max_index = index_mask >> index_offset;
 
-		explicit constexpr BasicTypedIdx_BitField() noexcept :index(-1u), type(static_cast<UnderlyingType>(TypesEnum::COUNT)) {}
+		explicit constexpr BasicTypedIdx_BitField() noexcept :index(-1ull), type(static_cast<UnderlyingType>(TypesEnum::COUNT)) {}
 
 		constexpr BasicTypedIdx_BitField(const std::size_t new_index, const TypesEnum new_type)
 			:index(new_index), type(static_cast<UnderlyingType>(new_type))

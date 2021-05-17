@@ -159,7 +159,7 @@ namespace simp {
                         for (const NodeIndex param_param : param_ref->f_app.parameters()) {
                             merged_apps.push_back(param_param);
                         }
-                        free_shallow_app(param_ref);
+                        free_app_shallow(param_ref);
                         continue;
                     }
                 }
@@ -170,7 +170,7 @@ namespace simp {
                     FApp::emplace(*ref, merged_apps, f_app.capacity());
                 }
                 else {
-                    free_shallow_app(ref); //only free old application, not its parameters
+                    free_app_shallow(ref); //only free old application, not its parameters
                     ref.index = FApp::build(*ref.store, merged_apps);
                 }
             }
@@ -371,28 +371,28 @@ namespace simp {
                 case FixedArity(Bool::true_): {
                     const NodeIndex res = params[0];
                     free_tree(ref.at(params[1]));
-                    free_shallow_app(ref);
+                    free_app_shallow(ref);
                     return res;
                 } break;
                 case FixedArity(Bool::false_): {
                     const NodeIndex res = params[1];
                     free_tree(ref.at(params[0]));
-                    free_shallow_app(ref);
+                    free_app_shallow(ref);
                     return res;
                 } break;
                 case FixedArity(MiscFn::id): {
                     const NodeIndex res = params[0];
-                    free_shallow_app(ref);
+                    free_app_shallow(ref);
                     return res;
                 } break;
                 case FixedArity(ToBool::not_): {
                     const NodeIndex param = params[0];
                     if (param == literal_false) {
-                        free_shallow_app(ref);
+                        free_app_shallow(ref);
                         return literal_true;
                     }
                     if (param == literal_true) {
-                        free_shallow_app(ref);
+                        free_app_shallow(ref);
                         return literal_false;
                     }
                 } break;
@@ -433,7 +433,7 @@ namespace simp {
                         ref.store->at(app_index) = FApp({ converter, *iter });
                         *iter = outermost(ref.at(NodeIndex(app_index, Literal::f_app)), options).res;
                     }
-                    free_shallow_app(ref); //free app of map
+                    free_app_shallow(ref); //free app of map
                     free_tree(converter_ref);
                     return outermost(convertee_ref, options).res;
                 } break;
@@ -501,7 +501,7 @@ namespace simp {
                     for (auto iter = params.begin(); iter != end_complex; ++iter) {
                         const MutRef current = ref.at(*iter);
                         if (maybe_accumulate(acc, *current, std::plus<Complex>())) {
-                            free_shallow_single(*current.store, current.index);
+                            free_node_shallow(*current.store, current.index);
                             *iter = literal_nullptr;
                         }
                     }
@@ -520,7 +520,7 @@ namespace simp {
                     for (auto iter = params.begin(); iter != end_complex; ++iter) {
                         const MutRef current = ref.at(*iter);
                         if (maybe_accumulate(acc, *current, std::multiplies<Complex>())) {
-                            free_shallow_single(*current.store, current.index);
+                            free_node_shallow(*current.store, current.index);
                             *iter = literal_nullptr;
                         }
                     }
@@ -589,7 +589,7 @@ namespace simp {
                         const FApp& f_app = *ref;
                         if (f_app.size() == 2u) { //only contains function type and single parameter
                             const NodeIndex single_param = f_app[1u];
-                            free_shallow_app(ref);
+                            free_app_shallow(ref);
                             return { single_param, true };
                         }
                     }
@@ -639,25 +639,25 @@ namespace simp {
         switch (ref.type) {
         case NodeType(Literal::complex):
         case NodeType(SpecialMatch::multi):
-            if (--ref.store->count_at(ref.index) != 0) return;
+            if (ref.store->decr_at(ref.index) != 0) return;
             break;
         case NodeType(Literal::lambda):
-            if (--ref.store->count_at(ref.index) != 0) return;
+            if (ref.store->decr_at(ref.index) != 0) return;
             free_tree(ref.at(ref->lambda.definition));
             break;
         case NodeType(Literal::f_app):
-            if (--ref.store->count_at(ref.index) != 0) return;
+            if (ref.store->decr_at(ref.index) != 0) return;
             for (const NodeIndex subtree : ref) {
                 free_tree(ref.at(subtree));
             }
             FApp::free(*ref.store, ref.index);
             return;
         case NodeType(SingleMatch::restricted):
-            if (--ref.store->count_at(ref.index) != 0) return;
+            if (ref.store->decr_at(ref.index) != 0) return;
             free_tree(ref.at(ref->single_match.condition));
             break;
         case NodeType(SpecialMatch::value):
-            if (--ref.store->count_at(ref.index) != 0) return;
+            if (ref.store->decr_at(ref.index) != 0) return;
             free_tree(ref.at(ref->value_match.inverse));
             break;
         default:
@@ -906,7 +906,6 @@ namespace simp {
                 { "'sqrt'('_VM'(idx, domain, match))                           = '_VM'(idx, domain, match ^ 2)" },
                 }, build_basic_pattern);
             heads.lhs = greedy_apply_ruleset(bubble_up, MutRef(store, heads.lhs), {});
-            heads.lhs = normalize::recursive(MutRef(store, heads.lhs), {}); //combine match
 
             static const auto to_domain = RuleSet({
                 { "v :t   = t" },
@@ -920,13 +919,11 @@ namespace simp {
                     FApp& f_app = *r;
                     assert(f_app[1].get_type().is<PatternUnsigned>());
                     const std::uint32_t match_state_index = f_app[1].get_index();
-                    const NodeIndex domain = shallow_apply_ruleset(to_domain, r.at(f_app[2]), {});
-                    const NodeIndex inverse = f_app[3];
+                    const NodeIndex inverse = std::exchange(f_app[3], literal_nullptr);
+                    const NodeIndex domain = shallow_apply_ruleset(to_domain, r.at(std::exchange(f_app[2], literal_nullptr)), {});
                     if (domain.get_type() != Literal::symbol || !to_symbol(domain).is<nv::ComplexSubset>()) {
                         throw TypeError{ "value match restrictions may only be of form \"<value match> :<complex subset>\"", r };
                     }
-                    f_app[2] = literal_nullptr;
-                    f_app[3] = literal_nullptr;
                     free_tree(r);
                     const std::size_t result_index = r.store->allocate_one();
                     r.store->at(result_index) = ValueMatch{ .match_state_index = match_state_index,
@@ -966,7 +963,7 @@ namespace simp {
                     for (const NodeIndex sub : ref) {
                         subterms.push_back(sub);
                     }
-                    free_shallow_app(ref);
+                    free_app_shallow(ref);
                     const std::size_t app_capacity = FApp::smallest_fit_capacity(subterms.size());
                     const std::size_t nr_app_nodes = FApp::_node_count(app_capacity);
 
@@ -1874,12 +1871,12 @@ namespace simp {
                             dst_subterms.push_back(dst_param);
                         }
                     }
-                }
+                } //end if multi
                 else {
                     dst_subterms.push_back(pattern_interpretation(
                         pn_ref.at(*iter), match_state, store, options));
                 }
-            }
+            } //end for
             const std::size_t dst_index = FApp::build(store, dst_subterms);
             return normalize::outermost(MutRef(store, dst_index, pn_ref.type), options).res;
         } break;

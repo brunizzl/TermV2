@@ -45,18 +45,18 @@ namespace simp {
     //frees subtree starting at ref
     void free_tree(const MutRef ref);
 
-    constexpr void free_shallow_app(const MutRef ref) noexcept
+    constexpr void free_app_shallow(const MutRef ref) noexcept
     {   assert(ref.type == Literal::f_app);
-        if (--ref.store->count_at(ref.index) == 0) FApp::free(*ref.store, ref.index);
+        if (ref.store->decr_at(ref.index) == 0) FApp::free(*ref.store, ref.index);
     }
 
     //assumes index to point at a single node, not a node block
-    constexpr void free_shallow_single(Store& store, const std::size_t index) noexcept
-    {   if (--store.count_at(index) == 0) store.free_one(index);
+    constexpr void free_node_shallow(Store& store, const std::size_t index) noexcept
+    {   if (store.decr_at(index) == 0) store.free_one(index);
     }
 
     constexpr void share(const MutRef ref) noexcept
-    {   if (is_stored_node(ref.type)) ++ref.store->count_at(ref.index);
+    {   if (is_stored_node(ref.type)) ref.store->incr_at(ref.index);
     }
 
     //copies tree starting at src_ref into dst_store

@@ -218,9 +218,19 @@ namespace bmath::intern {
 			,memory(std::move(snd.memory))
 		{}
 
-		//not yet done
-		BasicStore& operator=(const BasicStore& snd) = delete;
-		BasicStore& operator=(BasicStore&& snd) = delete;
+		constexpr BasicStore& operator=(const BasicStore& snd) noexcept 
+		{
+			this->~BasicStore();
+			new (this) BasicStore(snd);
+			return *this;
+		}
+
+		constexpr BasicStore& operator=(BasicStore&& snd) noexcept
+		{
+			this->~BasicStore();
+			new (this) BasicStore(std::move(snd));
+			return *this;
+		}
 
 		constexpr ~BasicStore() noexcept 
 		{ 
@@ -501,7 +511,7 @@ namespace bmath::intern {
 		}
 
 		constexpr BasicMonotonicStore(const BasicMonotonicStore& snd) noexcept 
-			:size_(snd.size_), memory(this->local_data())
+			:size_(snd.size_), memory(this->local_data()), capacity(buffer_size)
 		{
 			this->reserve(snd.size_);
 			std::copy_n(snd.memory.data_, snd.size_, this->memory.data_);
@@ -511,9 +521,9 @@ namespace bmath::intern {
 			:size_(std::exchange(snd.size_, 0u)), 
 			capacity(std::exchange(snd.capacity, buffer_size)), 
 			local_buffer(snd.local_buffer), 
-			memory(std::move(snd.memory))
+			memory(std::move(snd.memory)) //<- if snd has local_data active, we will now have that address as .memory.data_
 		{
-			if (snd.memory.data_ != snd.local_data()) {
+			if (this->memory.data_ != snd.local_data()) { 
 				snd.memory.data_ = snd.local_data();
 			}
 			else {
