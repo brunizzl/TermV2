@@ -30,7 +30,7 @@ namespace simp {
 
 	std::string LiteralTerm::to_memory_layout() const noexcept
 	{
-		return print::to_memory_layout(this->store, {this->head});
+		return print::to_memory_layout(this->store, { this->head });
 	}
 
 	std::string RuleRef::to_string() const noexcept
@@ -99,25 +99,23 @@ namespace simp {
 		}
 	} //RuleSet::migrate_rules
 
-	RuleApplicationRes raw_apply_ruleset(const RuleSet& rules, const Ref ref, Store& dst_store, 
+	RuleApplicationRes raw_apply_ruleset(const RuleSet& rules, const MutRef ref, 
 		match::State& state, const Options options)
 	{
 		const auto stop = rules.end();
 		RuleSetIter iter = [&] {
-			const auto less = [](const RuleRef& rule, const UnsaveRef& ref) {
-				return unsure_compare_tree(rule.lhs, ref) == std::partial_ordering::less;
+			const auto less = [](const RuleRef& rule, const UnsaveRef& r) {
+				return unsure_compare_tree(rule.lhs, r) == std::partial_ordering::less;
 			};
 			return std::lower_bound(rules.begin(), stop, UnsaveRef(ref), less);
-			//return rules.begin();
 		}();
 
 		for (; iter != stop; ++iter) {
 			const RuleRef rule = *iter;
 			const std::partial_ordering match_res = match::match_(rule.lhs, ref, state);
 			if (match_res == std::partial_ordering::equivalent) {
-				const NodeIndex res = pattern_interpretation(
-					rule.rhs, state, *ref.store, dst_store, options);
-				//std::cout << "from   " << print::to_string(ref) << "   to   " << print::to_string(Ref(dst_store, res)) << "\n";
+				const NodeIndex res = pattern_interpretation(rule.rhs, state, *ref.store, options);
+				//std::cout << "from   " << print::to_string(ref) << "   to   " << print::to_string(Ref(*ref.store, res)) << "\n";
 				return { res, iter };
 			}
 			if (match_res == std::partial_ordering::greater) {
@@ -131,7 +129,7 @@ namespace simp {
 	{
 	apply_ruleset:
 		match::State state = *ref.store;
-		RuleApplicationRes result = raw_apply_ruleset(rules, ref, *ref.store, state, options);
+		RuleApplicationRes result = raw_apply_ruleset(rules, ref, state, options);
 		if (result.result_term != literal_nullptr) {
 			free_tree(ref);
 			ref.index = result.result_term.get_index();
@@ -141,10 +139,10 @@ namespace simp {
 		return ref.typed_idx();
 	} //shallow_apply_ruleset
 
-	NodeIndex recursive_greedy_apply(const RuleSet& rules, MutRef ref, const Options options) {
+	NodeIndex recursive_greedy_apply(const RuleSet& rules, const MutRef ref, const Options options) {
 		{ //try replacing this
 			match::State state = *ref.store;
-			const RuleApplicationRes applied = raw_apply_ruleset(rules, ref, *ref.store, state, options);
+			const RuleApplicationRes applied = raw_apply_ruleset(rules, ref, state, options);
 			if (applied.result_term != literal_nullptr) {
 				free_tree(ref);
 				return applied.result_term;

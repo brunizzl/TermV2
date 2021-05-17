@@ -109,8 +109,8 @@ namespace simp {
 	//tries to match every maybe applicable rule, returns first succesfull rule application,
 	//the old ref is not deleted.
 	//if no match was found, { literal_nullptr, undefined } is returned
-	[[nodiscard]] RuleApplicationRes raw_apply_ruleset(const RuleSet& rules, const Ref ref,
-		Store& dst_store, match::State& state, const Options options);
+	[[nodiscard]] RuleApplicationRes raw_apply_ruleset(const RuleSet& rules, const MutRef ref,
+		match::State& state, const Options options);
 
 	//same as above, only handles storage, returns new ref's index.
 	[[nodiscard]] NodeIndex shallow_apply_ruleset(const RuleSet& rules, MutRef ref, const Options options);

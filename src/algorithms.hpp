@@ -45,6 +45,20 @@ namespace simp {
     //frees subtree starting at ref
     void free_tree(const MutRef ref);
 
+    constexpr void free_shallow_app(const MutRef ref) noexcept
+    {   assert(ref.type == Literal::f_app);
+        if (--ref.store->count_at(ref.index) == 0) FApp::free(*ref.store, ref.index);
+    }
+
+    //assumes index to point at a single node, not a node block
+    constexpr void free_shallow_single(Store& store, const std::size_t index) noexcept
+    {   if (--store.count_at(index) == 0) store.free_one(index);
+    }
+
+    constexpr void share(const MutRef ref) noexcept
+    {   if (is_stored_node(ref.type)) ++ref.store->count_at(ref.index);
+    }
+
     //copies tree starting at src_ref into dst_store
     template<bmath::intern::Reference R, bmath::intern::StoreLike S>
     [[nodiscard]] NodeIndex copy_tree(const R src_ref, S& dst_store);
@@ -197,6 +211,6 @@ namespace simp {
 
     //copies pn_ref like copy_tree, only match variables are replaced by their matched counterparts from src_store.
     [[nodiscard]] NodeIndex pattern_interpretation(const UnsaveRef pn_ref, const match::State& match_state,
-        const Store& src_store, Store& dst_store, const Options options);
+        Store& store, const Options options);
     
 } //namespace simp

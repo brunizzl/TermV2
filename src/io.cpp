@@ -381,7 +381,7 @@ namespace simp {
 				view.remove_prefix(1u); //remove dot
 				const NodeIndex definition = parse::build(store, infos, view);
 				const std::size_t res_index = store.allocate_one();
-				store.at(res_index) = Lambda{ definition, param_count, !outermost_lambda };
+				store.at(res_index) = Lambda{ param_count, definition, !outermost_lambda };
 				infos.lambda_params.resize(infos.lambda_params.size() - param_count); //remove own names again
 				return NodeIndex(res_index, Literal::lambda);
 			} break;
@@ -739,6 +739,8 @@ namespace simp {
 			}
 
 			std::string& current_str = rows[ref.index];
+			if (current_str.size()) return;
+
 			switch (ref.type) {
 			case NodeType(Literal::complex): {
 				current_str += "value      : ";
@@ -752,7 +754,6 @@ namespace simp {
 				append_f_app_info(f_app_info(ref), ref->f_app.size() - 1u, prev_str);
 			} [[fallthrough]];
 			case NodeType(Literal::f_app): {
-				//parameters:
 				current_str += "application:     { ";
 				const char* separator = "";
 				const FApp& vec = *ref;
@@ -760,7 +761,7 @@ namespace simp {
 				std::size_t vec_idx = 0u;
 				const auto maybe_start_new_line = [&] {
 					if ((vec_idx - FApp::min_capacity) % FApp::values_per_node == 0) {
-						*(++current_line) += "  ...        ";
+						*(++current_line) += "  ...         ";
 					}
 				};
 				for (; vec_idx < vec.size(); vec_idx++) {
@@ -768,7 +769,7 @@ namespace simp {
 					maybe_start_new_line();
 					*current_line += [&] {
 						const std::string elem_idx = std::to_string(vec[vec_idx].get_index());
-						return std::string(std::min(2ull, elem_idx.size()), ' ') + elem_idx;
+						return std::string(3ull - std::min(3ull, elem_idx.size()), ' ') + elem_idx;
 					}();
 					print::append_memory_row(ref.at(vec[vec_idx]), rows);
 				}
@@ -788,10 +789,17 @@ namespace simp {
 
 			//append name of subterm to line
 			current_str.append(std::max(0, 38 - (int)current_str.size()), ' ');
-			print::append_to_string(ref, current_str, 0);
+			std::string subtree_as_string;
+			print::append_to_string(ref, subtree_as_string, 0);
+			if (subtree_as_string.size() > 50u) {
+				subtree_as_string.erase(40);
+				subtree_as_string.append("   .  .  .");
+			}
+			current_str.append(subtree_as_string);
 		} //append_memory_row
 
-		std::string to_memory_layout(const Store& store, const std::initializer_list<const NodeIndex> heads)
+		template<bmath::intern::StoreLike S, bmath::intern::ContainerOf<const NodeIndex> C>
+		std::string to_memory_layout(const S& store, const C& heads)
 		{
 			std::vector<std::string> rows(std::max(store.size(), match::State::max_pattern_f_app_count), "");
 
@@ -807,25 +815,47 @@ namespace simp {
 				result += "\n";
 			}
 			{
+				std::vector<std::size_t> leaks;
 				const bmath::intern::BitVector used_positions = store.storage_occupancy();
-				for (int i = 0; i < store.size(); i++) {
-					if (i < 10) { //please std::format, i need you :(
-						result += "  ";
-					}
-					else if (i < 100) {
-						result += " ";
-					}
-					result += std::to_string(i);
+				for (std::size_t i = 0; i < store.size(); i++) {
+					result += [&] {
+						const std::string i_str = std::to_string(i);
+						const std::string spaces = std::string(4ull - std::min(4ull, i_str.size()), ' ');
+						return spaces + i_str;
+					}();
 					result += " | ";
 					result += rows[i];
 					if (!used_positions.test(i)) {
 						result += "-----free slot-----";
 					}
 					result += "\n";
+
+					if (!rows[i].size() && used_positions.test(i)) {
+						leaks.push_back(i);
+					}
+
+					if (!rows[i].size()) { //skip ofer large sections where nothing is used
+						std::size_t next_used = i + 1u;
+						while (next_used < store.size() && !used_positions.test(next_used)) next_used++;
+						if (next_used - i > 5u) {
+							result += "...\n";
+							i = next_used - 2u; //after i++ in enclosing loop, i points at last unused slot
+						}
+					}
+				} //end for
+				if (leaks.size()) {
+					result += "leaks at: ";
+					const char* seperator = "";
+					for (const std::size_t leak : leaks) {
+						result += std::exchange(seperator, ", ");
+						result += std::to_string(leak);
+					}
+					result += "\n";
 				}
 			}
 			return result;
 		} //to_memory_layout
+		template std::string to_memory_layout(const Store&, const std::initializer_list<const NodeIndex>&);
 
 	} //namespace print
 

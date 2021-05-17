@@ -13,7 +13,7 @@
 
 #include "typedIndex.hpp"
 #include "termVector.hpp"
-#include "termStore.hpp"
+#include "countingStore.hpp"
 
 namespace simp {
 
@@ -305,8 +305,8 @@ namespace simp {
 
 	struct Lambda
 	{
-		NodeIndex definition;
 		std::uint32_t param_count;
+		NodeIndex definition;
 		//if a lambda is transparent, there is the possibility, that lambdas in the ancestry
 		//  own variables in this definition.
 		//the outermost lambda is never transparent, otherwise matching in such lambdas is undefined behavior.
@@ -334,8 +334,8 @@ namespace simp {
 	struct ValueMatch
 	{
 		std::uint32_t match_state_index; //indexes in match::State::value_vars
-		nv::ComplexSubset domain = nv::ComplexSubset::complex;
 		NodeIndex inverse; //in pattern "'sin'(2 $k 'pi')" is "_VP / 2" the inverse needed to compute $k, with _VP representing value_proxy
+		nv::ComplexSubset domain = nv::ComplexSubset::complex;
 		bool owner;
 	};
 
@@ -411,7 +411,7 @@ namespace simp {
 	}; //TermNode
 	static_assert(sizeof(TermNode) == sizeof(Complex));
 
-	using Store = bmath::intern::BasicStore<TermNode>;
+	using Store = BasicCountingStore<TermNode>;
 	using MonotonicStore = bmath::intern::BasicMonotonicStore<TermNode>;
 
 	using Ref = bmath::intern::BasicSaveRef<NodeType, const Store>;

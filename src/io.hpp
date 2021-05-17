@@ -136,7 +136,15 @@ namespace simp {
 			return name;
 		}
 
-		std::string to_memory_layout(const Store& store, const std::initializer_list<const NodeIndex> heads);
+		template<bmath::intern::StoreLike S, bmath::intern::ContainerOf<const NodeIndex> C>
+		std::string [[nodiscard]] to_memory_layout(const S& store, const C& heads);
+
+		template<bmath::intern::StoreLike S>
+		std::string [[nodiscard]] to_memory_layout(const S& store, const std::initializer_list<const NodeIndex> heads)
+		{	
+			return to_memory_layout<S, std::initializer_list<const NodeIndex>>(store, heads);
+		}
+
 	} //namespace print
 
 } //namespace simp

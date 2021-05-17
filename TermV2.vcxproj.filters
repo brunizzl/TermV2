@@ -125,5 +125,8 @@
     <ClInclude Include="src\rewrite.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\countingStore.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

@@ -290,7 +290,7 @@ namespace bmath::intern {
 			if (n == 1u) { //quite a lot faster for that case
 				return this->allocate_one(); 
 			}
-			if (n < 64u) { //finds the first n consecutive free bits contained in a single bitset (thus better working for small n)				
+			else if (n < 64u) { //finds the first n consecutive free bits contained in a single bitset (thus better working for small n)				
 				//every bit set to true will also set the (n-1) bits below. (the nonexisting 65'th bit acts as true)
 				const auto spread_truth = [n](std::uint64_t to_spread) {
 					std::uint64_t result = -1ull << (65u - n); //start with the (n-1) last bits already set. note: requires n >= 2
@@ -326,7 +326,38 @@ namespace bmath::intern {
 					}
 				}
 			}
-			//no fitting space found (or n to large) -> allocate at end
+			else { //n >= 64u
+				//allocate alligned at the start of the first bitset where the needed number of bitsets is completely empty
+				const std::size_t needed_bitsets = (n + 63u) / 64u;
+				std::size_t bitsets_left = needed_bitsets;
+
+				const std::size_t bitset_end_index = (this->size_ + 63u) / 64u;
+				for (std::size_t bitset_index = this->free_pos_buffer[1u]; bitset_index < bitset_end_index; bitset_index++) {
+					if (this->occupancy_data()[bitset_index].none()) {
+						if (!--bitsets_left) {
+							const std::size_t res_bitset_index = bitset_index - needed_bitsets + 1u;
+							const std::size_t last_occupied_index = bitset_index; //last bitset, where current allocation happens
+							//set the now occupied bits...
+							{ // ...in the last relevant bitset
+								const std::size_t bits_set_in_last_bitset = (n % 64u) ? (n % 64u) : 64u;
+								assert((needed_bitsets - 1u) * 64u + bits_set_in_last_bitset == n);
+
+								const std::uint64_t last_mask = -1ull >> (64u - bits_set_in_last_bitset); //the first bits are set
+								this->occupancy_data()[last_occupied_index] = last_mask;
+							} // ...in the preceeding bitsets
+							for (bitset_index = res_bitset_index; bitset_index < last_occupied_index; bitset_index++) {
+								this->occupancy_data()[bitset_index] = -1ull;
+							}
+
+							return res_bitset_index * 64u;
+						}
+					}
+					else {
+						bitsets_left = needed_bitsets;
+					}
+				}
+			}
+			//no fitting space found -> allocate at end
 			return this->at_back_allocate_alligned(n);
 		} //allocate_n()
 
@@ -341,14 +372,14 @@ namespace bmath::intern {
 				bitset &= ~mask;
 			}
 			else {
-				assert(start % std::min(std::bit_ceil(n), 64ull) == 0u); //check if start is alligned
+				assert(start % 64u == 0u); //check if start is alligned
 
 				std::size_t bit_index = start;
-				for (; bit_index + 64u < start + n; bit_index += 64u) { //reset completely set bitsets 
+				for (; bit_index < start + n - 64u; bit_index += 64u) { //reset completely set bitsets 
 					assert(this->occupancy_data()[bit_index / 64u].all()); //check if all elements actually where used
 					this->occupancy_data()[bit_index / 64u] = 0ull; //reset all in first (n / 64u) tables responsible for the n freed elements 
 				}
-				const std::uint64_t last_mask = (-1ull >> (64u - (n % 64u))) << (start % 64u);
+				const std::uint64_t last_mask = -1ull >> (64u - (n % 64u));
 				BitSet64& bitset = this->occupancy_data()[bit_index / 64u];
 				assert((bitset & last_mask) == last_mask); //check if all elements actually where used
 				bitset &= ~last_mask;
