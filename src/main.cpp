@@ -97,7 +97,7 @@ int main()
 			{ "(\\f n. f(f, n))(\\f n.(n <= 1)(1, n * f(f, -1 + n)), 5)" },
 			{ "(\\f n. f(f, n))(\\f n.(n == 1)(1, n * f(f, -1 + n)), 5)" },
 		});
-		constexpr bool show = true;
+		constexpr bool show = false;
 		for (const auto& name : names) {
 			if (show) std::cout << name << "\n";
 			auto term = simp::LiteralTerm(name);
@@ -113,10 +113,7 @@ int main()
 		std::cout << "\n\n\n";
 	}
 	if (true) {
-		const simp::RuleSet rules = {			
-			{ "0 xs...  = 0" },
-			{ "'sum'()  = 0" },
-			{ "'prod'() = 1" },
+		const simp::RuleSet rules = {		
 			{ "0^x      = 0" },
 			{ "x^0      = 1" },
 			{ "x^1      = x" },

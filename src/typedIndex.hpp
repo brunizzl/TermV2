@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <type_traits>
 #include <bit>
+#include <cassert>
 
 #include "utility/misc.hpp"
 #include "utility/sumEnum.hpp"
@@ -31,8 +32,8 @@ namespace bmath::intern {
 		constexpr BasicTypedIdx_Bitmask(const std::size_t index, const TypesEnum type)
 			: data(static_cast<UnderlyingType>(index << index_offset) | static_cast<UnderlyingType>(type))
 		{
-			throw_if(index > max_index, "TypedIdx has recieved index bigger than max_index");
-			throw_if(static_cast<UnderlyingType>(type) >= static_cast<UnderlyingType>(TypesEnum::COUNT), "recieved enum value outside allowed range");
+			assert(index <= max_index && "TypedIdx has recieved index bigger than max_index");
+			assert(static_cast<UnderlyingType>(type) < static_cast<UnderlyingType>(TypesEnum::COUNT) && "recieved enum value outside allowed range");
 		}
 
 		[[nodiscard]] constexpr auto get_index() const noexcept { return data >> index_offset; }
@@ -67,8 +68,8 @@ namespace bmath::intern {
 		constexpr BasicTypedIdx_BitField(const std::size_t new_index, const TypesEnum new_type)
 			:index(new_index), type(static_cast<UnderlyingType>(new_type))
 		{
-			throw_if(index > max_index, "TypedIdx has recieved index bigger than max_index");
-			throw_if(type >= static_cast<UnderlyingType>(TypesEnum::COUNT), "recieved enum value outside allowed range");
+			assert(index <= max_index && "TypedIdx has recieved index bigger than max_index");
+			assert(type < static_cast<UnderlyingType>(TypesEnum::COUNT) && "recieved enum value outside allowed range");
 		}
 
 		[[nodiscard]] constexpr auto get_index() const noexcept { return this->index; }

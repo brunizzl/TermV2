@@ -89,7 +89,7 @@ namespace simp {
 		MonotonicStore store;
 		std::vector<RuleHead> rules;
 
-		RuleSet(std::initializer_list<std::string_view> names, 
+		RuleSet(std::initializer_list<std::string_view> names_, 
 			RuleHead(*build)(Store&, std::string&) = build_rule::build_everything);
 
 		void add(std::initializer_list<const RuleSet*> sets);

@@ -55,8 +55,18 @@ namespace simp {
     {   if (store.decr_at(index) == 0) store.free_one(index);
     }
 
-    constexpr void share(const MutRef ref) noexcept
+    constexpr [[nodiscard]] NodeIndex share(Store& store, const NodeIndex idx) noexcept
+    {   if (is_stored_node(idx.get_type())) store.incr_at(idx.get_index());
+        return idx;
+    }
+
+    constexpr [[nodiscard]] NodeIndex share(const MutRef ref) noexcept
     {   if (is_stored_node(ref.type)) ref.store->incr_at(ref.index);
+        return ref.typed_idx();
+    }
+
+    constexpr void share_with_n(const MutRef ref, const std::int32_t n) noexcept
+    {   if (is_stored_node(ref.type)) ref.store->incr_at_by(ref.index, n);
     }
 
     //copies tree starting at src_ref into dst_store

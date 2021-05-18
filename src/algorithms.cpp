@@ -116,12 +116,10 @@ namespace simp {
                 return NodeIndex(res_index, Literal::lambda);
             }
             else if (ref.type == Literal::lambda_param) { 
-                assert(ref.index < params.size());
-                share(ref.at(params[ref.index]));
-                return params[ref.index];
+                assert(ref.index < params.size());                
+                return share(*ref.store, params[ref.index]);
             }
-            share(ref);
-            return ref.typed_idx();
+            return share(ref);
         } //replace_lambda_params
 
         [[nodiscard]] NodeIndex eval_lambda(const MutRef ref, const Options options)
@@ -424,33 +422,18 @@ namespace simp {
                     const MutRef convertee_ref = ref.at(params[2]);
                     assert(convertee_ref.type == Literal::f_app);
 
+                    share_with_n(converter_ref, convertee_ref->f_app.parameters().size());
                     const auto stop = end(convertee_ref);
                     auto iter = begin(convertee_ref);
                     for (++iter; iter != stop; ++iter) {
                         static_assert(FApp::min_capacity >= 2u, "assumes application to only use one store slot");
                         const std::size_t app_index = ref.store->allocate_one();
-                        share(converter_ref);
                         ref.store->at(app_index) = FApp({ converter, *iter });
                         *iter = outermost(ref.at(NodeIndex(app_index, Literal::f_app)), options).res;
                     }
                     free_app_shallow(ref); //free app of map
                     free_tree(converter_ref);
                     return outermost(convertee_ref, options).res;
-                } break;
-                case FixedArity(MiscFn::replace): if (options.eval_special) {
-                    bmath::intern::StupidBufferVector<ReplaceItem, 16> replace_items;
-                    assert(params[1].get_type() == Literal::f_app);
-                    assert(params[2].get_type() == Literal::f_app);
-                    const auto from_range = ref.at(params[1])->f_app.parameters();
-                    const auto to_range = ref.at(params[2])->f_app.parameters();
-                    const auto min_size = std::min(from_range.size(), to_range.size());
-                    for (std::size_t i = 0; i < min_size; i++) {
-                        replace_items.emplace_back(from_range[i], to_range[i]);
-                    }
-                    const NodeIndex res = replace(ref.at(params[0]), options, replace_items);
-                    params[0] = literal_nullptr;
-                    free_tree(ref);
-                    return res;
                 } break;
                 }
             } //end fixed arity
@@ -465,8 +448,8 @@ namespace simp {
                     return new_size;
                 };
                 const auto eval_bool = [&](const NodeIndex neutral_value, const NodeIndex short_circuit_value) {
-                    if (!remove_shallow_value(neutral_value)) { //remove values not changing outcome (true for and, false for or)
-                        free_tree(ref);
+                    if (remove_shallow_value(neutral_value) == 0u) { //remove values not changing outcome (true for and, false for or)
+                        free_app_shallow(ref); //zero size remaining -> no subterms
                         return neutral_value;
                     }                    
                     { //evaluate if possible
@@ -498,17 +481,22 @@ namespace simp {
                         [](const NodeIndex i) { return i.get_type() != Literal::complex; });
 
                     Complex acc = 0.0;
+                    std::size_t size = params.size();
                     for (auto iter = params.begin(); iter != end_complex; ++iter) {
                         const MutRef current = ref.at(*iter);
                         if (maybe_accumulate(acc, *current, std::plus<Complex>())) {
                             free_node_shallow(*current.store, current.index);
                             *iter = literal_nullptr;
+                            size--;
                         }
                     }
-                    if (acc != 0.0) { //addition with 0.0 is always exact -> we know params[0] == literal_nullptr -> reuse as position for new value
-                        const std::size_t value_index = ref.store->allocate_one();
-                        ref.store->at(value_index) = acc;
-                        params.front() = NodeIndex(value_index, Literal::complex);
+                    if (size == 0u) {
+                        free_app_shallow(ref);
+                        return parse::build_value(*ref.store, acc);
+                    }
+                    else if (acc != 0.0) { //addition with 0.0 is always exact -> we know params[0] == literal_nullptr -> reuse as position for new value
+                        assert(params.front() == literal_nullptr);
+                        params.front() = parse::build_value(*ref.store, acc);
                     }
                     remove_shallow_value(literal_nullptr);
                 } break;
@@ -517,19 +505,24 @@ namespace simp {
                         [](const NodeIndex i) { return i.get_type() != Literal::complex; });
 
                     Complex acc = 1.0;
+                    std::size_t size = params.size();
                     for (auto iter = params.begin(); iter != end_complex; ++iter) {
                         const MutRef current = ref.at(*iter);
                         if (maybe_accumulate(acc, *current, std::multiplies<Complex>())) {
                             free_node_shallow(*current.store, current.index);
                             *iter = literal_nullptr;
+                            size--;
                         }
                     }
                     //TODO: evaluate exact division / normalize two divisions
 
+                    if (size == 0u) {
+                        free_app_shallow(ref);
+                        return parse::build_value(*ref.store, acc);
+                    }
                     if (acc != 1.0) { //multiplication with 1.0 is always exact -> we know params[0] == literal_nullptr -> reuse as position for new value
-                        const std::size_t value_index = ref.store->allocate_one();
-                        ref.store->at(value_index) = acc;
-                        params.front() = NodeIndex(value_index, Literal::complex);
+                        assert(params.front() == literal_nullptr);
+                        params.front() = parse::build_value(*ref.store, acc);
                     }
                     remove_shallow_value(literal_nullptr);
                 } break;
@@ -881,9 +874,9 @@ namespace simp {
             const auto optimize = [](const MutRef r) {
                 if (r.type == SingleMatch::restricted) {
                     r->single_match.condition =
-                        shallow_apply_ruleset(buildin_conditions, r.at(r->single_match.condition), {});
+                        shallow_apply_ruleset(buildin_conditions, r.at(r->single_match.condition), { .eval_special = false });
                     r->single_match.condition =
-                        greedy_apply_ruleset(compute_optimisations, r.at(r->single_match.condition), {});
+                        greedy_apply_ruleset(compute_optimisations, r.at(r->single_match.condition), { .eval_special = false });
                 }
                 return r.typed_idx();
             };
@@ -905,7 +898,7 @@ namespace simp {
                 { "       '_VM'(idx, domain, match) ^ 2                        = '_VM'(idx, domain, 'sqrt'(match))" },
                 { "'sqrt'('_VM'(idx, domain, match))                           = '_VM'(idx, domain, match ^ 2)" },
                 }, build_basic_pattern);
-            heads.lhs = greedy_apply_ruleset(bubble_up, MutRef(store, heads.lhs), {});
+            heads.lhs = greedy_apply_ruleset(bubble_up, MutRef(store, heads.lhs), { .eval_special = false });
 
             static const auto to_domain = RuleSet({
                 { "v :t   = t" },
@@ -920,7 +913,8 @@ namespace simp {
                     assert(f_app[1].get_type().is<PatternUnsigned>());
                     const std::uint32_t match_state_index = f_app[1].get_index();
                     const NodeIndex inverse = std::exchange(f_app[3], literal_nullptr);
-                    const NodeIndex domain = shallow_apply_ruleset(to_domain, r.at(std::exchange(f_app[2], literal_nullptr)), {});
+                    const NodeIndex domain = shallow_apply_ruleset(to_domain, r.at(std::exchange(f_app[2], literal_nullptr)), 
+                        { .remove_unary_assoc = false, .eval_special = false });
                     if (domain.get_type() != Literal::symbol || !to_symbol(domain).is<nv::ComplexSubset>()) {
                         throw TypeError{ "value match restrictions may only be of form \"<value match> :<complex subset>\"", r };
                     }
@@ -936,7 +930,7 @@ namespace simp {
             };
             heads.lhs = transform(MutRef(store, heads.lhs), build_value_match);
             heads.rhs = transform(MutRef(store, heads.rhs), build_value_match);
-            heads.lhs = normalize::recursive(MutRef(store, heads.lhs), {}); //order value match to right positions in commutative
+            heads.lhs = normalize::recursive(MutRef(store, heads.lhs), { .eval_special = false }); //order value match to right positions in commutative
 
             std::bitset<match::State::max_value_match_count> encountered = 0;
             const auto set_owner = [&encountered](const MutRef r) {
@@ -1820,11 +1814,12 @@ namespace simp {
 
     } //namespace match
 
+    static bool break_ = false;
 
     NodeIndex pattern_interpretation(const UnsaveRef pn_ref, const match::State& match_state, 
         Store& store, const Options options)
     {
-        const auto insert_node = [&](const TermNode node, NodeType type) {
+        const auto insert_node = [&](const TermNode node, const NodeType type) {
             const std::size_t dst_index = store.allocate_one();
             store.at(dst_index) = node;
             return NodeIndex(dst_index, type);
@@ -1847,7 +1842,9 @@ namespace simp {
         case NodeType(Literal::f_app): {
             bmath::intern::StupidBufferVector<NodeIndex, 16> dst_subterms;
             const auto stop = end(pn_ref);
-            for (auto iter = begin(pn_ref); iter != stop; ++iter) {
+            auto iter = begin(pn_ref);
+            if (break_ && *iter == from_native(nv::Comm::sum)) __debugbreak();
+            for (; iter != stop; ++iter) {
                 if (iter->get_type() == SpecialMatch::multi) {
                     const MultiMatch multi = *pn_ref.at(*iter);
                     if (multi.index_in_params == -1u) { //commutative -> multi might not be one pice
@@ -1857,18 +1854,14 @@ namespace simp {
                         auto donator_iter = begin(donator); //currently pointing at function
                         for (++donator_iter; donator_iter != donator_stop; ++donator_iter) {
                             if (!entry.index_matched(donator_iter.array_idx - 1u)) { //-1u as we dont want the function itself, only the parameters
-                                const NodeIndex dst_param = *donator_iter;
-                                share(MutRef(store, dst_param));
-                                dst_subterms.push_back(dst_param);
+                                dst_subterms.push_back(share(store, *donator_iter));
                             }
                         }
                     }
                     else {
                         match::MultiRange donator = match_state.multi_range(multi);
                         for (; donator.start != donator.stop; ++donator.start) {
-                            const NodeIndex dst_param = *donator.start;
-                            share(MutRef(store, dst_param));
-                            dst_subterms.push_back(dst_param);
+                            dst_subterms.push_back(share(store, *donator.start));
                         }
                     }
                 } //end if multi
@@ -1883,8 +1876,7 @@ namespace simp {
         case NodeType(SingleMatch::weak): {            
             const match::SharedSingleMatchEntry& entry = match_state.single_vars[pn_ref.index];
             assert(entry.is_set());
-            share(MutRef(store, entry.match_idx));
-            return entry.match_idx; 
+            return share(store, entry.match_idx);
         } break;
         case NodeType(SpecialMatch::value): {
             const Complex& val = match_state.value_entry(*pn_ref).value;

@@ -191,7 +191,6 @@ namespace simp {
 			pair,   //two parameters, no evaluation
 			fst, //access pair elements
 			snd, //access pair elements
-			replace, //"replace(x, list(y, ys...), list(z, zs...))" returns x, but all occurences of y are replaced by z and so on
 			COUNT
 		};
 
@@ -547,7 +546,6 @@ namespace simp {
 			{ MiscFn::pair           , "pair"      , 2u, {}                     , MiscFn::pair                },
 			{ MiscFn::fst            , "fst"       , 1u, { MiscFn::pair        }, Restr::any                  },
 			{ MiscFn::snd            , "snd"       , 1u, { MiscFn::pair        }, Restr::any                  },
-			{ MiscFn::replace        , "replace"   , 3u, { Restr::any, NonComm::list, NonComm::list                         }, Restr::any      },
 			{ HaskellFn::map         , "map"       , 3u, { Restr::applicable, Restr::applicable, Literal::f_app             }, Literal::f_app  },
 			{ HaskellFn::filter      , "filter"    , 3u, { Restr::applicable, Restr::applicable, Literal::f_app             }, Literal::f_app  },
 			{ HaskellFn::split       , "split"     , 3u, { Restr::applicable, Restr::applicable, Literal::f_app             }, MiscFn::pair    },

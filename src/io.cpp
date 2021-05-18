@@ -642,7 +642,7 @@ namespace simp {
 					if (!in_pattern && function.get_type() == Literal::symbol) {
 						switch (to_symbol(function)) {
 						case Symbol(Comm::sum):             return { "" , " + "  };
-						case Symbol(Comm::prod):            return { "" , " "  };
+						case Symbol(Comm::prod):            return { "" , " "    };
 						case Symbol(Comm::and_):            return { "" , " && " };
 						case Symbol(Comm::or_):             return { "" , " || " };
 						case Symbol(CtoC::pow):             return { "" , " ^ "  };
