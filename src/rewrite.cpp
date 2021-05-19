@@ -99,8 +99,7 @@ namespace simp {
 		}
 	} //RuleSet::migrate_rules
 
-	RuleApplicationRes raw_apply_ruleset(const RuleSet& rules, const MutRef ref, 
-		match::State& state, const Options options)
+	RuleApplicationRes raw_apply_ruleset(const RuleSet& rules, const MutRef ref, match::State& state, const Options options)
 	{
 		const auto stop = rules.end();
 		RuleSetIter iter = [&] {
@@ -110,20 +109,15 @@ namespace simp {
 			return std::lower_bound(rules.begin(), stop, UnsaveRef(ref), less);
 		}();
 
-		static bool show = false;
-
 		for (; iter != stop; ++iter) {
 			const RuleRef rule = *iter;
-			if (show) std::cout << "try\n" << rule.to_string() << "\n" << "on\n" << print::to_string(ref) << "\n\n";
 			const std::partial_ordering match_res = match::match_(rule.lhs, ref, state);
 			if (match_res == std::partial_ordering::equivalent) {
 				const NodeIndex res = pattern_interpretation(rule.rhs, state, *ref.store, options);
-				if (show) std::cout << "success\n" << print::to_string(Ref(*ref.store, res)) << "\n\n";
 				return { res, iter };
 			}
-			if (match_res == std::partial_ordering::greater) {
-				break; //current rule is greater than ref and rules are only ever getting even greater -> no chance
-			}
+			//current rule is greater than ref and rules are only ever getting even greater -> no chance
+			if (match_res == std::partial_ordering::greater) break; 
 		}
 		return { literal_nullptr, stop };
 	} //shallow_apply_ruleset
@@ -142,16 +136,14 @@ namespace simp {
 		return ref.typed_idx();
 	} //shallow_apply_ruleset
 
-	NodeIndex recursive_greedy_apply(const RuleSet& rules, const MutRef ref, const Options options) {
+	NodeIndex recursive_greedy_apply(const RuleSet& rules, const MutRef ref, const Options options) 
+	{
 		{ //try replacing this
-			match::State state = *ref.store;
-			const RuleApplicationRes applied = raw_apply_ruleset(rules, ref, state, options);
-			if (applied.result_term != literal_nullptr) {
-				free_tree(ref);
-				return applied.result_term;
-			}
+			const NodeIndex old = ref.typed_idx();
+			const NodeIndex new_ = shallow_apply_ruleset(rules, ref, options);
+			if (old != new_) return new_;
 		}
-		if (ref.type == Literal::f_app) {
+		if (ref.type == Literal::f_app) { //try replacing subterms
 			bool change = false;
 			const auto stop = end(ref);
 			for (auto subterm = begin(ref); subterm != stop; ++subterm) {
@@ -161,9 +153,7 @@ namespace simp {
 					change = true;
 				}
 			}
-			if (change) {
-				return normalize::outermost(ref, {}).res;
-			}
+			if (change) return normalize::outermost(ref, options).res;
 		}
 		return literal_nullptr;
 	} //recursive_greedy_apply

@@ -244,6 +244,21 @@ namespace simp {
             return {};
         } //eval_unary_complex
 
+        Complex eval_pow(const Complex base, const Complex expo)
+        {
+            if (expo == 0.5) {
+                return (base.imag() == 0.0 && base.real() >= 0.0) ?
+                    std::sqrt(base.real()) :
+                    std::sqrt(base);
+            }
+            else if (in_complex_subset(expo, nv::ComplexSubset::integer)) {
+                const long long int_expo = expo.real();
+                const Complex res = bmath::intern::nat_pow(base, std::abs(int_expo));
+                return int_expo < 0 ? 1.0 / res : res;
+            }
+            return std::pow(base, expo);
+        } //eval_pow
+
         Complex eval_binary_complex(nv::CtoC f, const Complex param1, const Complex param2) 
         {
             using namespace nv;
@@ -251,17 +266,7 @@ namespace simp {
             case CtoC::divide: //param1 is numerator, param2 is denominator
                 return param1 / param2;
             case CtoC::pow: //param1 is base, param2 is exponent
-                if (param2 == 0.5) {
-                    return (param1.imag() == 0.0 && param1.real() >= 0.0) ?
-                        std::sqrt(param1.real()) :
-                        std::sqrt(param1);
-                }
-                else if (in_complex_subset(param2, ComplexSubset::integer)) {
-                    const long long int_expo = param2.real();
-                    const Complex res = bmath::intern::nat_pow(param1, std::abs(int_expo));
-                    return int_expo < 0 ? 1.0 / res : res;
-                }
-                return std::pow(param1, param2);
+                return eval_pow(param1, param2);
             case CtoC::log: { //param1 is base, param2 is argument
                 const Complex num = (param2.imag() == 0.0) ?
                     std::log(param2.real()) :
@@ -513,9 +518,32 @@ namespace simp {
                             *iter = literal_nullptr;
                             size--;
                         }
+                    }                    
+                    if (options.exact) { //evaluate exact division
+                        const auto is_value_pow_app = [ref](const NodeIndex n) {
+                            if (n.get_type() != Literal::f_app) return false;
+                            const FApp& app = *ref.at(n);
+                            return app[0] == from_native(nv::CtoC::pow) &&
+                                app[1].get_type() == Literal::complex &&
+                                app[2].get_type() == Literal::complex;
+                        };
+                        static_assert(shallow_order(UnsaveRef(nullptr, 0, Literal::complex)) < shallow_order(UnsaveRef(nullptr, 0, Literal::f_app)));
+                        auto iter = std::find_if(end_complex, params.end(), is_value_pow_app);
+                        const auto end_pow = std::find_if(iter, params.end(), [&](const NodeIndex n) { return !is_value_pow_app(n); });
+                        for (; iter != end_pow; ++iter) {
+                            const FApp& pow = *ref.at(*iter);
+                            Complex base = *ref.at(pow[1]);
+                            const Complex negative_expo = -ref.at(pow[2])->complex;
+                            if (negative_expo.imag() == 0.0 && negative_expo.real() > 0.0 &&
+                                maybe_accumulate(base, negative_expo, normalize::eval_pow) &&
+                                maybe_accumulate(acc, base, std::divides<Complex>()))
+                            {
+                                free_tree(ref.at(*iter));
+                                *iter = literal_nullptr;
+                                size--;
+                            }
+                        }
                     }
-                    //TODO: evaluate exact division / normalize two divisions
-
                     if (size == 0u) {
                         free_app_shallow(ref);
                         return parse::build_value(*ref.store, acc);
@@ -1843,7 +1871,6 @@ namespace simp {
             bmath::intern::StupidBufferVector<NodeIndex, 16> dst_subterms;
             const auto stop = end(pn_ref);
             auto iter = begin(pn_ref);
-            if (break_ && *iter == from_native(nv::Comm::sum)) __debugbreak();
             for (; iter != stop; ++iter) {
                 if (iter->get_type() == SpecialMatch::multi) {
                     const MultiMatch multi = *pn_ref.at(*iter);
