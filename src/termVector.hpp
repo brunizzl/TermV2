@@ -50,10 +50,15 @@ namespace bmath::intern {
 
 		Value_T data_[min_capacity];
 
+		constexpr StoredVector(const std::uint16_t new_size, const std::uint16_t new_capacity) noexcept
+			:info{ .size = new_size, .capacity = new_capacity }
+		{}
+
 	public:
-		constexpr std::size_t capacity() const noexcept { return this->info.capacity; }
-		constexpr std::size_t size() const noexcept { return this->info.size; }
-		constexpr auto& size() noexcept { return this->info.size; }
+		constexpr std::uint16_t capacity() const noexcept { return this->info.capacity; }
+		constexpr std::uint16_t size() const noexcept { return this->info.size; }
+
+		constexpr void shrink_size_to(const std::uint16_t new_) noexcept { assert(this->info.size >= new_); this->info.size = new_; }
 
 		constexpr Value_T* data() noexcept { return this->data_; }
 		constexpr const Value_T* data() const noexcept { return this->data_; }
@@ -64,10 +69,6 @@ namespace bmath::intern {
 			assert(init.size() <= min_capacity);
 			std::copy(init.begin(), init.end(), this->data_);
 		}
-
-		constexpr StoredVector(const std::uint16_t new_size, const std::uint16_t new_capacity) noexcept 
-			:info{ .size = new_size, .capacity = new_capacity }
-		{}
 
 		static constexpr std::size_t _node_count(const std::size_t capacity_) noexcept 
 		{	

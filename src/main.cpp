@@ -113,10 +113,11 @@ int main()
 		std::cout << "\n\n\n";
 	}
 	if (true) {
-		const simp::RuleSet rules = {		
-			{ "0^x      = 0" },
-			{ "x^0      = 1" },
-			{ "x^1      = x" },
+		const simp::RuleSet rules = {
+			{ "0 xs... = 0" },
+			{ "0^x     = 0" },
+			{ "x^0     = 1" },
+			{ "x^1     = x" },
 			
 			{ "(x^a)^b = x^(a b)" },
 			{ "x x     = x^2" },
@@ -236,6 +237,7 @@ int main()
 			std::getline(std::cin, name);
 			try {
 				auto term = simp::LiteralTerm(name);
+				std::cout << " = " << term.to_string() << "\n\n";
 				//std::cout << term.to_memory_layout() << "\n\n\n";
 				term.normalize({ .exact = false });
 				term.head = simp::greedy_apply_ruleset(rules, term.mut_ref(), { .exact = false });

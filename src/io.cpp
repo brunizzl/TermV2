@@ -622,7 +622,7 @@ namespace simp {
 			str.append("]");
 		}
 
-		void append_to_string(const UnsaveRef ref, std::string& str, const int parent_infixr)
+		void append_to_string(const UnsaveRef ref, std::string& str, const int parent_infixr, const bool fancy)
 		{
 			switch (ref.type) {
 			case NodeType(Literal::complex):
@@ -639,7 +639,7 @@ namespace simp {
 				const char* replacement_seperator = nullptr;
 				const auto [init, seperator] = [&]() -> std::pair<const char*, const char*> {
 					using namespace nv;
-					if (!in_pattern && function.get_type() == Literal::symbol) {
+					if (fancy && !in_pattern && function.get_type() == Literal::symbol) {
 						switch (to_symbol(function)) {
 						case Symbol(Comm::sum):             return { "" , " + "  };
 						case Symbol(Comm::prod):            return { "" , " "    };
@@ -656,18 +656,18 @@ namespace simp {
 						case Symbol(PatternFn::of_type):    return { "" , " :"   };
 						}
 					}
-					append_to_string(ref.at(function), str, max_infixr);
+					append_to_string(ref.at(function), str, max_infixr, fancy);
 					if (in_pattern) {
 						append_f_app_info(f_app_info(ref), ref->f_app.size() - 1u, str);
 					}
 					return { "", ", " };
 				}();
-				const int own_infixr = in_pattern ? default_infixr : infixr(function);
+				const int own_infixr = (!fancy || in_pattern) ? default_infixr : infixr(function);
 				if (own_infixr <= parent_infixr) { str.push_back('('); }				
 				const char* spacer = init;
 				for (const NodeIndex param : f_app.parameters()) {
 					str.append(std::exchange(spacer, seperator));
-					append_to_string(ref.at(param), str, own_infixr);
+					append_to_string(ref.at(param), str, own_infixr, fancy);
 				}
 				if (own_infixr <= parent_infixr) { str.push_back(')'); }
 			} break;
@@ -676,7 +676,7 @@ namespace simp {
 				str.append(lambda.transparent ? "([" : "{[");
 				str.append(std::to_string(lambda.param_count));
 				str.append("]\\");
-				append_to_string(ref.at(lambda.definition), str, max_infixr);
+				append_to_string(ref.at(lambda.definition), str, max_infixr, fancy);
 				str.push_back(lambda.transparent ? ')' : '}');
 			} break;
 			case NodeType(Literal::lambda_param):
@@ -688,7 +688,7 @@ namespace simp {
 				str.append("_X");
 				str.append(std::to_string(var.match_state_index));
 				str.append("[");
-				append_to_string(ref.at(var.condition), str, default_infixr);
+				append_to_string(ref.at(var.condition), str, default_infixr, fancy);
 				str.append("]");
 			} break;				
 			case NodeType(SingleMatch::unrestricted):
@@ -711,7 +711,7 @@ namespace simp {
 				str.append(std::to_string(var.match_state_index));
 				str.append(var.owner ? "" : "'");
 				str.append("[");
-				append_to_string(ref.at(var.inverse), str, default_infixr);
+				append_to_string(ref.at(var.inverse), str, default_infixr, fancy);
 				if (var.domain != nv::ComplexSubset::complex) {
 					str.append(", ");
 					str.append(nv::name_of(var.domain));
@@ -790,7 +790,7 @@ namespace simp {
 			//append name of subterm to line
 			current_str.append(std::max(0, 38 - (int)current_str.size()), ' ');
 			std::string subtree_as_string;
-			print::append_to_string(ref, subtree_as_string, 0);
+			print::append_to_string(ref, subtree_as_string, 0, false);
 			if (subtree_as_string.size() > 50u) {
 				subtree_as_string.erase(40);
 				subtree_as_string.append("   .  .  .");

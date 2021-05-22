@@ -77,7 +77,6 @@ namespace simp {
     constexpr int shallow_order(const UnsaveRef ref) {
         constexpr int after_symbol = std::numeric_limits<int>::max() - 10000;
         switch (ref.type) {
-        case NodeType::COUNT:                      return -1;
         case NodeType(Literal::complex):           return 0;
         case NodeType(SpecialMatch::value):        return 2;
         case NodeType(PatternUnsigned{}):          return 4;

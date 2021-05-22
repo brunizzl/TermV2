@@ -25,8 +25,8 @@ namespace simp {
 	//everything that is not exclusively affiliated with patterns
 	enum class Literal
 	{
-		complex, //only of Literal never expected as .function() in f_app
 		symbol,
+		complex, //only of Literal never expected as .function() in f_app
 		lambda,
 		lambda_param,
 		f_app,
@@ -69,7 +69,7 @@ namespace simp {
 
 	using NodeType = SumEnum<PatternNodeType, Literal>;
 
-	using NodeIndex = BasicTypedIdx<NodeType>;
+	using NodeIndex = BasicTypedIdx<NodeType, std::uint32_t>;
 
 	//only some types correspond to actual allocated storage in the term tree.
 	//other types can represent all information defining a value of this type in a single unsigned integer,
@@ -90,7 +90,6 @@ namespace simp {
 		case NodeType(SingleMatch::weak):          return false;
 		case NodeType(SpecialMatch::multi):        return true;
 		case NodeType(SpecialMatch::value):        return true;
-		case NodeType(NodeType::COUNT):            return false; //.get_type() of literal_nullptr
 		default:
 			assert(false);
 			BMATH_UNREACHABLE;
@@ -255,14 +254,20 @@ namespace simp {
 			COUNT
 		};
 
+		enum class Const
+		{
+			nullptr_,
+			COUNT
+		};
+
 		//mostly used to denote restrictions on allowed types 
 		//  note: NodeType also appears here, but only as restriction, not as indicator of possible indirection
 		//this SumEnum contains everything in Native not applicable, although also everything applicable is a constant.
 		//in particular: Bool is not part of Constant, as it can be applied
-		using Constant = SumEnum<NodeType, ComplexSubset, Restr, PatternConst>;
+		using Constant = SumEnum<NodeType, ComplexSubset, Restr, PatternConst, Const>;
 
 		//values of this type are stored in .get_index() of a NodeIndex if .get_type() is Literal::native_symbol
-		using Native = SumEnum<Constant, Function_>;
+		using Native = SumEnum<Function_, Constant>;
 	} //namespace nv
 
 	//if .value is larger than Native::COUNT, the Symbol was added at runtime
@@ -279,7 +284,7 @@ namespace simp {
 		return Symbol(idx.get_index());
 	}
 
-	constexpr NodeIndex literal_nullptr = NodeIndex();
+	constexpr NodeIndex literal_nullptr = from_native(nv::Const::nullptr_);
 	constexpr NodeIndex literal_false   = from_native(nv::Bool::false_);
 	constexpr NodeIndex literal_true    = from_native(nv::Bool::true_);
 	constexpr NodeIndex value_proxy     = from_native(nv::PatternConst::value_proxy);
@@ -619,6 +624,7 @@ namespace simp {
 		};
 
 		constexpr auto constant_table = std::to_array<CommonProps>({
+			{ Const::nullptr_            , "_Nullptr"    , Const::nullptr_ },
 			{ PatternConst::value_proxy  , "_VP"         , PatternConst::value_proxy },
 			{ Restr::any                 , "\\"          , Literal::symbol }, //can not be constructed from a string
 			{ Restr::applicable          , "applicable"  , Literal::symbol },
@@ -635,8 +641,8 @@ namespace simp {
 			{ ComplexSubset::positive    , "_Positive"   , Literal::symbol }, //can not be constructed from a string
 			{ ComplexSubset::not_negative, "_NotNegative", Literal::symbol }, //can not be constructed from a string
 			{ ComplexSubset::not_positive, "_NotPositive", Literal::symbol }, //can not be constructed from a string
-			{ Literal::complex           , "complex"     , Literal::symbol },
 			{ Literal::symbol            , "symbol"      , Literal::symbol },
+			{ Literal::complex           , "complex"     , Literal::symbol },
 			{ Literal::lambda            , "lambda"      , Literal::symbol },
 			{ Literal::lambda_param      , "lambda_param", Literal::symbol },
 			{ Literal::f_app             , "f_app"       , Literal::symbol },
@@ -654,9 +660,9 @@ namespace simp {
 		constexpr auto common_table = [] {
 			std::array<CommonProps, (unsigned)Native::COUNT> res;
 			std::size_t i = 0;
+			for (const auto& elem : constant_table)    { res[i++] = { elem.type, elem.name, elem.result_space }; }
 			for (const auto& elem : fixed_arity_table) { res[i++] = { elem.type, elem.name, elem.result_space }; }
 			for (const auto& elem : variadic_table)    { res[i++] = { elem.type, elem.name, elem.result_space }; }
-			for (const auto& elem : constant_table)    { res[i++] = { elem.type, elem.name, elem.result_space }; }
 			return res;
 		}();
 		static_assert(bmath::intern::is_sorted_by(common_table, &CommonProps::type)

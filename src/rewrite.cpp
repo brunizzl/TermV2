@@ -108,12 +108,15 @@ namespace simp {
 			};
 			return std::lower_bound(rules.begin(), stop, UnsaveRef(ref), less);
 		}();
+		static bool show = false;
 
 		for (; iter != stop; ++iter) {
 			const RuleRef rule = *iter;
+			if (show) std::cout << "try\n" << rule.to_string() << "\n" << "on\n" << print::to_string(ref) << "\n\n";
 			const std::partial_ordering match_res = match::match_(rule.lhs, ref, state);
 			if (match_res == std::partial_ordering::equivalent) {
 				const NodeIndex res = pattern_interpretation(rule.rhs, state, *ref.store, options);
+				if (show) std::cout << "success\n" << print::to_string(Ref(*ref.store, res)) << "\n\n";
 				return { res, iter };
 			}
 			//current rule is greater than ref and rules are only ever getting even greater -> no chance

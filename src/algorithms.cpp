@@ -95,29 +95,36 @@ namespace simp {
 
     namespace normalize {
 
-        [[nodiscard]] NodeIndex replace_lambda_params(const MutRef ref, const bmath::intern::StupidBufferVector<NodeIndex, 16>& params)
+        [[nodiscard]] NodeIndex replace_lambda_params(const MutRef ref, const bmath::intern::StupidBufferVector<NodeIndex, 16>& params
+            , const bool transparent)
         {
             assert(ref.type != PatternFApp{});
             if (ref.type == Literal::f_app) {
                 bmath::intern::StupidBufferVector<NodeIndex, 16> res_application;
                 const auto stop = end(ref);
                 for (auto iter = begin(ref); iter != stop; ++iter) {
-                    res_application.push_back(replace_lambda_params(ref.at(*iter), params));
+                    res_application.push_back(replace_lambda_params(ref.at(*iter), params, transparent));
                 }
                 const std::size_t res_index = FApp::build(*ref.store, res_application);
                 return NodeIndex(res_index, Literal::f_app);
             }
             else if (ref.type == Literal::lambda && ref->lambda.transparent) {
                 Lambda res_lambda = *ref;
-                res_lambda.definition =
-                    replace_lambda_params(ref.at(res_lambda.definition), params);
+                res_lambda.transparent = transparent;
+                res_lambda.definition = replace_lambda_params(ref.at(res_lambda.definition), params, true);
+
                 const std::size_t res_index = ref.store->allocate_one();
                 ref.store->at(res_index) = res_lambda;
                 return NodeIndex(res_index, Literal::lambda);
             }
             else if (ref.type == Literal::lambda_param) { 
-                assert(ref.index < params.size());                
-                return share(*ref.store, params[ref.index]);
+                if (ref.index < params.size()) {
+                    return share(*ref.store, params[ref.index]);
+                }
+                else {
+                    assert(transparent);
+                    return NodeIndex(ref.index - params.size(), Literal::lambda_param);
+                }
             }
             return share(ref);
         } //replace_lambda_params
@@ -136,7 +143,7 @@ namespace simp {
             if (lambda.param_count != params.size()) [[unlikely]] {
                 throw TypeError{ "wrong number of arguments for applied lambda", ref };
             }
-            const NodeIndex replaced = replace_lambda_params(ref.at(lambda.definition), params);
+            const NodeIndex replaced = replace_lambda_params(ref.at(lambda.definition), params, false);
             free_tree(ref);
             return normalize::recursive(ref.at(replaced), options);
         } //eval_lambda
@@ -318,8 +325,8 @@ namespace simp {
 
             const Symbol f = to_symbol(function);
             assert(f.is<Native>());
-            const auto params = ref->f_app.parameters();
             if (f.is<FixedArity>()) {
+                const auto params = ref->f_app.parameters();
                 const FixedArity fixed_f = f.to<FixedArity>();
                 {
                     const FixedInputSpace param_spaces = input_space(fixed_f);
@@ -444,13 +451,15 @@ namespace simp {
             } //end fixed arity
             else {
                 assert(f.is<Variadic>());
+                auto params = ref->f_app.parameters(); //not const to allow to set params to new position if store reallocates
+
                 //note: params last elements become invalid after calling this function
                 const auto remove_shallow_value = [&](const NodeIndex to_remove) {
+                    assert(ref->f_app.parameters().begin() == params.begin()); //make sure params are still valid
                     const auto new_end = std::remove(params.begin(), params.end(), to_remove);
-                    const std::size_t new_size = new_end - params.begin();
-                    static_assert(FApp::values_per_node - FApp::min_capacity == 1u);
-                    ref->f_app.size() = new_size + 1u; //+1 for function info itself
-                    return new_size;
+                    const std::size_t new_param_count = new_end - params.begin();
+                    ref->f_app.shrink_size_to(new_param_count + 1u); //+1 for function info itself
+                    return new_param_count;
                 };
                 const auto eval_bool = [&](const NodeIndex neutral_value, const NodeIndex short_circuit_value) {
                     if (remove_shallow_value(neutral_value) == 0u) { //remove values not changing outcome (true for and, false for or)
@@ -466,7 +475,7 @@ namespace simp {
                         return literal_nullptr;
                     }
                 };
-                const auto maybe_accumulate = [&](Complex& acc, const Complex& new_, auto operation) -> bool {
+                const auto maybe_accumulate = [&](Complex& acc, const Complex& new_, const auto operation) {
                     std::feclearexcept(FE_ALL_EXCEPT);
                     const Complex result = operation(acc, new_);
                     if (options.exact && std::fetestexcept(FE_ALL_EXCEPT)) { //operation failed to be exact
@@ -485,74 +494,88 @@ namespace simp {
                     const auto end_complex = std::find_if(params.begin(), params.end(),
                         [](const NodeIndex i) { return i.get_type() != Literal::complex; });
 
-                    Complex acc = 0.0;
-                    std::size_t size = params.size();
-                    for (auto iter = params.begin(); iter != end_complex; ++iter) {
-                        const MutRef current = ref.at(*iter);
-                        if (maybe_accumulate(acc, *current, std::plus<Complex>())) {
-                            free_node_shallow(*current.store, current.index);
-                            *iter = literal_nullptr;
-                            size--;
-                        }
-                    }
-                    if (size == 0u) {
-                        free_app_shallow(ref);
-                        return parse::build_value(*ref.store, acc);
-                    }
-                    else if (acc != 0.0) { //addition with 0.0 is always exact -> we know params[0] == literal_nullptr -> reuse as position for new value
-                        assert(params.front() == literal_nullptr);
-                        params.front() = parse::build_value(*ref.store, acc);
-                    }
-                    remove_shallow_value(literal_nullptr);
-                } break;
-                case Variadic(Comm::prod): { 
-                    const auto end_complex = std::find_if(params.begin(), params.end(),
-                        [](const NodeIndex i) { return i.get_type() != Literal::complex; });
-
-                    Complex acc = 1.0;
-                    std::size_t size = params.size();
-                    for (auto iter = params.begin(); iter != end_complex; ++iter) {
-                        const MutRef current = ref.at(*iter);
-                        if (maybe_accumulate(acc, *current, std::multiplies<Complex>())) {
-                            free_node_shallow(*current.store, current.index);
-                            *iter = literal_nullptr;
-                            size--;
-                        }
-                    }                    
-                    if (options.exact) { //evaluate exact division
-                        const auto is_value_pow_app = [ref](const NodeIndex n) {
-                            if (n.get_type() != Literal::f_app) return false;
-                            const FApp& app = *ref.at(n);
-                            return app[0] == from_native(nv::CtoC::pow) &&
-                                app[1].get_type() == Literal::complex &&
-                                app[2].get_type() == Literal::complex;
-                        };
-                        static_assert(shallow_order(UnsaveRef(nullptr, 0, Literal::complex)) < shallow_order(UnsaveRef(nullptr, 0, Literal::f_app)));
-                        auto iter = std::find_if(end_complex, params.end(), is_value_pow_app);
-                        const auto end_pow = std::find_if(iter, params.end(), [&](const NodeIndex n) { return !is_value_pow_app(n); });
-                        for (; iter != end_pow; ++iter) {
-                            const FApp& pow = *ref.at(*iter);
-                            Complex base = *ref.at(pow[1]);
-                            const Complex negative_expo = -ref.at(pow[2])->complex;
-                            if (negative_expo.imag() == 0.0 && negative_expo.real() > 0.0 &&
-                                maybe_accumulate(base, negative_expo, normalize::eval_pow) &&
-                                maybe_accumulate(acc, base, std::divides<Complex>()))
-                            {
-                                free_tree(ref.at(*iter));
+                    //dont bother unless we have at least two values to add or the whole sum is only (up to) one value
+                    //  (second case is needed to make removing of sum around a single value consistent)
+                    if (auto iter = params.begin(); std::next(iter) < end_complex || end_complex == params.end()) {
+                        Complex acc = 0.0;
+                        std::size_t size = params.size();
+                        for (; iter != end_complex; ++iter) {
+                            const MutRef current = ref.at(*iter);
+                            if (maybe_accumulate(acc, *current, std::plus<Complex>())) {
+                                free_node_shallow(*current.store, current.index);
                                 *iter = literal_nullptr;
                                 size--;
                             }
                         }
+                        if (size == 0u) {
+                            free_app_shallow(ref);
+                            return parse::build_value(*ref.store, acc);
+                        }
+                        else if (acc != 0.0) { //addition with 0.0 is always exact -> we know params[0] == literal_nullptr -> reuse as position for new value
+                            const NodeIndex new_val = parse::build_value(*ref.store, acc); //could change stores data position 
+                            params = ref->f_app.parameters(); //update params to (possibly) new position
+                            assert(params.front() == literal_nullptr);
+                            params.front() = new_val;
+                        }
+                        remove_shallow_value(literal_nullptr);
                     }
-                    if (size == 0u) {
-                        free_app_shallow(ref);
-                        return parse::build_value(*ref.store, acc);
+                } break;
+                case Variadic(Comm::prod): {
+                    const auto end_complex = std::find_if(params.begin(), params.end(),
+                        [](const NodeIndex i) { return i.get_type() != Literal::complex; });
+
+                    if (auto iter = params.begin(); iter != end_complex) {
+                        Complex acc = 1.0;
+                        std::size_t size = params.size();
+                        if (options.exact || std::next(iter) != end_complex || end_complex == params.end()) {
+                            for (; iter != end_complex; ++iter) {
+                                const MutRef current = ref.at(*iter);
+                                if (maybe_accumulate(acc, *current, std::multiplies<Complex>())) {
+                                    free_node_shallow(*current.store, current.index);
+                                    *iter = literal_nullptr;
+                                    size--;
+                                }
+                            }
+                        }
+                        if (options.exact) { //evaluate exact division (never succeeds if acc == 1.0 -> only try if we had at least one value)
+                            const auto is_value_pow_app = [ref](const NodeIndex n) {
+                                if (n.get_type() != Literal::f_app) return false;
+                                const FApp& app = *ref.at(n);
+                                return app[0] == from_native(nv::CtoC::pow) &&
+                                    app[1].get_type() == Literal::complex &&
+                                    app[2].get_type() == Literal::complex;
+                            };
+                            static_assert(shallow_order(UnsaveRef(nullptr, 0, Literal::complex)) < shallow_order(UnsaveRef(nullptr, 0, Literal::f_app)));
+                            auto iter = std::find_if(end_complex, params.end(), is_value_pow_app);
+                            const auto end_pow = std::find_if(iter, params.end(), [&](const NodeIndex n) { return !is_value_pow_app(n); });
+
+                            for (; iter != end_pow; ++iter) {
+                                const MutRef current = ref.at(*iter);
+                                const FApp& pow = *current;
+                                Complex base = *ref.at(pow[1]);
+                                const Complex negative_expo = -ref.at(pow[2])->complex;
+                                if (maybe_accumulate(base, negative_expo, normalize::eval_pow) &&
+                                    maybe_accumulate(acc, base, std::divides<Complex>()))
+                                {
+                                    free_tree(current);
+                                    *iter = literal_nullptr;
+                                    size--;
+                                }
+                            }
+                        }
+
+                        if (size == 0u) {
+                            free_app_shallow(ref);
+                            return parse::build_value(*ref.store, acc);
+                        }
+                        else if (acc != 1.0) { //multiplication with 1.0 is always exact -> we know params[0] == literal_nullptr -> reuse as position for new value
+                            const NodeIndex new_val = parse::build_value(*ref.store, acc); //could change stores data position 
+                            params = ref->f_app.parameters(); //update params to (possibly) new position
+                            assert(params.front() == literal_nullptr);
+                            params.front() = new_val;
+                        }
+                        remove_shallow_value(literal_nullptr);
                     }
-                    if (acc != 1.0) { //multiplication with 1.0 is always exact -> we know params[0] == literal_nullptr -> reuse as position for new value
-                        assert(params.front() == literal_nullptr);
-                        params.front() = parse::build_value(*ref.store, acc);
-                    }
-                    remove_shallow_value(literal_nullptr);
                 } break;
                 case Variadic(Comm::set): if (params.size() >= 2) { 
                     auto iter = params.begin();
@@ -1268,7 +1291,7 @@ namespace simp {
                         }
                     }
                     const auto new_end = std::remove(f_app.begin(), f_app.end(), literal_nullptr);
-                    f_app.size() = new_end - f_app.begin();
+                    f_app.shrink_size_to(new_end - f_app.begin());
                 }
             }
             else if (ref.type == Literal::lambda) {
@@ -1730,27 +1753,24 @@ namespace simp {
                     const std::span<const NodeIndex> pn_params = pn_ref->f_app.parameters();
                     const std::span<const NodeIndex> params = ref->f_app.parameters();
                     if (pn_params.size() != params.size()) {
-                        return std::partial_ordering::unordered;
+                        return std::partial_ordering::unordered; //TODO: would the ordering still hold if we return greater / smaller?
                     }
-                    auto pn_iter = pn_params.begin();
-                    const std::partial_ordering cmp = [&] {
-                        const auto stop = params.end();
-                        for (auto iter = params.begin(); iter != stop; ++pn_iter, ++iter) {
-                            const auto cmp = match_(pn_ref.at(*pn_iter), ref.at(*iter), match_state);
-                            if (cmp != std::partial_ordering::equivalent)
-                                return cmp;
-                        }
-                        return std::partial_ordering::equivalent;
-                    }();
 
+                    auto pn_iter = pn_params.begin();
                     const auto pn_start = pn_params.begin();
-                    if (strat == MatchStrategy::backtracking && pn_iter != pn_start &&
-                        cmp != std::partial_ordering::equivalent) [[unlikely]]
-                    {
-                        return to_order(track_back(pn_ref, ref, pn_params, params,
-                            match_state, pn_iter - pn_start));
+
+                    const auto stop = params.end();
+                    for (auto iter = params.begin(); iter != stop; ++pn_iter, ++iter) {
+                        const auto cmp = match_(pn_ref.at(*pn_iter), ref.at(*iter), match_state);
+                        if (cmp != std::partial_ordering::equivalent) {
+                            if (strat == MatchStrategy::backtracking && pn_iter != pn_start) {
+                                return to_order(track_back(pn_ref, ref, pn_params, params,
+                                    match_state, pn_iter - pn_start));
+                            }
+                            return cmp;
+                        }
                     }
-                    return cmp;
+                    return std::partial_ordering::equivalent;
                 }
                 }
             }
@@ -1774,7 +1794,10 @@ namespace simp {
             case NodeType(SingleMatch::weak): {
                 const SharedSingleMatchEntry entry = match_state.single_vars[pn_ref.index];
                 assert(entry.is_set());
-                return compare_tree(ref.at(entry.match_idx), ref);
+                //as the order of this depends on the point where the variable is set, 
+                //  no conclusion besides "matches" or "matches not" can be drawn.
+                // -> the ordering infomation of compare_tree has to be thrown out
+                return to_order(compare_tree(ref.at(entry.match_idx), ref) == std::strong_ordering::equivalent);
             }
             case NodeType(SpecialMatch::value): {
                 if (ref.type != Literal::complex) { //only this test allows us to pass *ref to evaluate this_value
