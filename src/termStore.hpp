@@ -347,35 +347,41 @@ namespace bmath::intern {
 					}
 				}
 			}
-			else if (false) { //n >= 64u
+			else {
+				assert(n >= 64u);
 				//allocate alligned at the start of the first bitset where the needed number of bitsets is completely empty
 				const std::size_t needed_bitsets = (n + 63u) / 64u;
 				std::size_t bitsets_left = needed_bitsets;
 
-				const std::size_t bitset_end_index = (this->size_ + 63u) / 64u;
-				for (std::size_t bitset_index = this->free_pos_buffer[1u]; bitset_index < bitset_end_index; bitset_index++) {
-					if (this->occupancy_data()[bitset_index].none()) {
-						if (!--bitsets_left) {
-							const std::size_t res_bitset_index = bitset_index - needed_bitsets + 1u;
-							const std::size_t last_occupied_index = bitset_index; //last bitset, where current allocation happens
-							//set the now occupied bits...
-							{ // ...in the last relevant bitset
-								const std::size_t bits_set_in_last_bitset = (n % 64u) ? (n % 64u) : 64u;
+				const std::size_t bitset_end_index = (this->size_ + 63u) / 64u; 
+				std::size_t bitset_index = this->free_pos_buffer[1u];
+
+				while (bitset_index < bitset_end_index) {
+					if (this->occupancy_data()[bitset_index++].none()) {
+						if (--bitsets_left == 0u) {
+							//bitset_index now points at first not needed bitset following the needed ones
+							const std::size_t res_bitset_index = bitset_index - needed_bitsets;							
+							{ //set the now occupied bits...
+								const std::size_t bits_set_in_last_bitset = (n - 1u) % 64u + 1u; //in [1..64]
 								assert((needed_bitsets - 1u) * 64u + bits_set_in_last_bitset == n);
+								const std::uint64_t last_mask = -1ull >> (64u - bits_set_in_last_bitset); 						
+								this->occupancy_data()[--bitset_index] = last_mask; // ...in the last relevant bitset
 
-								const std::uint64_t last_mask = -1ull >> (64u - bits_set_in_last_bitset); //the first bits are set
-								this->occupancy_data()[last_occupied_index] = last_mask;
-							} // ...in the preceeding bitsets
-							for (bitset_index = res_bitset_index; bitset_index < last_occupied_index; bitset_index++) {
-								this->occupancy_data()[bitset_index] = -1ull;
+								while (bitset_index > res_bitset_index) { // ...in the preceeding bitsets
+									this->occupancy_data()[--bitset_index] = -1ull;
+								}
+							} 
+							{ //make sure the store knows it is this large now
+								const std::size_t end_of_allocated = res_bitset_index * 64u + n;
+								if (end_of_allocated > this->capacity) {
+									this->unsave_change_capacity(std::bit_ceil(end_of_allocated));
+								}
+								this->size_ = std::max(this->size_, end_of_allocated);
 							}
-
 							return res_bitset_index * 64u;
 						}
 					}
-					else {
-						bitsets_left = needed_bitsets;
-					}
+					else { bitsets_left = needed_bitsets; }
 				}
 			}
 			//no fitting space found -> allocate at end
