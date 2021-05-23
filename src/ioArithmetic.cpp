@@ -233,12 +233,12 @@ namespace bmath::intern {
 		constexpr int infixr(MathType type)
 		{
 			constexpr auto infixr_table = std::to_array<std::pair<MathType, int>>({
-				{ Comm::sum          , 2000 },
-				{ Comm::product      , 2001 },
-				{ Fn::pow            , 3000 }, //not between other function types -> assumed to be printed with '^'  
-				{ Literal::symbol    , 5000 },
-				{ Literal::complex   , 5000 }, //may be printed as sum/product itself, then (maybe) has to add parentheses on its own
-				{ LambdaParam{}      , 5000 },
+				{ Comm::sum          , 20 },
+				{ Comm::product      , 21 },
+				{ Fn::pow            , 30 }, //not between other function types -> assumed to be printed with '^'  
+				{ Literal::symbol    , 50 },
+				{ Literal::complex   , 50 }, //may be printed as sum/product itself, then (maybe) has to add parentheses on its own
+				{ LambdaParam{}      , 50 },
 			});
 			static_assert(std::is_sorted(infixr_table.begin(), infixr_table.end(), [](auto a, auto b) { return a.second < b.second; }));
 

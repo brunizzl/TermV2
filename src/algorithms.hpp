@@ -132,7 +132,7 @@ namespace simp {
         else if (ref.type == Literal::f_app || ref.type == PatternFApp{}) {
             for (const NodeIndex subterm : ref->f_app) {
                 const NodeIndex sub_res = search(ref.at(subterm), pred);
-                if (sub_res != literal_nullptr) {
+                if (sub_res != invalid_index) {
                     return sub_res;
                 }
             }
@@ -140,7 +140,7 @@ namespace simp {
         else if (ref.type == Literal::lambda) {
             return search(ref.at(ref->lambda.definition), pred);
         }
-        return literal_nullptr;
+        return invalid_index;
     } //search
 
     //applies f to every subterm in postorder, result is new subterm

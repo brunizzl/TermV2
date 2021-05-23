@@ -36,9 +36,9 @@ namespace simp {
 	std::string RuleRef::to_string() const noexcept
 	{
 		std::string res;
-		print::append_to_string(this->lhs, res, 0);
+		print::append_to_string(this->lhs, res, 0, false);
 		res.append("\n   ->   ");
-		print::append_to_string(this->rhs, res, 0);
+		print::append_to_string(this->rhs, res, 0, false);
 		return res;
 	}
 
@@ -101,28 +101,23 @@ namespace simp {
 
 	RuleApplicationRes raw_apply_ruleset(const RuleSet& rules, const MutRef ref, match::State& state, const Options options)
 	{
-		const auto stop = rules.end();
-		RuleSetIter iter = [&] {
-			const auto less = [](const RuleRef& rule, const UnsaveRef& r) {
-				return unsure_compare_tree(rule.lhs, r) == std::partial_ordering::less;
-			};
-			return std::lower_bound(rules.begin(), stop, UnsaveRef(ref), less);
-		}();
-		static bool show = false;
+		const auto less = [](const RuleRef& rule, const UnsaveRef& r) {
+			return unsure_compare_tree(rule.lhs, r) == std::partial_ordering::less;
+		};
+		const auto not_greater = [](const RuleRef& rule, const UnsaveRef& r) {
+			return unsure_compare_tree(rule.lhs, r) != std::partial_ordering::greater;
+		};
+		RuleSetIter iter =       std::lower_bound(rules.begin(), rules.end(), UnsaveRef(ref), less);
+		const RuleSetIter stop = std::lower_bound(iter,          rules.end(), UnsaveRef(ref), not_greater);
 
 		for (; iter != stop; ++iter) {
 			const RuleRef rule = *iter;
-			if (show) std::cout << "try\n" << rule.to_string() << "\n" << "on\n" << print::to_string(ref) << "\n\n";
-			const std::partial_ordering match_res = match::match_(rule.lhs, ref, state);
-			if (match_res == std::partial_ordering::equivalent) {
+			if (match::matches(rule.lhs, ref, state)) {
 				const NodeIndex res = pattern_interpretation(rule.rhs, state, *ref.store, options);
-				if (show) std::cout << "success\n" << print::to_string(Ref(*ref.store, res)) << "\n\n";
 				return { res, iter };
 			}
-			//current rule is greater than ref and rules are only ever getting even greater -> no chance
-			if (match_res == std::partial_ordering::greater) break; 
 		}
-		return { literal_nullptr, stop };
+		return { invalid_index, stop };
 	} //shallow_apply_ruleset
 
 	NodeIndex shallow_apply_ruleset(const RuleSet& rules, MutRef ref, const Options options)
@@ -130,7 +125,7 @@ namespace simp {
 	apply_ruleset:
 		match::State state = *ref.store;
 		RuleApplicationRes result = raw_apply_ruleset(rules, ref, state, options);
-		if (result.result_term != literal_nullptr) {
+		if (result.result_term != invalid_index) {
 			free_tree(ref);
 			ref.index = result.result_term.get_index();
 			ref.type = result.result_term.get_type();
@@ -151,21 +146,21 @@ namespace simp {
 			const auto stop = end(ref);
 			for (auto subterm = begin(ref); subterm != stop; ++subterm) {
 				const NodeIndex sub_result = recursive_greedy_apply(rules, ref.at(*subterm), options);
-				if (sub_result != literal_nullptr) {
+				if (sub_result != invalid_index) {
 					*subterm = sub_result;
 					change = true;
 				}
 			}
 			if (change) return normalize::outermost(ref, options).res;
 		}
-		return literal_nullptr;
+		return invalid_index;
 	} //recursive_greedy_apply
 
 	NodeIndex greedy_apply_ruleset(const RuleSet& rules, MutRef ref, const Options options)
 	{
 	apply_ruleset:
 		NodeIndex result = recursive_greedy_apply(rules, ref, options);
-		if (result != literal_nullptr) {
+		if (result != invalid_index) {
 			ref.type = result.get_type();
 			ref.index = result.get_index();
 			goto apply_ruleset;

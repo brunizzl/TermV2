@@ -7,6 +7,7 @@
 #include <array>
 #include <unordered_map>
 #include <mutex>
+#include <tuple>
 
 #include "utility/vector.hpp"
 #include "utility/misc.hpp"
@@ -48,16 +49,12 @@ namespace simp {
 			return names;
 		} //names
 
-		static std::mutex& mutex()
-		{
-			static std::mutex mutex;
-			return mutex;
-		} //mutex
+		static std::mutex access;
 
 	public:
 		static std::uint32_t id_of(const std::string name)
 		{
-			const auto lock = std::lock_guard<std::mutex>(mutex());
+			const auto lock = std::lock_guard<std::mutex>(access);
 			const auto pos = ids().find(name);
 			if (pos != ids().end()) {
 				return pos->second;
@@ -72,11 +69,13 @@ namespace simp {
 
 		static const std::string& name_of(const std::uint32_t id)
 		{
-			const auto lock = std::lock_guard<std::mutex>(mutex());
+			const auto lock = std::lock_guard<std::mutex>(access);
 			assert(id < names().size());
 			return names()[id];
 		} //name_of
 	}; //class Names
+
+	std::mutex Names::access = {};
 
 	namespace parse {
 		Head find_head_type(const bmath::intern::ParseView view)
@@ -84,39 +83,46 @@ namespace simp {
 			using namespace bmath;
 			using namespace bmath::intern;
 			const std::size_t operator_pos = [](TokenView token_view) {
-				enum class Arity { unary, binary };
-				struct Operator { Token tok; Arity arity; };
+				enum class SearchStrategy { front, left_right, right_left };
+				struct Operator { Token tok; SearchStrategy strat; };
 				//order by precedence (low to high)
 				constexpr auto operators = std::to_array<Operator>({
-					{ token::colon,        Arity::binary },
-					{ token::backslash,    Arity::unary  },
-					{ token::or_,          Arity::binary },
-					{ token::and_,         Arity::binary },
-					{ token::relation,     Arity::binary },
-					{ token::sum,          Arity::binary },
-					{ token::sticky_space, Arity::binary }, //can also act as multiplication
-					{ token::product,      Arity::binary },
-					{ token::hat,          Arity::binary },
-					{ token::bang,         Arity::unary  },
-					{ token::unary_minus,  Arity::unary  },
-					});
-				std::size_t i = 0u;
-				while (i < operators.size()) {
-					std::size_t pos = find_last_of_skip_pars(token_view, operators[i].tok);
-					if (pos != TokenView::npos) {
-						//as we search in reverse, this loop adjust pos to point at first part of token
-						while (pos > 0 && token_view[pos - 1] == operators[i].tok) { 
-							pos--; //TODO: make less hacky
-						}
-						if (operators[i].arity == Arity::binary || pos == 0u) {
+					{ token::colon,        SearchStrategy::left_right },
+					{ token::backslash,    SearchStrategy::front      },
+					{ token::or_,          SearchStrategy::left_right },
+					{ token::and_,         SearchStrategy::left_right },
+					{ token::relation,     SearchStrategy::left_right },
+					{ token::sum,          SearchStrategy::right_left },
+					{ token::sticky_space, SearchStrategy::right_left }, //can also act as multiplication
+					{ token::product,      SearchStrategy::right_left },
+					{ token::hat,          SearchStrategy::right_left },
+					{ token::bang,         SearchStrategy::front      },
+					{ token::unary_minus,  SearchStrategy::front      },
+				});
+				
+				for (std::size_t i = 0u; i < operators.size(); i++) {
+					switch (operators[i].strat) {
+					case SearchStrategy::front: {
+						std::size_t pos = find_first_of_skip_pars(token_view, operators[i].tok);
+						if (pos == 0u) {
 							return pos;
 						}
-						else { //found unary operation in middle of view -> return binary operation bevore it
+						else if (pos != TokenView::npos) { //found unary operation in middle of view -> return binary operation bevore it
 							token_view.remove_suffix(token_view.size() - pos);
 						}
-					}
-					else {
-						i++;
+					} break;
+					case SearchStrategy::left_right: {
+						std::size_t pos = find_first_of_skip_pars(token_view, operators[i].tok);
+						if (pos != TokenView::npos) {
+							return pos;
+						}
+					} break;
+					case SearchStrategy::right_left: {
+						std::size_t pos = find_last_of_skip_pars(token_view, operators[i].tok);
+						if (pos != TokenView::npos) {
+							return pos;
+						}
+					} break;
 					}
 				}
 				return TokenView::npos;
@@ -185,13 +191,13 @@ namespace simp {
 					[name](const NameInfo& i) { return i.name == name; });
 				return iter != infos.rend() ?
 					iter->value :
-					literal_nullptr;
+					invalid_index;
 			}
 
 			NodeIndex build_symbol(Store& store, const LiteralInfos& infos, bmath::intern::ParseView view)
 			{
 				const std::string_view name = view.to_string_view();
-				if (const NodeIndex res = find_name_in_infos(infos.lambda_params, name); res != literal_nullptr) {
+				if (const NodeIndex res = find_name_in_infos(infos.lambda_params, name); res != invalid_index) {
 					return res;
 				}
 				if (!mundane_name(view)) [[unlikely]] {
@@ -203,19 +209,19 @@ namespace simp {
 			NodeIndex build_symbol(Store& store, PatternInfos& infos, bmath::intern::ParseView view)
 			{
 				std::string_view name = view.to_string_view();
-				if (const NodeIndex res = find_name_in_infos(infos.lambda_params, name); res != literal_nullptr) {
+				if (const NodeIndex res = find_name_in_infos(infos.lambda_params, name); res != invalid_index) {
 					return res;
 				}
-				if (const NodeIndex res = find_name_in_infos(infos.single_matches, name); res != literal_nullptr) {
+				if (const NodeIndex res = find_name_in_infos(infos.single_matches, name); res != invalid_index) {
 					return res;
 				}
-				if (const NodeIndex res = find_name_in_infos(infos.multi_matches, name); res != literal_nullptr) {
+				if (const NodeIndex res = find_name_in_infos(infos.multi_matches, name); res != invalid_index) {
 					if (infos.parse_match) [[unlikely]] {
 						throw bmath::ParseFailure{ view.offset, "multiple occurences of multi in lhs are forbidden" };
 					}
 					return copy_tree(Ref(store, res), store);
 				}
-				if (const NodeIndex res = find_name_in_infos(infos.value_matches, name); res != literal_nullptr) {
+				if (const NodeIndex res = find_name_in_infos(infos.value_matches, name); res != invalid_index) {
 					return copy_tree(Ref(store, res), store);
 				}
 				if (name.starts_with('\'') && name.ends_with('\'')) {
@@ -387,7 +393,7 @@ namespace simp {
 			} break;
 			default:
 				assert(false);
-				return literal_nullptr;
+				return invalid_index;
 			}
 		} //build
 		template NodeIndex build(Store&, name_lookup::LiteralInfos&, bmath::intern::ParseView);
@@ -431,7 +437,7 @@ namespace simp {
 			//extra condition concerning single match variables (might set multiple in relation)
 			struct SingleCondition
 			{
-				NodeIndex head = literal_nullptr;
+				NodeIndex head = invalid_index;
 				//dependencies[i] is set iff single match i occurs in the condition
 				std::bitset<match::State::max_single_match_count> dependencies = 0; 
 			};
@@ -452,13 +458,13 @@ namespace simp {
 				}
 				const auto cond_ref = MutRef(store, condition_head);
 				const bool contains_single = simp::search(cond_ref, 
-					[](const UnsaveRef r) { return r.type == SingleMatch::weak; }) != literal_nullptr;
+					[](const UnsaveRef r) { return r.type == SingleMatch::weak; }) != invalid_index;
 				const bool contains_value = simp::search(cond_ref,
-					[](const UnsaveRef r) { return r.typed_idx() == from_native(nv::PatternFn::value_match); }) != literal_nullptr;
+					[](const UnsaveRef r) { return r.typed_idx() == from_native(nv::PatternFn::value_match); }) != invalid_index;
 				const bool contains_multi = simp::search(cond_ref,
-					[](const UnsaveRef r) { return r.type == SpecialMatch::multi; }) != literal_nullptr; 
+					[](const UnsaveRef r) { return r.type == SpecialMatch::multi; }) != invalid_index; 
 				const bool contains_lambda = simp::search(cond_ref,
-						[](const UnsaveRef r) { return r.type == Literal::lambda; }) != literal_nullptr; 
+						[](const UnsaveRef r) { return r.type == Literal::lambda; }) != invalid_index; 
 				if (contains_multi || contains_lambda) [[unlikely]] {
 					throw ParseFailure{ conditions_view.offset, "sorry, but i am too lazy to check that" };
 				}
@@ -492,7 +498,7 @@ namespace simp {
 							return r.type == Literal::f_app && 
 							r->f_app.function() == from_native(nv::PatternFn::value_match); 
 						});
-					assert(value_app_idx != literal_nullptr);
+					assert(value_app_idx != invalid_index);
 					FApp& value_app = *MutRef(store, value_app_idx);
 					value_conditions[value_app[1].get_index()] = condition_head;
 				}
@@ -557,29 +563,6 @@ namespace simp {
 
 	namespace print {
 
-		constexpr int max_infixr = std::numeric_limits<int>::max();
-		constexpr int default_infixr = 0;
-
-		constexpr int infixr(const NodeIndex f) {
-			if (f.get_type() != Literal::symbol) { return default_infixr; }
-			using namespace nv;
-			switch (to_symbol(f)) {
-			case Symbol(ToBool::not_):       return 4000;
-			case Symbol(CtoC::pow):          return 3000;
-			case Symbol(Comm::prod):		 return 2001;
-			case Symbol(Comm::sum):          return 2000;
-			case Symbol(ToBool::eq):         return 1000;
-			case Symbol(ToBool::neq):        return 1000;
-			case Symbol(ToBool::greater):    return 1000;
-			case Symbol(ToBool::smaller):    return 1000;
-			case Symbol(ToBool::greater_eq): return 1000;
-			case Symbol(ToBool::smaller_eq): return 1000;
-			case Symbol(Comm::and_):         return 2;
-			case Symbol(Comm::or_):          return 1;
-			default:                          return default_infixr;
-			}
-		}
-
 		void append_f_app_info(const FAppInfo& info, const std::size_t param_count, std::string& str)
 		{
 			const auto to_string = [](const auto bitset, const std::size_t size) {
@@ -622,11 +605,11 @@ namespace simp {
 			str.append("]");
 		}
 
-		void append_to_string(const UnsaveRef ref, std::string& str, const int parent_infixr, const bool fancy)
+		void append_to_string(const UnsaveRef ref, std::string& str, const int parent_precedence, const bool fancy)
 		{
 			switch (ref.type) {
 			case NodeType(Literal::complex):
-				bmath::intern::print::append_complex(*ref, str, parent_infixr);
+				bmath::intern::print::append_complex(*ref, str, parent_precedence);
 				break;
 			case NodeType(Literal::symbol):
 				str.append(Names::name_of(ref.index));
@@ -637,46 +620,45 @@ namespace simp {
 				const FApp& f_app = *ref;
 				const NodeIndex function = f_app.function();
 				const char* replacement_seperator = nullptr;
-				const auto [init, seperator] = [&]() -> std::pair<const char*, const char*> {
-					using namespace nv;
+				const auto [init, seperator, precedence] = [&]() -> std::tuple<const char*, const char*, int> {
 					if (fancy && !in_pattern && function.get_type() == Literal::symbol) {
+						using namespace nv;
 						switch (to_symbol(function)) {
-						case Symbol(Comm::sum):             return { "" , " + "  };
-						case Symbol(Comm::prod):            return { "" , " "    };
-						case Symbol(Comm::and_):            return { "" , " && " };
-						case Symbol(Comm::or_):             return { "" , " || " };
-						case Symbol(CtoC::pow):             return { "" , " ^ "  };
-						case Symbol(ToBool::eq):            return { "" , " == " };
-						case Symbol(ToBool::neq):           return { "" , " != " };
-						case Symbol(ToBool::greater):       return { "" , " > "  };
-						case Symbol(ToBool::smaller):       return { "" , " < "  };
-						case Symbol(ToBool::greater_eq):    return { "" , " >= " };
-						case Symbol(ToBool::smaller_eq):    return { "" , " <= " };
-						case Symbol(ToBool::not_):          return { "!", ""     };
-						case Symbol(PatternFn::of_type):    return { "" , " :"   };
+						case Symbol(ToBool::not_):          return { "!", ""    , 40 };
+						case Symbol(CtoC::pow):             return { "" , "^"   , 30 };
+						case Symbol(Comm::prod):            return { "" , " "   , 21 };
+						case Symbol(Comm::sum):             return { "" , " + " , 20 };
+						case Symbol(ToBool::eq):            return { "" , " == ", 10 };
+						case Symbol(ToBool::neq):           return { "" , " != ", 10 };
+						case Symbol(ToBool::greater):       return { "" , " > " , 10 };
+						case Symbol(ToBool::smaller):       return { "" , " < " , 10 };
+						case Symbol(ToBool::greater_eq):    return { "" , " >= ", 10 };
+						case Symbol(ToBool::smaller_eq):    return { "" , " <= ", 10 };
+						case Symbol(Comm::and_):            return { "" , " && ",  3 };
+						case Symbol(Comm::or_):             return { "" , " || ",  2 };
+						case Symbol(PatternFn::of_type):    return { "" , " :"  ,  1 };
 						}
 					}
-					append_to_string(ref.at(function), str, max_infixr, fancy);
+					append_to_string(ref.at(function), str, 1000, fancy);
 					if (in_pattern) {
 						append_f_app_info(f_app_info(ref), ref->f_app.size() - 1u, str);
 					}
-					return { "", ", " };
+					return { "", ", ", 0 };
 				}();
-				const int own_infixr = (!fancy || in_pattern) ? default_infixr : infixr(function);
-				if (own_infixr <= parent_infixr) { str.push_back('('); }				
+				if (precedence <= parent_precedence) { str.push_back('('); }
 				const char* spacer = init;
 				for (const NodeIndex param : f_app.parameters()) {
 					str.append(std::exchange(spacer, seperator));
-					append_to_string(ref.at(param), str, own_infixr, fancy);
+					append_to_string(ref.at(param), str, precedence, fancy);
 				}
-				if (own_infixr <= parent_infixr) { str.push_back(')'); }
+				if (precedence <= parent_precedence) { str.push_back(')'); }
 			} break;
 			case NodeType(Literal::lambda): {
 				const Lambda& lambda = *ref;
 				str.append(lambda.transparent ? "([" : "{[");
 				str.append(std::to_string(lambda.param_count));
 				str.append("]\\");
-				append_to_string(ref.at(lambda.definition), str, max_infixr, fancy);
+				append_to_string(ref.at(lambda.definition), str, 1000, fancy);
 				str.push_back(lambda.transparent ? ')' : '}');
 			} break;
 			case NodeType(Literal::lambda_param):
@@ -688,7 +670,7 @@ namespace simp {
 				str.append("_X");
 				str.append(std::to_string(var.match_state_index));
 				str.append("[");
-				append_to_string(ref.at(var.condition), str, default_infixr, fancy);
+				append_to_string(ref.at(var.condition), str, 0, fancy);
 				str.append("]");
 			} break;				
 			case NodeType(SingleMatch::unrestricted):
@@ -711,7 +693,7 @@ namespace simp {
 				str.append(std::to_string(var.match_state_index));
 				str.append(var.owner ? "" : "'");
 				str.append("[");
-				append_to_string(ref.at(var.inverse), str, default_infixr, fancy);
+				append_to_string(ref.at(var.inverse), str, 0, fancy);
 				if (var.domain != nv::ComplexSubset::complex) {
 					str.append(", ");
 					str.append(nv::name_of(var.domain));

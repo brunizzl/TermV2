@@ -284,7 +284,8 @@ namespace simp {
 		return Symbol(idx.get_index());
 	}
 
-	constexpr NodeIndex literal_nullptr = from_native(nv::Const::nullptr_);
+	constexpr NodeIndex invalid_index   = NodeIndex();
+	constexpr NodeIndex literal_nullptr = from_native(nv::Const::nullptr_); //rarely what is needed
 	constexpr NodeIndex literal_false   = from_native(nv::Bool::false_);
 	constexpr NodeIndex literal_true    = from_native(nv::Bool::true_);
 	constexpr NodeIndex value_proxy     = from_native(nv::PatternConst::value_proxy);
@@ -328,10 +329,13 @@ namespace simp {
 	//only expected in rhs (lhs stores multis only as bool /bits in PatternCallData)
 	struct MultiMatch
 	{
-		std::uint32_t match_state_index; //indexes in match::State::f_app_entries
+		//indexes in match::State::f_app_entries
+		std::uint32_t match_state_index; 
+
 		//imaginary (as multi match variables are not explicitly in lhs) index in application in lhs, minus the other multis
 		//e.g. in "list(xs..., 1, ys..., list(as..., 2, bs..., 3, cs...)) = list(cs...)" 
 		//  has rhs instance of "cs..." .index_in_params = 2 (preceeded by "2" and "3")
+		//if a multi belongs to a commutative in lhs, .index_in_params == -1u
 		std::uint32_t index_in_params; 
 	};
 
@@ -554,8 +558,8 @@ namespace simp {
 			{ HaskellFn::map         , "map"       , 3u, { Restr::applicable, Restr::applicable, Literal::f_app             }, Literal::f_app  },
 			{ HaskellFn::filter      , "filter"    , 3u, { Restr::applicable, Restr::applicable, Literal::f_app             }, Literal::f_app  },
 			{ HaskellFn::split       , "split"     , 3u, { Restr::applicable, Restr::applicable, Literal::f_app             }, MiscFn::pair    },
-			{ HaskellFn::foldl       , "ffoldl"    , 4u, { Restr::applicable, Restr::applicable, Restr::any, Literal::f_app }, Restr::any      }, //foldl f z (x:xs) = foldl f (f z x) xs
-			{ HaskellFn::foldr       , "ffoldr"    , 4u, { Restr::applicable, Restr::applicable, Restr::any, Literal::f_app }, Restr::any      }, //foldr f z (x:xs) = f x (foldr f z xs) 
+			{ HaskellFn::foldl       , "foldl"     , 4u, { Restr::applicable, Restr::applicable, Restr::any, Literal::f_app }, Restr::any      }, //foldl f z (x:xs) = foldl f (f z x) xs
+			{ HaskellFn::foldr       , "foldr"     , 4u, { Restr::applicable, Restr::applicable, Restr::any, Literal::f_app }, Restr::any      }, //foldr f z (x:xs) = f x (foldr f z xs) 
 			{ PatternFn::value_match , "_VM"       , 3u, { PatternUnsigned{}, Restr::any, Restr::any                        }, Restr::any      }, //layout as in ValueMatch (minus .owner)
 			{ PatternFn::of_type     , "_Of_T"     , 2u, { Restr::any, Literal::symbol                                      }, Restr::boolean  },
 		});
@@ -703,8 +707,8 @@ namespace simp {
 		//whitch actually matched, and if the name "a" is already matched, even if the current instance is not.
 		struct SharedSingleMatchEntry
 		{
-			NodeIndex match_idx = literal_nullptr; //indexes in Term to simplify
-			bool is_set() const noexcept { return this->match_idx != literal_nullptr; } //debugging
+			NodeIndex match_idx = invalid_index; //indexes in Term to simplify
+			bool is_set() const noexcept { return this->match_idx != invalid_index; } //debugging
 		};
 
 		struct SharedValueMatchEntry
@@ -725,7 +729,7 @@ namespace simp {
 			//  with which element in term to match it currently is associated with.
 			std::array<MatchPos_T, max_params_count> match_positions;
 
-			NodeIndex match_idx = literal_nullptr; //indexes in Term to simplify (the haystack)
+			NodeIndex match_idx = invalid_index; //indexes in Term to simplify (the haystack)
 
 			constexpr SharedFAppEntry() noexcept { this->match_positions.fill(-1u); }
 
@@ -737,16 +741,6 @@ namespace simp {
 				return std::find(this->match_positions.begin(), stop, needle) != stop;
 			}
 		}; //SharedCallEntry
-
-		//range of values matched to a multi mtch variable
-		struct MultiRange
-		{
-			decltype(begin(std::declval<Ref>())) start;
-			decltype(end(std::declval<Ref>())) stop;
-
-			constexpr auto begin() const noexcept { return this->start; }
-			constexpr auto end() const noexcept { return this->stop; }
-		};
 
 		//to allow a constant RewriteRule to be matched against, all match info is stored here
 		struct State
@@ -786,28 +780,6 @@ namespace simp {
 			constexpr auto& f_app_entry(const UnsaveRef ref) const noexcept
 			{	assert(ref.type == PatternFApp{});
 				return this->f_app_entries[f_app_info(ref).match_state_index];
-			}
-
-			constexpr MultiRange multi_range(const MultiMatch& multi) const noexcept
-			{
-				assert(multi.index_in_params != -1u); 
-				const SharedFAppEntry& owning_entry = this->f_app_entries[multi.match_state_index];
-				const Ref matched_ref = this->make_ref(owning_entry.match_idx);
-				assert(matched_ref.type == Literal::f_app);
-				const FApp& matched_app = *matched_ref;
-
-				const std::uint32_t begin_params_index =
-					multi.index_in_params > 0 ?
-					//+1u because we only want the thingies after the match listed here
-					owning_entry.match_positions[multi.index_in_params - 1u] + 1u :
-					0u;
-				const std::uint32_t end_params_index =
-					owning_entry.match_positions[multi.index_in_params] != SharedFAppEntry::MatchPos_T(-1) ?
-					owning_entry.match_positions[multi.index_in_params] :
-					matched_app.parameters().size();
-				assert(begin_params_index < 10000 && end_params_index < 10000);
-				//+ 1u in both cases, because the function itself resides at index 0
-				return MultiRange{ { *matched_ref.store, matched_ref.index, begin_params_index + 1u }, { end_params_index + 1u } };
 			}
 		}; //State
 

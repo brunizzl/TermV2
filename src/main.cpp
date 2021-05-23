@@ -13,6 +13,7 @@
 TODO:
 
 important:
+ - fix bug in BasicStore when more than 63 nodes are allocated at once and not all bits are set to owning
  - finish match:
 	  - eval_value_match
  - only test subset of rulerange (requires rule iterator to become random access)
@@ -221,8 +222,8 @@ int main()
 			{ "'pair'(a + b, 'list'(b, a)) = 'success'('a_is', a, 'and_b_is', b)" },
 			
 			{ "'make_ints'(a, b) | a <= b = 'make_ints_h'(b, 'list'(a))" },
-			{ "'make_ints_h'(b, 'list'(xs..., b)) = 'list'(xs..., b)" },
-			{ "'make_ints_h'(b, 'list'(xs..., x)) = 'make_ints_h'(b, 'list'(xs..., x, x + 1))" },
+			{ "'make_ints_h'(b, 'list'(xs..., x)) | x < b = 'make_ints_h'(b, 'list'(xs..., x, x + 1))" },
+			{ "'make_ints_h'(b, 'list'(xs..., b))         = 'list'(xs..., b)" },
 			
 			{ "'change'(from, to, from(xs...)) = to(xs...)" },
 		};
@@ -230,17 +231,27 @@ int main()
 			std::cout << rule.to_string() << "\n\n";
 		}
 		std::cout << "\n";
-
+		bool exact = true;
 		while (true) {
 			std::string name;
 			std::cout << "simp> ";
 			std::getline(std::cin, name);
+			if (name == "--inexact") {
+				exact = false;
+				std::cout << "set exact to false\n\n";
+				continue;
+			}
+			if (name == "--exact") {
+				exact = true;
+				std::cout << "set exact to true\n\n";
+				continue;
+			}
 			try {
 				auto term = simp::LiteralTerm(name);
-				std::cout << " = " << term.to_string() << "\n\n";
+				//std::cout << " = " << term.to_string() << "\n\n";
 				//std::cout << term.to_memory_layout() << "\n\n\n";
-				term.normalize({ .exact = false });
-				term.head = simp::greedy_apply_ruleset(rules, term.mut_ref(), { .exact = false });
+				term.normalize({ .exact = exact });
+				term.head = simp::greedy_apply_ruleset(rules, term.mut_ref(), { .exact = exact });
 				std::cout << " = " << term.to_string() << "\n\n";
 				//std::cout << term.to_memory_layout() << "\n\n\n";
 

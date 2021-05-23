@@ -334,19 +334,19 @@ namespace simp {
                     for (std::size_t i = 0; i < params_size; i++) {
                         const nv::Native param_space = param_spaces[i];
                         if (param_space != Restr::any && !meets_restriction(ref.at(params[i]), param_space)) {
-                            return literal_nullptr;
+                            return invalid_index;
                         }
                     }
                 }
                 const std::size_t f_arity = arity(fixed_f);
                 assert(f_arity > 0u); //that would not make sense in a purely functional laguage
-                if (params.size() != f_arity) return literal_nullptr;
+                if (params.size() != f_arity) return invalid_index;
 
                 const auto compute_and_replace = [&](auto compute) -> NodeIndex {
                     std::feclearexcept(FE_ALL_EXCEPT);
                     const Complex result = compute();
                     if (options.exact && std::fetestexcept(FE_ALL_EXCEPT)) { //operation failed to be exact
-                        return literal_nullptr;
+                        return invalid_index;
                     }
                     free_tree(ref); 
                     const std::size_t new_index = ref.store->allocate_one();
@@ -412,8 +412,8 @@ namespace simp {
                         return r.type.is<PatternNodeType>() || r.type == Literal::lambda_param; 
                     };
                     //only evaluate if no placeholders of some sort remain
-                    if (search(ref, is_placeholder) != literal_nullptr) {
-                        return literal_nullptr;
+                    if (search(ref, is_placeholder) != invalid_index) {
+                        return invalid_index;
                     }
                     const std::strong_ordering ord = compare_tree(ref.at(params[0]), ref.at(params[1]));
                     free_tree(ref);
@@ -446,7 +446,7 @@ namespace simp {
                     free_app_shallow(ref); //free app of map
                     free_tree(converter_ref);
                     return outermost(convertee_ref, options).res;
-                } break;
+                } break; 
                 }
             } //end fixed arity
             else {
@@ -472,7 +472,7 @@ namespace simp {
                             free_tree(ref);
                             return short_circuit_value;
                         }
-                        return literal_nullptr;
+                        return invalid_index;
                     }
                 };
                 const auto maybe_accumulate = [&](Complex& acc, const Complex& new_, const auto operation) {
@@ -494,30 +494,35 @@ namespace simp {
                     const auto end_complex = std::find_if(params.begin(), params.end(),
                         [](const NodeIndex i) { return i.get_type() != Literal::complex; });
 
-                    //dont bother unless we have at least two values to add or the whole sum is only (up to) one value
-                    //  (second case is needed to make removing of sum around a single value consistent)
-                    if (auto iter = params.begin(); std::next(iter) < end_complex || end_complex == params.end()) {
-                        Complex acc = 0.0;
-                        std::size_t size = params.size();
-                        for (; iter != end_complex; ++iter) {
+                    if (auto iter = params.begin(); iter != end_complex) {
+                        const MutRef fst = ref.at(*iter);
+                        Complex acc = *fst;
+                        std::size_t remaining = params.size() - 1u; //already subtract fst
+                        while (++iter != end_complex) {
                             const MutRef current = ref.at(*iter);
                             if (maybe_accumulate(acc, *current, std::plus<Complex>())) {
                                 free_node_shallow(*current.store, current.index);
-                                *iter = literal_nullptr;
-                                size--;
+                                *iter = invalid_index;
+                                remaining--;
                             }
                         }
-                        if (size == 0u) {
+
+                        if (remaining == 0u) {
+                            free_node_shallow(*fst.store, fst.index);
                             free_app_shallow(ref);
                             return parse::build_value(*ref.store, acc);
                         }
-                        else if (acc != 0.0) { //addition with 0.0 is always exact -> we know params[0] == literal_nullptr -> reuse as position for new value
+                        else if (acc == 0.0) [[unlikely]] {
+                            free_node_shallow(*fst.store, fst.index);
+                            params.front() = invalid_index;
+                        }
+                        else if (remaining != params.size() - 1u) {
+                            free_node_shallow(*fst.store, fst.index);
                             const NodeIndex new_val = parse::build_value(*ref.store, acc); //could change stores data position 
                             params = ref->f_app.parameters(); //update params to (possibly) new position
-                            assert(params.front() == literal_nullptr);
                             params.front() = new_val;
                         }
-                        remove_shallow_value(literal_nullptr);
+                        remove_shallow_value(invalid_index);
                     }
                 } break;
                 case Variadic(Comm::prod): {
@@ -525,19 +530,18 @@ namespace simp {
                         [](const NodeIndex i) { return i.get_type() != Literal::complex; });
 
                     if (auto iter = params.begin(); iter != end_complex) {
-                        Complex acc = 1.0;
-                        std::size_t size = params.size();
-                        if (options.exact || std::next(iter) != end_complex || end_complex == params.end()) {
-                            for (; iter != end_complex; ++iter) {
-                                const MutRef current = ref.at(*iter);
-                                if (maybe_accumulate(acc, *current, std::multiplies<Complex>())) {
-                                    free_node_shallow(*current.store, current.index);
-                                    *iter = literal_nullptr;
-                                    size--;
-                                }
+                        const MutRef fst = ref.at(*iter);
+                        Complex acc = *fst;
+                        std::size_t remaining = params.size() - 1u; //already subtract fst
+                        while (++iter != end_complex) {
+                            const MutRef current = ref.at(*iter);
+                            if (maybe_accumulate(acc, *current, std::multiplies<Complex>())) {
+                                free_node_shallow(*current.store, current.index);
+                                *iter = invalid_index;
+                                remaining--;
                             }
                         }
-                        if (options.exact) { //evaluate exact division (never succeeds if acc == 1.0 -> only try if we had at least one value)
+                        if (options.exact) { //evaluate exact division
                             const auto is_value_pow_app = [ref](const NodeIndex n) {
                                 if (n.get_type() != Literal::f_app) return false;
                                 const FApp& app = *ref.at(n);
@@ -558,23 +562,28 @@ namespace simp {
                                     maybe_accumulate(acc, base, std::divides<Complex>()))
                                 {
                                     free_tree(current);
-                                    *iter = literal_nullptr;
-                                    size--;
+                                    *iter = invalid_index;
+                                    remaining--;
                                 }
                             }
                         }
 
-                        if (size == 0u) {
+                        if (remaining == 0u) {
+                            free_node_shallow(*fst.store, fst.index);
                             free_app_shallow(ref);
                             return parse::build_value(*ref.store, acc);
                         }
-                        else if (acc != 1.0) { //multiplication with 1.0 is always exact -> we know params[0] == literal_nullptr -> reuse as position for new value
+                        else if (acc == 1.0) [[unlikely]] {
+                            free_node_shallow(*fst.store, fst.index);
+                            params.front() = invalid_index;
+                        }
+                        else if (remaining != params.size() - 1u) {
+                            free_node_shallow(*fst.store, fst.index);
                             const NodeIndex new_val = parse::build_value(*ref.store, acc); //could change stores data position 
                             params = ref->f_app.parameters(); //update params to (possibly) new position
-                            assert(params.front() == literal_nullptr);
                             params.front() = new_val;
                         }
-                        remove_shallow_value(literal_nullptr);
+                        remove_shallow_value(invalid_index);
                     }
                 } break;
                 case Variadic(Comm::set): if (params.size() >= 2) { 
@@ -584,15 +593,15 @@ namespace simp {
                         UnsaveRef snd = ref.at(*iter); //remove duplicates (remember: already sorted)
                         if (compare_tree(fst, snd) == std::strong_ordering::equal) {
                             free_tree(ref.at(*iter));
-                            *iter = literal_nullptr;
+                            *iter = invalid_index;
                         }
                         fst = snd;
                     }
-                    remove_shallow_value(literal_nullptr);
+                    remove_shallow_value(invalid_index);
                 } break;
                 }
             } //end variadic
-            return literal_nullptr;
+            return invalid_index;
         } //eval_native
 
         void BMATH_FORCE_INLINE sort(MutRef ref)
@@ -623,7 +632,7 @@ namespace simp {
                     }
                     if (symbol.is<nv::Native>()) {
                         if (const NodeIndex res = eval_native(ref, options, function);
-                            res != literal_nullptr)
+                            res != invalid_index)
                         {
                             //if the function could be fully evaluated, the following step(s) can no longer be executed -> return
                             return { res, true };
@@ -1041,7 +1050,7 @@ namespace simp {
                         const auto has_owned_single = [r](const NodeIndex n) {
                             return search(r.at(n), [](const UnsaveRef rr) {
                                 return rr.type == SingleMatch::restricted || rr.type == SingleMatch::unrestricted;
-                                }) != literal_nullptr;
+                                }) != invalid_index;
                         };
                         const std::span<const NodeIndex> params = r->f_app.parameters();
                         if (info.preceeded_by_multi) {
@@ -1070,7 +1079,7 @@ namespace simp {
                 }
                 return false;
             };
-            return search(ref, app_is_rematchable) != literal_nullptr;
+            return search(ref, app_is_rematchable) != invalid_index;
         } //is_rematchable
 
         using EquivalenceTable = std::array<std::array<bool, match::State::max_single_match_count>,
@@ -1280,7 +1289,7 @@ namespace simp {
                             multi_changes.emplace_back(identifier,
                                 MultiMatch{ this_pattern_index, commuts ? -1u : pos_mod_multis });
                             free_tree(ref.at(param));
-                            param = literal_nullptr;
+                            param = invalid_index;
                             if (info.preceeded_by_multi.test(pos_mod_multis)) {
                                 throw TypeError{ "two multis in direct succession are illegal in lhs", ref };
                             }
@@ -1290,7 +1299,7 @@ namespace simp {
                             pos_mod_multis++;
                         }
                     }
-                    const auto new_end = std::remove(f_app.begin(), f_app.end(), literal_nullptr);
+                    const auto new_end = std::remove(f_app.begin(), f_app.end(), invalid_index);
                     f_app.shrink_size_to(new_end - f_app.begin());
                 }
             }
@@ -1380,6 +1389,43 @@ namespace simp {
 
 
     namespace match {
+
+        template<bmath::intern::Callable<NodeIndex> F>
+        void for_each_multi(const MultiMatch multi, const match::State& state, F f)
+        {
+            const SharedFAppEntry& entry = state.f_app_entries[multi.match_state_index];
+            const Ref matched_ref = Ref(*state.haystack, entry.match_idx);
+            assert(matched_ref.type == Literal::f_app);
+
+            if (multi.index_in_params == -1u) { //commutative -> multi might not be one pice
+                auto iter = begin(matched_ref); //currently pointing at function
+                const auto stop = end(matched_ref);
+                for (++iter; iter != stop; ++iter) {
+                    //-1u as we dont want the function itself, only the parameters
+                    if (!entry.index_matched(iter.array_idx - 1u)) {
+                        f(*iter);
+                    }
+                }
+            }
+            else { //only part of matched_ref's unmatched parameters belongs to multi (but part is continuous)
+                const std::uint32_t begin_params_index =
+                    multi.index_in_params > 0 ?
+                    //+1u because we only want the thingies after the match listed here
+                    entry.match_positions[multi.index_in_params - 1u] + 1u :
+                    0u;
+                const std::uint32_t end_params_index =
+                    entry.match_positions[multi.index_in_params] != SharedFAppEntry::MatchPos_T(-1) ?
+                    entry.match_positions[multi.index_in_params] :
+                    matched_ref->f_app.parameters().size();
+
+                //+ 1u in both cases, because the function itself resides at index 0
+                auto iter = decltype(begin(std::declval<Ref>())){ *matched_ref.store, matched_ref.index, begin_params_index + 1u };
+                const auto stop = decltype(end(std::declval<Ref>())){ end_params_index + 1u };
+                for (; iter != stop; ++iter) {
+                    f(*iter);
+                }
+            }
+        } //for_each_multi
 
         auto make_ref_maker(const State& match_state, const TermNode* const store_data)
         {
@@ -1481,7 +1527,7 @@ namespace simp {
                 const auto is_snd = [&](const UnsaveRef r) { 
                     return compare_tree(snd_ref, r) == std::strong_ordering::equal;
                 };
-                return search(make_ref(params[0]), is_snd) != literal_nullptr;
+                return search(make_ref(params[0]), is_snd) != invalid_index;
             } break;
             case Symbol(ToBool::not_):
                 return !test_condition(cond.at(params[0]), match_state);
@@ -1865,7 +1911,6 @@ namespace simp {
 
     } //namespace match
 
-    static bool break_ = false;
 
     NodeIndex pattern_interpretation(const UnsaveRef pn_ref, const match::State& match_state, 
         Store& store, const Options options)
@@ -1897,24 +1942,9 @@ namespace simp {
             for (; iter != stop; ++iter) {
                 if (iter->get_type() == SpecialMatch::multi) {
                     const MultiMatch multi = *pn_ref.at(*iter);
-                    if (multi.index_in_params == -1u) { //commutative -> multi might not be one pice
-                        const match::SharedFAppEntry& entry = match_state.f_app_entries[multi.match_state_index];
-                        const Ref donator = Ref(store, entry.match_idx);
-                        const auto donator_stop = end(donator);
-                        auto donator_iter = begin(donator); //currently pointing at function
-                        for (++donator_iter; donator_iter != donator_stop; ++donator_iter) {
-                            if (!entry.index_matched(donator_iter.array_idx - 1u)) { //-1u as we dont want the function itself, only the parameters
-                                dst_subterms.push_back(share(store, *donator_iter));
-                            }
-                        }
-                    }
-                    else {
-                        match::MultiRange donator = match_state.multi_range(multi);
-                        for (; donator.start != donator.stop; ++donator.start) {
-                            dst_subterms.push_back(share(store, *donator.start));
-                        }
-                    }
-                } //end if multi
+                    match::for_each_multi(multi, match_state, 
+                        [&](const NodeIndex n) { dst_subterms.push_back(share(store, n)); });
+                } 
                 else {
                     dst_subterms.push_back(pattern_interpretation(
                         pn_ref.at(*iter), match_state, store, options));
@@ -1935,7 +1965,7 @@ namespace simp {
         default:
             assert(false);
             BMATH_UNREACHABLE;
-            return literal_nullptr;
+            return invalid_index;
         }
     } //pattern_interpretation
  

@@ -108,7 +108,7 @@ namespace simp {
 	};
 	//tries to match every maybe applicable rule, returns first succesfull rule application,
 	//the old ref is not deleted.
-	//if no match was found, { literal_nullptr, undefined } is returned
+	//if no match was found, { invalid_index, undefined } is returned
 	[[nodiscard]] RuleApplicationRes raw_apply_ruleset(const RuleSet& rules, const MutRef ref,
 		match::State& state, const Options options);
 

@@ -127,7 +127,7 @@ namespace simp {
 
 	namespace print {
 
-		void append_to_string(const UnsaveRef ref, std::string& str, const int parent_infixr, const bool fancy = true);
+		void append_to_string(const UnsaveRef ref, std::string& str, const int parent_precedence, const bool fancy = true);
 
 		inline [[nodiscard]] std::string to_string(const UnsaveRef ref)
 		{

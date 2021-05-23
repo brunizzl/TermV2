@@ -121,6 +121,7 @@ namespace bmath::intern {
 		{
 			//pointer to array of VecElem with [0 .. this->capacity) used as payload and [this->capacity .. end) used as occupancy tables
 			VecElem* combined_data = nullptr;
+			BitSet64* occupancy_data = nullptr;
 
 			constexpr Memory() noexcept = default;
 
@@ -129,13 +130,22 @@ namespace bmath::intern {
 
 			constexpr Memory(Memory&& snd) noexcept
 				:Alloc_T<VecElem>(std::move(snd)),
-				combined_data(std::exchange(snd.combined_data, nullptr)) {}
+				combined_data(std::exchange(snd.combined_data, nullptr)),
+				occupancy_data(std::exchange(snd.occupancy_data, nullptr)) {}
 		} memory = {};
-		static_assert(sizeof(Memory) == sizeof(VecElem*) || !std::is_empty_v<Alloc_T<VecElem>>); //use empty base class optimisation for Alloc_T == std::allocator
+		static_assert(sizeof(Memory) == sizeof(VecElem*) * 2 || !std::is_empty_v<Alloc_T<VecElem>>); //use empty base class optimisation for Alloc_T == std::allocator
 
 		//returns pointer to begin of management array
-		constexpr inline BitSet64* occupancy_data() noexcept { return this->memory.combined_data[this->capacity].table.data; }
-		constexpr inline const BitSet64* occupancy_data() const noexcept { return this->memory.combined_data[this->capacity].table.data; }
+		constexpr inline BitSet64* occupancy_data() noexcept 
+		{
+			assert(this->memory.occupancy_data == this->memory.combined_data[this->capacity].table.data);
+			return this->memory.occupancy_data;
+		}
+		constexpr inline const BitSet64* occupancy_data() const noexcept 
+		{
+			assert(this->memory.occupancy_data == this->memory.combined_data[this->capacity].table.data);
+			return this->memory.occupancy_data;
+		}
 
 
 		//unsave, because if new_capacity is smaller than current this->size_, the last elements are lost and size_ is not shrunk -> possible to access invalid memory
@@ -159,6 +169,7 @@ namespace bmath::intern {
 			}
 
 			this->memory.combined_data = new_data;
+			this->memory.occupancy_data = (new_data + new_capacity)->table.data;
 			this->capacity = new_capacity;
 		} //unsave_change_capacity()
 
@@ -336,7 +347,7 @@ namespace bmath::intern {
 					}
 				}
 			}
-			else { //n >= 64u
+			else if (false) { //n >= 64u
 				//allocate alligned at the start of the first bitset where the needed number of bitsets is completely empty
 				const std::size_t needed_bitsets = (n + 63u) / 64u;
 				std::size_t bitsets_left = needed_bitsets;
