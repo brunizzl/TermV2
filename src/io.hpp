@@ -29,6 +29,7 @@ namespace simp {
 				divided,       //where specifies position of found operator
 				power,         //where specifies position of found operator
 				of_type,       //where specifies position of found operator
+				cons,          //where specifies position of found operator
 				not_,		   //where is unspecified
 				negate,	       //where is unspecified
 				real_value,    //where is unspecified

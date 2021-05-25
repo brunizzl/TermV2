@@ -1034,7 +1034,7 @@ namespace simp {
         //to be rematchable one has to eighter contain a rematchable subterm or be 
         //a pattern f_app with at least one of the following properties:
         //   - in a non-commutative f_app at least two parameters are multi match variables 
-        //     e.g. "list(xs..., 1, 2, ys...)" but not "list(xs..., 1, 2, list(ys...))"
+        //     e.g. "tup(xs..., 1, 2, ys...)" but not "tup(xs..., 1, 2, tup(ys...))"
         //   - in a commutative f_app a multi match and one or more parameters containing an owned single match are held
         //     e.g. "a + bs..." or "2 a + bs..." but not "2 + bs..."
         //   - in a commutative f_app two or more parameters hold an owned single match and are relatively unordered

@@ -13,7 +13,7 @@
 TODO:
 
 important:
- - fix bug in BasicStore when more than 63 nodes are allocated at once and not all bits are set to owning
+ - move callstack to heap in recursive functions iterating over terms
  - finish match:
 	  - eval_value_match
  - only test subset of rulerange (requires rule iterator to become random access)
@@ -32,20 +32,19 @@ nice to have:
  - add eval_native for min/max to remove values guaranteed to not be minimum / maximum without requiring full evaluation
  - add neutral element to associative functions
  - add "dont care" pattern
- - use ref-counting in store instead of always copy (-> normalize::eval_native no longer has to do as much memory management)
  - implement meta_pn::match function for variadic patterns
  - achieve feature parity between compile time pattern and run time pattern (add value match to ct)
  - enable StupidBufferVector to handle non-trivial destructible types -> change name to BufferVector
  - automate error checking in stupidTests.hpp -> change name to tests.hpp
  - noexceptify everything
  - restructure everything to use modules (basically needed to constexprfy all the things)
- - allow to restrict a variables domain (add to Names map?)
+ - allow to restrict a variables domain (add to Names vector?)
 
 idea status:
+ - introduce special condition "submatch" , where "submatch(x, ???, pat)" tries to match pat in parts of x, where the parts can be chosen using ??? in some way
  - allow PatternFApp in rhs to indicate, that a call of lhs can be "stolen" e.g. the parameter count in rhs is guaranteed to be lower than the one in lhs -> the old allocation can be reused
  - let each RewriteRule have a name in form of a constant c-string (not what pattern is constructed from, but name of rule, e.g. "differentiation: product rule" or something)
  - always keep -1 at some known index in store and never allocate new -1 in build_negated and build_inverted (problem: identify bevore copy, solution: you know the index)
- - sort pattern with care for match variables
  - change macros in meta_pn to create function objects, not functions 
  - build meta_pn::match not from pattern encoded as type, but pattern encoded as value by taking lamdas returning pattern part as template parameter
 */
@@ -77,18 +76,18 @@ int main()
 	}
 	{
 		const auto names = std::to_array<std::string>({
-			{ "list(conj(3-1i), conj(4+3i), conj(8), conj(-1i))" },
-			{ "list(3 == 4, 3 != 4, 3 < 4, 3 <= 4, 3 >= 4, 3 > 4)" },
-			{ "list(4 == 4, 4 != 4, 4 < 4, 4 <= 4, 4 >= 4, 4 > 4)" },
-			{ "list(x == 4, x != 4, x < 4, x <= 4, x >= 4, x > 4)" },
-			{ "list(floor(4.2), floor(3.9), floor(2-1i), ceil(3.9), ceil(4), ceil(4+1i))" },
+			{ "tup(conj(3-1i), conj(4+3i), conj(8), conj(-1i))" },
+			{ "tup(3 == 4, 3 != 4, 3 < 4, 3 <= 4, 3 >= 4, 3 > 4)" },
+			{ "tup(4 == 4, 4 != 4, 4 < 4, 4 <= 4, 4 >= 4, 4 > 4)" },
+			{ "tup(x == 4, x != 4, x < 4, x <= 4, x >= 4, x > 4)" },
+			{ "tup(floor(4.2), floor(3.9), floor(2-1i), ceil(3.9), ceil(4), ceil(4+1i))" },
 			{ "set(1, -4, 5, a, 12, 13+3i, 13+4i, 13-1i, 13, 13+1i, b, -10)" },
 			{ "true(3, 4)" },
 			{ "false(3, 4^2)" },
 			{ "\\x.\\y.\\z. x + y + z" },
 			{ "a + b + 3 + c + 1 + 6 + a" },
 			{ "(\\x y. x y)(a, 4)" },
-			{ "(\\x y z. list(x, y, z))(a, 4, sin(x))" },
+			{ "(\\x y z. tup(x, y, z))(a, 4, sin(x))" },
 			{ "4^(0.5)" },
 			{ "2^(0.5)" },
 			{ "map(sum, \\x. -x, sum(a, b, sin(x), 3, 5))" },
@@ -186,8 +185,8 @@ int main()
 			{ "'reverse_h'(fxs, f())              = fxs" },
 			
 			//listing first n fibonacci numbers:
-			{ "'fib_n'(n)  |  n >= 2                       = 'reverse'('list', 'list_fibs'(n - 2, 'list'(1, 0)))" },
-			{ "'list_fibs'(n, 'list'(a, b, bs...)) | n > 0 = 'list_fibs'(n - 1, 'list'(a + b, a, b, bs...))" },
+			{ "'fib_n'(n)  |  n >= 2                       = 'reverse'('tup', 'list_fibs'(n - 2, 'tup'(1, 0)))" },
+			{ "'list_fibs'(n, 'tup'(a, b, bs...)) | n > 0 = 'list_fibs'(n - 1, 'tup'(a + b, a, b, bs...))" },
 			{ "'list_fibs'(n, res)                         = res" },
 			
 			{ "'filter'(f, p, f(xs...)) = 'take_true'(f(), 'map'(f, \\x .'pair'(p(x), x), f(xs...)))" },
@@ -200,11 +199,11 @@ int main()
 			{ "'split_hlp'(f(xs...), f(ys...), f('pair'(_   , z), zs...))   = 'split_hlp'(f(xs...), f(ys..., z), f(zs...))" },
 			{ "'split_hlp'(fxs, fys, f())                                   = 'pair'(fxs, fys)" },
 			
-			{ "'sort'('list'())                                   = 'list'()" },
-			{ "'sort'('list'(x))                                  = 'list'(x)" },
-			{ "'sort'('list'(x, xs...))                           = 'sort_h1'('split'('list', \\y .y < x, 'list'(xs...)), x)" },
-			{ "'sort_h1'('pair'('list'(xs...), 'list'(ys...)), x) = 'sort_h2'('sort'('list'(xs...)), x, 'sort'('list'(ys...)))" },
-			{ "'sort_h2'('list'(xs...), x, 'list'(ys...))         = 'list'(xs..., x, ys...)" },
+			{ "'sort'('tup'())                                   = 'tup'()" },
+			{ "'sort'('tup'(x))                                  = 'tup'(x)" },
+			{ "'sort'('tup'(x, xs...))                           = 'sort_h1'('split'('tup', \\y .y < x, 'tup'(xs...)), x)" },
+			{ "'sort_h1'('pair'('tup'(xs...), 'tup'(ys...)), x) = 'sort_h2'('sort'('tup'(xs...)), x, 'sort'('tup'(ys...)))" },
+			{ "'sort_h2'('tup'(xs...), x, 'tup'(ys...))         = 'tup'(xs..., x, ys...)" },
 			
 			{ "'union'('set'(xs...), 'set'(ys...)) = 'set'(xs..., ys...)" },
 			{ "'union'()                           = 'set'()" },
@@ -218,25 +217,31 @@ int main()
 			{ "'foldr'(f, g, acc, f())         = acc" },
 			{ "'foldr'(f, g, acc, f(x, xs...)) = g(x, 'foldr'(f, g, acc, f(xs...)))" },
 			
-			{ "'pair'('test_'(ws..., a, b, c, xs...), 'test_'(ys..., a, b, c, zs...)) = 'list'(ws..., 'found'(a, b, c), xs..., '_space_', ys..., 'found'(a, b, c), zs...)" },
-			{ "'pair'(a + b, 'list'(b, a)) = 'success'('a_is', a, 'and_b_is', b)" },
+			{ "'pair'('test_'(ws..., a, b, c, xs...), 'test_'(ys..., a, b, c, zs...)) = 'tup'(ws..., 'found'(a, b, c), xs..., '_space_', ys..., 'found'(a, b, c), zs...)" },
+			{ "'pair'(a + b, 'tup'(b, a)) = 'success'('a_is', a, 'and_b_is', b)" },
 			
-			{ "'make_ints'(a, b) | a <= b = 'make_ints_h'(b, 'list'(a))" },
-			{ "'make_ints_h'(b, 'list'(xs..., x)) | x < b = 'make_ints_h'(b, 'list'(xs..., x, x + 1))" },
-			{ "'make_ints_h'(b, 'list'(xs..., b))         = 'list'(xs..., b)" },
+			{ "'make_ints'('tup', a, b)              | a <= b = 'make_ints_tup_h'(b, 'tup'(a))" },
+			{ "'make_ints_tup_h'(b, 'tup'(xs..., x)) | x < b  = 'make_ints_tup_h'(b, 'tup'(xs..., x, x + 1))" },
+			{ "'make_ints_tup_h'(b, res)                      = res" },
+
+			{ "'make_ints'('cons', a, b)      | a <= b = 'make_ints_cons_h'(b - a, b :: '_Nullptr')" },
+			{ "'make_ints_cons_h'(n, y :: ys) | n > 0  = 'make_ints_cons_h'(n - 1, (y - 1) :: y :: ys)" },
+			{ "'make_ints_cons_h'(n, res)              = res" },
 			
-			{ "'change'(from, to, from(xs...)) = to(xs...)" },
+			{ "'change'(f, g, f(xs...)) = g(xs...)" },
 		};
 		for (const simp::RuleRef rule : rules) {
 			std::cout << rule.to_string() << "\n\n";
 		}
 		std::cout << "\n";
+
 		bool exact = true;
+		bool show_memory = false;
 		while (true) {
 			std::string name;
 			std::cout << "simp> ";
 			std::getline(std::cin, name);
-			if (name == "--inexact") {
+			if (name == "--not exact") {
 				exact = false;
 				std::cout << "set exact to false\n\n";
 				continue;
@@ -246,6 +251,16 @@ int main()
 				std::cout << "set exact to true\n\n";
 				continue;
 			}
+			if (name == "--not show memory") {
+				show_memory = false;
+				std::cout << "set show_memory to false\n\n";
+				continue;
+			}
+			if (name == "--show memory") {
+				show_memory = true;
+				std::cout << "set show_memory to true\n\n";
+				continue;
+			}
 			try {
 				auto term = simp::LiteralTerm(name);
 				//std::cout << " = " << term.to_string() << "\n\n";
@@ -253,7 +268,7 @@ int main()
 				term.normalize({ .exact = exact });
 				term.head = simp::greedy_apply_ruleset(rules, term.mut_ref(), { .exact = exact });
 				std::cout << " = " << term.to_string() << "\n\n";
-				std::cout << term.to_memory_layout() << "\n\n\n";
+				if (show_memory) std::cout << term.to_memory_layout() << "\n\n\n";
 
 				assert((simp::free_tree(term.mut_ref()), term.store.nr_used_slots() == 0u));
 			}

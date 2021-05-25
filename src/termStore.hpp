@@ -362,7 +362,7 @@ namespace bmath::intern {
 							//bitset_index now points at first not needed bitset following the needed ones
 							const std::size_t res_bitset_index = bitset_index - needed_bitsets;							
 							{ //set the now occupied bits...
-								const std::size_t bits_set_in_last_bitset = (n - 1u) % 64u + 1u; //in [1..64]
+								const std::size_t bits_set_in_last_bitset = (n % 64u) ? (n % 64u) : 64u;
 								assert((needed_bitsets - 1u) * 64u + bits_set_in_last_bitset == n);
 								const std::uint64_t last_mask = -1ull >> (64u - bits_set_in_last_bitset); 						
 								this->occupancy_data()[--bitset_index] = last_mask; // ...in the last relevant bitset

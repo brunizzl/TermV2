@@ -5,13 +5,163 @@
 #include <string>
 #include <compare>
 #include <cassert>
+#include <ranges>
 
 #include "types.hpp"
 #include "io.hpp"
 #include "utility/meta.hpp"
+#include "utility/vector.hpp"
 
 namespace simp {
 
+    /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    //\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\general utility\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+    /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+    using bmath::intern::CallableTo;
+
+    template<typename C, typename ElemInfo>
+    concept Consumer = requires (C t, UnsaveRef ref, ElemInfo info) {
+        { t.make_info(ref) };
+        { t.consume(ref, info) };
+        { t.finalize(info) };
+    };
+
+    template<typename ElemInfo, Consumer<ElemInfo> C>
+    void traverse_app_preorder(const UnsaveRef ref, C& consumer, ElemInfo fst_info)
+    {
+        consumer.consume(ref, fst_info);
+
+        if (ref.type == Literal::f_app) {
+            struct StackElem
+            {
+                NodeIndex const* iter;
+                NodeIndex const* const stop;
+                ElemInfo info;
+            };
+            bmath::intern::StupidBufferVector<StackElem, 128> stack;
+            stack.emplace_back(ref->f_app.begin(), ref->f_app.end(), consumer.make_info(ref));
+
+        iterate_over_top:
+            do {
+                StackElem& top = stack.back();
+                while (top.iter != top.stop) {
+                    const UnsaveRef current = ref.at(*(top.iter++));
+                    consumer.consume(current, top.info);
+
+                    if (current.type == Literal::f_app) {
+                        stack.emplace_back(current->f_app.begin(), current->f_app.end(), consumer.make_info(current));
+                        goto iterate_over_top;
+                    }
+                }
+                consumer.finalize(top.info);
+                stack.pop_back();
+            } while (stack.size());
+        }
+    } //traverse_preorder
+
+    template<typename ElemInfo, Consumer<ElemInfo> C>
+    void traverse_preorder(const UnsaveRef ref, C& consumer, ElemInfo fst_info)
+    {
+        consumer.consume(ref, fst_info);
+
+        if (ref.type == Literal::f_app || ref.type == Literal::lambda) {
+            struct StackElem
+            {
+                NodeIndex const* iter;
+                NodeIndex const* const stop;
+                ElemInfo info;
+            };
+            bmath::intern::StupidBufferVector<StackElem, 128> stack;
+
+            if (ref.type == Literal::f_app) {
+                stack.emplace_back(ref->f_app.begin(), ref->f_app.end(), consumer.make_info(ref));
+            }
+            else {
+                assert(ref.type == Literal::lambda);
+                NodeIndex const* const definition = &ref->lambda.definition;
+                stack.emplace_back(definition, definition + 1, consumer.make_info(ref));
+            }
+
+        iterate_over_top:
+            do {
+                StackElem& top = stack.back();
+                for (; top.iter != top.stop; ++top.iter) {
+                    const UnsaveRef current = ref.at(*top.iter);
+                    consumer.consume(current, top.info);
+
+                    if (current.type == Literal::f_app) {
+                        stack.emplace_back(current->f_app.begin(), current->f_app.end(), consumer.make_info(current));
+                        goto iterate_over_top;
+                    }
+                    if (current.type == Literal::lambda) {
+                        NodeIndex const* const definition = &current->lambda.definition;
+                        stack.emplace_back(definition, definition + 1, consumer.make_info(current));
+                        goto iterate_over_top;
+                    }
+                }
+                consumer.finalize(top.info);
+                stack.pop_back();
+            } while (stack.size());
+        }
+    } //traverse_preorder
+
+
+    //returns first subterm where pred is true, tested in pre-order
+    template<std::predicate<UnsaveRef> Pred>
+    NodeIndex search(const UnsaveRef ref, Pred pred)
+    {
+        if (pred(ref)) {
+            return ref.typed_idx();
+        }
+        else if (ref.type == Literal::f_app || ref.type == PatternFApp{}) {
+            for (const NodeIndex subterm : ref->f_app) {
+                const NodeIndex sub_res = search(ref.at(subterm), pred);
+                if (sub_res != invalid_index) {
+                    return sub_res;
+                }
+            }
+        }
+        else if (ref.type == Literal::lambda) {
+            return search(ref.at(ref->lambda.definition), pred);
+        }
+        return invalid_index;
+    } //search
+
+    //applies f to every subterm in postorder, result is new subterm
+    template<bmath::intern::Reference R, bmath::intern::CallableTo<NodeIndex, R> F>
+    [[nodiscard]] NodeIndex transform(const R ref, F f)
+    {
+        if (ref.type == Literal::f_app || ref.type == PatternFApp{}) {
+            const auto stop = end(ref);
+            for (auto iter = begin(ref); iter != stop; ++iter) {
+                *iter = transform(ref.at(*iter), f);
+            }
+        }
+        if (ref.type == Literal::lambda) {
+            ref->lambda.definition = transform(ref.at(ref->lambda.definition), f);
+        }
+        return f(ref);
+    } //transform
+
+    //applies f to every subterm in postorder
+    template<bmath::intern::Reference R, bmath::intern::Procedure<R> F>
+    void transform(const R ref, F f)
+    {
+        if (ref.type == Literal::f_app || ref.type == PatternFApp{}) {
+            for (const auto sub : ref) {
+                transform(ref.at(sub), f);
+            }
+        }
+        if (ref.type == Literal::lambda) {
+            transform(ref.at(ref->lambda.definition), f);
+        }
+        f(ref);
+    } //transform
+
+    /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    //\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\finished functions\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+    /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
     bool in_complex_subset(const Complex& nr, const nv::ComplexSubset domain);
 
@@ -119,60 +269,6 @@ namespace simp {
         };
     } //ordered
     constexpr auto ordered_less = ordered<std::strong_ordering::less, compare_tree>;
-
-
-
-    //returns first subterm where pred is true, tested in pre-order
-    template<std::predicate<UnsaveRef> Pred>
-    NodeIndex search(const UnsaveRef ref, Pred pred)
-    {
-        if (pred(ref)) {
-            return ref.typed_idx();
-        }
-        else if (ref.type == Literal::f_app || ref.type == PatternFApp{}) {
-            for (const NodeIndex subterm : ref->f_app) {
-                const NodeIndex sub_res = search(ref.at(subterm), pred);
-                if (sub_res != invalid_index) {
-                    return sub_res;
-                }
-            }
-        }
-        else if (ref.type == Literal::lambda) {
-            return search(ref.at(ref->lambda.definition), pred);
-        }
-        return invalid_index;
-    } //search
-
-    //applies f to every subterm in postorder, result is new subterm
-    template<bmath::intern::Reference R, bmath::intern::CallableTo<NodeIndex, R> F>
-    [[nodiscard]] NodeIndex transform(const R ref, F f) 
-    {
-        if (ref.type == Literal::f_app || ref.type == PatternFApp{}) {
-            const auto stop = end(ref);
-            for (auto iter = begin(ref); iter != stop; ++iter) {
-                *iter = transform(ref.at(*iter), f);
-            }
-        }
-        if (ref.type == Literal::lambda) {
-            ref->lambda.definition = transform(ref.at(ref->lambda.definition), f);
-        }
-        return f(ref);
-    } //transform
-
-    //applies f to every subterm in postorder
-    template<bmath::intern::Reference R, bmath::intern::Procedure<R> F>
-    void transform(const R ref, F f)
-    {
-        if (ref.type == Literal::f_app || ref.type == PatternFApp{}) {
-            for (const auto sub : ref) {
-                transform(ref.at(sub), f);
-            }
-        }
-        if (ref.type == Literal::lambda) {
-            transform(ref.at(ref->lambda.definition), f);
-        }
-        f(ref);
-    } //transform
 
     namespace build_rule {
 

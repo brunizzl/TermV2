@@ -119,7 +119,7 @@ namespace simp {
 
 		enum class NonComm
 		{
-			list,
+			tup,
 			ordered_sum,
 			ordered_prod,
 			COUNT
@@ -190,6 +190,7 @@ namespace simp {
 			pair,   //two parameters, no evaluation
 			fst, //access pair elements
 			snd, //access pair elements
+			cons, //constucts a list as in lisp
 			COUNT
 		};
 
@@ -333,7 +334,7 @@ namespace simp {
 		std::uint32_t match_state_index; 
 
 		//imaginary (as multi match variables are not explicitly in lhs) index in application in lhs, minus the other multis
-		//e.g. in "list(xs..., 1, ys..., list(as..., 2, bs..., 3, cs...)) = list(cs...)" 
+		//e.g. in "tup(xs..., 1, ys..., tup(as..., 2, bs..., 3, cs...)) = tup(cs...)" 
 		//  has rhs instance of "cs..." .index_in_params = 2 (preceeded by "2" and "3")
 		//if a multi belongs to a commutative in lhs, .index_in_params == -1u
 		std::uint32_t index_in_params; 
@@ -555,6 +556,7 @@ namespace simp {
 			{ MiscFn::pair           , "pair"      , 2u, {}                     , MiscFn::pair                },
 			{ MiscFn::fst            , "fst"       , 1u, { MiscFn::pair        }, Restr::any                  },
 			{ MiscFn::snd            , "snd"       , 1u, { MiscFn::pair        }, Restr::any                  },
+			{ MiscFn::cons           , "cons"      , 2u, { Restr::any, MiscFn::cons }, MiscFn::cons           },
 			{ HaskellFn::map         , "map"       , 3u, { Restr::applicable, Restr::applicable, Literal::f_app             }, Literal::f_app  },
 			{ HaskellFn::filter      , "filter"    , 3u, { Restr::applicable, Restr::applicable, Literal::f_app             }, Literal::f_app  },
 			{ HaskellFn::split       , "split"     , 3u, { Restr::applicable, Restr::applicable, Literal::f_app             }, MiscFn::pair    },
@@ -589,7 +591,7 @@ namespace simp {
 		};
 
 		constexpr auto variadic_table = std::to_array<VariadicProps>({
-			{ NonComm::list           , "list"        , false, Restr::any         , NonComm::list       },
+			{ NonComm::tup           , "tup"        , false, Restr::any         , NonComm::tup       },
 			{ NonComm::ordered_sum    , "sum'"        , true , Restr::any         , Restr::any          },
 			{ NonComm::ordered_prod   , "prod'"       , true , Restr::any         , Restr::any          },
 			{ Comm::sum               , "sum"         , true , Literal::complex   , Literal::complex    },
@@ -628,7 +630,7 @@ namespace simp {
 		};
 
 		constexpr auto constant_table = std::to_array<CommonProps>({
-			{ Const::nullptr_            , "_Nullptr"    , Const::nullptr_ },
+			{ Const::nullptr_            , "_Nullptr"    , Restr::any      },
 			{ PatternConst::value_proxy  , "_VP"         , PatternConst::value_proxy },
 			{ Restr::any                 , "\\"          , Literal::symbol }, //can not be constructed from a string
 			{ Restr::applicable          , "applicable"  , Literal::symbol },

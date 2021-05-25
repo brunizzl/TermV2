@@ -143,7 +143,7 @@ namespace simp {
 					case ' ':  return Head::Type::times;
 					case '/':  return Head::Type::divided;
 					case '^':  return Head::Type::power;
-					case ':':  return Head::Type::of_type;
+					case ':':  return view.chars[operator_pos + 1u] == ':' ? Head::Type::cons : Head::Type::of_type;
 					default:
 						assert(false);
 						return Head::Type::symbol;
@@ -334,6 +334,7 @@ namespace simp {
 			case Head::Type::divided:    return to_inverse_buildin_app(nv::Comm::prod, build_inverted<Store>);
 			case Head::Type::power:      return to_buildin_app(1, nv::CtoC::pow);
 			case Head::Type::of_type:    return to_buildin_app(1, nv::PatternFn::of_type);
+			case Head::Type::cons:       return to_buildin_app(2, nv::MiscFn::cons);
 			case Head::Type::not_: {
 				view.remove_prefix(1u);  //remove '!'
 				const NodeIndex to_negate = parse::build(store, infos, view);
@@ -637,6 +638,7 @@ namespace simp {
 						case Symbol(Comm::and_):            return { "" , " && ",  3 };
 						case Symbol(Comm::or_):             return { "" , " || ",  2 };
 						case Symbol(PatternFn::of_type):    return { "" , " :"  ,  1 };
+						case Symbol(MiscFn::cons):          return { "" , " :: ",  1 };
 						}
 					}
 					append_to_string(ref.at(function), str, 1000, fancy);
