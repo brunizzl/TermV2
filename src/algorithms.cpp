@@ -289,34 +289,6 @@ namespace simp {
             return {};
         } //eval_binary_complex
 
-        struct ReplaceItem
-        {
-            NodeIndex from, to;
-        };
-
-        NodeIndex replace(const MutRef ref, const Options options, 
-            const bmath::intern::StupidBufferVector<ReplaceItem, 16>& replace_items)
-        {
-            assert(ref.type != PatternFApp{});
-            for (const ReplaceItem replace_item : replace_items) {
-                if (compare_tree(ref.at(replace_item.from), ref) == std::strong_ordering::equal) {
-                    free_tree(ref);
-                    return copy_tree(ref.at(replace_item.to), *ref.store);
-                }
-            }
-            if (ref.type == Literal::f_app) {
-                const auto stop = end(ref);
-                for (auto iter = begin(ref); iter != stop; ++iter) {
-                    *iter = replace(ref.at(*iter), options, replace_items);
-                }
-                return normalize::outermost(ref, options).res;
-            }
-            if (ref.type == Literal::lambda) {
-                ref->lambda.definition = replace(ref.at(ref->lambda.definition), options, replace_items);
-            }
-            return ref.typed_idx();
-        } //find_and_replace
-
         NodeIndex BMATH_FORCE_INLINE eval_native(const MutRef ref, const Options options, const NodeIndex function)
         {
             using namespace nv;
@@ -649,11 +621,9 @@ namespace simp {
                     }
                 } break;
                 case NodeType(Literal::lambda): {
-                    if (options.eval_lambdas) {
-                        assert(!ref.at(function)->lambda.transparent);
-                        const NodeIndex evaluated = eval_lambda(ref, options);
-                        return { evaluated, true };
-                    }
+                    assert(!ref.at(function)->lambda.transparent);
+                    const NodeIndex evaluated = eval_lambda(ref, options);
+                    return { evaluated, true };
                 } break;
                 }
                 return { ref.typed_idx(), change };
@@ -677,13 +647,6 @@ namespace simp {
                         *iter = normalize::recursive(ref.at(*iter), options);
                     }
                 }
-            }
-            if (ref.type == Literal::lambda) {
-                const Lambda lambda = *ref;
-                Options new_options = options;
-                new_options.eval_lambdas = false; //no longer outside a lambda definitions
-                ref->lambda.definition = 
-                    normalize::recursive(ref.at(lambda.definition), new_options);
             }
             return normalize::outermost(ref, options).res;
         } //recursive
