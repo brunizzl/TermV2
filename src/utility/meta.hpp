@@ -104,7 +104,6 @@ namespace bmath::intern {
 						 {c.size() } -> std::same_as<std::size_t>;
 	};
 
-	static_assert(ContainerOf<std::array<int, 3>, int>);
 	static_assert(ContainerOf<std::string_view, char>);
 
 

@@ -7,10 +7,12 @@
 #include <cassert>
 #include <ranges>
 
-#include "types.hpp"
-#include "io.hpp"
 #include "utility/meta.hpp"
 #include "utility/vector.hpp"
+#include "utility/queue.hpp"
+
+#include "types.hpp"
+#include "io.hpp"
 
 namespace simp {
 
@@ -62,23 +64,27 @@ namespace simp {
 
 
     //returns first subterm where pred is true, tested in pre-order
-    template<std::predicate<UnsaveRef> Pred>
-    NodeIndex search(const UnsaveRef ref, Pred pred)
+    template<bool traverse_lambdas = false, NodeType f_app = Literal::f_app, std::predicate<UnsaveRef> Pred>
+    NodeIndex search(const TermNode* const store_data, const NodeIndex head, Pred pred)
     {
-        if (pred(ref)) {
-            return ref.typed_idx();
-        }
-        else if (ref.type == Literal::f_app || ref.type == PatternFApp{}) {
-            for (const NodeIndex subterm : ref->f_app) {
-                const NodeIndex sub_res = search(ref.at(subterm), pred);
-                if (sub_res != invalid_index) {
-                    return sub_res;
-                }
+        static_assert(f_app == Literal::f_app || f_app == PatternFApp{});
+        Queue<NodeIndex, 128> queue;
+        queue.emplace_back(head);
+        do {
+            const NodeIndex curr_idx = queue.pop_front();
+            const UnsaveRef curr_ref = UnsaveRef(store_data, curr_idx.get_index(), curr_idx.get_type());
+            assert(curr_ref.type != Literal::f_app || f_app == Literal::f_app);
+            assert(curr_ref.type != PatternFApp{}  || f_app == PatternFApp{} );
+            if (pred(curr_ref)) {
+                return curr_idx;
             }
-        }
-        else if (ref.type == Literal::lambda) {
-            return search(ref.at(ref->lambda.definition), pred);
-        }
+            if (curr_ref.type == f_app) {
+                for (const NodeIndex& sub : curr_ref) { queue.emplace_back(sub); }
+            }
+            if constexpr (traverse_lambdas) {
+                if (curr_ref.type == Literal::lambda) { queue.emplace_back(curr_ref->lambda.definition); }
+            }
+        } while (queue.size());
         return invalid_index;
     } //search
 

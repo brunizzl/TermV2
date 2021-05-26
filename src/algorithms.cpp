@@ -380,14 +380,7 @@ namespace simp {
                     }
                 } break;
                 case FixedArity(ToBool::eq):
-                case FixedArity(ToBool::neq): {
-                    const auto is_placeholder = [](const UnsaveRef r) { 
-                        return r.type.is<PatternNodeType>() || r.type == Literal::lambda_param; 
-                    };
-                    //only evaluate if no placeholders of some sort remain
-                    if (search(ref, is_placeholder) != invalid_index) {
-                        return invalid_index;
-                    }
+                case FixedArity(ToBool::neq): if (options.eval_special) {
                     const std::strong_ordering ord = compare_tree(ref.at(params[0]), ref.at(params[1]));
                     free_tree(ref);
                     return bool_to_typed_idx((fixed_f == ToBool::eq) ^ (ord != std::strong_ordering::equal));
@@ -1015,7 +1008,7 @@ namespace simp {
                     switch (info.strategy) {
                     case MatchStrategy::permutation: {
                         const auto has_owned_single = [r](const NodeIndex n) {
-                            return search(r.at(n), [](const UnsaveRef rr) {
+                            return search<true, PatternFApp{}>(r.store_data(), n, [](const UnsaveRef rr) {
                                 return rr.type == SingleMatch::restricted || rr.type == SingleMatch::unrestricted;
                                 }) != invalid_index;
                         };
@@ -1046,7 +1039,7 @@ namespace simp {
                 }
                 return false;
             };
-            return search(ref, app_is_rematchable) != invalid_index;
+            return search<true, PatternFApp{}>(ref.store_data(), ref.typed_idx(), app_is_rematchable) != invalid_index;
         } //is_rematchable
 
         using EquivalenceTable = std::array<std::array<bool, match::State::max_single_match_count>,
@@ -1494,7 +1487,7 @@ namespace simp {
                 const auto is_snd = [&](const UnsaveRef r) { 
                     return compare_tree(snd_ref, r) == std::strong_ordering::equal;
                 };
-                return search(make_ref(params[0]), is_snd) != invalid_index;
+                return search<true>(make_ref(params[0]).store_data(), params[0], is_snd) != invalid_index;
             } break;
             case Symbol(ToBool::not_):
                 return !test_condition(cond.at(params[0]), match_state);

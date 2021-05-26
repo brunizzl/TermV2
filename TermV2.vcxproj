@@ -158,6 +158,7 @@
     <ClInclude Include="src\utility\bit.hpp" />
     <ClInclude Include="src\utility\meta.hpp" />
     <ClInclude Include="src\utility\misc.hpp" />
+    <ClInclude Include="src\utility\queue.hpp" />
     <ClInclude Include="src\utility\stringLiteral.hpp" />
     <ClInclude Include="src\utility\sumEnum.hpp" />
     <ClInclude Include="src\utility\typeDebug.hpp" />

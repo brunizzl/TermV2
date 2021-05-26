@@ -431,7 +431,7 @@ namespace simp {
 			infos.parse_match = false;
 			heads.rhs = parse::build(store, infos, rhs_view); 
 
-			heads.lhs = normalize::recursive(MutRef(store, heads.lhs), {});
+			heads.lhs = normalize::recursive(MutRef(store, heads.lhs), { .eval_special = false });
 			heads.rhs = normalize::recursive(MutRef(store, heads.rhs), 
 				{ .remove_unary_assoc = false, .eval_special = false });
 
@@ -453,18 +453,17 @@ namespace simp {
 				const std::size_t comma = find_first_of_skip_pars(conditions_view.tokens, token::comma);
 				const auto condition_view = conditions_view.steal_prefix(comma);
 				const NodeIndex condition_head = normalize::recursive(
-					MutRef(store, parse::build(store, infos, condition_view)), {});
+					MutRef(store, parse::build(store, infos, condition_view)), { .eval_special = false });
 				if (condition_head.get_type() != Literal::f_app) [[unlikely]] {
 					throw ParseFailure{ conditions_view.offset, "please make this condition look a bit more conditiony." };
 				}
-				const auto cond_ref = MutRef(store, condition_head);
-				const bool contains_single = simp::search(cond_ref, 
+				const bool contains_single = simp::search<true>(store.data(), condition_head, 
 					[](const UnsaveRef r) { return r.type == SingleMatch::weak; }) != invalid_index;
-				const bool contains_value = simp::search(cond_ref,
+				const bool contains_value = simp::search<true>(store.data(), condition_head,
 					[](const UnsaveRef r) { return r.typed_idx() == from_native(nv::PatternFn::value_match); }) != invalid_index;
-				const bool contains_multi = simp::search(cond_ref,
+				const bool contains_multi = simp::search<true>(store.data(), condition_head,
 					[](const UnsaveRef r) { return r.type == SpecialMatch::multi; }) != invalid_index; 
-				const bool contains_lambda = simp::search(cond_ref,
+				const bool contains_lambda = simp::search<true>(store.data(), condition_head,
 						[](const UnsaveRef r) { return r.type == Literal::lambda; }) != invalid_index; 
 				if (contains_multi || contains_lambda) [[unlikely]] {
 					throw ParseFailure{ conditions_view.offset, "sorry, but i am too lazy to check that" };
@@ -491,10 +490,10 @@ namespace simp {
 							return res;
 						}
 					} list_singles;
-					single_conditions.emplace_back(condition_head, list_singles(cond_ref));
+					single_conditions.emplace_back(condition_head, list_singles(Ref(store, condition_head)));
 				}
 				if (contains_value) {
-					const NodeIndex value_app_idx = simp::search(cond_ref,
+					const NodeIndex value_app_idx = simp::search<true>(store.data(), condition_head,
 						[](const UnsaveRef r) { 
 							return r.type == Literal::f_app && 
 							r->f_app.function() == from_native(nv::PatternFn::value_match); 

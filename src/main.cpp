@@ -9,6 +9,8 @@
 #include "io.hpp"
 #include "rewrite.hpp"
 
+#include "utility/queue.hpp"
+
 /*
 TODO:
 
@@ -98,7 +100,7 @@ int main()
 			{ "(\\f n. f(f, n))(\\f n.(n == 1)(1, n * f(f, -1 + n)), 5)" },
 			{ "(\\x .\\y .x(y))(\\x .\\y .x(y))(\\x .x)" },
 		});
-		constexpr bool show = false;
+		constexpr bool show = true;
 		for (const auto& name : names) {
 			if (show) std::cout << name << "\n";
 			auto term = simp::LiteralTerm(name);
