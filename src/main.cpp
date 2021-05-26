@@ -96,6 +96,7 @@ int main()
 			{ "set(1, 100, a, b, 50 + 2 * 25, a, (\\x.2 x)(50))" },
 			{ "(\\f n. f(f, n))(\\f n.(n <= 1)(1, n * f(f, -1 + n)), 5)" },
 			{ "(\\f n. f(f, n))(\\f n.(n == 1)(1, n * f(f, -1 + n)), 5)" },
+			{ "(\\x .\\y .x(y))(\\x .\\y .x(y))(\\x .x)" },
 		});
 		constexpr bool show = false;
 		for (const auto& name : names) {

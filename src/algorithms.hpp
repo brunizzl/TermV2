@@ -20,14 +20,14 @@ namespace simp {
 
     using bmath::intern::CallableTo;
 
-    template<typename C, typename ElemInfo>
-    concept Consumer = requires (C t, UnsaveRef ref, ElemInfo info) {
-        { t.make_info(ref) };
-        { t.consume(ref, info) };
-        { t.finalize(info) };
+    template<typename C, typename R, typename ElemInfo>
+    concept Consumer = requires (C c, R ref, ElemInfo& info) {
+        { c.make_info(ref) };
+        { c.consume(ref, info) };
+        { c.finalize(info) };
     };
 
-    template<typename ElemInfo, Consumer<ElemInfo> C>
+    template<typename ElemInfo, Consumer<UnsaveRef, ElemInfo> C>
     void traverse_app_preorder(const UnsaveRef ref, C& consumer, ElemInfo fst_info)
     {
         consumer.consume(ref, fst_info);
@@ -37,7 +37,7 @@ namespace simp {
             {
                 NodeIndex const* iter;
                 NodeIndex const* const stop;
-                ElemInfo info;
+                ElemInfo info; 
             };
             bmath::intern::StupidBufferVector<StackElem, 128> stack;
             stack.emplace_back(ref->f_app.begin(), ref->f_app.end(), consumer.make_info(ref));
@@ -58,53 +58,7 @@ namespace simp {
                 stack.pop_back();
             } while (stack.size());
         }
-    } //traverse_preorder
-
-    template<typename ElemInfo, Consumer<ElemInfo> C>
-    void traverse_preorder(const UnsaveRef ref, C& consumer, ElemInfo fst_info)
-    {
-        consumer.consume(ref, fst_info);
-
-        if (ref.type == Literal::f_app || ref.type == Literal::lambda) {
-            struct StackElem
-            {
-                NodeIndex const* iter;
-                NodeIndex const* const stop;
-                ElemInfo info;
-            };
-            bmath::intern::StupidBufferVector<StackElem, 128> stack;
-
-            if (ref.type == Literal::f_app) {
-                stack.emplace_back(ref->f_app.begin(), ref->f_app.end(), consumer.make_info(ref));
-            }
-            else {
-                assert(ref.type == Literal::lambda);
-                NodeIndex const* const definition = &ref->lambda.definition;
-                stack.emplace_back(definition, definition + 1, consumer.make_info(ref));
-            }
-
-        iterate_over_top:
-            do {
-                StackElem& top = stack.back();
-                for (; top.iter != top.stop; ++top.iter) {
-                    const UnsaveRef current = ref.at(*top.iter);
-                    consumer.consume(current, top.info);
-
-                    if (current.type == Literal::f_app) {
-                        stack.emplace_back(current->f_app.begin(), current->f_app.end(), consumer.make_info(current));
-                        goto iterate_over_top;
-                    }
-                    if (current.type == Literal::lambda) {
-                        NodeIndex const* const definition = &current->lambda.definition;
-                        stack.emplace_back(definition, definition + 1, consumer.make_info(current));
-                        goto iterate_over_top;
-                    }
-                }
-                consumer.finalize(top.info);
-                stack.pop_back();
-            } while (stack.size());
-        }
-    } //traverse_preorder
+    } //traverse_app_preorder
 
 
     //returns first subterm where pred is true, tested in pre-order
