@@ -105,6 +105,7 @@ namespace simp {
                 for (auto iter = begin(ref); iter != stop; ++iter) {
                     res_application.push_back(replace_lambda_params(ref.at(*iter), params, transparent));
                 }
+                //TODO: maybe only build new if something changed
                 const std::size_t res_index = FApp::build(*ref.store, res_application);
                 return NodeIndex(res_index, Literal::f_app);
             }
@@ -648,7 +649,8 @@ namespace simp {
                     }
                 } break;
                 case NodeType(Literal::lambda): {
-                    if (!ref.at(function)->lambda.transparent) {
+                    if (options.eval_lambdas) {
+                        assert(!ref.at(function)->lambda.transparent);
                         const NodeIndex evaluated = eval_lambda(ref, options);
                         return { evaluated, true };
                     }
@@ -678,8 +680,10 @@ namespace simp {
             }
             if (ref.type == Literal::lambda) {
                 const Lambda lambda = *ref;
+                Options new_options = options;
+                new_options.eval_lambdas = false; //no longer outside a lambda definitions
                 ref->lambda.definition = 
-                    normalize::recursive(ref.at(lambda.definition), options);
+                    normalize::recursive(ref.at(lambda.definition), new_options);
             }
             return normalize::outermost(ref, options).res;
         } //recursive

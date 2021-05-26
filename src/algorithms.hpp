@@ -174,6 +174,7 @@ namespace simp {
         bool exact = true; //true: only exact operations are permitted
         bool remove_unary_assoc = true; //true: "f(a) -> a" for all associative f (e.g. sum, product, and...)
         bool eval_special = true; //replace is evaluated
+        bool eval_lambdas = true; //may only be true if we are not inside a lambdas definition
     };
 
     namespace normalize {

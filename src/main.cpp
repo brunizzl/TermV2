@@ -263,7 +263,7 @@ int main()
 			}
 			try {
 				auto term = simp::LiteralTerm(name);
-				//std::cout << " = " << term.to_string() << "\n\n";
+				std::cout << " = " << term.to_string() << "\n\n";
 				//std::cout << term.to_memory_layout() << "\n\n\n";
 				term.normalize({ .exact = exact });
 				term.head = simp::greedy_apply_ruleset(rules, term.mut_ref(), { .exact = exact });
