@@ -137,6 +137,7 @@
   <ItemGroup>
     <ClInclude Include="src\algorithms.hpp" />
     <ClInclude Include="src\arithmeticTerm.hpp" />
+    <ClInclude Include="src\control.hpp" />
     <ClInclude Include="src\countingStore.hpp" />
     <ClInclude Include="src\fold.hpp" />
     <ClInclude Include="src\io.hpp" />

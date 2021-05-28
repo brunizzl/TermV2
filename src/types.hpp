@@ -257,7 +257,7 @@ namespace simp {
 
 		enum class Const
 		{
-			nullptr_,
+			null,
 			COUNT
 		};
 
@@ -285,11 +285,11 @@ namespace simp {
 		return Symbol(idx.get_index());
 	}
 
-	constexpr NodeIndex invalid_index   = NodeIndex();
-	constexpr NodeIndex literal_nullptr = from_native(nv::Const::nullptr_); //rarely what is needed
-	constexpr NodeIndex literal_false   = from_native(nv::Bool::false_);
-	constexpr NodeIndex literal_true    = from_native(nv::Bool::true_);
-	constexpr NodeIndex value_proxy     = from_native(nv::PatternConst::value_proxy);
+	constexpr NodeIndex invalid_index = NodeIndex();
+	constexpr NodeIndex literal_null  = from_native(nv::Const::null); //rerely intendet as intermediary value
+	constexpr NodeIndex literal_false = from_native(nv::Bool::false_);
+	constexpr NodeIndex literal_true  = from_native(nv::Bool::true_);
+	constexpr NodeIndex value_proxy   = from_native(nv::PatternConst::value_proxy);
 
 	constexpr NodeIndex bool_to_typed_idx(const bool b) { return b ? literal_true : literal_false; }
 
@@ -630,7 +630,7 @@ namespace simp {
 		};
 
 		constexpr auto constant_table = std::to_array<CommonProps>({
-			{ Const::nullptr_            , "_Nullptr"    , Restr::any      },
+			{ Const::null                , "null"    , Restr::any      },
 			{ PatternConst::value_proxy  , "_VP"         , PatternConst::value_proxy },
 			{ Restr::any                 , "\\"          , Literal::symbol }, //can not be constructed from a string
 			{ Restr::applicable          , "applicable"  , Literal::symbol },

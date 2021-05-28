@@ -36,6 +36,7 @@ namespace simp {
 			assert(this->size_ >= 1);
 			//due to queues circular nature, from can start at this->end_used, but not be invalid.
 			//that case occurs precisely when this->capacity() == this->size_
+			//  -> the following loop may not check from before the first iteration
 			Value_T* from = this->start_used;
 			Value_T* to = new_data;
 			do {

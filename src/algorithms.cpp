@@ -16,6 +16,7 @@
 #include "termVector.hpp"
 #include "io.hpp"
 #include "rewrite.hpp"
+#include "control.hpp"
 
 
 
@@ -932,8 +933,8 @@ namespace simp {
                     FApp& f_app = *r;
                     assert(f_app[1].get_type().is<PatternUnsigned>());
                     const std::uint32_t match_state_index = f_app[1].get_index();
-                    const NodeIndex inverse = std::exchange(f_app[3], literal_nullptr);
-                    const NodeIndex domain = shallow_apply_ruleset(to_domain, r.at(std::exchange(f_app[2], literal_nullptr)), 
+                    const NodeIndex inverse = std::exchange(f_app[3], literal_null);
+                    const NodeIndex domain = shallow_apply_ruleset(to_domain, r.at(std::exchange(f_app[2], literal_null)), 
                         { .remove_unary_assoc = false, .eval_special = false });
                     if (domain.get_type() != Literal::symbol || !to_symbol(domain).is<nv::ComplexSubset>()) {
                         throw TypeError{ "value match restrictions may only be of form \"<value match> :<complex subset>\"", r };
@@ -1008,7 +1009,7 @@ namespace simp {
                     switch (info.strategy) {
                     case MatchStrategy::permutation: {
                         const auto has_owned_single = [r](const NodeIndex n) {
-                            return search<true, PatternFApp{}>(r.store_data(), n, [](const UnsaveRef rr) {
+                            return ctrl::search<true, PatternFApp{}>(r.store_data(), n, [](const UnsaveRef rr) {
                                 return rr.type == SingleMatch::restricted || rr.type == SingleMatch::unrestricted;
                                 }) != invalid_index;
                         };
@@ -1039,7 +1040,7 @@ namespace simp {
                 }
                 return false;
             };
-            return search<true, PatternFApp{}>(ref.store_data(), ref.typed_idx(), app_is_rematchable) != invalid_index;
+            return ctrl::search<true, PatternFApp{}>(ref.store_data(), ref.typed_idx(), app_is_rematchable) != invalid_index;
         } //is_rematchable
 
         using EquivalenceTable = std::array<std::array<bool, match::State::max_single_match_count>,
@@ -1483,11 +1484,12 @@ namespace simp {
                 return meets_restriction(make_ref(params[0]), restr.to<Native>());
             }
             case Symbol(ToBool::contains): {
+                const UnsaveRef fst_ref = make_ref(params[0]);
                 const UnsaveRef snd_ref = make_ref(params[1]);
                 const auto is_snd = [&](const UnsaveRef r) { 
                     return compare_tree(snd_ref, r) == std::strong_ordering::equal;
                 };
-                return search<true>(make_ref(params[0]).store_data(), params[0], is_snd) != invalid_index;
+                return ctrl::search<true>(fst_ref.store_data(), fst_ref.typed_idx(), is_snd) != invalid_index;
             } break;
             case Symbol(ToBool::not_):
                 return !test_condition(cond.at(params[0]), match_state);

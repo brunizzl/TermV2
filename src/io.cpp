@@ -14,6 +14,7 @@
 
 #include "ioArithmetic.hpp"
 #include "algorithms.hpp"
+#include "control.hpp"
 
 namespace simp {
 
@@ -457,13 +458,13 @@ namespace simp {
 				if (condition_head.get_type() != Literal::f_app) [[unlikely]] {
 					throw ParseFailure{ conditions_view.offset, "please make this condition look a bit more conditiony." };
 				}
-				const bool contains_single = simp::search<true>(store.data(), condition_head, 
+				const bool contains_single = ctrl::search<true>(store.data(), condition_head, 
 					[](const UnsaveRef r) { return r.type == SingleMatch::weak; }) != invalid_index;
-				const bool contains_value = simp::search<true>(store.data(), condition_head,
+				const bool contains_value = ctrl::search<true>(store.data(), condition_head,
 					[](const UnsaveRef r) { return r.typed_idx() == from_native(nv::PatternFn::value_match); }) != invalid_index;
-				const bool contains_multi = simp::search<true>(store.data(), condition_head,
+				const bool contains_multi = ctrl::search<true>(store.data(), condition_head,
 					[](const UnsaveRef r) { return r.type == SpecialMatch::multi; }) != invalid_index; 
-				const bool contains_lambda = simp::search<true>(store.data(), condition_head,
+				const bool contains_lambda = ctrl::search<true>(store.data(), condition_head,
 						[](const UnsaveRef r) { return r.type == Literal::lambda; }) != invalid_index; 
 				if (contains_multi || contains_lambda) [[unlikely]] {
 					throw ParseFailure{ conditions_view.offset, "sorry, but i am too lazy to check that" };
@@ -493,7 +494,7 @@ namespace simp {
 					single_conditions.emplace_back(condition_head, list_singles(Ref(store, condition_head)));
 				}
 				if (contains_value) {
-					const NodeIndex value_app_idx = simp::search<true>(store.data(), condition_head,
+					const NodeIndex value_app_idx = ctrl::search<true>(store.data(), condition_head,
 						[](const UnsaveRef r) { 
 							return r.type == Literal::f_app && 
 							r->f_app.function() == from_native(nv::PatternFn::value_match); 

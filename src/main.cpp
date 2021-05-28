@@ -227,7 +227,7 @@ int main()
 			{ "'make_ints_tup_h'(b, 'tup'(xs..., x)) | x < b  = 'make_ints_tup_h'(b, 'tup'(xs..., x, x + 1))" },
 			{ "'make_ints_tup_h'(b, res)                      = res" },
 
-			{ "'make_ints'('cons', a, b)      | a <= b = 'make_ints_cons_h'(b - a, b :: '_Nullptr')" },
+			{ "'make_ints'('cons', a, b)      | a <= b = 'make_ints_cons_h'(b - a, b :: 'null')" },
 			{ "'make_ints_cons_h'(n, y :: ys) | n > 0  = 'make_ints_cons_h'(n - 1, (y - 1) :: y :: ys)" },
 			{ "'make_ints_cons_h'(n, res)              = res" },
 			
@@ -266,8 +266,8 @@ int main()
 			}
 			try {
 				auto term = simp::LiteralTerm(name);
-				std::cout << " = " << term.to_string() << "\n\n";
-				//std::cout << term.to_memory_layout() << "\n\n\n";
+				//std::cout << " = " << term.to_string() << "\n\n";
+				std::cout << term.to_memory_layout() << "\n\n\n";
 				term.normalize({ .exact = exact });
 				term.head = simp::greedy_apply_ruleset(rules, term.mut_ref(), { .exact = exact });
 				std::cout << " = " << term.to_string() << "\n\n";

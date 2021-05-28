@@ -9,7 +9,6 @@
 
 #include "utility/meta.hpp"
 #include "utility/vector.hpp"
-#include "utility/queue.hpp"
 
 #include "types.hpp"
 #include "io.hpp"
@@ -20,73 +19,6 @@ namespace simp {
     //\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\general utility\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
     /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-    using bmath::intern::CallableTo;
-
-    template<typename C, typename R, typename ElemInfo>
-    concept Consumer = requires (C c, R ref, ElemInfo& info) {
-        { c.make_info(ref) };
-        { c.consume(ref, info) };
-        { c.finalize(info) };
-    };
-
-    template<typename ElemInfo, Consumer<UnsaveRef, ElemInfo> C>
-    void traverse_app_preorder(const UnsaveRef ref, C& consumer, ElemInfo fst_info)
-    {
-        consumer.consume(ref, fst_info);
-
-        if (ref.type == Literal::f_app) {
-            struct StackElem
-            {
-                NodeIndex const* iter;
-                NodeIndex const* const stop;
-                ElemInfo info; 
-            };
-            bmath::intern::StupidBufferVector<StackElem, 128> stack;
-            stack.emplace_back(ref->f_app.begin(), ref->f_app.end(), consumer.make_info(ref));
-
-        iterate_over_top:
-            do {
-                StackElem& top = stack.back();
-                while (top.iter != top.stop) {
-                    const UnsaveRef current = ref.at(*(top.iter++));
-                    consumer.consume(current, top.info);
-
-                    if (current.type == Literal::f_app) {
-                        stack.emplace_back(current->f_app.begin(), current->f_app.end(), consumer.make_info(current));
-                        goto iterate_over_top;
-                    }
-                }
-                consumer.finalize(top.info);
-                stack.pop_back();
-            } while (stack.size());
-        }
-    } //traverse_app_preorder
-
-
-    //returns first subterm where pred is true, tested in pre-order
-    template<bool traverse_lambdas = false, NodeType f_app = Literal::f_app, std::predicate<UnsaveRef> Pred>
-    NodeIndex search(const TermNode* const store_data, const NodeIndex head, Pred pred)
-    {
-        static_assert(f_app == Literal::f_app || f_app == PatternFApp{});
-        Queue<NodeIndex, 128> queue;
-        queue.emplace_back(head);
-        do {
-            const NodeIndex curr_idx = queue.pop_front();
-            const UnsaveRef curr_ref = UnsaveRef(store_data, curr_idx.get_index(), curr_idx.get_type());
-            assert(curr_ref.type != Literal::f_app || f_app == Literal::f_app);
-            assert(curr_ref.type != PatternFApp{}  || f_app == PatternFApp{} );
-            if (pred(curr_ref)) {
-                return curr_idx;
-            }
-            if (curr_ref.type == f_app) {
-                for (const NodeIndex& sub : curr_ref) { queue.emplace_back(sub); }
-            }
-            if constexpr (traverse_lambdas) {
-                if (curr_ref.type == Literal::lambda) { queue.emplace_back(curr_ref->lambda.definition); }
-            }
-        } while (queue.size());
-        return invalid_index;
-    } //search
 
     //applies f to every subterm in postorder, result is new subterm
     template<bmath::intern::Reference R, bmath::intern::CallableTo<NodeIndex, R> F>
@@ -218,17 +150,16 @@ namespace simp {
     std::partial_ordering unsure_compare_tree(const UnsaveRef fst, const UnsaveRef snd);
 
     //returns a function comparing two NodeIndices assumed they both point in store_data
-    template<auto Ord, auto compare>
+    template<std::strong_ordering Ord>
     constexpr auto ordered(const TermNode* const store_data) 
     {
-        static_assert((void*)compare == (void*)compare_tree || (void*)compare == (void*)unsure_compare_tree);
         return [store_data](const NodeIndex fst, const NodeIndex snd) {
             const UnsaveRef fst_ref = UnsaveRef(store_data, fst.get_index(), fst.get_type());
             const UnsaveRef snd_ref = UnsaveRef(store_data, snd.get_index(), snd.get_type());
-            return compare(fst_ref, snd_ref) == Ord;
+            return compare_tree(fst_ref, snd_ref) == Ord;
         };
     } //ordered
-    constexpr auto ordered_less = ordered<std::strong_ordering::less, compare_tree>;
+    inline constexpr auto ordered_less = ordered<std::strong_ordering::less>;
 
     namespace build_rule {
 
