@@ -137,6 +137,8 @@ namespace simp {
 			return name;
 		}
 
+		std::string to_simple_string(const UnsaveRef ref);
+
 		template<bmath::intern::StoreLike S, bmath::intern::ContainerOf<const NodeIndex> C>
 		std::string [[nodiscard]] to_memory_layout(const S& store, const C& heads);
 

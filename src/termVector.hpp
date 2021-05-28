@@ -60,8 +60,12 @@ namespace bmath::intern {
 
 		constexpr void shrink_size_to(const std::uint16_t new_) noexcept { assert(this->info.size >= new_); this->info.size = new_; }
 
-		constexpr Value_T* data() noexcept { return this->data_; }
+		constexpr       Value_T* data()       noexcept { return this->data_; }
 		constexpr const Value_T* data() const noexcept { return this->data_; }
+
+		//only intended to be used by SaveIterator
+		constexpr       Value_T* unsave_data_no_start_offset()       noexcept { return this->subsequent_data_part; }
+		constexpr const Value_T* unsave_data_no_start_offset() const noexcept { return this->subsequent_data_part; }
 
 		constexpr StoredVector(std::initializer_list<Value_T> init) noexcept 
 			:info{ .size = static_cast<decltype(Info::size)>(init.size()), .capacity = min_capacity }
@@ -135,7 +139,7 @@ namespace bmath::intern {
 
 	namespace detail_vector {
 
-		struct SaveEndIndicator { std::uint32_t idx; };
+		struct SaveEndIndicator {};
 
 		//this iterator does not hold the position pointed at directly, but always takes the way via the store,
 		//  where the StoredVector we walk along is held.
@@ -153,18 +157,19 @@ namespace bmath::intern {
 
 			constexpr Value_T* raw_pointer() noexcept
 			{
-				return static_cast<StoredVector_T&>(this->store.at(this->store_idx)).data() + this->array_idx; 
+				assert(this->index < this->stop);
+				return static_cast<StoredVector_T&>(*this->store.data()).unsave_data_no_start_offset() + this->index;
 			}
 
 			static constexpr bool valid_interaction(const SaveIterator& fst, const SaveIterator& snd) noexcept 
 			{
-				return (&fst.store == &snd.store) && (fst.store_idx == snd.store_idx);
+				return (&fst.store == &snd.store) && fst.stop == snd.stop;
 			}
 
 		public:
 			Store_T& store;
-			std::uint32_t store_idx;
-			std::uint32_t array_idx;
+			std::int32_t index; //imagines all entries in store to be StoredVector_T, stores offest of current Value_T to store.data()
+			std::int32_t stop; //first index counted as above no longer belonging to instance of StoredVector_T
 
 			//http://www.cplusplus.com/reference/iterator/RandomAccessIterator/
 			using value_type      = Value_T;
@@ -173,27 +178,22 @@ namespace bmath::intern {
 			using reference       = Value_T&;
 			using iterator_category = std::contiguous_iterator_tag;
 
-			constexpr SaveIterator& operator++() noexcept { ++this->array_idx; return *this; }  
+			static constexpr SaveIterator build(Store_T& store, const std::int32_t store_index, const std::int32_t start_index,
+				const std::int32_t stop_index) noexcept
+			{
+				const std::int32_t vec_start = StoredVector_T::values_per_node * store_index + StoredVector_T::values_per_info;
+				return SaveIterator{ store, vec_start + start_index, vec_start + stop_index };
+			}
+
+			constexpr SaveIterator& operator++() noexcept { ++this->index; return *this; }
 			constexpr SaveIterator operator++(int) noexcept { auto result = *this; ++(*this); return result; }
-			constexpr SaveIterator& operator+=(Diff_T n) noexcept { this->array_idx += n; return *this; }  
+			constexpr SaveIterator& operator+=(Diff_T n) noexcept { this->index += n; return *this; }
 			constexpr SaveIterator operator+(Diff_T n) const noexcept { auto result = *this; result += n; return result; }
 
-			constexpr SaveIterator operator+(const SaveIterator& snd) const noexcept 
-			{	
-				assert(valid_interaction(*this, snd));
-				return SaveIterator{ this->store, this->store_idx, this->array_idx + snd.array_idx };
-			}
-
-			constexpr SaveIterator& operator--() noexcept { --this->array_idx; return *this; }  
+			constexpr SaveIterator& operator--() noexcept { --this->index; return *this; }
 			constexpr SaveIterator operator--(int) noexcept { auto result = *this; --(*this); return result; }
-			constexpr SaveIterator& operator-=(Diff_T n) noexcept { this->array_idx -= n; return *this; }  
+			constexpr SaveIterator& operator-=(Diff_T n) noexcept { this->index -= n; return *this; }
 			constexpr SaveIterator operator-(Diff_T n) const noexcept { auto result = *this; result -= n; return result; }
-
-			constexpr SaveIterator operator-(const SaveIterator& snd) noexcept 
-			{ 
-				assert(valid_interaction(*this, snd) && this->array_idx >= snd.array_idx);
-				return SaveIterator{ this->store, this->store_idx, this->array_idx - snd.array_idx };
-			}
 
 			constexpr const Value_T& operator*()  const noexcept { return *this->raw_pointer(); }
 			constexpr const Value_T* operator->() const noexcept { return this->raw_pointer(); }
@@ -205,16 +205,18 @@ namespace bmath::intern {
 			constexpr bool operator==(const SaveIterator& snd) const noexcept
 			{
 				assert(valid_interaction(*this, snd));
-				return this->offset == snd.offset;
+				return this->index == snd.index;
 			}
 
 			constexpr std::strong_ordering operator<=>(const SaveIterator& snd) const noexcept
 			{
 				assert(valid_interaction(*this, snd));
-				return this->offset <=> snd.offset;
+				return this->index <=> snd.index;
 			}
 
-			constexpr bool operator==(const SaveEndIndicator& end_) const noexcept { return this->array_idx == end_.idx; }
+			constexpr bool at_end() const noexcept { return this->index == this->stop; }
+			constexpr bool operator==(const SaveEndIndicator&) const noexcept { return this->at_end(); }
+
 		}; //struct SaveIterator
 
 	} //namespace stored_vector
@@ -224,13 +226,13 @@ namespace bmath::intern {
 	{
 		using CV_Value_T = std::conditional_t<std::is_const_v<Store_T>, const Value_T, Value_T>;
 		using Iter = detail_vector::SaveIterator<CV_Value_T, AllocNodeSize, Store_T>;
-		return Iter{ *ref.store, ref.index, 0u };
+		return Iter::build(*ref.store, ref.index, 0, ref->size());
 	}
 
 	template<typename Value_T, std::size_t AllocNodeSize, StoreLike Store_T>
 	constexpr auto end(const BasicNodeRef<StoredVector<Value_T, AllocNodeSize>, Store_T>& ref)
 	{
-		return detail_vector::SaveEndIndicator{ (std::uint32_t) ref->size() };
+		return detail_vector::SaveEndIndicator{};
 	}
 
 } //namespace bmath::intern

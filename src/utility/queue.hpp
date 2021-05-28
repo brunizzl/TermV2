@@ -8,7 +8,7 @@
 
 namespace simp {
 
-	template<typename Value_T, std::size_t BufferSize>
+	template<typename Value_T, std::size_t BufferSize, typename Allocator = std::allocator<Value_T>>
 	class Queue
 	{
 		static_assert(std::is_trivially_destructible_v<Value_T>);
@@ -24,14 +24,17 @@ namespace simp {
 
 		std::size_t size_;
 
+		Allocator allocator;
+
 		constexpr std::size_t capacity() const noexcept { return this->end_data - this->start_data; }
 
 		constexpr void incr(Value_T*& pos) const noexcept { if (++pos == this->end_data) [[unlikely]] { pos = this->start_data; } }
 
 		constexpr void unsave_change_capacity(const std::size_t new_cap) noexcept
 		{
-			assert(this->capacity() < new_cap);
-			Value_T* const new_data = new Value_T[new_cap];
+			const std::size_t old_cap = this->capacity();
+			assert(old_cap < new_cap);
+			Value_T* const new_data = this->allocator.allocate(new_cap);
 
 			assert(this->size_ >= 1);
 			//due to queues circular nature, from can start at this->end_used, but not be invalid.
@@ -45,7 +48,7 @@ namespace simp {
 			} while (from != this->end_used);
 
 			if (this->start_data != this->local_data) {
-				delete[] this->start_data;
+				this->allocator.deallocate(this->start_data, old_cap);
 			}
 
 			this->start_data = new_data;
@@ -65,6 +68,9 @@ namespace simp {
 			end_used   (&this->local_data[0]),
 			size_(0)
 		{}
+
+		template<typename AllocInit>
+		constexpr Queue(AllocInit&& init) :Queue(), allocator(std::forward<AllocInit>(init)) {}
 
 		constexpr ~Queue() noexcept 
 		{

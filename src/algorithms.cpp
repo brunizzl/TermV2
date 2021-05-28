@@ -636,8 +636,7 @@ namespace simp {
                     return normalize::recursive(ref.at(result), options);
                 }
                 else {
-                    const auto stop = end(ref);
-                    for (++iter; iter != stop; ++iter) {
+                    for (++iter; !iter.at_end(); ++iter) {
                         *iter = normalize::recursive(ref.at(*iter), options);
                     }
                 }
@@ -901,7 +900,7 @@ namespace simp {
                 }
                 return r.typed_idx();
             };
-            head.lhs = transform(MutRef(store, head.lhs), optimize);
+            head.lhs = ctrl::transform(MutRef(store, head.lhs), optimize);
             return head;
         } //optimize_single_conditions
 
@@ -949,8 +948,8 @@ namespace simp {
                 }
                 return r.typed_idx();
             };
-            heads.lhs = transform(MutRef(store, heads.lhs), build_value_match);
-            heads.rhs = transform(MutRef(store, heads.rhs), build_value_match);
+            heads.lhs = ctrl::transform(MutRef(store, heads.lhs), build_value_match);
+            heads.rhs = ctrl::transform(MutRef(store, heads.rhs), build_value_match);
             heads.lhs = normalize::recursive(MutRef(store, heads.lhs), { .eval_special = false }); //order value match to right positions in commutative
 
             std::bitset<match::State::max_value_match_count> encountered = 0;
@@ -963,7 +962,7 @@ namespace simp {
                     }
                 }
             };
-            transform(MutRef(store, heads.lhs), set_owner);
+            ctrl::transform(MutRef(store, heads.lhs), set_owner);
 
             return heads;
         } //prime_value
@@ -989,7 +988,7 @@ namespace simp {
                 }
                 return ref.typed_idx();
             };
-            return transform(lhs_ref, swap_app);
+            return ctrl::transform(lhs_ref, swap_app);
         } //swap_lhs_f_apps
 
         //to be rematchable one has to eighter contain a rematchable subterm or be 
@@ -1080,7 +1079,7 @@ namespace simp {
                     occurs_unrestricted.at(r.index) = true;
                 }
             };
-            transform(lhs_ref, catalog_occurence);
+            ctrl::transform(lhs_ref, catalog_occurence);
 
             Store copy_store;
             NodeIndex head_copy = copy_tree(lhs_ref, copy_store);
@@ -1105,7 +1104,7 @@ namespace simp {
                     }
                     return r.typed_idx();
                 };
-                head_copy = transform(MutRef(copy_store, head_copy), swap_single);
+                head_copy = ctrl::transform(MutRef(copy_store, head_copy), swap_single);
             }; //lambda swap_singles
 
             EquivalenceTable equivalence_table = {};
@@ -1295,7 +1294,7 @@ namespace simp {
                     r->multi_match = data->new_;
                 }
             };
-            transform(MutRef(store, head.rhs), prime_rhs);
+            ctrl::transform(MutRef(store, head.rhs), prime_rhs);
             return head;
         } //prime_f_app
 
@@ -1360,10 +1359,9 @@ namespace simp {
 
             if (multi.index_in_params == -1u) { //commutative -> multi might not be one pice
                 auto iter = begin(matched_ref); //currently pointing at function
-                const auto stop = end(matched_ref);
-                for (++iter; iter != stop; ++iter) {
-                    //-1u as we dont want the function itself, only the parameters
-                    if (!entry.index_matched(iter.array_idx - 1u)) {
+                std::uint32_t i = 0;
+                for (++iter; !iter.at_end(); ++iter) {
+                    if (!entry.index_matched(i++)) {
                         f(*iter);
                     }
                 }
@@ -1380,9 +1378,10 @@ namespace simp {
                     matched_ref->f_app.parameters().size();
 
                 //+ 1u in both cases, because the function itself resides at index 0
-                auto iter = decltype(begin(std::declval<Ref>())){ *matched_ref.store, matched_ref.index, begin_params_index + 1u };
-                const auto stop = decltype(end(std::declval<Ref>())){ end_params_index + 1u };
-                for (; iter != stop; ++iter) {
+                auto iter = decltype(begin(std::declval<Ref>()))
+                    ::build(*matched_ref.store, matched_ref.index, begin_params_index + 1u, end_params_index + 1u);
+
+                for (; !iter.at_end(); ++iter) {
                     f(*iter);
                 }
             }

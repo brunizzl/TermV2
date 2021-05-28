@@ -108,7 +108,7 @@ namespace simp {
 			return unsure_compare_tree(rule.lhs, r) != std::partial_ordering::greater;
 		};
 		RuleSetIter iter =       std::lower_bound(rules.begin(), rules.end(), UnsaveRef(ref), less);
-		const RuleSetIter stop = std::lower_bound(iter,          rules.end(), UnsaveRef(ref), not_greater);
+		const RuleSetIter stop = rules.end(); //std::lower_bound(iter,          rules.end(), UnsaveRef(ref), not_greater);
 
 		static bool show = false;
 		if (show) std::cout << "from\n" << (*iter).to_string() << "\nto\n" 

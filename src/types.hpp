@@ -434,8 +434,9 @@ namespace simp {
 		assert(ref.type == Literal::f_app || ref.type == PatternFApp{});
 		using TypedIdx_T = std::conditional_t<R::is_const, const NodeIndex, NodeIndex>;
 		using Store_T = std::remove_reference_t<decltype(*ref.store)>;
-		using namespace bmath::intern::detail_vector;
-		return SaveIterator<TypedIdx_T, sizeof(TermNode), Store_T>{ *ref.store, ref.index, 0u };
+
+		return bmath::intern::detail_vector::SaveIterator<TypedIdx_T, sizeof(TermNode), Store_T>
+			::build(*ref.store, ref.index, 0, ref->f_app.size());
 	}
 
 	//caution: can only be used as a range-based-for-loop, if there is no reallocation possible inside the loop body!
@@ -443,7 +444,7 @@ namespace simp {
 	constexpr auto end(const R& ref) noexcept
 	{
 		assert(ref.type == Literal::f_app || ref.type == PatternFApp{});
-		return bmath::intern::detail_vector::SaveEndIndicator{ (std::uint32_t)ref->f_app.size() };
+		return bmath::intern::detail_vector::SaveEndIndicator{};
 	}
 
 	template<bmath::intern::Reference R> requires (!requires { R::store; })
@@ -461,13 +462,13 @@ namespace simp {
 	}
 
 
-	constexpr inline const FAppInfo& f_app_info(const UnsaveRef ref)
+	constexpr const FAppInfo& f_app_info(const UnsaveRef ref)
 	{
 		assert(ref.type == PatternFApp{});
 		return *(ref.ptr - 1u);
 	}
 
-	constexpr inline FAppInfo& f_app_info(const MutRef ref)
+	constexpr FAppInfo& f_app_info(const MutRef ref)
 	{
 		assert(ref.type == PatternFApp{});
 		return *(&ref.store->at(ref.index) - 1u);

@@ -965,8 +965,9 @@ namespace bmath::intern::pattern {
 						const SharedVariadicDatum& info = match_data.variadic_data[pn_param.get_index()];
 						const auto src_range = fn::save_range(Ref(src_store, info.match_idx));
 						const auto src_stop = end(src_range);
+						int i = 0;
 						for (auto src_iter = begin(src_range); src_iter != src_stop; ++src_iter) {
-							if (!info.index_matched(src_iter.array_idx)) {
+							if (!info.index_matched(i++)) {
 								const MathIdx dst_param = tree::copy(Ref(src_store, *src_iter), dst_store); //call normal copy!
 								dst_parameters.push_back(dst_param);
 							}

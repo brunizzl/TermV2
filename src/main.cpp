@@ -54,6 +54,8 @@ idea status:
 
 int main()
 {
+	//bmath::intern::debug::enumerate_type();
+	//bmath::intern::debug::test_rechner();
 	{
 		for (unsigned i = 0; i < (unsigned)simp::NodeType::COUNT; i++) {
 			const auto as_native = simp::nv::Native(simp::NodeType(i));
@@ -286,8 +288,6 @@ int main()
 			}
 		}
 	}
-	//debug::enumerate_type();
-	//bmath::intern::debug::test_rechner();
 	//test::stable_sort();
 	//test::meta_pattern();
 	//test::meta_pattern_2();

@@ -15,46 +15,6 @@
 
 namespace simp {
 
-    /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-    //\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\general utility\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
-    /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-    //applies f to every subterm in postorder, result is new subterm
-    template<bmath::intern::Reference R, bmath::intern::CallableTo<NodeIndex, R> F>
-    [[nodiscard]] NodeIndex transform(const R ref, F f)
-    {
-        if (ref.type == Literal::f_app || ref.type == PatternFApp{}) {
-            const auto stop = end(ref);
-            for (auto iter = begin(ref); iter != stop; ++iter) {
-                *iter = transform(ref.at(*iter), f);
-            }
-        }
-        if (ref.type == Literal::lambda) {
-            ref->lambda.definition = transform(ref.at(ref->lambda.definition), f);
-        }
-        return f(ref);
-    } //transform
-
-    //applies f to every subterm in postorder
-    template<bmath::intern::Reference R, bmath::intern::Procedure<R> F>
-    void transform(const R ref, F f)
-    {
-        if (ref.type == Literal::f_app || ref.type == PatternFApp{}) {
-            for (const auto sub : ref) {
-                transform(ref.at(sub), f);
-            }
-        }
-        if (ref.type == Literal::lambda) {
-            transform(ref.at(ref->lambda.definition), f);
-        }
-        f(ref);
-    } //transform
-
-    /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-    //\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\finished functions\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
-    /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
     bool in_complex_subset(const Complex& nr, const nv::ComplexSubset domain);
 
     //only interested in final results -> a function call guaranteed to return something meeting restr results in false

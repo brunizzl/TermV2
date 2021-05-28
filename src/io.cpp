@@ -518,7 +518,7 @@ namespace simp {
 					}
 					return r.typed_idx();
 				};
-				heads.lhs = transform(MutRef(store, heads.lhs), restrict_value);
+				heads.lhs = ctrl::transform(MutRef(store, heads.lhs), restrict_value);
 			}
 			{
 				//go through lhs in preorder, adjust single match using single_conditions
@@ -555,7 +555,7 @@ namespace simp {
 					}
 					return r.typed_idx();
 				};
-				heads.lhs = transform(MutRef(store, heads.lhs), empower_singles);
+				heads.lhs = ctrl::transform(MutRef(store, heads.lhs), empower_singles);
 			}
 			return heads;
 		} //raw_rule
@@ -714,6 +714,57 @@ namespace simp {
 				str.append(")");
 			}
 		} //append_to_string
+
+		std::string to_simple_string(const UnsaveRef ref)
+		{
+			struct StackInfo { std::size_t depth; bool fst; };
+
+			struct
+			{
+				std::string str;
+				std::size_t depth = 2;
+
+				void consume(UnsaveRef ref, StackInfo& i) noexcept
+				{
+					this->str.append(std::string((i.depth - std::exchange(i.fst, false)) * 3ull , ' '));
+
+					switch (ref.type) {
+					case NodeType(Literal::complex):
+						bmath::intern::print::append_complex(*ref, this->str, 1000);
+						break;
+					case NodeType(Literal::symbol):
+						this->str.append(Names::name_of(ref.index));
+						break;
+					case NodeType(PatternFApp{}):
+					case NodeType(Literal::f_app):
+						break;
+					case NodeType(Literal::lambda): {
+						const Lambda& lambda = *ref;
+						this->str.append(lambda.transparent ? "(transparent) [" : "[");
+						this->str.append(std::to_string(lambda.param_count));
+						this->str.append("]\\");
+					} break;
+					case NodeType(Literal::lambda_param):
+						this->str.push_back('%');
+						this->str.append(std::to_string(ref.index));
+						break;
+					default:
+						this->str.append("(ERROR:");
+						this->str.append(std::to_string((unsigned)ref.type));
+						this->str.append(":");
+						this->str.append(std::to_string(ref.index));
+						this->str.append(")");
+					}
+					this->str.append("\n");
+				} //consume
+
+				StackInfo make_info(const UnsaveRef ref) noexcept { return { this->depth++, true }; }
+				void finalize(StackInfo& i) { this->depth--; }
+
+			} consumer;
+			ctrl::traverse_preorder<true>(ref.store_data(), ref.typed_idx(), consumer, StackInfo{ false });
+			return consumer.str;
+		} //to_simple_string
 
 
 		void append_memory_row(const Ref ref, std::vector<std::string>& rows)
