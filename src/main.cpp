@@ -106,6 +106,7 @@ int main()
 			{ "(\\f n. f(f, n))(\\f n.(n <= 1)(1, n * f(f, -1 + n)), 5)" },
 			{ "(\\f n. f(f, n))(\\f n.(n == 1)(1, n * f(f, -1 + n)), 5)" },
 			{ "(\\x .\\y .x(y))(\\x .\\y .x(y))(\\x .x)" },
+			{ "(\\x .\\y .x(y))(\\x .\\y .x(y))(\\x .x)(jens)" },
 		});
 		constexpr bool show = true;
 		for (const auto& name : names) {
@@ -133,7 +134,7 @@ int main()
 			{ "x x     = x^2" },
 			{ "x x^a   = x^(a + 1)" },
 			{ "x^a x^b = x^(a + b)" },
-			{ "'exp'(ln(y) xs...) = y^('prod'(xs...))" },
+			{ "'exp'('ln'(y) xs...) = y^('prod'(xs...))" },
 			
 			{ " a^2   +  2 a b + b^2 =  (a + b)^2" },
 			{ " a^2   -  2 a b + b^2 =  (a - b)^2" },
