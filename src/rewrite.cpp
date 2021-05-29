@@ -48,7 +48,8 @@ namespace simp {
 		for (const std::string_view name_view : names) {
 			std::string name = std::string(name_view.data(), name_view.size());
 			try {
-				this->rules.push_back(build(temp_store, name));
+				const RuleHead rule = build(temp_store, name);
+				this->rules.emplace_back(rule.lhs, rule.rhs, 0);
 			}
 			catch (bmath::ParseFailure failure) {
 				std::cerr << "parse failure: " << failure.what << "\n";
@@ -68,15 +69,16 @@ namespace simp {
 	void RuleSet::add(std::initializer_list<const RuleSet*> sets)
 	{
 		Store temp_store;
-		for (RuleHead& rule : this->rules) {
+		for (RuleSetEntry& rule : this->rules) {
 			rule.lhs = copy_tree(UnsaveRef(this->store.data(), rule.lhs.get_index(), rule.lhs.get_type()), temp_store);
 			rule.rhs = copy_tree(UnsaveRef(this->store.data(), rule.rhs.get_index(), rule.rhs.get_type()), temp_store);
 		}
 		for (const RuleSet* set : sets) {
-			for (const RuleHead rule : set->rules) {
+			for (const RuleSetEntry rule : set->rules) {
 				this->rules.emplace_back(
 					copy_tree(UnsaveRef(set->store.data(), rule.lhs.get_index(), rule.lhs.get_type()), temp_store),
-					copy_tree(UnsaveRef(set->store.data(), rule.rhs.get_index(), rule.rhs.get_type()), temp_store));
+					copy_tree(UnsaveRef(set->store.data(), rule.rhs.get_index(), rule.rhs.get_type()), temp_store), 
+					0);
 			}
 		}
 		this->migrate_rules(temp_store);
@@ -85,7 +87,7 @@ namespace simp {
 	void RuleSet::migrate_rules(const Store& temp_store)
 	{
 		std::stable_sort(this->rules.begin(), this->rules.end(),
-			[&temp_store](const RuleHead fst, const RuleHead snd) {
+			[&temp_store](const RuleSetEntry fst, const RuleSetEntry snd) {
 				return unsure_compare_tree(Ref(temp_store, fst.lhs), Ref(temp_store, snd.lhs))
 					== std::partial_ordering::less;
 			});
@@ -97,6 +99,22 @@ namespace simp {
 		for (std::size_t i = 0u; i < this->rules.size(); i++) {
 			this->rules[i].rhs = copy_tree(Ref(temp_store, this->rules[i].rhs), this->store);
 		}
+
+		//set RuleSetEntry::subset_size
+		using RevIter = std::vector<RuleSetEntry>::reverse_iterator;
+		const auto to_lhs_ref = [store_data = this->store.data()](const RevIter iter) {
+			return UnsaveRef(store_data, iter->lhs.get_index(), iter->lhs.get_type());
+		};
+		RevIter first_not_greater = this->rules.rbegin(); //first seen from the end, because reverse
+		const RevIter reverse_end = this->rules.rend();
+		for (RevIter iter = first_not_greater; iter != reverse_end; ++iter) {
+			while (unsure_compare_tree(to_lhs_ref(first_not_greater), to_lhs_ref(iter)) == std::partial_ordering::greater) {
+				assert(first_not_greater < iter);
+				++first_not_greater;
+			}
+			iter->subset_size = iter - first_not_greater + 1; //+1, because we want to include first_not_greater in half open range
+			assert(iter->subset_size > 0);
+		}
 	} //RuleSet::migrate_rules
 
 	RuleApplicationRes raw_apply_ruleset(const RuleSet& rules, const MutRef ref, match::State& state, const Options options)
@@ -104,11 +122,9 @@ namespace simp {
 		const auto less = [](const RuleRef& rule, const UnsaveRef& r) {
 			return unsure_compare_tree(rule.lhs, r) == std::partial_ordering::less;
 		};
-		const auto not_greater = [](const RuleRef& rule, const UnsaveRef& r) {
-			return unsure_compare_tree(rule.lhs, r) != std::partial_ordering::greater;
-		};
-		RuleSetIter iter =       std::lower_bound(rules.begin(), rules.end(), UnsaveRef(ref), less);
-		const RuleSetIter stop = rules.end(); //std::lower_bound(iter,          rules.end(), UnsaveRef(ref), not_greater);
+		assert(rules.rules.size()); //else rules.end() - 1 is illegal
+		RuleSetIter iter = std::lower_bound(rules.begin(), rules.end() - 1, UnsaveRef(ref), less); //always valid
+		const RuleSetIter stop = iter + iter.iter->subset_size; 
 
 		static bool show = false;
 		if (show) std::cout << "from\n" << (*iter).to_string() << "\nto\n" 

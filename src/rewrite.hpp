@@ -35,9 +35,16 @@ namespace simp {
 		std::string to_string() const noexcept;
 	};
 
+	struct RuleSetEntry
+	{ //lhs and rhs are same as in RuleHead
+		NodeIndex lhs; //match side
+		NodeIndex rhs; //replace side
+		int subset_size; //size of range in need to be checked, if a literal starts matching at entry
+	};
+
 	struct RuleSetIter 
 	{
-		std::vector<RuleHead>::const_iterator iter;
+		std::vector<RuleSetEntry>::const_iterator iter;
 		const TermNode* const store_data;
 
 		using value_type = RuleRef;
@@ -47,7 +54,7 @@ namespace simp {
 		using iterator_category = std::contiguous_iterator_tag;
 
 		RuleSetIter(const RuleSetIter& snd) noexcept :iter(snd.iter), store_data(snd.store_data) {}
-		RuleSetIter(const std::vector<RuleHead>::const_iterator iter_, const TermNode* const store_data_) noexcept
+		RuleSetIter(const std::vector<RuleSetEntry>::const_iterator iter_, const TermNode* const store_data_) noexcept
 			:iter(iter_), store_data(store_data_) {}
 
 		RuleSetIter& operator=(const RuleSetIter& snd) noexcept
@@ -82,12 +89,18 @@ namespace simp {
 			assert(this->store_data == snd.store_data);
 			return this->iter == snd.iter;
 		}
+
+		bool operator<(const RuleSetIter& snd) const noexcept
+		{
+			assert(this->store_data == snd.store_data);
+			return this->iter < snd.iter;
+		}
 	};
 
 	struct RuleSet
 	{
 		MonotonicStore store;
-		std::vector<RuleHead> rules;
+		std::vector<RuleSetEntry> rules;
 
 		RuleSet(std::initializer_list<std::string_view> names_, 
 			RuleHead(*build)(Store&, std::string&) = build_rule::build_everything);

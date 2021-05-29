@@ -81,22 +81,45 @@ namespace simp::ctrl {
         } while (stack.size());
     } //traverse_preorder
 
-    using SearchQueue = Queue<NodeIndex, 256>;
+    struct UnsaveRange
+    {
+        NodeIndex const* iter;
+        NodeIndex const* stop;
 
-    //returns first subterm where pred is true, tested in breadth-first search
-    //enqueue adds subterms of curr_ref to queue
+        constexpr NodeIndex const* begin() const noexcept { return this->iter; }
+        constexpr NodeIndex const* end() const noexcept { return this->stop; }
+        constexpr std::size_t size() const noexcept { return this->stop - this->iter; }
+    };
+
+    using SearchQueue = Queue<UnsaveRange, 128>;
+
+    //returns first subterm where pred is true, subterms are tested in unspecified order
+    //enqueue adds range over subterms of curr_ref to queue
     template<std::predicate<UnsaveRef> Pred, Procedure<UnsaveRef, SearchQueue&> Enqueue>
     NodeIndex search(const TermNode* const store_data, const NodeIndex head, Pred pred, Enqueue enqueue)
     {
         SearchQueue queue;
-        queue.emplace_back(head);
+        queue.emplace_back(&head, &head + 1);
         do {
-            const NodeIndex curr_idx = queue.pop_front();
-            const UnsaveRef curr_ref = UnsaveRef(store_data, curr_idx.get_index(), curr_idx.get_type());
-            if (pred(curr_ref)) {
-                return curr_idx;
+            UnsaveRange range = queue.pop_front();
+            if (range.size() > 20) [[unlikely]] { 
+                //if a function application has many parameters, these are looked at in smaller chunks.
+                //this prevents building large queues in situations as "set(tup(0, 0), tup(0, 1), tup(0, 2), ..., tup(10, 9), tup(10, 10))"
+                //it is not sufficient to split when a new range is added, as then all partial ranges would 
+                //  still be in direct succession of each other, not soving the problem
+                NodeIndex const* const split_point = range.iter + 16;
+                queue.emplace_back(split_point, range.stop);
+                range.stop = split_point;
             }
-            enqueue(curr_ref, queue);
+            do {
+                assert(range.size() > 0); //holds, because every f_app at least holds the applied function and every lambda has a definition
+                const NodeIndex curr_idx = *range.iter;
+                const UnsaveRef curr_ref = UnsaveRef(store_data, curr_idx.get_index(), curr_idx.get_type());
+                if (pred(curr_ref)) {
+                    return curr_idx;
+                }
+                enqueue(curr_ref, queue);
+            } while (++range.iter != range.stop);
         } while (queue.size());
         return invalid_index;
     } //search
@@ -109,16 +132,17 @@ namespace simp::ctrl {
             assert(ref.type != Literal::f_app || f_app == Literal::f_app);
             assert(ref.type != PatternFApp{} || f_app == PatternFApp{});
             if (ref.type == f_app) {
-                for (const NodeIndex& sub : ref) {
-                    queue.emplace_back(sub);
-                }
+                queue.emplace_back(ref->f_app.begin(), ref->f_app.end());
             }
             if constexpr (search_lambdas) if (ref.type == Literal::lambda) {
-                queue.emplace_back(ref->lambda.definition);
+                queue.emplace_back(&ref->lambda.definition, &ref->lambda.definition + 1);
             }
         };
         return search(store_data, head, pred, enqueue);
     } //search
+
+    using SaveRange = decltype(begin(std::declval<MutRef>()));
+    using TransformQueue = Queue<SaveRange, 128>;
       
     //applies f to every subterm in postorder, result is new subterm
     template<Reference R, CallableTo<NodeIndex, R> F>

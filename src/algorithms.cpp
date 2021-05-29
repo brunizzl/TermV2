@@ -819,8 +819,10 @@ namespace simp {
             return bmath::intern::compare_complex(*fst, *snd);
         case NodeType(PatternFApp{}):
         case NodeType(Literal::f_app): {
-            const NodeIndex fst_f = fst->f_app.function();
-            const NodeIndex snd_f = snd->f_app.function();            
+            auto fst_iter = fst->f_app.begin();
+            auto snd_iter = snd->f_app.begin();     
+            const NodeIndex fst_f = *fst_iter;
+            const NodeIndex snd_f = *snd_iter;
             if (const auto cmp_fs = unsure_compare_tree(fst.at(fst_f), snd.at(snd_f)); 
                 cmp_fs != std::partial_ordering::equivalent)
             {   return cmp_fs;
@@ -828,11 +830,9 @@ namespace simp {
             else if (fst_f.get_type() == Literal::symbol && to_symbol(fst_f).is<nv::Variadic>()) {
                 return std::partial_ordering::unordered;
             }
-            const auto fst_end = fst->f_app.parameters().end();
-            const auto snd_end = snd->f_app.parameters().end();
-            auto fst_iter = fst->f_app.parameters().begin();
-            auto snd_iter = snd->f_app.parameters().begin();
-            for (; fst_iter != fst_end && snd_iter != snd_end; ++fst_iter, ++snd_iter) {
+            const auto fst_end = fst->f_app.end();
+            const auto snd_end = snd->f_app.end();
+            for (++fst_iter, ++snd_iter; fst_iter != fst_end && snd_iter != snd_end; ++fst_iter, ++snd_iter) {
                 const std::partial_ordering cmp =
                     unsure_compare_tree(fst.at(*fst_iter), snd.at(*snd_iter));
                 if (cmp != std::partial_ordering::equivalent) {
@@ -880,7 +880,7 @@ namespace simp {
                 { "x <= 0          | x :'_SingleMatch'              = '_NotPositive'" },
                 { "x >= 0          | x :'_SingleMatch'              = '_NotNegative'" },
                 { "!(x :'complex') | x :'_SingleMatch'              = '_NoValue'" },
-                { "x != 1          | x :'_SingleMatch'              = '_NotNeg1'" },
+                { "x != -1         | x :'_SingleMatch'              = '_NotNeg1'" },
                 { "x != 0          | x :'_SingleMatch'              = '_Not0'" },
             }, build_very_basic_pattern);
 
