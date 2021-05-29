@@ -97,14 +97,14 @@ namespace simp {
     namespace normalize {
 
         [[nodiscard]] NodeIndex replace_lambda_params(const MutRef ref, const bmath::intern::StupidBufferVector<NodeIndex, 16>& params
-            , const bool transparent)
+            , const int max_depth, const bool transparent)
         {
             assert(ref.type != PatternFApp{});
-            if (ref.type == Literal::f_app) {
+            if (ref.type == Literal::f_app && max_depth > 0) {
                 bmath::intern::StupidBufferVector<NodeIndex, 16> res_application;
                 const auto stop = end(ref);
                 for (auto iter = begin(ref); iter != stop; ++iter) {
-                    res_application.push_back(replace_lambda_params(ref.at(*iter), params, transparent));
+                    res_application.push_back(replace_lambda_params(ref.at(*iter), params, max_depth - 1, transparent));
                 }
                 //TODO: maybe only build new if something changed
                 const std::size_t res_index = FApp::build(*ref.store, res_application);
@@ -113,7 +113,7 @@ namespace simp {
             else if (ref.type == Literal::lambda && ref->lambda.transparent) {
                 Lambda res_lambda = *ref;
                 res_lambda.transparent = transparent;
-                res_lambda.definition = replace_lambda_params(ref.at(res_lambda.definition), params, true);
+                res_lambda.definition = replace_lambda_params(ref.at(res_lambda.definition), params, max_depth - 1, true);
 
                 const std::size_t res_index = ref.store->allocate_one();
                 ref.store->at(res_index) = res_lambda;
@@ -145,7 +145,7 @@ namespace simp {
             if (lambda.param_count != params.size()) [[unlikely]] {
                 throw TypeError{ "wrong number of arguments for applied lambda", ref };
             }
-            const NodeIndex replaced = replace_lambda_params(ref.at(lambda.definition), params, false);
+            const NodeIndex replaced = replace_lambda_params(ref.at(lambda.definition), params, lambda.owned_depth, false);
             free_tree(ref);
             return normalize::recursive(ref.at(replaced), options);
         } //eval_lambda
@@ -862,6 +862,24 @@ namespace simp {
             return fst.index <=> snd.index;
         }
     } //unsure_compare_tree
+
+    int owned_lambda_depth(const UnsaveRef ref, const int param_count, const int param_offset)
+    {
+        if (ref.type == Literal::f_app) {
+            int sub_max = std::numeric_limits<int>::min();
+            for (const NodeIndex sub : ref) {
+                sub_max = std::max(sub_max, owned_lambda_depth(ref.at(sub), param_count, param_offset));
+            }
+            return sub_max + 1;
+        }
+        else if (ref.type == Literal::lambda && ref->lambda.transparent) {
+            return owned_lambda_depth(ref.at(ref->lambda.definition), param_count, param_offset) + 1;
+        }
+        else if (ref.type == Literal::lambda_param && ref.index - param_offset < param_count) {
+            return 1;
+        }
+        return std::numeric_limits<int>::min();
+    } //find_lambda_depth
 
 
     namespace build_rule {

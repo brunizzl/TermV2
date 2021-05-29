@@ -385,12 +385,15 @@ namespace simp {
 				if (dot_pos == TokenView::npos) [[unllikely]] {
 					throw ParseFailure { view.offset, "there is no valid lambda without the definition preceeded by a dot" };
 				}
-				const unsigned param_count = name_lookup::add_lambda_params(infos.lambda_params, view.steal_prefix(dot_pos));
+				const std::int32_t prev_param_count = infos.lambda_params.size();
+				const std::int32_t param_count = name_lookup::add_lambda_params(infos.lambda_params, view.steal_prefix(dot_pos));
 				view.remove_prefix(1u); //remove dot
+
 				const NodeIndex definition = parse::build(store, infos, view);
 				const std::size_t res_index = store.allocate_one();
-				store.at(res_index) = Lambda{ param_count, definition, !outermost_lambda };
-				infos.lambda_params.resize(infos.lambda_params.size() - param_count); //remove own names again
+				const std::int32_t owned_depth = std::max(0, owned_lambda_depth(Ref(store, definition), param_count, prev_param_count));
+				store.at(res_index) = Lambda{ param_count, definition, owned_depth, !outermost_lambda };
+				infos.lambda_params.resize(prev_param_count); //remove own names again
 				return NodeIndex(res_index, Literal::lambda);
 			} break;
 			default:
@@ -659,6 +662,8 @@ namespace simp {
 				const Lambda& lambda = *ref;
 				str.append(lambda.transparent ? "([" : "{[");
 				str.append(std::to_string(lambda.param_count));
+				str.append(", ");
+				str.append(std::to_string(lambda.owned_depth));
 				str.append("]\\");
 				append_to_string(ref.at(lambda.definition), str, 1000, fancy);
 				str.push_back(lambda.transparent ? ')' : '}');

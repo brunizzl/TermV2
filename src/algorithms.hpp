@@ -121,6 +121,11 @@ namespace simp {
     } //ordered
     inline constexpr auto ordered_less = ordered<std::strong_ordering::less>;
 
+    //deepest depth, where a parameter belonging to a lambda is held; ref is assumed to be lambda.definition in first call
+    //if no parameter belonging to lambda could be found, a negative number is returned
+    //a parameter belongs to the lambda in question, if it is smaller than param_count, after the param_offset has been subtracted
+    int owned_lambda_depth(const UnsaveRef ref, const int param_count, const int param_offset);
+
     namespace build_rule {
 
         //turns "_Xn[_Xn' :<some_type>]" into "_Xn[<some_type>]"

@@ -311,8 +311,13 @@ namespace simp {
 
 	struct Lambda
 	{
-		std::uint32_t param_count;
+		std::int32_t param_count;
 		NodeIndex definition;
+
+		//every subterm of definition nested deeper than owned_depth deeply is guarnateed to not contain any lambda parameters.
+		// (definition itself has nesting depth 1)
+		std::int32_t owned_depth; 
+
 		//if a lambda is transparent, there is the possibility, that lambdas in the ancestry
 		//  own variables in this definition.
 		//the outermost lambda is never transparent, otherwise matching in such lambdas is undefined behavior.

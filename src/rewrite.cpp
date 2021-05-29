@@ -126,10 +126,6 @@ namespace simp {
 		RuleSetIter iter = std::lower_bound(rules.begin(), rules.end() - 1, UnsaveRef(ref), less); //always valid
 		const RuleSetIter stop = iter + iter.iter->subset_size; 
 
-		static bool show = false;
-		if (show) std::cout << "from\n" << (*iter).to_string() << "\nto\n" 
-			<< (*iter).to_string() << "\non\n" << print::to_string(ref) << "\n\n\n";
-
 		for (; iter != stop; ++iter) {
 			const RuleRef rule = *iter;
 			if (match::matches(rule.lhs, ref, state)) {

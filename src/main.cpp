@@ -16,6 +16,11 @@ TODO:
 
 important:
  - move callstack to heap in recursive functions iterating over terms
+      - normalize::recursive (alterantively add depth limit for lambda normalisation)
+	  - greedy_apply_ruleset
+	  - print::append_to_string
+	  - (perhaps) print::to_memory_layout
+
  - finish match:
 	  - eval_value_match
  - only test subset of rulerange (requires rule iterator to become random access)
