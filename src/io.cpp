@@ -271,11 +271,17 @@ namespace simp {
 					params_view.remove_prefix(1u); //remove previous space (or '\\' for first parameter)
 					const std::size_t space = params_view.to_string_view().find_first_of(' ');
 					const ParseView param = params_view.steal_prefix(space);
-					if (!mundane_name(param)) [[unlikely]]
+					if (!mundane_name(param)) 
 						throw bmath::ParseFailure{ params_view.offset, "we name lambda parameters less exiting around here" };
-					if (!param.size()) [[unlikely]]
+					if (!param.size()) 
 						throw bmath::ParseFailure{ params_view.offset, "there is little reason for nullary lambdas in a purely functional language" };
-					lambda_params.push_back({ param.to_string_view(), NodeIndex(lambda_params.size(), Literal::lambda_param) });
+					const std::string_view param_name = param.to_string_view();
+					//runs in O(n^2), but lambdas are expected to behave in size. 
+					if (std::find_if(lambda_params.begin(), lambda_params.end(), 
+						[param_name](const NameInfo& i) { return i.name == param_name; }) != lambda_params.end()) 
+						throw bmath::ParseFailure{ params_view.offset, "name shadowing in lambdas is forbidden" };
+
+					lambda_params.push_back({ param_name, NodeIndex(lambda_params.size(), Literal::lambda_param) });
 				}
 				return lambda_params.size() - old_size;
 			}
@@ -391,7 +397,7 @@ namespace simp {
 
 				const NodeIndex definition = parse::build(store, infos, view);
 				const std::size_t res_index = store.allocate_one();
-				const std::int32_t owned_depth = std::max(0, owned_lambda_depth(Ref(store, definition), param_count, prev_param_count));
+				const std::int32_t owned_depth = std::max(0, owned_lambda_depth(Ref(store, definition)));
 				store.at(res_index) = Lambda{ param_count, definition, owned_depth, !outermost_lambda };
 				infos.lambda_params.resize(prev_param_count); //remove own names again
 				return NodeIndex(res_index, Literal::lambda);

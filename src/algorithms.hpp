@@ -123,8 +123,9 @@ namespace simp {
 
     //deepest depth, where a parameter belonging to a lambda is held; ref is assumed to be lambda.definition in first call
     //if no parameter belonging to lambda could be found, a negative number is returned
-    //a parameter belongs to the lambda in question, if it is smaller than param_count, after the param_offset has been subtracted
-    int owned_lambda_depth(const UnsaveRef ref, const int param_count, const int param_offset);
+    //a parameter is counted as 'belonging to the lambda' even if it only is part of a transparent lambda within, 
+    //because evaluation of the outer lambda needs to reach the inner one to subtract the outer parameter count
+    int owned_lambda_depth(const UnsaveRef ref);
 
     namespace build_rule {
 

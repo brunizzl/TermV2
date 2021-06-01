@@ -863,19 +863,19 @@ namespace simp {
         }
     } //unsure_compare_tree
 
-    int owned_lambda_depth(const UnsaveRef ref, const int param_count, const int param_offset)
+    int owned_lambda_depth(const UnsaveRef ref)
     {
         if (ref.type == Literal::f_app) {
             int sub_max = std::numeric_limits<int>::min();
             for (const NodeIndex sub : ref) {
-                sub_max = std::max(sub_max, owned_lambda_depth(ref.at(sub), param_count, param_offset));
+                sub_max = std::max(sub_max, owned_lambda_depth(ref.at(sub)));
             }
             return sub_max + 1;
         }
         else if (ref.type == Literal::lambda && ref->lambda.transparent) {
-            return owned_lambda_depth(ref.at(ref->lambda.definition), param_count, param_offset) + 1;
+            return owned_lambda_depth(ref.at(ref->lambda.definition)) + 1;
         }
-        else if (ref.type == Literal::lambda_param && ref.index - param_offset < param_count) {
+        else if (ref.type == Literal::lambda_param) {
             return 1;
         }
         return std::numeric_limits<int>::min();
