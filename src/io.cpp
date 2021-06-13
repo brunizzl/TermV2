@@ -8,6 +8,7 @@
 #include <unordered_map>
 #include <mutex>
 #include <tuple>
+#include <format>
 
 #include "utility/vector.hpp"
 #include "utility/misc.hpp"
@@ -813,10 +814,7 @@ namespace simp {
 				for (; vec_idx < vec.size(); vec_idx++) {
 					*current_line += std::exchange(separator, ", ");
 					maybe_start_new_line();
-					*current_line += [&] {
-						const std::string elem_idx = std::to_string(vec[vec_idx].get_index());
-						return std::string(3ull - std::min(3ull, elem_idx.size()), ' ') + elem_idx;
-					}();
+					*current_line += std::format("{:3}", vec[vec_idx].get_index());
 					print::append_memory_row(ref.at(vec[vec_idx]), rows);
 				}
 				*current_line += " }";
@@ -864,12 +862,7 @@ namespace simp {
 				std::vector<std::size_t> leaks;
 				const bmath::intern::BitVector used_positions = store.storage_occupancy();
 				for (std::size_t i = 0; i < store.size(); i++) {
-					result += [&] {
-						const std::string i_str = std::to_string(i);
-						const std::string spaces = std::string(4ull - std::min(4ull, i_str.size()), ' ');
-						return spaces + i_str;
-					}();
-					result += " | ";
+					result += std::format("{:4} | ", i);
 					result += rows[i];
 					if (!used_positions.test(i)) {
 						result += "-----free slot-----";

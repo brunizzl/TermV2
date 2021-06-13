@@ -597,7 +597,7 @@ namespace simp {
 		};
 
 		constexpr auto variadic_table = std::to_array<VariadicProps>({
-			{ NonComm::tup           , "tup"        , false, Restr::any         , NonComm::tup       },
+			{ NonComm::tup            , "tup"         , false, Restr::any         , NonComm::tup        },
 			{ NonComm::ordered_sum    , "sum'"        , true , Restr::any         , Restr::any          },
 			{ NonComm::ordered_prod   , "prod'"       , true , Restr::any         , Restr::any          },
 			{ Comm::sum               , "sum"         , true , Literal::complex   , Literal::complex    },
@@ -636,7 +636,7 @@ namespace simp {
 		};
 
 		constexpr auto constant_table = std::to_array<CommonProps>({
-			{ Const::null                , "null"    , Restr::any      },
+			{ Const::null                , "null"        , Restr::any      },
 			{ PatternConst::value_proxy  , "_VP"         , PatternConst::value_proxy },
 			{ Restr::any                 , "\\"          , Literal::symbol }, //can not be constructed from a string
 			{ Restr::applicable          , "applicable"  , Literal::symbol },

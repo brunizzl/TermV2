@@ -1310,7 +1310,7 @@ template<Pattern Lhs, Pattern Rhs> constexpr InRelation<name, Lhs, Rhs> op(Lhs, 
 	} //namespace detail_rule_set
 
 	template<InstanceOf<Rule>... Rules>
-	struct RuleSet__
+	struct RuleSet_
 	{
 		std::array<bool(*)(UnsaveRef, pattern::match::MatchData&), sizeof...(Rules)> match_functions;
 
@@ -1331,15 +1331,15 @@ template<Pattern Lhs, Pattern Rhs> constexpr InRelation<name, Lhs, Rhs> op(Lhs, 
 				[](const auto& elem) { return elem.match_function; });
 		}
 
-		constexpr RuleSet__(Rules...) { this->set_rules(); }
-		constexpr RuleSet__() { this->set_rules(); }
+		constexpr RuleSet_(Rules...) { this->set_rules(); }
+		constexpr RuleSet_() { this->set_rules(); }
 
 		template<typename... OtherRules>
-		constexpr RuleSet__<Rules..., OtherRules...> operator+(const RuleSet__<OtherRules...>&) { return {}; }
+		constexpr RuleSet_<Rules..., OtherRules...> operator+(const RuleSet_<OtherRules...>&) { return {}; }
 	};
 
-	template<InstanceOf<Rule>... Rules>
-	RuleSet__(Rules...) -> RuleSet__<Rules...>;
+	template<typename... Rules>
+	RuleSet_(Rules...) -> RuleSet_<Rules...>;
 
 
 	/////////////////////////////Test Facilities

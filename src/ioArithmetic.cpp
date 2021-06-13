@@ -2,6 +2,7 @@
 #include <charconv>
 #include <algorithm>
 #include <numeric>
+#include <format>
 
 #include "ioArithmetic.hpp"
 #include "pattern.hpp"
@@ -580,13 +581,7 @@ namespace bmath::intern {
 						*(++current_line) += "(Node)         ";
 					}
 					const std::size_t elem_idx = vec[vec_idx].get_index();
-					if (elem_idx < 10) {
-						*current_line += ' '; //pleeeaaasee std::format, where are you? :(
-					}
-					if (elem_idx < 100) {
-						*current_line += ' '; //pleeeaaasee std::format, where are you? :(
-					}
-					*current_line += std::to_string(elem_idx);
+					*current_line += std::format("{:3}", elem_idx);
 					print::append_memory_row(ref.at(vec[vec_idx]), rows);
 				}
 				*current_line += " }";
@@ -623,13 +618,7 @@ namespace bmath::intern {
 			{
 				const BitVector used_positions = store.storage_occupancy();
 				for (int i = 0; i < store.size(); i++) {
-					if (i < 10) { //please std::format, i need you :(
-						result += "  ";
-					}
-					else if (i < 100) {
-						result += " ";
-					}
-					result += std::to_string(i);
+					result += std::format("{:3}", i);
 					result += " | ";
 					result += rows[i];
 					if (!used_positions.test(i)) {

@@ -668,7 +668,7 @@ namespace bmath::intern::test {
 		}
 	}
 
-	template<InstanceOf<bmath::intern::meta_pn::RuleSet__> Rules, std::size_t N>
+	template<InstanceOf<bmath::intern::meta_pn::RuleSet_> Rules, std::size_t N>
 	void try_matching(const Rules& rules, const std::array<bmath::Term, N>& terms)
 	{
 		for (auto& term : terms) {
@@ -698,7 +698,7 @@ namespace bmath::intern::test {
 			std::cout << name(rule_3) << "\n";
 			std::cout << "\n";
 
-			auto rules = RuleSet__(rule_1, rule_2, rule_3);
+			auto rules = RuleSet_(rule_1, rule_2, rule_3);
 			auto terms = std::to_array<bmath::Term>({
 				{ "fob(6)" },
 				{ "fibb(6)" },

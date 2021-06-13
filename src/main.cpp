@@ -23,8 +23,9 @@ important:
 
  - finish match:
 	  - eval_value_match
- - only test subset of rulerange (requires rule iterator to become random access)
-	  - do one binary search to find begin of maybe matching range, continue trying to match until match returns "less"
+	  - somehow enable "a^2 + 2 a b + b^2" to match "(x y)^2 + 2 x y z + z^2", for an arbitrary ammount of factors like "x" and "y"
+ - fix when match returns std::strong_ordering::unordered, by utilizing FAppInfo::always_preceeding_next as 
+		bool for MatchStrategy::backtracking and MatchStrategy::linear (perhaps rename accordingly?)
  - type checking (extended: keep track of what restrictions apply to match variable in lhs, use in rhs)
  - finnish building / verifying pattern:
       - (depends on type checking) verify whole patterns
@@ -275,7 +276,7 @@ int main()
 			try {
 				auto term = simp::LiteralTerm(name);
 				//std::cout << " = " << term.to_string() << "\n\n";
-				std::cout << term.to_memory_layout() << "\n\n\n";
+				//std::cout << term.to_memory_layout() << "\n\n\n";
 				term.normalize({ .exact = exact });
 				term.head = simp::greedy_apply_ruleset(rules, term.mut_ref(), { .exact = exact });
 				std::cout << " = " << term.to_string() << "\n\n";

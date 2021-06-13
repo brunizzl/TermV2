@@ -133,6 +133,8 @@ namespace bmath::intern {
 		explicit constexpr SumEnum(const unsigned u) noexcept :value(static_cast<Value>(u)) {}
 		explicit constexpr operator unsigned() const noexcept { return static_cast<unsigned>(this->value); }
 
+		constexpr std::strong_ordering operator<=>(const SumEnum&) const noexcept = default;
+		constexpr bool operator==(const SumEnum&) const noexcept = default;
 		static constexpr Value COUNT = static_cast<Value>(0u);
 	}; //class SumEnum<>
 
@@ -208,8 +210,8 @@ namespace bmath::intern {
 		}
 
 
-		constexpr friend std::strong_ordering operator<=>(const SumEnum&, const SumEnum&) noexcept = default;
-		constexpr friend bool operator==(const SumEnum&, const SumEnum&) noexcept = default;
+		constexpr std::strong_ordering operator<=>(const SumEnum&) const noexcept = default;
+		constexpr bool operator==(const SumEnum&) const noexcept = default;
 		static constexpr Value COUNT = static_cast<Value>(next_offset); //only relevant for outhermost instanciation
 	}; //class SumEnum<Enum, TailEnums...>
 
@@ -268,8 +270,8 @@ namespace bmath::intern {
 		constexpr bool is() const noexcept { return static_cast<unsigned>(this->value) == this_offset; }
 
 
-		constexpr friend std::strong_ordering operator<=>(const SumEnum&, const SumEnum&) noexcept = default;
-		constexpr friend bool operator==(const SumEnum&, const SumEnum&) noexcept = default;
+		constexpr std::strong_ordering operator<=>(const SumEnum&) const noexcept = default;
+		constexpr bool operator==(const SumEnum&) const noexcept = default;
 		static constexpr Value COUNT = static_cast<Value>(next_offset); //only relevant for outhermost instanciation
 	}; //class SumEnum<Atom<T>, TailEnums...>
 
@@ -354,8 +356,8 @@ namespace bmath::intern {
 		template<typename E> requires (std::is_same_v<Enum, E>)
 		constexpr bool is() const noexcept { return (unsigned)this->value < (unsigned)Enum::COUNT; }
 
-		constexpr friend std::strong_ordering operator<=>(const FinalSumEnum&, const FinalSumEnum&) noexcept = default;
-		constexpr friend bool operator==(const FinalSumEnum&, const FinalSumEnum&) noexcept = default;
+		constexpr std::strong_ordering operator<=>(const FinalSumEnum&) const noexcept = default;
+		constexpr bool operator==(const FinalSumEnum&) const noexcept = default;
 	}; //struct FinalSumEnum
 
 

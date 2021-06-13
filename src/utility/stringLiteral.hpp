@@ -2,20 +2,26 @@
 
 #include <array>
 #include <string_view>
+#include <utility>
 
 namespace bmath::intern {
     
+	template<std::size_t... Is>
+	constexpr auto make_char_array(std::index_sequence<Is...>, const char* init)
+	{
+		return std::array<char, sizeof...(Is)>{ init[Is]... };
+	}
     
 	//taken (and adapted) from here: http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2018/p0732r2.pdf
 	template<std::size_t N> 
 	struct StringLiteral :std::array<char, N>
 	{
 		//perhaps change to array reference of length N + 1? (+ 1 because '\0')
-		constexpr StringLiteral(const char* init) noexcept { std::copy_n(init, N, this->data()); }
+		constexpr StringLiteral(const char* init) noexcept :std::array<char, N>(make_char_array(std::make_index_sequence<N>{}, init)) {}
 
 		constexpr StringLiteral(const std::array<char, N>& init) noexcept :std::array<char, N>(init) {}
 
-		constexpr StringLiteral() noexcept { this->fill('\0'); }
+		constexpr StringLiteral() noexcept :std::array<char, N>{} {}
 
 		template<std::size_t Start, std::size_t Length>
 		constexpr StringLiteral<Length> substr() const noexcept 
@@ -164,7 +170,7 @@ namespace bmath::intern {
 		else if constexpr (Re == 0.0) { 
 			return double_to_string_literal<Im>() + "i"; 
 		}
-		else if (Re == 0.0 && Im == 0.0) {
+		else if constexpr (Re == 0.0 && Im == 0.0) {
 			return StringLiteral("0");
 		}
 		else {
