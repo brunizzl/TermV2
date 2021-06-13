@@ -25,7 +25,7 @@ namespace bmath::intern::arr {
 		return detail_concat::impl(arr_1, arr_2, std::make_index_sequence<N1>{}, std::make_index_sequence<N2>{});
 	}
 
-	//static_assert(concat(std::array{ 1, 2, 3 }, std::array{ 4, 5, 6 }) == std::array{ 1, 2, 3, 4, 5, 6 });
+	static_assert(concat(std::array{ 1, 2, 3 }, std::array{ 4, 5, 6 }) == std::array{ 1, 2, 3, 4, 5, 6 });
 
 
 	/////////////////   cons
@@ -43,7 +43,7 @@ namespace bmath::intern::arr {
 		return detail_cons::impl(val, arr_, std::make_index_sequence<N>{});
 	}
 
-	//static_assert(cons(1, std::array{ 2, 3, 4 }) == std::array{ 1, 2, 3, 4 });
+	static_assert(cons(1, std::array{ 2, 3, 4 }) == std::array{ 1, 2, 3, 4 });
 
 
 	/////////////////   subrange / take / drop
@@ -62,7 +62,7 @@ namespace bmath::intern::arr {
 		return detail_subrange::impl<Length>(arr_.data() + Start, std::make_index_sequence<Length>{});
 	}
 
-	//static_assert(subrange<3, 4>(std::array{ 1, 2, 3, 4, 5, 6, 7 ,8 }) == std::array{ 4, 5, 6, 7 });
+	static_assert(subrange<3, 4>(std::array{ 1, 2, 3, 4, 5, 6, 7 ,8 }) == std::array{ 4, 5, 6, 7 });
 
 
 	template<std::size_t Delta, typename T, std::size_t N>
@@ -72,7 +72,7 @@ namespace bmath::intern::arr {
 		return detail_subrange::impl<Delta>(arr_.data(), std::make_index_sequence<Delta>{});
 	}
 
-	//static_assert(take<3>(std::array{ 1, 2, 3, 4, 5, 6, 7 ,8 }) == std::array{ 1, 2, 3 });
+	static_assert(take<3>(std::array{ 1, 2, 3, 4, 5, 6, 7 ,8 }) == std::array{ 1, 2, 3 });
 
 
 	template<std::size_t Delta, typename T, std::size_t N>
@@ -82,7 +82,7 @@ namespace bmath::intern::arr {
 		return detail_subrange::impl<N - Delta>(arr_.data() + Delta, std::make_index_sequence<N - Delta>{});
 	}
 
-	//static_assert(drop<3>(std::array{ 1, 2, 3, 4, 5, 6, 7 ,8 }) == std::array{ 4, 5, 6, 7, 8 });
+	static_assert(drop<3>(std::array{ 1, 2, 3, 4, 5, 6, 7 ,8 }) == std::array{ 4, 5, 6, 7, 8 });
 
 
 	/////////////////   FromList
@@ -129,8 +129,8 @@ namespace bmath::intern::arr {
 		return std::distance(arr.begin(), iter);
 	}
 
-	//static_assert(index_of(4, std::array{ 1, 2, 4, 5, 6, 7 }) == 2);
-	//static_assert(index_of(8, std::array{ 1, 2, 4, 5, 6, 7 }) == -1);
+	static_assert(index_of(4, std::array{ 1, 2, 4, 5, 6, 7 }) == 2);
+	static_assert(index_of(8, std::array{ 1, 2, 4, 5, 6, 7 }) == 6);
 
 
 	/////////////////   map
@@ -154,32 +154,34 @@ namespace bmath::intern::arr {
 	/////////////////   Map
 
 	namespace detail_map {
-		template<typename ResT, template <auto> class F, std::array Arr, typename IndexSeq>
+		template<template <auto> class F, std::array Arr, typename IndexSeq>
 		struct ComputeMap;
 
-		template<typename ResT, template <auto> class F, std::array Arr, std::size_t... I>
-		struct ComputeMap<ResT, F, Arr, std::index_sequence<I...>>
+		template<template <auto> class F, typename T, std::size_t N, std::array<T, N> Arr, std::size_t... Is>
+		class ComputeMap<F, Arr, std::index_sequence<Is...>>
 		{
-			static constexpr auto value = std::array{ F<Arr[I]>::value... };
-		};
+			static constexpr T sample_input = [] { 
+				if constexpr (N > 0) { return Arr[0]; }
+				else                 { return T{};    } //only mapping over an empty array requires T to be default constructable
+			}();
+			using ResT = std::remove_cvref_t<decltype(F<sample_input>::value)>;
 
-		template<typename ResT, template <auto> class F, std::array Arr>
-		struct ComputeMap<ResT, F, Arr, std::index_sequence<>>
-		{
-			static constexpr auto value = std::array<ResT, 0>{};
+		public:
+			static constexpr auto value = std::array<ResT, N>{ F<Arr[Is]>::value... };
 		};
 	} //detail_map
 
-	template<typename ResT, template <auto> class F, std::array Arr>
-	constexpr auto map_v = detail_map::ComputeMap<ResT, F, Arr, std::make_index_sequence<Arr.size()>>::value;
+	template<template <auto> class F, std::array Arr>
+	constexpr auto map_v = detail_map::ComputeMap<F, Arr, std::make_index_sequence<Arr.size()>>::value;
 
 	template<auto V>
 	struct Plus3 { static constexpr auto value = V + 3; };
+	
+	static_assert(map_v<Plus3, std::array{ 1, 2, 3 }> == std::array{ 4, 5, 6 });
+	static_assert(map_v<Plus3, std::array<int, 0>{}> == std::array<int, 0>{});
 
-	static_assert(map_v<int, Plus3, std::array{ 1, 2, 3 }> == std::array{ 4, 5, 6 });
 
 
-
-	//static_assert(arr::map([](auto x) { return x + 3; }, std::array{ 1, 2, 3 }) == std::array{ 4, 5, 6 });
+	static_assert(arr::map([](auto x) { return x + 3; }, std::array{ 1, 2, 3 }) == std::array{ 4, 5, 6 });
 
 } //namespace bmath::intern::arr

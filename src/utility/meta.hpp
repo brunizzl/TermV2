@@ -143,7 +143,7 @@ namespace bmath::intern {
 		return integer_part;
 	}
 
-	//static_assert(parse_double(+_1234, _1234 + 8) == 12345.25);
+	static_assert(parse_double(+_1234, _1234 + 8) == 12345.25);
 
 } //namespace bmath::intern
 
