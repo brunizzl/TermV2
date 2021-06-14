@@ -366,12 +366,6 @@ namespace simp {
 	//i have tried writing this as std::variant, but failed to keep the boilerplate acceptable in size :(
 	struct FAppInfo
 	{
-		//determines what algorithm is choosen to match this application
-		//  permutation:  uses all later members, only preceeded_by_multi is degraded to a bool
-		//  dilation:     uses all later members except always_preceeding_next (because that is a tautology here)
-		//  backtracking: uses ONLY rematchable_params (not even uses match_state_index)
-		//  linear:       uses nothing
-		MatchStrategy strategy = MatchStrategy::linear; //default required as linear in build_rume::build_lhs_multis_and_pattern_f_apps
 		//indexes in match::State::f_app_entries (used in both commutative and non-commutative)
 		std::uint32_t match_state_index = -1u;
 		//bit i dertermines whether parameter i is rematchable (used in both commutative and non-commutative)
@@ -384,6 +378,16 @@ namespace simp {
 		//note: as a multi is also valid as last parameter, a pattern function application may only hold up to 15 non-multi parameters!
 		//(used in non-commutative as bitset and in commutative as bool)
 		bmath::intern::BitSet16 preceeded_by_multi = (std::uint16_t)0;
+
+		//TODO: think about who needs this (at least permutation and dilation)
+		bool associative = false;
+
+		//determines what algorithm is choosen to match this application
+		//  permutation:  uses all later members, only preceeded_by_multi is degraded to a bool
+		//  dilation:     uses all later members except always_preceeding_next (because that is a tautology here)
+		//  backtracking: uses ONLY rematchable_params (not even uses match_state_index)
+		//  linear:       uses nothing
+		MatchStrategy strategy = MatchStrategy::linear; //default required as linear in build_rume::build_lhs_multis_and_pattern_f_apps
 	}; //struct FAppInfo
 
 	union TermNode

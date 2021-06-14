@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cassert>
 #include <bit>
+#include <functional>
 
 namespace bmath::intern {
 
@@ -206,11 +207,16 @@ namespace bmath::intern {
 			}
 		}
 
-		constexpr void clear() noexcept 
-		{ 
+		constexpr void reset_all() noexcept 
+		{
 			for (std::size_t i = 0u; i < this->bitset_end_idx(); i++) {
 				this->data_[i] = 0ull;
 			}
+		}
+
+		constexpr void clear() noexcept 
+		{ 
+			this->reset_all();
 			this->size_ = 0u; 
 		}
 
@@ -310,6 +316,31 @@ namespace bmath::intern {
 			const std::size_t bit_idx = this->data_[array_idx].find_first_false();
 			const std::size_t res_idx = array_idx * 64u + bit_idx;
 			return (res_idx < this->size_) ? res_idx : -1ull;
+		}
+
+		template<std::invocable<BitSet64, BitSet64> Operation>
+		constexpr BitVector& combine_with(const BitVector& snd) noexcept
+		{
+			assert(this->size_ == snd.size_);
+			for (std::size_t array_idx = 0u; array_idx < this->bitset_end_idx(); array_idx++) {
+				this->data_[array_idx] = Operation{}(this->data_[array_idx], snd.data_[array_idx]);
+			}
+			return *this;
+		}
+
+		constexpr BitVector& operator|=(const BitVector& snd) noexcept { return this->combine_with<std::bit_or<>>(snd); }
+		constexpr BitVector& operator&=(const BitVector& snd) noexcept { return this->combine_with<std::bit_and<>>(snd); }
+		constexpr BitVector& operator^=(const BitVector& snd) noexcept { return this->combine_with<std::bit_xor<>>(snd); }
+
+		constexpr BitVector& invert() noexcept
+		{
+			std::size_t array_idx = 0u;
+			for (; array_idx < this->bitset_end_idx() - 1u; array_idx++) {
+				this->data_[array_idx] = ~this->data_[array_idx];
+			}
+			const std::uint64_t last_mask = -1ull >> (this->size_ % 64u);
+			this->data_[array_idx] = ~this->data_[array_idx] && last_mask;
+			return *this;
 		}
 	}; //class BitVector
 

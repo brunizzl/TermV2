@@ -1222,6 +1222,11 @@ namespace simp {
                     if (f.get_type() == Literal::symbol) {
                         using namespace nv;
                         const Symbol symbol = to_symbol(f);
+
+                        if (symbol.is<Variadic>() && is_associative(symbol.to<Variadic>())) {
+                            info.associative = true;
+                        }
+
                         if (symbol.is<Comm>()) {
                             if (this_multi_count > 1) 
                                 throw TypeError{ "too many multis in commutative", ref };
@@ -1552,36 +1557,99 @@ namespace simp {
         //the first haystack_k elements of hay_ref will be skipped for the first match attemt.
         //it is assumed, that needle_ref and hay_ref are both applications of the same nv::Comm, where pn_ref is a PatternFApp
         //returns true if a match was found
-        bool find_permutation(const UnsaveRef pn_ref, const UnsaveRef hay_ref, State& match_state, std::uint32_t needle_i, std::uint32_t hay_k)
+        bool find_permutation(const UnsaveRef pn_ref, const UnsaveRef hay_ref, State& match_state, std::int32_t needle_i, std::int32_t hay_k)
         {
             assert(pn_ref.type == PatternFApp{} && hay_ref.type == Literal::f_app);
-            assert(pn_ref->f_app.function() == hay_ref->f_app.function()); //maybe too strict if the future allows to search unordered in unknown apps
+            const NodeIndex f = pn_ref->f_app.function();
+            assert(f == hay_ref->f_app.function()); //maybe too strict if the future allows to search unordered in unknown apps
 
             const std::span<const NodeIndex> needles = pn_ref->f_app.parameters();
             const std::span<const NodeIndex> haystack = hay_ref->f_app.parameters();
             assert(std::is_sorted(needles.begin(), needles.end(), ordered_less(pn_ref.store_data())));
             assert(std::is_sorted(haystack.begin(), haystack.end(), ordered_less(hay_ref.store_data())));
 
-            const FAppInfo info = f_app_info(pn_ref);
-            if (info.preceeded_by_multi) {
-                if (needles.size() > haystack.size()) {
-                    return false;
-                }
-            }
-            else if (needles.size() != haystack.size()) {
+            if (needles.size() > haystack.size()) {
                 return false;
             }
+
+            const FAppInfo info = f_app_info(pn_ref);
             SharedFAppEntry& needles_data = match_state.f_app_entries[info.match_state_index];
             assert(needle_i == 0u || needles_data.match_idx == hay_ref.typed_idx() && "rematch only with same subterm");
             needles_data.match_idx = hay_ref.typed_idx();
 
-            auto currently_matched = bmath::intern::BitVector(haystack.size());
-            for (std::uint32_t i = 0u; i < needle_i; i++) {
-                currently_matched.set(needles_data.match_positions[i]);
-            }
+            //keeps track of wether a param in haystack is currently associated with a param in needles or not
+            auto currently_matched = bmath::intern::BitVector(haystack.size()); 
+
+            //if needles_data.match_positions[i] == assoc_match_indicator, then needle i has not matched exactly one parameter of haystack, 
+            //  but an arbitrary ammount, as the needle i is a weak match variable currently associated with a function application of the same associative 
+            //  function f as pn_ref and hay_ref.
+            constexpr auto assoc_match_indicator = (SharedFAppEntry::MatchPos_T)-1u;
+
+            const auto find_associatively_matched = [&](const UnsaveRef needle_matched_ref, bmath::intern::BitVector& matched_by_needle) {
+                int k = 0;
+                for (const NodeIndex matched_param : needle_matched_ref->f_app.parameters()) {
+                    const UnsaveRef matched_param_ref = hay_ref.at(matched_param);
+                    for (;;) {
+                        while (currently_matched.test(k) && k != haystack.size()) k++;
+                        if (k == haystack.size()) return false;
+
+                        const std::strong_ordering ord = compare_tree(matched_param_ref, hay_ref.at(haystack[k]));
+                        if (ord == std::strong_ordering::equal) {
+                            matched_by_needle.set(k);
+                            k++;
+                            break; //leave inner loop, find next matched_param in haystack
+                        }
+                        else if (ord == std::strong_ordering::less) {                            
+                            return false; //haystack elems size monotonically increases -> no hope
+                        }
+                        assert(ord == std::strong_ordering::greater);
+                        k++;
+                    }
+                }
+                return true;
+            };
+
+            const auto set_matched = [&] {
+                for (std::int32_t i = 0; i < needle_i; i++) {
+                    const auto match_pos = needles_data.match_positions[i];
+                    if (match_pos == assoc_match_indicator) [[unlikely]] {
+                        const UnsaveRef needle_ref = pn_ref.at(needles[i]);
+                        assert(info.associative && needle_ref.type == SingleMatch::weak);
+                        const UnsaveRef needle_matched_ref = hay_ref.at(match_state.single_vars[needle_ref.index].match_idx);
+                        assert(needle_matched_ref.type == Literal::f_app && needle_matched_ref->f_app.function() == f);
+                        const bool found_all = find_associatively_matched(needle_matched_ref, currently_matched);
+                        assert(found_all);
+                    }
+                    else {
+                        currently_matched.set(match_pos);
+                    }
+                }
+            };
+            set_matched();
 
             while (needle_i < needles.size()) {
                 const UnsaveRef needle_ref = pn_ref.at(needles[needle_i]);
+
+                //if we currently match in application of associative symbol "f" and needle is currently also matched to an application of "f", 
+                //  we wont find the full needle in our haystack, but perhaps its parameters
+                if (info.associative && needle_ref.type == SingleMatch::weak) {
+                    const UnsaveRef needle_matched_ref = hay_ref.at(match_state.single_vars[needle_ref.index].match_idx);
+                    if (needle_matched_ref.type == Literal::f_app && needle_matched_ref->f_app.function() == f) [[unlikely]] {
+                        //matched_by_needle buffers needle's matches until the whole needle is confirmed to lie within the haystack, 
+                        //  to not require cumbersome resetting of currently_matched, if only parts of needle where found
+                        auto matched_by_needle = bmath::intern::BitVector(haystack.size());
+                        if (find_associatively_matched(needle_matched_ref, matched_by_needle)) {
+                            currently_matched |= matched_by_needle;
+                            //normally jump to prepare_next_needle, but this is too different from the usual
+                            needles_data.match_positions[needle_i] = assoc_match_indicator; 
+                            hay_k = 0;
+                            needle_i++;
+                            continue;
+                        }
+                        goto rematch_last_needle;
+                    }
+                }
+
                 for (; hay_k < haystack.size(); hay_k++) {
                     if (currently_matched.test(hay_k)) continue;
 
@@ -1591,12 +1659,18 @@ namespace simp {
                     if (cmp == std::partial_ordering::less)       goto rematch_last_needle;
                 }
             rematch_last_needle:
-                if (needle_i == 0u) {
+                if (needle_i == 0) {
                     return false; //failed to match first needle -> there is no hope
                 }
                 needle_i--;
                 hay_k = needles_data.match_positions[needle_i];
-                if (!info.rematchable_params.test(needle_i) ||
+                if (hay_k == assoc_match_indicator) [[unlikely]] { 
+                    //perhaps there are more efficient ways to do this, but i expect to only seldom encounter this situation anyway
+                    currently_matched.reset_all(); 
+                    set_matched();
+                    continue;
+                }
+                else if (!info.rematchable_params.test(needle_i) ||
                     !rematch(pn_ref.at(needles[needle_i]), hay_ref.at(haystack[hay_k]), match_state))
                 { //could not rematch last successfully-matched needle-hay pair with each other again
                   //  -> try succeeding elements in haystack in next loop iteration for that needle
@@ -1608,11 +1682,11 @@ namespace simp {
                 currently_matched.set(hay_k);                   //already set if needle was rematched
                 needles_data.match_positions[needle_i] = hay_k; //already set if needle was rematched
                 hay_k = info.always_preceeding_next.test(needle_i) ?
-                    hay_k + 1u :
-                    0u;
+                    hay_k + 1 :
+                    0;
                 needle_i++;
             }
-            return true;
+            return info.preceeded_by_multi || currently_matched.count() == haystack.size();
         } //find_permutation
 
         //analogous to find_permutation, but for non commutative pattern containing at least one multi_marker
