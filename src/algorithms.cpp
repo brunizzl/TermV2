@@ -1624,10 +1624,9 @@ namespace simp {
             }
             else {
                 needles_data.match_idx = hay_ref.typed_idx();
-            }
-
-            if (needles.size() > haystack.size()) {
-                return false;
+                if (needles.size() > haystack.size()) {
+                    return false;
+                }
             }
 
             while (needle_i < needles.size()) {            
@@ -1641,15 +1640,15 @@ namespace simp {
                             //matched_by_needle buffers needle's matches until the whole needle is confirmed to lie within the haystack, 
                             //  to not require cumbersome resetting of currently_matched, if only parts of needle where found
                             auto matched_by_needle = bmath::intern::BitVector(haystack.size());
-                        if (find_associatively_matched(needle_matched_ref, matched_by_needle)) {
-                            currently_matched |= matched_by_needle;
-                            //normally jump to prepare_next_needle, but this is too different from the usual
-                            needles_data.match_positions[needle_i] = assoc_match_indicator; 
-                            hay_k = 0;
-                            needle_i++;
-                            continue;
-                        }
-                        goto rematch_last_needle;
+                            if (find_associatively_matched(needle_matched_ref, matched_by_needle)) {
+                                currently_matched |= matched_by_needle;
+                                //normally jump to prepare_next_needle, but this is too different from the usual
+                                needles_data.match_positions[needle_i] = assoc_match_indicator; 
+                                hay_k = 0;
+                                needle_i++;
+                                continue;
+                            }
+                            goto rematch_last_needle;
                         }
                     }
                     for (; hay_k < haystack.size(); hay_k++) {
@@ -1662,10 +1661,7 @@ namespace simp {
                     }
                 }
             rematch_last_needle:
-                if (needle_i == 0) {
-                    return false; //failed to match first needle -> there is no hope
-                }
-                needle_i--;
+                if (needle_i-- == 0) return false; //failed to match first needle -> there is no hope
                 hay_k = needles_data.match_positions[needle_i];
                 if (hay_k == assoc_match_indicator) [[unlikely]] { 
                     //perhaps there are more efficient ways to do this, but i expect to only seldom encounter this situation anyway
@@ -1711,59 +1707,54 @@ namespace simp {
             }
             else {
                 needles_data.match_idx = hay_ref.typed_idx();
-            }
-
-            if (!needles.size()) {
-                assert(info.preceeded_by_multi.count() == 1u);
-                return true;
-            }
-            if (!haystack.size()) {
-                return false;
-            }
-            //how may elements of haystack can still be skipped (aka matched with a multi) without matching a (real) needle
-            //note: this test is not neccessairy, only improves performace in such cases
-            if ((int)haystack.size() - hay_k - (int)needles.size() + needle_i < 0) {
-                return false;
+                if (!needles.size()) {
+                    assert(info.preceeded_by_multi.count() == 1u);
+                    return true;
+                }
+                if (!haystack.size()) {
+                    return false;
+                }
+                //how may elements of haystack can still be skipped (aka matched with a multi) without matching a (real) needle
+                //note: this test is not neccessairy, only improves performace in such cases
+                if ((int)haystack.size() - hay_k - (int)needles.size() + needle_i < 0) {
+                    return false;
+                }
             }
             
         match_current_needle: 
-            {
-                assert(hay_k < haystack.size());
+            if (hay_k < haystack.size()) {
                 const UnsaveRef needle_ref = pn_ref.at(needles[needle_i]);
                 do {
                     if (matches(needle_ref, hay_ref.at(haystack[hay_k]), match_state)) {
                         goto prepare_next_needle;
                     }
                 } while (info.preceeded_by_multi.test(needle_i) && ++hay_k < haystack.size());
-                goto rematch_last_needle;
-            }
-        prepare_next_needle: 
-            {
-                needles_data.match_positions[needle_i] = hay_k; //already set if needle was rematched
-                needle_i++;
-                hay_k++;
-                if (needle_i == needles.size()) {
-                    if (info.preceeded_by_multi.test(needle_i) || hay_k == haystack.size()) {
-                        return true;
-                    }
-                    goto rematch_last_needle;
-                }
-                goto match_current_needle;
             }
         rematch_last_needle: 
             while (needle_i-- != 0) {
                 hay_k = needles_data.match_positions[needle_i];
-                if (info.rematchable_params.test(needle_i)) {
-                    if (rematch(pn_ref.at(needles[needle_i]), hay_ref.at(haystack[hay_k]), match_state)) {
-                        goto prepare_next_needle;
-                    }
+                if (info.rematchable_params.test(needle_i) && 
+                    rematch(pn_ref.at(needles[needle_i]), hay_ref.at(haystack[hay_k]), match_state)) 
+                {
+                    goto prepare_next_needle;
                 }
-                if (info.preceeded_by_multi.test(needle_i)) {
+                else if (info.preceeded_by_multi.test(needle_i)) {
                     hay_k++;
                     goto match_current_needle;
                 }
             }
             return false;
+        prepare_next_needle: 
+            needles_data.match_positions[needle_i] = hay_k; //already set if needle was rematched
+            needle_i++;
+            hay_k++;
+            if (needle_i != needles.size()) {
+                goto match_current_needle;
+            }
+            else if (!info.preceeded_by_multi.test(needle_i) && hay_k != haystack.size()) {
+                goto rematch_last_needle;
+            }
+            return true;
         } //find_dilation
 
         bool BMATH_FORCE_INLINE find_backtracking(const UnsaveRef pn_ref, const UnsaveRef hay_ref, State& match_state, const bool find_rematch)

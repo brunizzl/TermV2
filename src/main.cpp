@@ -15,6 +15,8 @@
 TODO:
 
 important:
+ - is find_backtrack sufficient if associativity is respected by find_dilation?
+ - test if combining match_ and rematch brings performance improvements
  - move callstack to heap in recursive functions iterating over terms
       - normalize::recursive (alterantively add depth limit for lambda normalisation)
 	  - greedy_apply_ruleset
@@ -240,7 +242,10 @@ int main()
 			{ "'make_ints_cons_h'(n, res)              = res" },
 
 			{ "'change'(f, g, f(xs...)) = g(xs...)" },
+
+			//experiments
 			{ "'teeest'('tup'(a+b, cs...), 'tup'(b, a)) = 'teEsT'(a, b, cs...)" },
+			{ "'tup'(xs..., 1, x) = x" },
 		};
 		for (const simp::RuleRef rule : rules) {
 			std::cout << rule.to_string() << "\n\n";
