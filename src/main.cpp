@@ -239,8 +239,9 @@ int main()
 			{ "'make_ints'('cons', a, b)      | a <= b = 'make_ints_cons_h'(b - a, b :: 'null')" },
 			{ "'make_ints_cons_h'(n, y :: ys) | n > 0  = 'make_ints_cons_h'(n - 1, (y - 1) :: y :: ys)" },
 			{ "'make_ints_cons_h'(n, res)              = res" },
-			
+
 			{ "'change'(f, g, f(xs...)) = g(xs...)" },
+			{ "'teeest'('tup'(a+b, cs...), 'tup'(b, a)) = 'teEsT'(a, b)" },
 		};
 		for (const simp::RuleRef rule : rules) {
 			std::cout << rule.to_string() << "\n\n";
