@@ -1552,31 +1552,20 @@ namespace simp {
         } //eval_value_match
 
         //determines weather there is a way to match needle_ref in hay_ref (thus needle_ref is assumed to part of a pattern)
-        //needle_i is the index of the first element in needle_ref to be matched. 
-        //if needle_i is not zero, it is assumed, that all previous elements in needle_ref are already matched (=> the call happens in a rematch).
-        //the first haystack_k elements of hay_ref will be skipped for the first match attemt.
         //it is assumed, that needle_ref and hay_ref are both applications of the same nv::Comm, where pn_ref is a PatternFApp
         //returns true if a match was found
-        bool find_permutation(const UnsaveRef pn_ref, const UnsaveRef hay_ref, State& match_state, std::int32_t needle_i, std::int32_t hay_k)
+        bool find_permutation(const UnsaveRef pn_ref, const UnsaveRef hay_ref, State& match_state, const bool find_rematch)
         {
             assert(pn_ref.type == PatternFApp{} && hay_ref.type == Literal::f_app);
-            const NodeIndex f = pn_ref->f_app.function();
-            assert(f == hay_ref->f_app.function()); //maybe too strict if the future allows to search unordered in unknown apps
-
             const std::span<const NodeIndex> needles = pn_ref->f_app.parameters();
             const std::span<const NodeIndex> haystack = hay_ref->f_app.parameters();
             assert(std::is_sorted(needles.begin(), needles.end(), ordered_less(pn_ref.store_data())));
             assert(std::is_sorted(haystack.begin(), haystack.end(), ordered_less(hay_ref.store_data())));
-
-            if (needles.size() > haystack.size()) {
-                return false;
-            }
+            std::int32_t needle_i = 0; //index in needles
+            std::int32_t hay_k = 0; //index in haystack
 
             const FAppInfo info = f_app_info(pn_ref);
             SharedFAppEntry& needles_data = match_state.f_app_entries[info.match_state_index];
-            assert(needle_i == 0u || needles_data.match_idx == hay_ref.typed_idx() && "rematch only with same subterm");
-            needles_data.match_idx = hay_ref.typed_idx();
-
             //keeps track of wether a param in haystack is currently associated with a param in needles or not
             auto currently_matched = bmath::intern::BitVector(haystack.size()); 
 
@@ -1584,6 +1573,7 @@ namespace simp {
             //  but an arbitrary ammount, as the needle i is a weak match variable currently associated with a function application of the same associative 
             //  function f as pn_ref and hay_ref.
             constexpr auto assoc_match_indicator = (SharedFAppEntry::MatchPos_T)-1u;
+            const NodeIndex f = pn_ref->f_app.function();
 
             const auto find_associatively_matched = [&](const UnsaveRef needle_matched_ref, bmath::intern::BitVector& matched_by_needle) {
                 int k = 0;
@@ -1625,19 +1615,32 @@ namespace simp {
                     }
                 }
             };
-            set_matched();
+            //case of find_permutation beeing called by rematch
+            if (find_rematch) {
+                needle_i = needles.size();
+                set_matched();
+                assert(needles_data.match_idx == hay_ref.typed_idx());
+                goto rematch_last_needle;
+            }
+            else {
+                needles_data.match_idx = hay_ref.typed_idx();
+            }
 
-            while (needle_i < needles.size()) {
-                const UnsaveRef needle_ref = pn_ref.at(needles[needle_i]);
+            if (needles.size() > haystack.size()) {
+                return false;
+            }
 
-                //if we currently match in application of associative symbol "f" and needle is currently also matched to an application of "f", 
-                //  we wont find the full needle in our haystack, but perhaps its parameters
-                if (info.associative && needle_ref.type == SingleMatch::weak) {
-                    const UnsaveRef needle_matched_ref = hay_ref.at(match_state.single_vars[needle_ref.index].match_idx);
-                    if (needle_matched_ref.type == Literal::f_app && needle_matched_ref->f_app.function() == f) [[unlikely]] {
-                        //matched_by_needle buffers needle's matches until the whole needle is confirmed to lie within the haystack, 
-                        //  to not require cumbersome resetting of currently_matched, if only parts of needle where found
-                        auto matched_by_needle = bmath::intern::BitVector(haystack.size());
+            while (needle_i < needles.size()) {            
+                { //match_current_needle
+                    const UnsaveRef needle_ref = pn_ref.at(needles[needle_i]);
+                    //if we currently match in application of associative symbol "f" and needle is currently also matched to an application of "f", 
+                    //  we wont find the full needle in our haystack, but perhaps its parameters
+                    if (info.associative && needle_ref.type == SingleMatch::weak) {
+                        const UnsaveRef needle_matched_ref = hay_ref.at(match_state.single_vars[needle_ref.index].match_idx);
+                        if (needle_matched_ref.type == Literal::f_app && needle_matched_ref->f_app.function() == f) [[unlikely]] {
+                            //matched_by_needle buffers needle's matches until the whole needle is confirmed to lie within the haystack, 
+                            //  to not require cumbersome resetting of currently_matched, if only parts of needle where found
+                            auto matched_by_needle = bmath::intern::BitVector(haystack.size());
                         if (find_associatively_matched(needle_matched_ref, matched_by_needle)) {
                             currently_matched |= matched_by_needle;
                             //normally jump to prepare_next_needle, but this is too different from the usual
@@ -1647,16 +1650,16 @@ namespace simp {
                             continue;
                         }
                         goto rematch_last_needle;
+                        }
                     }
-                }
+                    for (; hay_k < haystack.size(); hay_k++) {
+                        if (currently_matched.test(hay_k)) continue;
 
-                for (; hay_k < haystack.size(); hay_k++) {
-                    if (currently_matched.test(hay_k)) continue;
-
-                    const auto cmp = match_(needle_ref, hay_ref.at(haystack[hay_k]), match_state);
-                    if (cmp == std::partial_ordering::equivalent) goto prepare_next_needle;
-                    //current needle is smaller than current hay, but hay will only get bigger -> no chance
-                    if (cmp == std::partial_ordering::less)       goto rematch_last_needle;
+                        const auto cmp = match_(needle_ref, hay_ref.at(haystack[hay_k]), match_state);
+                        if (cmp == std::partial_ordering::equivalent) goto prepare_next_needle;
+                        //current needle is smaller than current hay, but hay will only get bigger -> no chance
+                        if (cmp == std::partial_ordering::less)       goto rematch_last_needle;
+                    }
                 }
             rematch_last_needle:
                 if (needle_i == 0) {
@@ -1690,23 +1693,24 @@ namespace simp {
         } //find_permutation
 
         //analogous to find_permutation, but for non commutative pattern containing at least one multi_marker
-        bool find_dilation(const UnsaveRef pn_ref, const UnsaveRef hay_ref, State& match_state, std::int32_t needle_i)
+        bool find_dilation(const UnsaveRef pn_ref, const UnsaveRef hay_ref, State& match_state, const bool find_rematch)
         {
-            std::int32_t hay_k = 0; //unlike in find_permutation, this is not a parameter
             assert(pn_ref.type == PatternFApp{} && hay_ref.type == Literal::f_app);
 
             const std::span<const NodeIndex> needles = pn_ref->f_app.parameters();
             const std::span<const NodeIndex> haystack = hay_ref->f_app.parameters();
+            std::int32_t needle_i = 0; //index in needles
+            std::int32_t hay_k = 0; //index in haystack
             const FAppInfo info = f_app_info(pn_ref);
-
             SharedFAppEntry& needles_data = match_state.f_app_entries[info.match_state_index];
-            assert(needle_i == 0 || needles_data.match_idx == hay_ref.typed_idx() && "rematch only with same subterm");
-            needles_data.match_idx = hay_ref.typed_idx();
 
-            //case of beeing called by rematch
-            if (needle_i != 0) {
-                assert(needle_i == needles.size());
+            if (find_rematch) {
+                needle_i = needles.size();
+                assert(needles_data.match_idx == hay_ref.typed_idx());
                 goto rematch_last_needle;
+            }
+            else {
+                needles_data.match_idx = hay_ref.typed_idx();
             }
 
             if (!needles.size()) {
@@ -1762,27 +1766,31 @@ namespace simp {
             return false;
         } //find_dilation
 
-        //assumes the first (i - 1) params to already be matched, starts backtracking by remaching param (i - 1)
-        //returns true if backtracking was succesfull
-        bool BMATH_FORCE_INLINE track_back(const UnsaveRef pn_ref, const UnsaveRef ref, const std::span<const NodeIndex> pn_params,
-            const std::span<const NodeIndex> params, State& match_state, std::uint32_t i)
+        bool BMATH_FORCE_INLINE find_backtracking(const UnsaveRef pn_ref, const UnsaveRef hay_ref, State& match_state, const bool find_rematch)
         {
-            assert(pn_params.size() == params.size());
-            assert(pn_params.size() > 0u);
-            assert(i > 0u);
+            assert(pn_ref.type == PatternFApp{} && hay_ref.type == Literal::f_app);
+            const std::span<const NodeIndex> needles = pn_ref->f_app.parameters();
+            const std::span<const NodeIndex> haystack = hay_ref->f_app.parameters();
+            int i = 0; //index for both haystack and needles
+
+            assert(needles.size() == haystack.size());
+            assert(needles.size() > 0u);
             const auto rematchable = f_app_info(pn_ref).rematchable_params;
+
+            if (find_rematch) {
+                i = needles.size();
+                goto rematch_last_needle;
+            }
             for (;;) {
-                i--;
-                while (!rematchable.test(i) ||
-                    !rematch(pn_ref.at(pn_params[i]), ref.at(params[i]), match_state))
-                {
-                    if (i == 0u)            return false;
-                    i--;
-                } do {
+                while (matches(pn_ref.at(needles[i]), hay_ref.at(haystack[i]), match_state)) {
                     i++;
-                    if (i == params.size()) return true;
-                }                 
-                while (matches(pn_ref.at(pn_params[i]), ref.at(params[i]), match_state));
+                    if (i == needles.size()) return true;
+                } do { rematch_last_needle:
+                    if (i == 0)              return false;
+                    i--;
+                } while (!rematchable.test(i) ||
+                    !rematch(pn_ref.at(needles[i]), hay_ref.at(haystack[i]), match_state));
+                i++;
             }
         } //track_back
 
@@ -1827,28 +1835,24 @@ namespace simp {
                 const MatchStrategy strat = f_app_info(pn_ref).strategy;
                 switch (strat) {
                 case MatchStrategy::permutation:
-                    return to_order(find_permutation(pn_ref, ref, match_state, 0, 0));
+                    return to_order( find_permutation(pn_ref, ref, match_state, false));
                 case MatchStrategy::dilation:
-                    return to_order(find_dilation(pn_ref, ref, match_state, 0));
-                default: {
-                    assert(strat == MatchStrategy::linear || strat == MatchStrategy::backtracking);
+                    return to_order(    find_dilation(pn_ref, ref, match_state, false));
+                case MatchStrategy::backtracking:
+                    return to_order(find_backtracking(pn_ref, ref, match_state, false));
+                case MatchStrategy::linear: {
                     const std::span<const NodeIndex> pn_params = pn_ref->f_app.parameters();
                     const std::span<const NodeIndex> params = ref->f_app.parameters();
                     if (pn_params.size() != params.size()) {
                         return std::partial_ordering::unordered; //TODO: would the ordering still hold if we return greater / smaller?
                     }
-
                     auto pn_iter = pn_params.begin();
                     const auto pn_start = pn_params.begin();
-
+                    auto iter = params.begin();
                     const auto stop = params.end();
-                    for (auto iter = params.begin(); iter != stop; ++pn_iter, ++iter) {
+                    for (; iter != stop; ++pn_iter, ++iter) {
                         const auto cmp = match_(pn_ref.at(*pn_iter), ref.at(*iter), match_state);
                         if (cmp != std::partial_ordering::equivalent) {
-                            if (strat == MatchStrategy::backtracking && pn_iter != pn_start) {
-                                return to_order(track_back(pn_ref, ref, pn_params, params,
-                                    match_state, pn_iter - pn_start));
-                            }
                             return cmp;
                         }
                     }
@@ -1915,29 +1919,19 @@ namespace simp {
             if (pn_ref.type == PatternFApp{}) {
                 assert(ref.type == Literal::f_app);
                 switch (f_app_info(pn_ref).strategy) {
-                case MatchStrategy::permutation: {
-                    const SharedFAppEntry& entry = match_state.f_app_entry(pn_ref);
-                    assert(entry.match_idx == ref.typed_idx());
-
-                    const auto needle_params = pn_ref->f_app.parameters();
-                    const std::uint32_t needle_i = needle_params.size() - 1u;
-                    const std::uint32_t hay_k = entry.match_positions[needle_i] + 1u;
-
-                    return find_permutation(pn_ref, ref, match_state, needle_i, hay_k);
-                } break;
+                case MatchStrategy::permutation:
+                    return  find_permutation(pn_ref, ref, match_state, true);
                 case MatchStrategy::dilation:
-                    return find_dilation(pn_ref, ref, match_state, pn_ref->f_app.parameters().size());
-                case MatchStrategy::backtracking: {
-                    const std::span<const NodeIndex> pn_params = pn_ref->f_app.parameters();
-                    const std::span<const NodeIndex> params = ref->f_app.parameters();
-                    return track_back(pn_ref, ref, pn_params, params, match_state, pn_params.size());
-                } break;
+                    return     find_dilation(pn_ref, ref, match_state, true);
+                case MatchStrategy::backtracking: 
+                    return find_backtracking(pn_ref, ref, match_state, true);
                 case MatchStrategy::linear:
                     assert(false); //why would one try to rematch something not rematchable?
                     BMATH_UNREACHABLE;
                 }
             }
             else if (pn_ref.type == Literal::lambda) {
+                assert(ref.type == Literal::lambda);
                 return rematch(pn_ref.at(pn_ref->lambda.definition), ref.at(ref->lambda.definition), match_state);
             }
             return false;

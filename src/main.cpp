@@ -241,7 +241,7 @@ int main()
 			{ "'make_ints_cons_h'(n, res)              = res" },
 
 			{ "'change'(f, g, f(xs...)) = g(xs...)" },
-			{ "'teeest'('tup'(a, b), 'tup'(cs..., a + b, ds...)) = 'teEsT'(a, b)" },
+			{ "'teeest'('tup'(a+b, cs...), 'tup'(b, a)) = 'teEsT'(a, b, cs...)" },
 		};
 		for (const simp::RuleRef rule : rules) {
 			std::cout << rule.to_string() << "\n\n";
