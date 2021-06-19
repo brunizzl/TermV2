@@ -1772,14 +1772,15 @@ namespace simp {
             const std::span<const NodeIndex> needles = pn_ref->f_app.parameters();
             const std::span<const NodeIndex> haystack = hay_ref->f_app.parameters();
             int i = 0; //index for both haystack and needles
-
-            assert(needles.size() == haystack.size());
             assert(needles.size() > 0u);
             const auto rematchable = f_app_info(pn_ref).rematchable_params;
 
             if (find_rematch) {
                 i = needles.size();
                 goto rematch_last_needle;
+            }
+            if (needles.size() != haystack.size()) {
+                return false;
             }
             for (;;) {
                 while (matches(pn_ref.at(needles[i]), hay_ref.at(haystack[i]), match_state)) {
@@ -1831,9 +1832,7 @@ namespace simp {
                     cmp != std::partial_ordering::equivalent)
                 {   return cmp;
                 }
-
-                const MatchStrategy strat = f_app_info(pn_ref).strategy;
-                switch (strat) {
+                switch (f_app_info(pn_ref).strategy) {
                 case MatchStrategy::permutation:
                     return to_order( find_permutation(pn_ref, ref, match_state, false));
                 case MatchStrategy::dilation:
@@ -1844,7 +1843,7 @@ namespace simp {
                     const std::span<const NodeIndex> pn_params = pn_ref->f_app.parameters();
                     const std::span<const NodeIndex> params = ref->f_app.parameters();
                     if (pn_params.size() != params.size()) {
-                        return std::partial_ordering::unordered; //TODO: would the ordering still hold if we return greater / smaller?
+                        return std::partial_ordering::unordered; //TODO: would the ordering still hold if we return greater / smaller? (i think not)
                     }
                     auto pn_iter = pn_params.begin();
                     const auto pn_start = pn_params.begin();
@@ -1857,9 +1856,9 @@ namespace simp {
                         }
                     }
                     return std::partial_ordering::equivalent;
+                } break;
                 }
-                }
-            }
+            } break;
             case NodeType(SingleMatch::restricted): {
                 const RestrictedSingleMatch var = *pn_ref;
                 SharedSingleMatchEntry& entry = match_state.single_vars[var.match_state_index];

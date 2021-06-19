@@ -40,8 +40,6 @@ nice to have:
  - add eval_native for min/max to remove values guaranteed to not be minimum / maximum without requiring full evaluation
  - add neutral element to associative functions
  - add "dont care" pattern
- - implement meta_pn::match function for variadic patterns
- - achieve feature parity between compile time pattern and run time pattern (add value match to ct)
  - enable StupidBufferVector to handle non-trivial destructible types -> change name to BufferVector
  - automate error checking in stupidTests.hpp -> change name to tests.hpp
  - noexceptify everything
@@ -49,6 +47,7 @@ nice to have:
  - allow to restrict a variables domain (add to Names vector?)
 
 idea status:
+ - achieve feature parity between compile time pattern and run time pattern (add value match to ct)
  - introduce special condition "submatch" , where "submatch(x, ???, pat)" tries to match pat in parts of x, where the parts can be chosen using ??? in some way
  - allow PatternFApp in rhs to indicate, that a call of lhs can be "stolen" e.g. the parameter count in rhs is guaranteed to be lower than the one in lhs -> the old allocation can be reused
  - let each RewriteRule have a name in form of a constant c-string (not what pattern is constructed from, but name of rule, e.g. "differentiation: product rule" or something)
