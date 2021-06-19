@@ -1721,51 +1721,19 @@ namespace simp {
             if ((int)haystack.size() - hay_k - (int)needles.size() + needle_i < 0) {
                 return false;
             }
-        match_current_needle:
+            
+        match_current_needle: 
             {
+                assert(hay_k < haystack.size());
                 const UnsaveRef needle_ref = pn_ref.at(needles[needle_i]);
-                if (info.preceeded_by_multi.test(needle_i)) {
-                    //how may elements of haystack can still be skipped (aka matched with a multi) without matching a (real) needle
-                    int skip_budget = haystack.size() - hay_k - needles.size() + needle_i;
-                    while (skip_budget >= 0) {
-                        assert(hay_k < haystack.size()); //implied by not negative skip budget
-                        if (matches(needle_ref, hay_ref.at(haystack[hay_k]), match_state))
-                        {
-                            goto prepare_next_needle;
-                        }
-                        hay_k++;
-                        skip_budget--;
+                do {
+                    if (matches(needle_ref, hay_ref.at(haystack[hay_k]), match_state)) {
+                        goto prepare_next_needle;
                     }
-                    goto rematch_last_needle;
-                }
-                else if (matches(needle_ref, hay_ref.at(haystack[hay_k]), match_state))
-                {
-                    goto prepare_next_needle;
-                }
+                } while (info.preceeded_by_multi.test(needle_i) && ++hay_k < haystack.size());
                 goto rematch_last_needle;
             }
-        rematch_last_needle:
-            {
-                if (needle_i == 0) {
-                    return false;
-                }
-                needle_i--;
-                hay_k = needles_data.match_positions[needle_i];
-                if (info.rematchable_params.test(needle_i) &&
-                    rematch(pn_ref.at(needles[needle_i]), hay_ref.at(haystack[hay_k]), match_state))
-                {
-                    goto prepare_next_needle;
-                }
-                while (!info.preceeded_by_multi.test(needle_i)) {
-                    if (needle_i == 0) {
-                        return false;
-                    }
-                    needle_i--;
-                }
-                hay_k = needles_data.match_positions[needle_i] + 1;
-                goto match_current_needle;
-            }
-        prepare_next_needle:
+        prepare_next_needle: 
             {
                 needles_data.match_positions[needle_i] = hay_k; //already set if needle was rematched
                 needle_i++;
@@ -1778,6 +1746,20 @@ namespace simp {
                 }
                 goto match_current_needle;
             }
+        rematch_last_needle: 
+            while (needle_i-- != 0) {
+                hay_k = needles_data.match_positions[needle_i];
+                if (info.rematchable_params.test(needle_i)) {
+                    if (rematch(pn_ref.at(needles[needle_i]), hay_ref.at(haystack[hay_k]), match_state)) {
+                        goto prepare_next_needle;
+                    }
+                }
+                if (info.preceeded_by_multi.test(needle_i)) {
+                    hay_k++;
+                    goto match_current_needle;
+                }
+            }
+            return false;
         } //find_dilation
 
         //assumes the first (i - 1) params to already be matched, starts backtracking by remaching param (i - 1)

@@ -109,7 +109,7 @@ int main()
 			{ "(\\x .\\y .x(y))(\\x .\\y .x(y))(\\x .x)" },
 			{ "(\\x .\\y .x(y))(\\x .\\y .x(y))(\\x .x)(jens)" },
 		});
-		constexpr bool show = true;
+		constexpr bool show = false;
 		for (const auto& name : names) {
 			if (show) std::cout << name << "\n";
 			auto term = simp::LiteralTerm(name);
@@ -241,7 +241,7 @@ int main()
 			{ "'make_ints_cons_h'(n, res)              = res" },
 
 			{ "'change'(f, g, f(xs...)) = g(xs...)" },
-			{ "'teeest'('tup'(a+b, cs...), 'tup'(b, a)) = 'teEsT'(a, b)" },
+			{ "'teeest'('tup'(a, b), 'tup'(cs..., a + b, ds...)) = 'teEsT'(a, b)" },
 		};
 		for (const simp::RuleRef rule : rules) {
 			std::cout << rule.to_string() << "\n\n";
