@@ -1915,15 +1915,14 @@ namespace simp {
                     return     find_dilation(pn_ref, ref, match_state, true);
                 case MatchStrategy::backtracking: 
                     return find_backtracking(pn_ref, ref, match_state, true);
-                case MatchStrategy::linear:
-                    assert(false); //why would one try to rematch something not rematchable?
-                    BMATH_UNREACHABLE;
-                }
+                } //MatchStrategy::linear is not expected above (as it implies not beeing rematchable)
             }
             else if (pn_ref.type == Literal::lambda) {
                 assert(ref.type == Literal::lambda);
                 return rematch(pn_ref.at(pn_ref->lambda.definition), ref.at(ref->lambda.definition), match_state);
             }
+            assert(false); //why would one try to rematch something not rematchable?
+            BMATH_UNREACHABLE;
             return false;
         } //rematch
 
