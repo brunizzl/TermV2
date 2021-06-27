@@ -348,7 +348,7 @@ namespace simp {
 	struct ValueMatch
 	{
 		std::uint32_t match_state_index; //indexes in match::State::value_vars
-		NodeIndex inverse; //in pattern "'sin'(2 $k 'pi')" is "_VP / 2" the inverse needed to compute $k, with _VP representing value_proxy
+		NodeIndex inverse; //in pattern "'sin'(2 $k 'pi')" is "value_proxy__ / 2" the inverse needed to compute $k, with value_proxy__ representing value_proxy
 		nv::ComplexSubset domain = nv::ComplexSubset::complex;
 		bool owner;
 	};
@@ -384,7 +384,7 @@ namespace simp {
 
 		//determines what algorithm is choosen to match this application
 		//  permutation:  uses all later members, only preceeded_by_multi is degraded to a bool
-		//  dilation:     uses all later members except always_preceeding_next (because that is a tautology here)
+		//  dilation:     uses all later members except always_preceeding_next (because that is always true anyway)
 		//  backtracking: uses ONLY rematchable_params (not even uses match_state_index)
 		//  linear:       uses nothing
 		MatchStrategy strategy = MatchStrategy::linear; //default required as linear in build_rume::build_lhs_multis_and_pattern_f_apps
@@ -525,55 +525,55 @@ namespace simp {
 		};
 
 		constexpr auto fixed_arity_table = std::to_array<FixedArityProps>({
-			{ Bool::false_           , "false"     , 2u, { Restr::any          }, Restr::any                  },
-			{ Bool::true_            , "true"      , 2u, { Restr::any          }, Restr::any                  },
-			{ ToBool::not_           , "not"       , 1u, { Restr::boolean      }, Restr::boolean              },
-			{ ToBool::eq             , "eq"        , 2u, { Restr::any          }, Restr::boolean              },
-			{ ToBool::neq            , "neq"       , 2u, { Restr::any          }, Restr::boolean              },
-			{ ToBool::greater        , "greater"   , 2u, { ComplexSubset::real }, Restr::boolean              },
-			{ ToBool::smaller        , "smaller"   , 2u, { ComplexSubset::real }, Restr::boolean              },
-			{ ToBool::greater_eq     , "greater_eq", 2u, { ComplexSubset::real }, Restr::boolean              },
-			{ ToBool::smaller_eq     , "smaller_eq", 2u, { ComplexSubset::real }, Restr::boolean              },
-			{ ToBool::contains       , "contains"  , 2u, { Restr::any          }, Restr::boolean              },
-			{ CtoC::divide           , "_Divide"   , 2u, { Literal::complex    }, Literal::complex            },
-			{ CtoC::pow              , "pow"       , 2u, { Literal::complex    }, Literal::complex            },
-			{ CtoC::log              , "log"       , 2u, { Literal::complex    }, Literal::complex            },
-			{ CtoC::sqrt             , "sqrt"      , 1u, { Literal::complex    }, Literal::complex            },
-			{ CtoC::exp              , "exp"       , 1u, { Literal::complex    }, Literal::complex            },
-			{ CtoC::ln               , "ln"        , 1u, { Literal::complex    }, Literal::complex            },
-			{ CtoC::sin              , "sin"       , 1u, { Literal::complex    }, Literal::complex            },
-			{ CtoC::cos              , "cos"       , 1u, { Literal::complex    }, Literal::complex            },
-			{ CtoC::tan              , "tan"       , 1u, { Literal::complex    }, Literal::complex            },
-			{ CtoC::sinh             , "sinh"      , 1u, { Literal::complex    }, Literal::complex            },
-			{ CtoC::cosh             , "cosh"      , 1u, { Literal::complex    }, Literal::complex            },
-			{ CtoC::tanh             , "tanh"      , 1u, { Literal::complex    }, Literal::complex            },
-			{ CtoC::asin             , "asin"      , 1u, { Literal::complex    }, Literal::complex            },
-			{ CtoC::acos             , "acos"      , 1u, { Literal::complex    }, Literal::complex            },
-			{ CtoC::atan             , "atan"      , 1u, { Literal::complex    }, Literal::complex            },
-			{ CtoC::asinh            , "asinh"     , 1u, { Literal::complex    }, Literal::complex            },
-			{ CtoC::acosh            , "acosh"     , 1u, { Literal::complex    }, Literal::complex            },
-			{ CtoC::atanh            , "atanh"     , 1u, { Literal::complex    }, Literal::complex            },
-			{ CtoC::abs              , "abs"       , 1u, { Literal::complex    }, ComplexSubset::not_negative },
-			{ CtoC::arg              , "arg"       , 1u, { Literal::complex    }, ComplexSubset::not_negative },
-			{ CtoC::re               , "re"        , 1u, { Literal::complex    }, ComplexSubset::real         },
-			{ CtoC::im               , "im"        , 1u, { Literal::complex    }, ComplexSubset::real         },
-			{ CtoC::conj             , "conj"      , 1u, { Literal::complex    }, Literal::complex            },
-			{ CtoC::floor            , "floor"     , 1u, { ComplexSubset::real }, ComplexSubset::integer      },
-			{ CtoC::ceil             , "ceil"      , 1u, { ComplexSubset::real }, ComplexSubset::integer      },
-			{ MiscFn::id             , "id"        , 1u, { Restr::any          }, Restr::any                  },
-			{ MiscFn::diff           , "diff"      , 2u, { Restr::any, Literal::symbol }, Restr::any          },
-			{ MiscFn::fdiff          , "fdiff"     , 1u, { Restr::applicable   }, Restr::applicable           },
-			{ MiscFn::pair           , "pair"      , 2u, {}                     , MiscFn::pair                },
-			{ MiscFn::fst            , "fst"       , 1u, { MiscFn::pair        }, Restr::any                  },
-			{ MiscFn::snd            , "snd"       , 1u, { MiscFn::pair        }, Restr::any                  },
-			{ MiscFn::cons           , "cons"      , 2u, { Restr::any, MiscFn::cons }, MiscFn::cons           },
-			{ HaskellFn::map         , "map"       , 3u, { Restr::applicable, Restr::applicable, Literal::f_app             }, Literal::f_app  },
-			{ HaskellFn::filter      , "filter"    , 3u, { Restr::applicable, Restr::applicable, Literal::f_app             }, Literal::f_app  },
-			{ HaskellFn::split       , "split"     , 3u, { Restr::applicable, Restr::applicable, Literal::f_app             }, MiscFn::pair    },
-			{ HaskellFn::foldl       , "foldl"     , 4u, { Restr::applicable, Restr::applicable, Restr::any, Literal::f_app }, Restr::any      }, //foldl f z (x:xs) = foldl f (f z x) xs
-			{ HaskellFn::foldr       , "foldr"     , 4u, { Restr::applicable, Restr::applicable, Restr::any, Literal::f_app }, Restr::any      }, //foldr f z (x:xs) = f x (foldr f z xs) 
-			{ PatternFn::value_match , "_VM"       , 3u, { PatternUnsigned{}, Restr::any, Restr::any                        }, Restr::any      }, //layout as in ValueMatch (minus .owner)
-			{ PatternFn::of_type     , "_Of_T"     , 2u, { Restr::any, Literal::symbol                                      }, Restr::boolean  },
+			{ Bool::false_           , "false"        , 2u, { Restr::any          }, Restr::any                  },
+			{ Bool::true_            , "true"         , 2u, { Restr::any          }, Restr::any                  },
+			{ ToBool::not_           , "not"          , 1u, { Restr::boolean      }, Restr::boolean              },
+			{ ToBool::eq             , "eq"           , 2u, { Restr::any          }, Restr::boolean              },
+			{ ToBool::neq            , "neq"          , 2u, { Restr::any          }, Restr::boolean              },
+			{ ToBool::greater        , "greater"      , 2u, { ComplexSubset::real }, Restr::boolean              },
+			{ ToBool::smaller        , "smaller"      , 2u, { ComplexSubset::real }, Restr::boolean              },
+			{ ToBool::greater_eq     , "greater_eq"   , 2u, { ComplexSubset::real }, Restr::boolean              },
+			{ ToBool::smaller_eq     , "smaller_eq"   , 2u, { ComplexSubset::real }, Restr::boolean              },
+			{ ToBool::contains       , "contains"     , 2u, { Restr::any          }, Restr::boolean              },
+			{ CtoC::divide           , "divide__"     , 2u, { Literal::complex    }, Literal::complex            },
+			{ CtoC::pow              , "pow"          , 2u, { Literal::complex    }, Literal::complex            },
+			{ CtoC::log              , "log"          , 2u, { Literal::complex    }, Literal::complex            },
+			{ CtoC::sqrt             , "sqrt"         , 1u, { Literal::complex    }, Literal::complex            },
+			{ CtoC::exp              , "exp"          , 1u, { Literal::complex    }, Literal::complex            },
+			{ CtoC::ln               , "ln"           , 1u, { Literal::complex    }, Literal::complex            },
+			{ CtoC::sin              , "sin"          , 1u, { Literal::complex    }, Literal::complex            },
+			{ CtoC::cos              , "cos"          , 1u, { Literal::complex    }, Literal::complex            },
+			{ CtoC::tan              , "tan"          , 1u, { Literal::complex    }, Literal::complex            },
+			{ CtoC::sinh             , "sinh"         , 1u, { Literal::complex    }, Literal::complex            },
+			{ CtoC::cosh             , "cosh"         , 1u, { Literal::complex    }, Literal::complex            },
+			{ CtoC::tanh             , "tanh"         , 1u, { Literal::complex    }, Literal::complex            },
+			{ CtoC::asin             , "asin"         , 1u, { Literal::complex    }, Literal::complex            },
+			{ CtoC::acos             , "acos"         , 1u, { Literal::complex    }, Literal::complex            },
+			{ CtoC::atan             , "atan"         , 1u, { Literal::complex    }, Literal::complex            },
+			{ CtoC::asinh            , "asinh"        , 1u, { Literal::complex    }, Literal::complex            },
+			{ CtoC::acosh            , "acosh"        , 1u, { Literal::complex    }, Literal::complex            },
+			{ CtoC::atanh            , "atanh"        , 1u, { Literal::complex    }, Literal::complex            },
+			{ CtoC::abs              , "abs"          , 1u, { Literal::complex    }, ComplexSubset::not_negative },
+			{ CtoC::arg              , "arg"          , 1u, { Literal::complex    }, ComplexSubset::not_negative },
+			{ CtoC::re               , "re"           , 1u, { Literal::complex    }, ComplexSubset::real         },
+			{ CtoC::im               , "im"           , 1u, { Literal::complex    }, ComplexSubset::real         },
+			{ CtoC::conj             , "conj"         , 1u, { Literal::complex    }, Literal::complex            },
+			{ CtoC::floor            , "floor"        , 1u, { ComplexSubset::real }, ComplexSubset::integer      },
+			{ CtoC::ceil             , "ceil"         , 1u, { ComplexSubset::real }, ComplexSubset::integer      },
+			{ MiscFn::id             , "id"           , 1u, { Restr::any          }, Restr::any                  },
+			{ MiscFn::diff           , "diff"         , 2u, { Restr::any, Literal::symbol }, Restr::any          },
+			{ MiscFn::fdiff          , "fdiff"        , 1u, { Restr::applicable   }, Restr::applicable           },
+			{ MiscFn::pair           , "pair"         , 2u, {}                     , MiscFn::pair                },
+			{ MiscFn::fst            , "fst"          , 1u, { MiscFn::pair        }, Restr::any                  },
+			{ MiscFn::snd            , "snd"          , 1u, { MiscFn::pair        }, Restr::any                  },
+			{ MiscFn::cons           , "cons"         , 2u, { Restr::any, MiscFn::cons }, MiscFn::cons           },
+			{ HaskellFn::map         , "map"          , 3u, { Restr::applicable, Restr::applicable, Literal::f_app             }, Literal::f_app  },
+			{ HaskellFn::filter      , "filter"       , 3u, { Restr::applicable, Restr::applicable, Literal::f_app             }, Literal::f_app  },
+			{ HaskellFn::split       , "split"        , 3u, { Restr::applicable, Restr::applicable, Literal::f_app             }, MiscFn::pair    },
+			{ HaskellFn::foldl       , "foldl"        , 4u, { Restr::applicable, Restr::applicable, Restr::any, Literal::f_app }, Restr::any      }, //foldl f z (x:xs) = foldl f (f z x) xs
+			{ HaskellFn::foldr       , "foldr"        , 4u, { Restr::applicable, Restr::applicable, Restr::any, Literal::f_app }, Restr::any      }, //foldr f z (x:xs) = f x (foldr f z xs) 
+			{ PatternFn::value_match , "value_match__", 3u, { PatternUnsigned{}, Restr::any, Restr::any                        }, Restr::any      }, //layout as in ValueMatch (minus .owner)
+			{ PatternFn::of_type     , "of_type__"    , 2u, { Restr::any, Literal::symbol                                      }, Restr::boolean  },
 		});
 		static_assert(static_cast<unsigned>(fixed_arity_table.front().type) == 0u);
 		static_assert(bmath::intern::is_sorted_by(fixed_arity_table, &FixedArityProps::type));
@@ -640,35 +640,35 @@ namespace simp {
 		};
 
 		constexpr auto constant_table = std::to_array<CommonProps>({
-			{ Const::null                , "null"        , Restr::any      },
-			{ PatternConst::value_proxy  , "_VP"         , PatternConst::value_proxy },
-			{ Restr::any                 , "\\"          , Literal::symbol }, //can not be constructed from a string
-			{ Restr::applicable          , "applicable"  , Literal::symbol },
-			{ Restr::boolean             , "bool"        , Literal::symbol },
-			{ Restr::no_value            , "_NoValue"    , Literal::symbol },
-			{ Restr::not_neg_1           , "_NotNeg1"    , Literal::symbol },
-			{ Restr::not_0               , "_Not0"       , Literal::symbol },
-			{ ComplexSubset::natural     , "nat"         , Literal::symbol },
-			{ ComplexSubset::natural_0   , "nat_0"       , Literal::symbol },
-			{ ComplexSubset::integer     , "int"         , Literal::symbol },
-			{ ComplexSubset::real        , "real"        , Literal::symbol },
-			{ ComplexSubset::complex     , "_Complex"    , Literal::symbol }, 
-			{ ComplexSubset::negative    , "_Negative"   , Literal::symbol }, //can not be constructed from a string
-			{ ComplexSubset::positive    , "_Positive"   , Literal::symbol }, //can not be constructed from a string
-			{ ComplexSubset::not_negative, "_NotNegative", Literal::symbol }, //can not be constructed from a string
-			{ ComplexSubset::not_positive, "_NotPositive", Literal::symbol }, //can not be constructed from a string
-			{ Literal::symbol            , "symbol"      , Literal::symbol },
-			{ Literal::complex           , "complex"     , Literal::symbol },
-			{ Literal::lambda            , "lambda"      , Literal::symbol },
-			{ Literal::lambda_param      , "lambda_param", Literal::symbol },
-			{ Literal::f_app             , "f_app"       , Literal::symbol },
-			{ PatternFApp{}              , "\\"          , Literal::symbol }, //can not be constructed from a string
-			{ PatternUnsigned{}          , "_UInt"       , Literal::symbol },
-			{ SingleMatch::restricted    , "\\"          , Literal::symbol }, //can not be constructed from a string
-			{ SingleMatch::unrestricted  , "\\"          , Literal::symbol }, //can not be constructed from a string
-			{ SingleMatch::weak          , "_SingleMatch", Literal::symbol }, //can not be constructed from a string
-			{ SpecialMatch::multi        , "_MultiMatch" , Literal::symbol }, //can not be constructed from a string
-			{ SpecialMatch::value        , "_ValueMatch" , Literal::symbol }, //can not be constructed from a string
+			{ Const::null                , "null"          , Restr::any      },
+			{ PatternConst::value_proxy  , "value_proxy__" , PatternConst::value_proxy },
+			{ Restr::any                 , "\\"            , Literal::symbol }, //can not be constructed from a string
+			{ Restr::applicable          , "applicable"    , Literal::symbol },
+			{ Restr::boolean             , "bool"          , Literal::symbol },
+			{ Restr::no_value            , "no_value__"    , Literal::symbol },
+			{ Restr::not_neg_1           , "not_neg_1__"   , Literal::symbol },
+			{ Restr::not_0               , "not_0__"       , Literal::symbol },
+			{ ComplexSubset::natural     , "nat"           , Literal::symbol },
+			{ ComplexSubset::natural_0   , "nat_0"         , Literal::symbol },
+			{ ComplexSubset::integer     , "int"           , Literal::symbol },
+			{ ComplexSubset::real        , "real"          , Literal::symbol },
+			{ ComplexSubset::complex     , "complex__"     , Literal::symbol }, 
+			{ ComplexSubset::negative    , "negative__"    , Literal::symbol }, //can not be constructed from a string
+			{ ComplexSubset::positive    , "positive__"    , Literal::symbol }, //can not be constructed from a string
+			{ ComplexSubset::not_negative, "not_negative__", Literal::symbol }, //can not be constructed from a string
+			{ ComplexSubset::not_positive, "not_positive__", Literal::symbol }, //can not be constructed from a string
+			{ Literal::symbol            , "symbol"        , Literal::symbol },
+			{ Literal::complex           , "complex"       , Literal::symbol },
+			{ Literal::lambda            , "lambda"        , Literal::symbol },
+			{ Literal::lambda_param      , "lambda_param"  , Literal::symbol },
+			{ Literal::f_app             , "f_app"         , Literal::symbol },
+			{ PatternFApp{}              , "\\"            , Literal::symbol }, //can not be constructed from a string
+			{ PatternUnsigned{}          , "u_int__"       , Literal::symbol },
+			{ SingleMatch::restricted    , "\\"            , Literal::symbol }, //can not be constructed from a string
+			{ SingleMatch::unrestricted  , "\\"            , Literal::symbol }, //can not be constructed from a string
+			{ SingleMatch::weak          , "single_match__", Literal::symbol }, //can not be constructed from a string
+			{ SpecialMatch::multi        , "multi_match__" , Literal::symbol }, //can not be constructed from a string
+			{ SpecialMatch::value        , "value_match__" , Literal::symbol }, //can not be constructed from a string
 		});
 		static_assert(constant_table.size() == (unsigned)Constant::COUNT);
 		static_assert(bmath::intern::is_sorted_by(constant_table, &CommonProps::type));

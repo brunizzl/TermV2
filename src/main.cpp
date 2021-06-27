@@ -8,6 +8,7 @@
 #include "types.hpp"
 #include "io.hpp"
 #include "rewrite.hpp"
+#include "control.hpp"
 
 #include "utility/queue.hpp"
 
@@ -128,124 +129,122 @@ int main()
 	if (true) {
 		const simp::RuleSet rules = {
 			{ "0 xs... = 0" },
-			{ "0^x     = 0" },
-			{ "x^0     = 1" },
-			{ "x^1     = x" },
+			{ "0^_x    = 0" },
+			{ "_x^0    = 1" },
+			{ "_x^1    = _x" },
 			
-			{ "(x^a)^b = x^(a b)" },
-			{ "x x     = x^2" },
-			{ "x x^a   = x^(a + 1)" },
-			{ "x^a x^b = x^(a + b)" },
-			{ "'exp'('ln'(y) xs...) = y^('prod'(xs...))" },
+			{ "(_x^_a)^_b        = _x^(_a _b)" },
+			{ "_x _x             = _x^2" },
+			{ "_x _x^_a          = _x^(_a + 1)" },
+			{ "_x^_a _x^_b       = _x^(_a + _b)" },
+			{ "exp(ln(_y) xs...) = _y^(prod(xs...))" },
 			
-			{ " a^2   +  2 a b + b^2 =  (a + b)^2" },
-			{ " a^2   -  2 a b + b^2 =  (a - b)^2" },
-			{ " aPow2 +  _2a b + b^2 | 2 'sqrt'(aPow2) == _2a =  (1/2 _2a + b)^2" },
-			{ "$a^2 + 2 $a b + b^2 = ($a + b)^2" },
+			{ "_a^2 + 2 _a _b + _b^2 = (_a + _b)^2" },
+			{ "_a^2 - 2 _a _b + _b^2 = (_a - _b)^2" },
+			{ "$a^2 + 2 $a _b + _b^2 = ($a + _b)^2" },
+			{ "$a^2 - 2 $a _b + _b^2 = ($a - _b)^2" },
+			{ "_aPow2 + _2a _b + _b^2 | 2 sqrt(_aPow2) == _2a = (1/2 _2a + _b)^2" },
 			
-			{ "a bs... + a cs... | !(a :'complex')          = a ('prod'(bs...) + 'prod'(cs...))" },
-			{ "a bs... + a       | !(a :'complex')          = a ('prod'(bs...) + 1)" },
-			{ "a       + a       | !(a :'complex')          = 2 a" },
-			{ "a b               |   a :'complex', b :'sum' = 'map'('sum', \\x .a x, b)" },
+			{ "_a bs... + _a cs... | !(_a :complex)         = _a (prod(bs...) + prod(cs...))" },
+			{ "_a bs... + _a       | !(_a :complex)         = _a (prod(bs...) + 1)" },
+			{ "_a       + _a       | !(_a :complex)         = 2 _a" },
+			{ "_a _b               |   _a :complex, _b :sum = map(sum, \\x ._a x, _b)" },
 			
-			{ "-a     | a :'sum'     = 'map'('sum' , \\x. -x    , a)" },
-			{ "a^(-1) | a :'prod'    = 'map'('prod', \\x. x^(-1), a)" },
+			{ "-_a     | _a :sum  = map(sum , \\x. -x    , _a)" },
+			{ "_a^(-1) | _a :prod = map(prod, \\x. x^(-1), _a)" },
 			
-			{ "'sin'(x)^2 + 'cos'(x)^2 = 1" },
+			{ "sin(_x)^2 + cos(_x)^2 = 1" },
 			
 			//roots and extreme points of sin and cos:
-			//{ "'cos'(             'pi')             = -1" },
-			//{ "'cos'(($k + 0.5)   'pi') | $k :'int' =  0" },
-			//{ "'cos'((2 $k)       'pi') | $k :'int' =  1" },
-			//{ "'cos'((2 $k + 1)   'pi') | $k :'int' = -1" },
-			//{ "'sin'(             'pi')             =  0" },
-			//{ "'sin'($k           'pi') | $k :'int' =  0" },
-			//{ "'sin'((2 $k + 0.5) 'pi') | $k :'int' =  1" },
-			//{ "'sin'((2 $k + 1.5) 'pi') | $k :'int' = -1" },
+			//{ "cos(             pi)           = -1" },
+			//{ "cos(($k + 0.5)   pi) | $k :int =  0" },
+			//{ "cos((2 $k)       pi) | $k :int =  1" },
+			//{ "cos((2 $k + 1)   pi) | $k :int = -1" },
+			//{ "sin(             pi)           =  0" },
+			//{ "sin($k           pi) | $k :int =  0" },
+			//{ "sin((2 $k + 0.5) pi) | $k :int =  1" },
+			//{ "sin((2 $k + 1.5) pi) | $k :int = -1" },
 
-			{ "'cos'(  'pi')                      = -1" },
-			{ "'cos'(a 'pi') | a + 1/2     :'int' =  0" },
-			{ "'cos'(a 'pi') | a / 2       :'int' =  1" },
-			{ "'cos'(a 'pi') | (a - 1) / 2 :'int' = -1" },
-			{ "'sin'(             'pi')             =  0" },
-			{ "'sin'($k           'pi') | $k :'int' =  0" },
-			{ "'sin'((2 $k + 0.5) 'pi') | $k :'int' =  1" },
-			{ "'sin'((2 $k + 1.5) 'pi') | $k :'int' = -1" },
+			{ "cos(  pi)                      = -1" },
+			{ "cos(_a pi) | _a + 1/2     :int =  0" },
+			{ "cos(_a pi) | _a / 2       :int =  1" },
+			{ "cos(_a pi) | (_a - 1) / 2 :int = -1" },
+			{ "sin(             pi)           =  0" },
+			{ "sin($k           pi) | $k :int =  0" },
+			{ "sin((2 $k + 0.5) pi) | $k :int =  1" },
+			{ "sin((2 $k + 1.5) pi) | $k :int = -1" },
 			
 			//differentiation rules:
-			{ "'diff'(x, x)                           = 1" },
-			{ "'diff'(a, x)       | !'contains'(a, x) = 0" },
-			{ "'diff'(f^a, x)     | !'contains'(a, x) = 'diff'(f, x) a f^(a-1)" },
-			{ "'diff'(a^f, x)     | !'contains'(a, x) = 'diff'(f, x) 'ln'(a) a^f" },
-			{ "'diff'(g^h, x)                         = ('diff'(h, x) 'ln'(g) + h 'diff'(g, x)/g) g^h" },
-			{ "'diff'(a, x)       | a :'sum'          = 'map'('sum', \\f .'diff'(f, x), a)" },
-			{ "'diff'(u vs..., x)                     = 'diff'(u, x) vs... + u 'diff'('prod'(vs...), x)" },
-			{ "'diff'(f(y), x)                        = 'diff'(y, x) 'fdiff'(f)(y)" },
+			{ "diff(_x, _x)                          = 1" },
+			{ "diff(_a, _x)      | !contains(_a, _x) = 0" },
+			{ "diff(_f^_a, _x)   | !contains(_a, _x) = diff(_f, _x) _a _f^(_a - 1)" },
+			{ "diff(_a^_f, _x)   | !contains(_a, _x) = diff(_f, _x) ln(_a) _a^_f" },
+			{ "diff(_g^_h, _x)                       = (diff(_h, _x) ln(_g) + _h diff(_g, _x) / _g) _g^_h" },
+			{ "diff(_a, _x)      | _a :sum           = map(sum, \\f .diff(f, _x), _a)" },
+			{ "diff(_u vs..., _x)                    = diff(_u, _x) vs... + _u diff(prod(vs...), _x)" },
+			{ "diff(_f(_y), _x)                      = diff(_y, _x) fdiff(_f)(_y)" },
 			
-			{ "'fdiff'(\\x .y) = \\x .'diff'(y, x)" },
-			{ "'fdiff'('sin')    = 'cos'" },
-			{ "'fdiff'('cos')    = \\x .-'sin'(x)" },
-			{ "'fdiff'('exp')    = 'exp'" },
-			{ "'fdiff'('ln')     = \\x .x^(-1)" },
-			{ "'fdiff'('tan')    = \\x .'cos'(x)^(-2)" },
+			{ "fdiff(\\x ._y) = \\x .diff(_y, x)" },
+			{ "fdiff(sin)     = cos" },
+			{ "fdiff(cos)     = \\x .-sin(x)" },
+			{ "fdiff(exp)     = exp" },
+			{ "fdiff(ln)      = \\x .x^(-1)" },
+			{ "fdiff(tan)     = \\x .cos(x)^(-2)" },
 			
 			//exponential runtime fibonacci implementation:
-			{ "'fib'(n) | n >= 0 = (n < 2)(n, 'fib'(n - 1) + 'fib'(n - 2))" },
+			{ "fib(_n) | _n >= 0 = (_n < 2)(_n, fib(_n - 1) + fib(_n - 2))" },
 			
 			//reversing parameters in application of f:
-			{ "'reverse'(f, f(xs...)) = 'reverse_h'(f(), f(xs...))" },
-			{ "'reverse_h'(f(xs...), f(y, ys...)) = 'reverse_h'(f(y, xs...), f(ys...))" },
-			{ "'reverse_h'(fxs, f())              = fxs" },
+			{ "reverse(_f, _f(xs...))              = reverse_h(_f(), _f(xs...))" },
+			{ "reverse_h(_f(xs...), _f(_y, ys...)) = reverse_h(_f(_y, xs...), _f(ys...))" },
+			{ "reverse_h(_fxs, _f())               = _fxs" },
 			
 			//listing first n fibonacci numbers:
-			{ "'fib_n'(n)  |  n >= 2                       = 'reverse'('tup', 'list_fibs'(n - 2, 'tup'(1, 0)))" },
-			{ "'list_fibs'(n, 'tup'(a, b, bs...)) | n > 0 = 'list_fibs'(n - 1, 'tup'(a + b, a, b, bs...))" },
-			{ "'list_fibs'(n, res)                         = res" },
-			
-			{ "'filter'(f, p, f(xs...)) = 'take_true'(f(), 'map'(f, \\x .'pair'(p(x), x), f(xs...)))" },
-			{ "'take_true'(f(xs...), f('pair'('true', x), ys...)) = 'take_true'(f(xs..., x), f(ys...))" },
-			{ "'take_true'(f(xs...), f('pair'(_     , x), ys...)) = 'take_true'(f(xs...), f(ys...))" },
-			{ "'take_true'(fxs, f())                              = fxs" },
-			
-			{ "'split'(f, p, f(xs...)) = 'split_hlp'(f(), f(), 'map'(f, \\x .'pair'(p(x), x), f(xs...)))" },
-			{ "'split_hlp'(f(xs...), f(ys...), f('pair'('true', z), zs...)) = 'split_hlp'(f(xs..., z), f(ys...), f(zs...))" },
-			{ "'split_hlp'(f(xs...), f(ys...), f('pair'(_   , z), zs...))   = 'split_hlp'(f(xs...), f(ys..., z), f(zs...))" },
-			{ "'split_hlp'(fxs, fys, f())                                   = 'pair'(fxs, fys)" },
-			
-			{ "'sort'('tup'())                                   = 'tup'()" },
-			{ "'sort'('tup'(x))                                  = 'tup'(x)" },
-			{ "'sort'('tup'(x, xs...))                           = 'sort_h1'('split'('tup', \\y .y < x, 'tup'(xs...)), x)" },
-			{ "'sort_h1'('pair'('tup'(xs...), 'tup'(ys...)), x) = 'sort_h2'('sort'('tup'(xs...)), x, 'sort'('tup'(ys...)))" },
-			{ "'sort_h2'('tup'(xs...), x, 'tup'(ys...))         = 'tup'(xs..., x, ys...)" },
-			
-			{ "'union'('set'(xs...), 'set'(ys...)) = 'set'(xs..., ys...)" },
-			{ "'union'()                           = 'set'()" },
-			
-			{ "'intersection'('set'(x, xs...), 'set'(x, ys...)) = 'union'('set'(x), 'intersection'('set'(xs...), 'set'(ys...)))" },
-			{ "'intersection'(x, xs...)                         = 'set'()" },
-			
-			{ "'min'(x, y) | x > y = y" },
-			{ "'max'(x, y) | x > y = x" },
-			
-			{ "'foldr'(f, g, acc, f())         = acc" },
-			{ "'foldr'(f, g, acc, f(x, xs...)) = g(x, 'foldr'(f, g, acc, f(xs...)))" },
-			
-			{ "'pair'('test_'(ws..., a, b, c, xs...), 'test_'(ys..., a, b, c, zs...)) = 'tup'(ws..., 'found'(a, b, c), xs..., '_space_', ys..., 'found'(a, b, c), zs...)" },
-			{ "'pair'(a + b, 'tup'(b, a)) = 'success'('a_is', a, 'and_b_is', b)" },
-			
-			{ "'make_ints'('tup', a, b)              | a <= b = 'make_ints_tup_h'(b, 'tup'(a))" },
-			{ "'make_ints_tup_h'(b, 'tup'(xs..., x)) | x < b  = 'make_ints_tup_h'(b, 'tup'(xs..., x, x + 1))" },
-			{ "'make_ints_tup_h'(b, res)                      = res" },
+			{ "fib_n(_n)  |  _n >= 2                      = reverse(tup, list_fibs(_n - 2, tup(1, 0)))" },
+			{ "list_fibs(_n, tup(_a, _b, bs...)) | _n > 0 = list_fibs(_n - 1, tup(_a + _b, _a, _b, bs...))" },
+			{ "list_fibs(_n, _res)                        = _res" },
 
-			{ "'make_ints'('cons', a, b)      | a <= b = 'make_ints_cons_h'(b - a, b :: 'null')" },
-			{ "'make_ints_cons_h'(n, y :: ys) | n > 0  = 'make_ints_cons_h'(n - 1, (y - 1) :: y :: ys)" },
-			{ "'make_ints_cons_h'(n, res)              = res" },
+			{ "filter(_f, _p, _f(xs...)) = take_true(_f(), map(_f, \\x .pair(_p(x), x), _f(xs...)))" },
+			{ "take_true(_f(xs...), _f(pair(true, _x), ys...))   = take_true(_f(xs..., _x), _f(ys...))" },
+			{ "take_true(_f(xs...), _f(pair(_     , _x), ys...)) = take_true(_f(xs...), _f(ys...))" },
+			{ "take_true(_fxs, _f())                             = _fxs" },
 
-			{ "'change'(f, g, f(xs...)) = g(xs...)" },
+			{ "split(_f, _p, _f(xs...)) = split_hlp(_f(), _f(), map(_f, \\x .pair(_p(x), x), _f(xs...)))" },
+			{ "split_hlp(_f(xs...), _f(ys...), _f(pair(true, _z), zs...)) = split_hlp(_f(xs..., _z), _f(ys...), _f(zs...))" },
+			{ "split_hlp(_f(xs...), _f(ys...), _f(pair(_   , _z), zs...)) = split_hlp(_f(xs...), _f(ys..., z), _f(zs...))" },
+			{ "split_hlp(_fxs, _fys, _f())                                = pair(_fxs, _fys)" },
+
+			{ "sort(tup())                               = tup()" },
+			{ "sort(tup(_x))                             = tup(_x)" },
+			{ "sort(tup(_x, xs...))                      = sort_h1(split(tup, \\y .y < _x, tup(xs...)), _x)" },
+			{ "sort_h1(pair(tup(xs...), tup(ys...)), _x) = sort_h2(sort(tup(xs...)), _x, sort(tup(ys...)))" },
+			{ "sort_h2(tup(xs...), _x, tup(ys...))       = tup(xs..., _x, ys...)" },
+
+			{ "union(set(xs...), set(ys...)) = set(xs..., ys...)" },
+			{ "union()                       = set()" },
+
+			{ "intersection(set(_x, xs...), set(_x, ys...)) = union(set(_x), intersection(set(xs...), set(ys...)))" },
+			{ "intersection(_x, xs...)                      = set()" },
+
+			{ "min(_x, _y) | _x > _y = _y" },
+			{ "max(_x, _y) | _x > _y = _x" },
+
+			{ "foldr(_f, _g, _acc, _f())          = _acc" },
+			{ "foldr(_f, _g, _acc, _f(_x, xs...)) = _g(_x, foldr(_f, _g, _acc, _f(xs...)))" },
+
+			{ "make_ints(tup, _a, _b)              | _a <= _b = make_ints_tup_h(_b, tup(_a))" },
+			{ "make_ints_tup_h(_b, tup(xs..., _x)) | _x < _b  = make_ints_tup_h(_b, tup(xs..., _x, _x + 1))" },
+			{ "make_ints_tup_h(_b, _res)                      = _res" },
+
+			{ "make_ints(cons, _a, _b)      | _a <= _b  = make_ints_cons_h(_b - _a, _b :: null)" },
+			{ "make_ints_cons_h(_n, _y :: _ys) | _n > 0 = make_ints_cons_h(_n - 1, (_y - 1) :: _y :: _ys)" },
+			{ "make_ints_cons_h(_n, _res)               = _res" },
+
+			{ "change(_f, _g, _f(xs...)) = _g(xs...)" },
 
 			//experiments
-			{ "'teeest'('tup'(a+b, cs...), 'tup'(b, a)) = 'teEsT'(a, b, cs...)" },
-			{ "'tup'(xs..., 1, x) = x" },
+			{ "teeest(tup(_a + _b, cs...), tup(_b, _a)) = teEsT(_a, _b, cs...)" },
+			{ "tup(xs..., 1, _x) = _x" },
 		};
 		for (const simp::RuleRef rule : rules) {
 			std::cout << rule.to_string() << "\n\n";
@@ -298,6 +297,29 @@ int main()
 				std::cout << "type error: " << error.what << "\n";
 				std::cout << simp::print::to_string(error.occurence) << "\n";
 			}
+		}
+	}
+	if (false) {
+		const simp::RuleSet rules = {
+			{ "_a^2   +  2 _a _b + _b^2 =  (_a + _b)^2" },
+			{ "_a^2   -  2 _a _b + _b^2 =  (_a - _b)^2" },
+			{ "_a bs... + _a cs...      = _a (prod(bs...) + prod(cs...))" },
+			{ "_a bs... + _a            = _a (prod(bs...) + 1)" },
+			{ "_a       + _a            = 2 _a" },
+		};
+
+		const auto weight_fun = [](const simp::UnsaveRef r) {
+			using namespace simp;
+			int count = 0;
+			(void)ctrl::search(r.store_data(), r.typed_idx(), [&](auto) { count++; return false; });
+			return count;
+		};
+
+		auto term = simp::LiteralTerm("a b c d + a b c d e + b c d e + c d e");
+		term.normalize({});
+		std::vector<simp::NodeIndex> normals = simp::nondeterministic_shallow_apply_ruleset(rules, term.mut_ref(), {});
+		for (const auto n : normals) {
+			std::cout << simp::print::to_string(term.ref().at(n)) << "\n";
 		}
 	}
 	//test::stable_sort();

@@ -14,7 +14,7 @@ namespace simp {
 
 		LiteralTerm(std::string name);
 
-		std::string to_string() const noexcept;
+		std::string to_string(const bool fancy = true) const noexcept;
 
 		std::string to_memory_layout() const noexcept;
 
@@ -128,7 +128,89 @@ namespace simp {
 	//same as above, only handles storage, returns new ref's index.
 	[[nodiscard]] NodeIndex shallow_apply_ruleset(const RuleSet& rules, MutRef ref, const Options options);
 
+	//returns the first max_size distinct normal forms of ref
+	[[nodiscard]] std::vector<NodeIndex> nondeterministic_shallow_apply_ruleset(const RuleSet& rules, 
+		const MutRef ref, const Options options, const std::size_t max_size = 16);
+
+	//returns function returning smallest (determined by weight_fun) normal form of ref found by nondeterministic_shallow_apply_ruleset
+	template<std::invocable<UnsaveRef> WeightFun>
+	[[nodiscard]] auto shallow_apply_and_choose(WeightFun weight_fun)
+	{
+		return [weight_fun](const RuleSet& rules, MutRef ref, const Options options) {
+			const std::vector<NodeIndex> normal_forms = nondeterministic_shallow_apply_ruleset(rules, ref, options);
+			const NodeIndex best = [&] {
+				auto iter = normal_forms.begin();
+				const auto stop = normal_forms.end();
+				long long current_best_weight = weight_fun(UnsaveRef(ref.at(*iter)));
+				auto current_best_iter = iter;
+				while (++iter != stop) {
+					const long long iter_weight = weight_fun(UnsaveRef(ref.at(*iter)));
+					if (iter_weight < current_best_weight) {
+						current_best_weight = iter_weight;
+						current_best_iter = iter;
+					}
+				}
+				return *current_best_iter;
+			}();
+			for (const auto normal_form : normal_forms) {
+				if (normal_form != best) {
+					free_tree(ref.at(normal_form));
+				}
+			}
+			return best;
+		};
+	} //shallow_apply_and_choose
+
+
+	//helper for apply_ruleset
+	template<bmath::intern::CallableTo<NodeIndex, const RuleSet&, MutRef, Options> ShallowApply>
+	NodeIndex recursive_apply(const RuleSet& rules, const MutRef ref, const Options options, ShallowApply shallow_apply)
+	{
+		{ //try replacing this
+			const NodeIndex old = ref.typed_idx();
+			const NodeIndex new_ = shallow_apply(rules, ref, options);
+			if (old != new_) return new_;
+		}
+		if (ref.type == Literal::f_app) { //try replacing subterms
+			bool change = false;
+			const auto stop = end(ref);
+			for (auto subterm = begin(ref); subterm != stop; ++subterm) {
+				const NodeIndex sub_result = recursive_apply(rules, ref.at(*subterm), options, shallow_apply);
+				if (sub_result != invalid_index) {
+					*subterm = sub_result;
+					change = true;
+				}
+			}
+			if (change) return normalize::outermost(ref, options).res;
+		}
+		return invalid_index;
+	} //recursive_apply
+
 	//lazyliy applies first rule applicable in depth first search in ref until no further rules can be applied
-	[[nodiscard]] NodeIndex greedy_apply_ruleset(const RuleSet& rules, MutRef ref, const Options options);
+	template<bmath::intern::CallableTo<NodeIndex, const RuleSet&, MutRef, Options> ShallowApply>
+	[[nodiscard]] NodeIndex apply_ruleset(const RuleSet& rules, MutRef ref, const Options options, ShallowApply shallow_apply)
+	{
+	apply:
+		NodeIndex result = recursive_apply(rules, ref, options, shallow_apply);
+		if (result != invalid_index) {
+			ref.type = result.get_type();
+			ref.index = result.get_index();
+			goto apply;
+		}
+		return ref.typed_idx();
+	} //apply_ruleset
+
+
+	inline [[nodiscard]] NodeIndex greedy_apply_ruleset(const RuleSet& rules, MutRef ref, const Options options)
+	{
+		return apply_ruleset(rules, ref, options, 
+			[](const RuleSet& rs, MutRef r, Options os) { return shallow_apply_ruleset(rs, r, os); });
+	}
+
+	template<std::invocable<UnsaveRef> WeightFun>
+	[[nodiscard]] NodeIndex nondeterministic_apply_ruleset(const RuleSet& rules, MutRef ref, const Options options, WeightFun weight_fun)
+	{
+		return apply_ruleset(rules, ref, options, shallow_apply_and_choose(weight_fun));
+	}
 
 } //namespace simp

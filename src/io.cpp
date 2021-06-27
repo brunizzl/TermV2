@@ -184,7 +184,8 @@ namespace simp {
 			{
 				const std::string_view name = view.to_string_view();
 				return view.tokens.find_first_not_of(bmath::intern::token::character) == std::string_view::npos &&
-					name.find_first_of(".$ ") == std::string_view::npos;
+					name.find_first_of(".$ ") == std::string_view::npos &&
+					!name.starts_with('_');
 			}
 
 			NodeIndex find_name_in_infos(const std::vector<NameInfo>& infos, const std::string_view name)
@@ -226,15 +227,7 @@ namespace simp {
 				if (const NodeIndex res = find_name_in_infos(infos.value_matches, name); res != invalid_index) {
 					return copy_tree(Ref(store, res), store);
 				}
-				if (name.starts_with('\'') && name.ends_with('\'')) {
-					name.remove_prefix(1u);
-					name.remove_suffix(1u);
-					if (!mundane_name(view)) [[unlikely]] { //tests not name, but the '\'' make no difference
-						throw bmath::ParseFailure{ view.offset, "please decide: this looks weird" };
-					}
-					return NodeIndex(Names::id_of({ name.data(), name.size() }), Literal::symbol);
-				}
-				if (!infos.parse_match) [[unlikely]] {
+				if (!infos.parse_match && !mundane_name(view)) [[unlikely]] {
 					throw bmath::ParseFailure{ view.offset, "match variables need to be introduced in lhs" };
 				}
 				if (name.ends_with('.')) {
@@ -244,7 +237,12 @@ namespace simp {
 					infos.multi_matches.emplace_back(name, result);
 					return result;
 				}
-				else if (name.starts_with('$')) {
+				if (name.starts_with('_')) {
+					const NodeIndex result = NodeIndex(infos.single_matches.size(), SingleMatch::weak);
+					infos.single_matches.emplace_back(name, result);
+					return result;
+				}
+				if (name.starts_with('$')) {
 					const std::size_t res_index = FApp::build(store, std::to_array({
 						from_native(nv::PatternFn::value_match),				  //function type
 						NodeIndex(infos.value_matches.size(), PatternUnsigned{}), //.match_state_index
@@ -255,11 +253,7 @@ namespace simp {
 					infos.value_matches.emplace_back(name, result);
 					return result;
 				}
-				else {
-					const NodeIndex result = NodeIndex(infos.single_matches.size(), SingleMatch::weak);
-					infos.single_matches.emplace_back(name, result);
-					return result;
-				}
+				return NodeIndex(Names::id_of({ name.data(), name.size() }), Literal::symbol);
 			}
 
 			unsigned add_lambda_params(std::vector<NameInfo>& lambda_params, bmath::intern::ParseView params_view)
@@ -517,7 +511,7 @@ namespace simp {
 			{ //give value conditions to value match variables
 				const auto restrict_value = [&value_conditions](const MutRef r) {
 					if (r.type == Literal::f_app && 
-						r->f_app.function() == from_native(nv::PatternFn::value_match) && //f_app of _VM
+						r->f_app.function() == from_native(nv::PatternFn::value_match) && //f_app of value_match__
 						//if f_app contains no match variables itself and holds only shallow parameters, 
 						//  it is assumed to stem from name_lookup::build_symbol
 						std::none_of(r->f_app.begin(), r->f_app.end(),
@@ -834,7 +828,7 @@ namespace simp {
 			//append name of subterm to line
 			current_str.append(std::max(0, 38 - (int)current_str.size()), ' ');
 			std::string subtree_as_string;
-			print::append_to_string(ref, subtree_as_string, 0, false);
+			print::append_to_string(ref, subtree_as_string, 0, true);
 			if (subtree_as_string.size() > 50u) {
 				subtree_as_string.erase(40);
 				subtree_as_string.append("   .  .  .");
@@ -842,7 +836,7 @@ namespace simp {
 			current_str.append(subtree_as_string);
 		} //append_memory_row
 
-		template<bmath::intern::StoreLike S, bmath::intern::ContainerOf<const NodeIndex> C>
+		template<bmath::intern::StoreLike S, bmath::intern::ContainerOf<NodeIndex> C>
 		std::string to_memory_layout(const S& store, const C& heads)
 		{
 			std::vector<std::string> rows(std::max(store.size(), match::State::max_pattern_f_app_count), "");
@@ -894,7 +888,8 @@ namespace simp {
 			}
 			return result;
 		} //to_memory_layout
-		template std::string to_memory_layout(const Store&, const std::initializer_list<const NodeIndex>&);
+		template std::string to_memory_layout(const Store&, const std::initializer_list<NodeIndex>&);
+		template std::string to_memory_layout(const Store&, const std::vector<NodeIndex>&);
 
 	} //namespace print
 

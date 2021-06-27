@@ -66,11 +66,9 @@ namespace simp {
 			end_data   (&this->local_data[0] + BufferSize),
 			start_used (&this->local_data[0]),
 			end_used   (&this->local_data[0]),
-			size_(0)
+			size_(0),
+			allocator()
 		{}
-
-		template<typename AllocInit>
-		constexpr Queue(AllocInit&& init) :Queue(), allocator(std::forward<AllocInit>(init)) {}
 
 		constexpr ~Queue() noexcept 
 		{
@@ -101,6 +99,15 @@ namespace simp {
 			Value_T* const res_pos = this->start_used;
 			this->incr(this->start_used);
 			return *res_pos;
+		}
+
+		constexpr Value_T& operator[](const std::size_t n) noexcept
+		{
+			assert(n < this->size_);
+			Value_T* const pos = this->start_used + n;
+			return pos < this->end_data ?
+				*pos :
+				*(pos - this->capacity());
 		}
 	}; //class Queue
 

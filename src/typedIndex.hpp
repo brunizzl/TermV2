@@ -8,6 +8,7 @@
 #include "utility/misc.hpp"
 #include "utility/sumEnum.hpp"
 
+
 namespace bmath::intern {
 
 	//stores both an index and an enum value in the same variable 

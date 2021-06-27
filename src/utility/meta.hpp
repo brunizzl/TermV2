@@ -89,9 +89,8 @@ namespace bmath::intern {
 	/////////////////   IterOver
 
 	template<typename I, typename T>
-	concept IterOver = std::random_access_iterator<I> &&
-		(requires (I i) { {*i} -> std::same_as<T&>;       } || 
-		 requires (I i) { {*i} -> std::same_as<const T&>; })
+	concept IterOver = std::random_access_iterator<I> &&		
+		 requires (I i) { {*i} -> std::convertible_to<const T&>; }
 	;
 
 
@@ -101,7 +100,7 @@ namespace bmath::intern {
 	concept ContainerOf = std::is_same_v<T, typename C::value_type> &&
 		requires (C c) { {c.begin()} -> IterOver<T>;
 			             {c.end()  } -> IterOver<T>;
-						 {c.size() } -> std::same_as<std::size_t>;
+						 {c.size() } -> std::convertible_to<std::size_t>;
 	};
 
 	static_assert(ContainerOf<std::string_view, char>);

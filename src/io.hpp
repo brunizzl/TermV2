@@ -130,22 +130,22 @@ namespace simp {
 
 		void append_to_string(const UnsaveRef ref, std::string& str, const int parent_precedence, const bool fancy = true);
 
-		inline [[nodiscard]] std::string to_string(const UnsaveRef ref)
+		inline [[nodiscard]] std::string to_string(const UnsaveRef ref, const bool fancy = true)
 		{
 			std::string name;
-			print::append_to_string(ref, name, 0, false);
+			print::append_to_string(ref, name, 0, fancy);
 			return name;
 		}
 
 		std::string to_simple_string(const UnsaveRef ref);
 
-		template<bmath::intern::StoreLike S, bmath::intern::ContainerOf<const NodeIndex> C>
+		template<bmath::intern::StoreLike S, bmath::intern::ContainerOf<NodeIndex> C>
 		std::string [[nodiscard]] to_memory_layout(const S& store, const C& heads);
 
 		template<bmath::intern::StoreLike S>
-		std::string [[nodiscard]] to_memory_layout(const S& store, const std::initializer_list<const NodeIndex> heads)
+		std::string [[nodiscard]] to_memory_layout(const S& store, const std::initializer_list<NodeIndex> heads)
 		{	
-			return to_memory_layout<S, std::initializer_list<const NodeIndex>>(store, heads);
+			return to_memory_layout<S, std::initializer_list<NodeIndex>>(store, heads);
 		}
 
 	} //namespace print

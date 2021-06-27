@@ -170,7 +170,7 @@ namespace bmath::intern {
 		//this constructor applies if Enum itself is WrapEnum<E> or SumEnum<...> that contains E (directly or deeper within)
 		template<detail_enum::ContainedIn<Enum> E>
 		constexpr SumEnum(const E e) noexcept :Base(static_cast<unsigned>(static_cast<Enum>(e)) + this_offset) {}
-
+		
 		//this constructor applies if E is contained in Base
 		template<detail_enum::ContainedIn<Base> E>
 		constexpr SumEnum(const E e) noexcept :Base(e) {}

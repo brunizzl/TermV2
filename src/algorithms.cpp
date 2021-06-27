@@ -892,21 +892,21 @@ namespace simp {
                 return h;
             };
             static const auto buildin_conditions = RuleSet({
-                { "x :t            | x :'_SingleMatch', t :'symbol' = t" },
-                { "x < 0           | x :'_SingleMatch'              = '_Negative'" },
-                { "x > 0           | x :'_SingleMatch'              = '_Positive'" },
-                { "x <= 0          | x :'_SingleMatch'              = '_NotPositive'" },
-                { "x >= 0          | x :'_SingleMatch'              = '_NotNegative'" },
-                { "!(x :'complex') | x :'_SingleMatch'              = '_NoValue'" },
-                { "x != -1         | x :'_SingleMatch'              = '_NotNeg1'" },
-                { "x != 0          | x :'_SingleMatch'              = '_Not0'" },
+                { "_x :_t         | _x :single_match__, _t :symbol = _t" },
+                { "_x < 0         | _x :single_match__             = negative__" },
+                { "_x > 0         | _x :single_match__             = positive__" },
+                { "_x <= 0        | _x :single_match__             = not_positive__" },
+                { "_x >= 0        | _x :single_match__             = not_negative__" },
+                { "!(_x :complex) | _x :single_match__             = no_value__" },
+                { "_x != -1       | _x :single_match__             = not_neg_1__" },
+                { "_x != 0        | _x :single_match__             = not_0__" },
             }, build_very_basic_pattern);
 
             static const auto compute_optimisations = RuleSet({
-                { "'_Divide'(a^(-1) * bs..., c)         = '_Divide'('prod'(bs...), a * c)" },
-                { "'_Divide'(a ^  n * bs..., c) | n < 0 = '_Divide'('prod'(bs...), a ^ (-n) * c)" },
-                { "        a ^ (-1) * bs...             = '_Divide'('prod'(bs...), a)" },
-                { "        a ^ n    * bs...     | n < 0 = '_Divide'('prod'(bs...), a ^ (-n))" },
+                { "divide__(_a^(-1) bs..., _c)          = divide__(prod(bs...), _a _c)" },
+                { "divide__(_a ^ _n bs..., _c) | _n < 0 = divide__(prod(bs...), _a ^ (-_n) _c)" },
+                { "       _a ^ (-1) bs...               = divide__(prod(bs...), _a)" },
+                { "       _a ^ _n   bs...      | _n < 0 = divide__(prod(bs...), _a ^ (-_n))" },
             }, build_very_basic_pattern);
 
             const auto optimize = [](const MutRef r) {
@@ -931,20 +931,20 @@ namespace simp {
                 return h;
             };
             static const auto bubble_up = RuleSet({
-                { "       '_VM'(idx, domain, match) + a + cs... | a :'complex' = '_VM'(idx, domain, match - a) + cs..." },
-                { "       '_VM'(idx, domain, match) * a * cs... | a :'complex' = '_VM'(idx, domain, match / a) * cs..." },
-                { "       '_VM'(idx, domain, match) ^ 2                        = '_VM'(idx, domain, 'sqrt'(match))" },
-                { "'sqrt'('_VM'(idx, domain, match))                           = '_VM'(idx, domain, match ^ 2)" },
-                }, build_basic_pattern);
+                { "     value_match__(_i, _dom, _match) + _a + cs... | _a :complex = value_match__(_i, _dom, _match - _a) + cs..." },
+                { "     value_match__(_i, _dom, _match) * _a * cs... | _a :complex = value_match__(_i, _dom, _match / _a) * cs..." },
+                { "     value_match__(_i, _dom, _match) ^ 2                        = value_match__(_i, _dom, sqrt(_match))" },
+                { "sqrt(value_match__(_i, _dom, _match))                           = value_match__(_i, _dom, _match ^ 2)" },
+            }, build_basic_pattern);
             heads.lhs = greedy_apply_ruleset(bubble_up, MutRef(store, heads.lhs), { .eval_special = false });
 
             static const auto to_domain = RuleSet({
-                { "v :t   = t" },
-                { "v < 0  = '_Negative'" },
-                { "v > 0  = '_Positive'" },
-                { "v <= 0 = '_NotPositive'" },
-                { "v >= 0 = '_NotNegative'" },
-                }, build_basic_pattern);
+                { "_v :_t   = _t" },
+                { "_v < 0  = negative__" },
+                { "_v > 0  = positive__" },
+                { "_v <= 0 = not_positive__" },
+                { "_v >= 0 = not_negative__" },
+            }, build_basic_pattern);
             const auto build_value_match = [](const MutRef r) {
                 if (r.type == Literal::f_app && r->f_app.function() == from_native(nv::PatternFn::value_match)) {
                     FApp& f_app = *r;
@@ -1730,18 +1730,24 @@ namespace simp {
                     }
                 } while (info.preceeded_by_multi.test(needle_i) && ++hay_k < haystack.size());
             }
-        rematch_last_needle: 
-            while (needle_i-- != 0) {
+        rematch_last_needle:
+            if (needle_i-- != 0) {
                 hay_k = needles_data.match_positions[needle_i];
-                if (info.rematchable_params.test(needle_i) && 
-                    rematch(pn_ref.at(needles[needle_i]), hay_ref.at(haystack[hay_k]), match_state)) 
-                {
-                    goto prepare_next_needle;
-                }
-                else if (info.preceeded_by_multi.test(needle_i)) {
-                    hay_k++;
-                    goto match_current_needle;
-                }
+                do {
+                    assert(hay_k == needles_data.match_positions[needle_i]);
+                    if (info.rematchable_params.test(needle_i) &&
+                        rematch(pn_ref.at(needles[needle_i]), hay_ref.at(haystack[hay_k]), match_state))
+                    {
+                        goto prepare_next_needle;
+                    }
+                    else if (info.preceeded_by_multi.test(needle_i)) {
+                        hay_k++;
+                        goto match_current_needle;
+                    }
+                    else { //no multi preceeding needle -> guaranteed previous match is preceeding current one
+                        hay_k--;
+                    }
+                } while (needle_i-- != 0);
             }
             return false;
         prepare_next_needle: 
@@ -1848,6 +1854,10 @@ namespace simp {
                     }
                     return std::partial_ordering::equivalent;
                 } break;
+                default:
+                    assert(false);
+                    BMATH_UNREACHABLE;
+                    return std::partial_ordering::unordered;
                 }
             } break;
             case NodeType(SingleMatch::restricted): {

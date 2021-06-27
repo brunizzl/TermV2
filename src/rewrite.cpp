@@ -5,6 +5,8 @@
 #include <iostream>
 #include <algorithm>
 
+#include "utility/queue.hpp"
+
 #include "algorithms.hpp"
 #include "parseTerm.hpp"
 #include "io.hpp"
@@ -21,10 +23,10 @@ namespace simp {
 		this->head = parse::build(this->store, lambda_params, parse_str);
 	}
 
-	std::string LiteralTerm::to_string() const noexcept
+	std::string LiteralTerm::to_string(const bool fancy) const noexcept
 	{
 		std::string res;
-		print::append_to_string(this->ref(), res, 0);
+		print::append_to_string(this->ref(), res, 0, fancy);
 		return res;
 	}
 
@@ -117,14 +119,21 @@ namespace simp {
 		}
 	} //RuleSet::migrate_rules
 
-	RuleApplicationRes raw_apply_ruleset(const RuleSet& rules, const MutRef ref, match::State& state, const Options options)
+	RuleSetIter start_point(const RuleSet& rules, const UnsaveRef ref)
 	{
 		const auto less = [](const RuleRef& rule, const UnsaveRef& r) {
 			return unsure_compare_tree(rule.lhs, r) == std::partial_ordering::less;
 		};
 		assert(rules.rules.size()); //else rules.end() - 1 is illegal
-		RuleSetIter iter = std::lower_bound(rules.begin(), rules.end() - 1, UnsaveRef(ref), less); //always valid
-		const RuleSetIter stop = iter + iter.iter->subset_size; 
+		return std::lower_bound(rules.begin(), rules.end() - 1, ref, less); //always valid
+	} //start_point
+
+	RuleSetIter end_point(const RuleSetIter& start) { return start + start.iter->subset_size; }
+
+	RuleApplicationRes raw_apply_ruleset(const RuleSet& rules, const MutRef ref, match::State& state, const Options options)
+	{
+		RuleSetIter iter = start_point(rules, ref);
+		const RuleSetIter stop = end_point(iter); 
 
 		for (; iter != stop; ++iter) {
 			const RuleRef rule = *iter;
@@ -138,8 +147,8 @@ namespace simp {
 
 	NodeIndex shallow_apply_ruleset(const RuleSet& rules, MutRef ref, const Options options)
 	{
+	match::State state = *ref.store;
 	apply_ruleset:
-		match::State state = *ref.store;
 		RuleApplicationRes result = raw_apply_ruleset(rules, ref, state, options);
 		if (result.result_term != invalid_index) {
 			free_tree(ref);
@@ -150,38 +159,47 @@ namespace simp {
 		return ref.typed_idx();
 	} //shallow_apply_ruleset
 
-	NodeIndex recursive_greedy_apply(const RuleSet& rules, const MutRef ref, const Options options) 
+	std::vector<NodeIndex> nondeterministic_shallow_apply_ruleset(const RuleSet& rules, const MutRef mother_ref, 
+		const Options options, const std::size_t max_size)
 	{
-		{ //try replacing this
-			const NodeIndex old = ref.typed_idx();
-			const NodeIndex new_ = shallow_apply_ruleset(rules, ref, options);
-			if (old != new_) return new_;
-		}
-		if (ref.type == Literal::f_app) { //try replacing subterms
-			bool change = false;
-			const auto stop = end(ref);
-			for (auto subterm = begin(ref); subterm != stop; ++subterm) {
-				const NodeIndex sub_result = recursive_greedy_apply(rules, ref.at(*subterm), options);
-				if (sub_result != invalid_index) {
-					*subterm = sub_result;
-					change = true;
+		std::vector<NodeIndex> normal_forms;
+		Queue<NodeIndex, 1006> todo;
+		todo.emplace_back(mother_ref.typed_idx());
+
+		match::State state = *mother_ref.store;
+		do {
+			const MutRef ref = mother_ref.at(todo.pop_front());
+
+			RuleSetIter iter = start_point(rules, ref);
+			const RuleSetIter stop = end_point(iter);
+			bool is_normal_form = true;
+			for (; iter != stop; ++iter) {
+				const RuleRef rule = *iter;
+				if (match::matches(rule.lhs, ref, state)) {
+					do {
+						const NodeIndex res = pattern_interpretation(rule.rhs, state, *ref.store, options);
+						if (res.get_type().value == NodeType::COUNT) __debugbreak();
+						todo.emplace_back(res);
+						is_normal_form = false;
+					} while (match::rematch(rule.lhs, ref, state));
 				}
 			}
-			if (change) return normalize::outermost(ref, options).res;
-		}
-		return invalid_index;
-	} //recursive_greedy_apply
-
-	NodeIndex greedy_apply_ruleset(const RuleSet& rules, MutRef ref, const Options options)
-	{
-	apply_ruleset:
-		NodeIndex result = recursive_greedy_apply(rules, ref, options);
-		if (result != invalid_index) {
-			ref.type = result.get_type();
-			ref.index = result.get_index();
-			goto apply_ruleset;
-		}
-		return ref.typed_idx();
-	} //greedy_apply_ruleset
+			if (is_normal_form) {
+				normal_forms.push_back(ref.typed_idx());
+				if (normal_forms.size() == max_size) {
+					while (todo.size()) {
+						free_tree(mother_ref.at(todo.pop_front()));
+					}
+					break;
+				}
+			}
+			else {
+				free_tree(ref);
+			}
+		} while (todo.size());
+		std::cout << print::to_memory_layout(*mother_ref.store, normal_forms) << "\n\n\n";
+		assert(normal_forms.size() > 0);
+		return normal_forms;
+	} //nondeterministic_shallow_apply_ruleset
 
 } //namespace simp
