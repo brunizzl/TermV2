@@ -39,6 +39,7 @@ important:
  - tests
 
 nice to have:
+ - to_tree
  - implement fst, snd, filter, split, ...
  - add eval_native for min/max to remove values guaranteed to not be minimum / maximum without requiring full evaluation
  - add neutral element to associative functions
@@ -160,12 +161,8 @@ int main()
 			//{ "cos(($k + 0.5)   pi) | $k :int =  0" },
 			//{ "cos((2 $k)       pi) | $k :int =  1" },
 			//{ "cos((2 $k + 1)   pi) | $k :int = -1" },
-			//{ "sin(             pi)           =  0" },
-			//{ "sin($k           pi) | $k :int =  0" },
-			//{ "sin((2 $k + 0.5) pi) | $k :int =  1" },
-			//{ "sin((2 $k + 1.5) pi) | $k :int = -1" },
 
-			{ "cos(  pi)                      = -1" },
+			{ "cos(   pi)                     = -1" },
 			{ "cos(_a pi) | _a + 1/2     :int =  0" },
 			{ "cos(_a pi) | _a / 2       :int =  1" },
 			{ "cos(_a pi) | (_a - 1) / 2 :int = -1" },
@@ -253,6 +250,7 @@ int main()
 
 		bool exact = true;
 		bool show_memory = false;
+		bool show_tree = false;
 		while (true) {
 			std::string name;
 			std::cout << "simp> ";
@@ -277,10 +275,18 @@ int main()
 				std::cout << "set show_memory to true\n\n";
 				continue;
 			}
+			if (name == "--not show tree") {
+				show_memory = false;
+				std::cout << "set show_tree to false\n\n";
+				continue;
+			}
+			if (name == "--show tree") {
+				show_memory = true;
+				std::cout << "set show_tree to true\n\n";
+				continue;
+			}
 			try {
 				auto term = simp::LiteralTerm(name);
-				//std::cout << " = " << term.to_string() << "\n\n";
-				//std::cout << term.to_memory_layout() << "\n\n\n";
 				term.normalize({ .exact = exact });
 				term.head = simp::greedy_apply_ruleset(rules, term.mut_ref(), { .exact = exact });
 				std::cout << " = " << term.to_string() << "\n\n";

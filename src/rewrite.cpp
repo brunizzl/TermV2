@@ -143,7 +143,7 @@ namespace simp {
 			}
 		}
 		return { invalid_index, stop };
-	} //shallow_apply_ruleset
+	} //raw_apply_ruleset
 
 	NodeIndex shallow_apply_ruleset(const RuleSet& rules, MutRef ref, const Options options)
 	{

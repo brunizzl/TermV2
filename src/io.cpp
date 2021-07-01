@@ -661,13 +661,11 @@ namespace simp {
 			} break;
 			case NodeType(Literal::lambda): {
 				const Lambda& lambda = *ref;
-				str.append(lambda.transparent ? "([" : "{[");
-				str.append(std::to_string(lambda.param_count));
-				str.append(", ");
-				str.append(std::to_string(lambda.owned_depth));
-				str.append("]\\");
+				str += lambda.transparent ? "(\\[" : "{\\[";
+				str += std::to_string(lambda.param_count);
+				str += "].";
 				append_to_string(ref.at(lambda.definition), str, 1000, fancy);
-				str.push_back(lambda.transparent ? ')' : '}');
+				str += (lambda.transparent ? ')' : '}');
 			} break;
 			case NodeType(Literal::lambda_param):
 				str.push_back('%');
