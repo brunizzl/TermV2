@@ -247,7 +247,7 @@ namespace simp {
 						from_native(nv::PatternFn::value_match),				  //function type
 						NodeIndex(infos.value_matches.size(), PatternUnsigned{}), //.match_state_index
 						from_native(nv::ComplexSubset::complex),                  //.domain
-						value_proxy                                               //.inverse
+						from_native(nv::MiscFn::id)                               //.inverse
 					}));
 					const NodeIndex result = NodeIndex(res_index, Literal::f_app);
 					infos.value_matches.emplace_back(name, result);

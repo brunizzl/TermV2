@@ -930,12 +930,19 @@ namespace simp {
                 return h;
             };
             static const auto bubble_up = RuleSet({
-                { "     value_match__(_i, _dom, _match) + _a + cs... | _a :complex = value_match__(_i, _dom, _match - _a) + cs..." },
-                { "     value_match__(_i, _dom, _match) * _a * cs... | _a :complex = value_match__(_i, _dom, _match / _a) * cs..." },
-                { "     value_match__(_i, _dom, _match) ^ 2                        = value_match__(_i, _dom, sqrt(_match))" },
-                { "sqrt(value_match__(_i, _dom, _match))                           = value_match__(_i, _dom, _match ^ 2)" },
+                { "     value_match__(_i, _dom, _inv) + _a + cs... | _a :complex = value_match__(_i, _dom, \\x ._inv(x - _a)) + cs..." },
+                { "     value_match__(_i, _dom, _inv) * _a * cs... | _a :complex = value_match__(_i, _dom, \\x ._inv(x / _a)) * cs..." },
+                { "     value_match__(_i, _dom, _inv) ^ 2                        = value_match__(_i, _dom, \\x ._inv(sqrt(x)))" },
+                { "sqrt(value_match__(_i, _dom, _inv))                           = value_match__(_i, _dom, \\x ._inv(x^2))" },
             }, build_basic_pattern);
             heads.lhs = greedy_apply_ruleset(bubble_up, MutRef(store, heads.lhs), { .eval_special = false });
+
+            //change the function _inv to subtree using value_proxy
+            static const auto inv_to_proxy = RuleSet({
+                { "value_match__(_i, _dom, _inv) | _inv :lambda = value_match__(_i, _dom, _inv(value_proxy__))" },
+                { "value_match__(_i, _dom, id)                  = value_match__(_i, _dom, value_proxy__)" },
+            }, build_basic_pattern);
+            heads.lhs = greedy_apply_ruleset(inv_to_proxy, MutRef(store, heads.lhs), { .eval_special = false });
 
             static const auto to_domain = RuleSet({
                 { "_v :_t   = _t" },
@@ -1547,7 +1554,45 @@ namespace simp {
         //(transiently) evaluates .inverse of ValueMatch for a given start_val
         bmath::intern::OptionalComplex eval_value_match(const UnsaveRef ref, const Complex& start_val)
         {
-            return bmath::intern::OptionalComplex();
+            switch (ref.type) {
+            case NodeType(Literal::f_app): {
+                const FApp& app = *ref;
+                const NodeIndex f = app.function();
+                assert(f.get_type() == Literal::symbol);
+
+                const auto fst = [&] { return eval_value_match(ref.at(app[1]), start_val); };
+                const auto snd = [&] { return eval_value_match(ref.at(app[2]), start_val); };
+
+                using namespace nv;
+                switch (to_symbol(f)) {
+                case Symbol(Comm::sum):
+                    assert(app.parameters().size() == 2);
+                    return fst() + snd();
+                case Symbol(Comm::prod):
+                    assert(app.parameters().size() == 2);
+                    return fst() * snd();
+                case Symbol(CtoC::pow):
+                    assert(app.parameters().size() == 2);
+                    return normalize::eval_pow(fst().val, snd().val);
+                case Symbol(CtoC::sqrt):
+                    assert(app.parameters().size() == 1);
+                    return std::sqrt(fst().val);
+                default:
+                    assert(false);
+                    BMATH_UNREACHABLE;
+                    return bmath::intern::OptionalComplex();
+                }
+            } break;
+            case NodeType(Literal::complex):
+                return ref->complex;
+            case NodeType(Literal::symbol):
+                assert(ref.typed_idx() == value_proxy);
+                return start_val;
+            default:
+                assert(false);
+                BMATH_UNREACHABLE;
+                return bmath::intern::OptionalComplex();
+            }
         } //eval_value_match
 
         //determines weather there is a way to match needle_ref in hay_ref (thus needle_ref is assumed to part of a pattern)
