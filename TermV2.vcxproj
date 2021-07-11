@@ -124,31 +124,20 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="src\algorithms.cpp" />
-    <ClCompile Include="src\arithmeticTerm.cpp" />
     <ClCompile Include="src\io.cpp" />
-    <ClCompile Include="src\ioPattern.cpp" />
     <ClCompile Include="src\main.cpp" />
-    <ClCompile Include="src\ioArithmetic.cpp" />
     <ClCompile Include="src\parseTerm.cpp" />
-    <ClCompile Include="src\pattern.cpp" />
     <ClCompile Include="src\transform.cpp" />
     <ClCompile Include="src\rewrite.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\algorithms.hpp" />
-    <ClInclude Include="src\arithmeticTerm.hpp" />
     <ClInclude Include="src\control.hpp" />
     <ClInclude Include="src\countingStore.hpp" />
-    <ClInclude Include="src\fold.hpp" />
     <ClInclude Include="src\io.hpp" />
-    <ClInclude Include="src\ioArithmetic.hpp" />
-    <ClInclude Include="src\ioPattern.hpp" />
-    <ClInclude Include="src\metaMatch.hpp" />
     <ClInclude Include="src\parseTerm.hpp" />
-    <ClInclude Include="src\pattern.hpp" />
     <ClInclude Include="src\reference.hpp" />
     <ClInclude Include="src\rewrite.hpp" />
-    <ClInclude Include="src\stupidTests.hpp" />
     <ClInclude Include="src\termVector.hpp" />
     <ClInclude Include="src\termStore.hpp" />
     <ClInclude Include="src\transform.hpp" />

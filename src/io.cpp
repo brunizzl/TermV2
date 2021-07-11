@@ -13,7 +13,6 @@
 #include "utility/vector.hpp"
 #include "utility/misc.hpp"
 
-#include "ioArithmetic.hpp"
 #include "algorithms.hpp"
 #include "control.hpp"
 
@@ -568,6 +567,45 @@ namespace simp {
 
 	namespace print {
 
+		void append_real(double val, std::string& dest)
+		{
+			std::stringstream buffer;
+			buffer << val;
+			dest.append(buffer.str());
+		}
+
+		constexpr int sum_precedence = 20;
+
+		void append_complex(const std::complex<double> val, std::string& dest, int parent_precedence)
+		{
+			std::stringstream buffer;
+			const bool parentheses = [&] {
+				if (val.real() != 0.0 && val.imag() != 0.0) {
+					buffer << val.real() << std::showpos << val.imag() << 'i';
+					return parent_precedence > sum_precedence;
+				}
+				else if (val.real() != 0.0 && val.imag() == 0.0) {
+					buffer << val.real();
+					return val.real() < 0.0 && parent_precedence >= sum_precedence;	//leading '-'
+				}
+				else if (val.real() == 0.0 && val.imag() != 0.0) {
+					buffer << val.imag() << 'i';
+					return val.imag() < 0.0 && parent_precedence >= sum_precedence;	//leading '-'	
+				}
+				buffer << '0';
+				return false;
+			}();
+
+			if (parentheses) {
+				dest.push_back('(');
+				dest.append(buffer.str());
+				dest.push_back(')');
+			}
+			else {
+				dest.append(buffer.str());
+			}
+		} //append_complex
+
 		void append_f_app_info(const FAppInfo& info, const std::size_t param_count, std::string& str)
 		{
 			const auto to_string = [](const auto bitset, const std::size_t size) {
@@ -608,13 +646,16 @@ namespace simp {
 				break;
 			}
 			str.append("]");
-		}
+		} //append_f_app_info
+
+		
+
 
 		void append_to_string(const UnsaveRef ref, std::string& str, const int parent_precedence, const bool fancy)
 		{
 			switch (ref.type) {
 			case NodeType(Literal::complex):
-				bmath::intern::print::append_complex(*ref, str, parent_precedence);
+				append_complex(*ref, str, parent_precedence);
 				break;
 			case NodeType(Literal::symbol):
 				str.append(Names::name_of(ref.index));
@@ -624,7 +665,6 @@ namespace simp {
 				const bool in_pattern = ref.type.is<PatternFApp>();
 				const FApp& f_app = *ref;
 				const NodeIndex function = f_app.function();
-				const char* replacement_seperator = nullptr;
 				const auto [init, seperator, precedence] = [&]() -> std::tuple<const char*, const char*, int> {
 					if (fancy && !in_pattern && function.get_type() == Literal::symbol) {
 						using namespace nv;
@@ -632,7 +672,7 @@ namespace simp {
 						case Symbol(ToBool::not_):          return { "!", ""    , 40 };
 						case Symbol(CtoC::pow):             return { "" , "^"   , 30 };
 						case Symbol(Comm::prod):            return { "" , " "   , 21 };
-						case Symbol(Comm::sum):             return { "" , " + " , 20 };
+						case Symbol(Comm::sum):             return { "" , " + " , 20 }; static_assert(sum_precedence == 20);
 						case Symbol(ToBool::eq):            return { "" , " == ", 10 };
 						case Symbol(ToBool::neq):           return { "" , " != ", 10 };
 						case Symbol(ToBool::greater):       return { "" , " > " , 10 };
@@ -734,7 +774,7 @@ namespace simp {
 
 					switch (ref.type) {
 					case NodeType(Literal::complex):
-						bmath::intern::print::append_complex(*ref, this->str, 1000);
+						append_complex(*ref, this->str, 1000);
 						break;
 					case NodeType(Literal::symbol):
 						this->str.append(Names::name_of(ref.index));

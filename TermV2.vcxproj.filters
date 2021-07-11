@@ -18,22 +18,10 @@
     <ClCompile Include="src\main.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="src\arithmeticTerm.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="src\parseTerm.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="src\ioArithmetic.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="src\transform.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\pattern.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\ioPattern.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\io.cpp">
@@ -50,19 +38,10 @@
     <ClInclude Include="src\termStore.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\arithmeticTerm.hpp">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="src\typedIndex.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\parseTerm.hpp">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="src\ioArithmetic.hpp">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="src\stupidTests.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\transform.hpp">
@@ -96,18 +75,6 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\reference.hpp">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="src\pattern.hpp">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="src\fold.hpp">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="src\ioPattern.hpp">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="src\metaMatch.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\utility\algorithm.hpp">
