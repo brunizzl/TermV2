@@ -715,8 +715,8 @@ namespace simp {
 
 	namespace match {
 
-		//all MatchVariables of same name in pattern (e.g. "a" in pattern "a*b+a" share the same SharedTreeDatum to know 
-		//whitch actually matched, and if the name "a" is already matched, even if the current instance is not.
+		//all MatchVariables of same name in pattern (e.g. "_a" in pattern "_a*_b+_a" share the same SharedSingleMatchEntry to know 
+		//whitch actually matched, and if the name "_a" is already matched, even if the current instance is not.
 		struct SharedSingleMatchEntry
 		{
 			NodeIndex match_idx = invalid_index; //indexes in Term to simplify

@@ -144,7 +144,7 @@ int main()
 			{ "_a^2 - 2 _a _b + _b^2 = (_a - _b)^2" },
 			{ "$a^2 + 2 $a _b + _b^2 = ($a + _b)^2" },
 			{ "$a^2 - 2 $a _b + _b^2 = ($a - _b)^2" },
-			{ "_aPow2 + _2a _b + _b^2 | 2 sqrt(_aPow2) == _2a = (1/2 _2a + _b)^2" },
+			{ "_aPow2 + _2a _b + _b^2 | 4 _aPow2 == _2a^2 = (1/2 _2a + _b)^2" },
 			
 			{ "_a bs... + _a cs... | !(_a :complex)         = _a (prod(bs...) + prod(cs...))" },
 			{ "_a bs... + _a       | !(_a :complex)         = _a (prod(bs...) + 1)" },
@@ -287,6 +287,7 @@ int main()
 			}
 			try {
 				auto term = simp::LiteralTerm(name);
+				if (show_memory) std::cout << term.to_memory_layout() << "\n\n\n";
 				term.normalize({ .exact = exact });
 				term.head = simp::greedy_apply_ruleset(rules, term.mut_ref(), { .exact = exact });
 				std::cout << " = " << term.to_string() << "\n\n";

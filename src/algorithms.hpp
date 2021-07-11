@@ -160,7 +160,7 @@ namespace simp {
         //if match was not successfull, match_state is NOT reset and something else than equivalent is returned
         std::partial_ordering match_(const UnsaveRef pn_ref, const UnsaveRef ref, State& match_state);
 
-        inline bool matches(const UnsaveRef pn_ref, const UnsaveRef ref, State& match_state)
+        inline bool find_match(const UnsaveRef pn_ref, const UnsaveRef ref, State& match_state)
         {   return match_(pn_ref, ref, match_state) == std::partial_ordering::equivalent;
         }
 

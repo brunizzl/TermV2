@@ -135,10 +135,13 @@ namespace simp {
 		RuleSetIter iter = start_point(rules, ref);
 		const RuleSetIter stop = end_point(iter); 
 
+		static bool print = false;
+
 		for (; iter != stop; ++iter) {
 			const RuleRef rule = *iter;
-			if (match::matches(rule.lhs, ref, state)) {
+			if (match::find_match(rule.lhs, ref, state)) {
 				const NodeIndex res = pattern_interpretation(rule.rhs, state, *ref.store, options);
+				if (print) std::cout << print::to_string(ref.at(res)) << "\n";
 				return { res, iter };
 			}
 		}
@@ -175,7 +178,7 @@ namespace simp {
 			bool is_normal_form = true;
 			for (; iter != stop; ++iter) {
 				const RuleRef rule = *iter;
-				if (match::matches(rule.lhs, ref, state)) {
+				if (match::find_match(rule.lhs, ref, state)) {
 					do {
 						const NodeIndex res = pattern_interpretation(rule.rhs, state, *ref.store, options);
 						if (res.get_type().value == NodeType::COUNT) __debugbreak();

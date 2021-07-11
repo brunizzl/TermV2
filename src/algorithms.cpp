@@ -649,32 +649,31 @@ namespace simp {
     void free_tree(const MutRef ref)
     {
         assert(ref.type != PatternFApp{});
+        if (!is_stored_node(ref.type) || ref.store->decr_at(ref.index) != 0) { 
+            return; 
+        }
         switch (ref.type) {
         case NodeType(Literal::complex):
         case NodeType(SpecialMatch::multi):
-            if (ref.store->decr_at(ref.index) != 0) return;
             break;
         case NodeType(Literal::lambda):
-            if (ref.store->decr_at(ref.index) != 0) return;
             free_tree(ref.at(ref->lambda.definition));
             break;
         case NodeType(Literal::f_app):
-            if (ref.store->decr_at(ref.index) != 0) return;
             for (const NodeIndex subtree : ref) {
                 free_tree(ref.at(subtree));
             }
             FApp::free(*ref.store, ref.index);
             return;
         case NodeType(SingleMatch::restricted):
-            if (ref.store->decr_at(ref.index) != 0) return;
             free_tree(ref.at(ref->single_match.condition));
             break;
         case NodeType(SpecialMatch::value):
-            if (ref.store->decr_at(ref.index) != 0) return;
             free_tree(ref.at(ref->value_match.inverse));
             break;
         default:
-            assert(!is_stored_node(ref.type));
+            assert(false);
+            BMATH_UNREACHABLE;
             return;
         }
         ref.store->free_one(ref.index);
@@ -1725,7 +1724,7 @@ namespace simp {
             if (hay_k < haystack.size()) {
                 const UnsaveRef needle_ref = pn_ref.at(needles[needle_i]);
                 do {
-                    if (matches(needle_ref, hay_ref.at(haystack[hay_k]), match_state)) {
+                    if (find_match(needle_ref, hay_ref.at(haystack[hay_k]), match_state)) {
                         goto prepare_next_needle;
                     }
                 } while (info.preceeded_by_multi.test(needle_i) && ++hay_k < haystack.size());
@@ -1763,7 +1762,7 @@ namespace simp {
             return true;
         } //find_dilation
 
-        bool BMATH_FORCE_INLINE find_backtracking(const UnsaveRef pn_ref, const UnsaveRef hay_ref, State& match_state, const bool find_rematch)
+        bool find_identic(const UnsaveRef pn_ref, const UnsaveRef hay_ref, State& match_state, const bool find_rematch)
         {
             assert(pn_ref.type == PatternFApp{} && hay_ref.type == Literal::f_app);
             const std::span<const NodeIndex> needles = pn_ref->f_app.parameters();
@@ -1780,7 +1779,7 @@ namespace simp {
                 return false;
             }
             for (;;) {
-                while (matches(pn_ref.at(needles[i]), hay_ref.at(haystack[i]), match_state)) {
+                while (find_match(pn_ref.at(needles[i]), hay_ref.at(haystack[i]), match_state)) {
                     i++;
                     if (i == needles.size()) return true;
                 } do { rematch_last_needle:
@@ -1790,7 +1789,7 @@ namespace simp {
                     !rematch(pn_ref.at(needles[i]), hay_ref.at(haystack[i]), match_state));
                 i++;
             }
-        } //track_back
+        } //find_identic
 
         std::partial_ordering match_(const UnsaveRef pn_ref, const UnsaveRef ref, State& match_state)
         {
@@ -1835,7 +1834,7 @@ namespace simp {
                 case MatchStrategy::dilation:
                     return to_order(    find_dilation(pn_ref, ref, match_state, false));
                 case MatchStrategy::backtracking:
-                    return to_order(find_backtracking(pn_ref, ref, match_state, false));
+                    return to_order(find_identic(pn_ref, ref, match_state, false));
                 case MatchStrategy::linear: {
                     const std::span<const NodeIndex> pn_params = pn_ref->f_app.parameters();
                     const std::span<const NodeIndex> params = ref->f_app.parameters();
@@ -1924,7 +1923,7 @@ namespace simp {
                 case MatchStrategy::dilation:
                     return     find_dilation(pn_ref, ref, match_state, true);
                 case MatchStrategy::backtracking: 
-                    return find_backtracking(pn_ref, ref, match_state, true);
+                    return find_identic(pn_ref, ref, match_state, true);
                 } //MatchStrategy::linear is not expected above (as it implies not beeing rematchable)
             }
             else if (pn_ref.type == Literal::lambda) {
