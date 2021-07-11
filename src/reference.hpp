@@ -2,7 +2,7 @@
 
 #include "termStore.hpp"
 
-namespace bmath::intern {
+namespace simp {
 
 	//it is advised to only use this concept to specify other concepts,
 	//  if both const and mut ref are semantically allowed, only enable const
@@ -120,4 +120,4 @@ namespace bmath::intern {
 		constexpr auto* operator->() const { return &static_cast<Allowed_T&>(store->at(index)); }
 	};
 
-} //namespace bmath::intern
+} //namespace simp

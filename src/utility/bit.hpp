@@ -5,7 +5,7 @@
 #include <bit>
 #include <functional>
 
-namespace bmath::intern {
+namespace simp {
 
 	template<typename UInt_T>
 	struct [[nodiscard]] IntBitSet
@@ -347,4 +347,4 @@ namespace bmath::intern {
 
 
     
-} //namespace bmath::intern
+} //namespace simp

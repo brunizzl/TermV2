@@ -13,10 +13,6 @@
 
 //control structures implemented without reursion, thus not limited by the callstack size
 namespace simp::ctrl {
-    using bmath::intern::CallableTo;
-    using bmath::intern::Callable;    
-    using bmath::intern::Procedure;
-    using bmath::intern::Reference;
 
     constexpr auto iter_from_lambda(const MutRef ref)
     {
@@ -50,7 +46,7 @@ namespace simp::ctrl {
             NodeIndex const* stop;
             StackInfo info;
         };
-        bmath::intern::StupidBufferVector<StackFrame, 64> stack;
+        StupidBufferVector<StackFrame, 64> stack;
         //c.make_info(...) only expects applications (and perhaps lambdas), which is not guaranteed to hold for head -> use fst_info
         stack.emplace_back(&head, &head + 1, fst_info); 
         do {

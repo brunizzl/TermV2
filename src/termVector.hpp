@@ -13,7 +13,7 @@
 #include "termStore.hpp"
 #include "reference.hpp"
 
-namespace bmath::intern {
+namespace simp {
 
 	//unlike containers like std::vector and the like, there is no proxy managing data on the heap here.
 	//all management lies directly with the data.
@@ -235,4 +235,4 @@ namespace bmath::intern {
 		return detail_vector::SaveEndIndicator{};
 	}
 
-} //namespace bmath::intern
+} //namespace simp

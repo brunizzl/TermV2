@@ -9,7 +9,7 @@
 #include "utility/sumEnum.hpp"
 
 
-namespace bmath::intern {
+namespace simp {
 
 	//stores both an index and an enum value in the same variable 
 	//with the lower bits representing the enum, the upper bits representing the (shifted) index
@@ -85,4 +85,4 @@ namespace bmath::intern {
 	//using BasicTypedIdx = BasicTypedIdx_Bitmask<TypesEnum, UnderlyingType>;
 	using BasicTypedIdx = BasicTypedIdx_BitField<TypesEnum, UnderlyingType>;
 
-} //namespace bmath::intern
+} //namespace simp

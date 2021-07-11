@@ -15,7 +15,7 @@ namespace simp {
 	template<typename Payload_T, template<typename> class Alloc_T = std::allocator>
 	class ResizeableArray
 	{
-		static_assert(bmath::intern::Allocator<Alloc_T>);
+		static_assert(Allocator<Alloc_T>);
 		static_assert(std::is_trivially_destructible_v<Payload_T>);
 
 		struct Memory :Alloc_T<Payload_T>
@@ -83,11 +83,11 @@ namespace simp {
 
 
 
-	//adds reference counting to bmath::intern::BasicStore
+	//adds reference counting to BasicStore
 	template<typename Payload_T, typename Index_T, template<typename> class Alloc_T = std::allocator>
 	class BasicCountingStore
 	{
-		bmath::intern::BasicStore<Payload_T, Alloc_T> store;
+		BasicStore<Payload_T, Alloc_T> store;
 
 		//an allocated block starting at i of size n is reference counted at management[i].ref_count, the follwing n-1 count entries are undefined
 		//if a match for this block is found, the old version of the block is kept, as long as .ref_count > 0.

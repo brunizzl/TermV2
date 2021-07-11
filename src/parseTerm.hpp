@@ -5,7 +5,7 @@
 #include <cassert>
 
 
-namespace bmath {
+namespace simp {
 
 	struct [[nodiscard]] ParseFailure
 	{
@@ -13,9 +13,9 @@ namespace bmath {
 		const char* what;
 	}; //struct ParseFailure
 
-} //namespace bmath
+} //namespace simp
 
-namespace bmath::intern {
+namespace simp {
 
 	using Token = char;
 	//TokenString is intended to be used along the string to be parsed to associate every char with what it represents.
@@ -167,4 +167,4 @@ namespace bmath::intern {
 	//counts occurences of token in all of name not enclosed by parentheses
 	std::size_t count_skip_pars(const TokenView name, const Token token) noexcept;
 
-} //namespace bmath::intern
+} //namespace simp

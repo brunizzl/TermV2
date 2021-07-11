@@ -15,7 +15,7 @@ namespace simp {
 
 	simp::LiteralTerm::LiteralTerm(std::string name)
 	{
-		using namespace bmath::intern;
+		using namespace simp;
 		auto parse_str = ParseString(name);
 		parse_str.allow_implicit_product(token::sticky_space, ' ');
 		parse_str.remove_space();
@@ -53,7 +53,7 @@ namespace simp {
 				const RuleHead rule = build(temp_store, name);
 				this->rules.emplace_back(rule.lhs, rule.rhs, 0);
 			}
-			catch (bmath::ParseFailure failure) {
+			catch (ParseFailure failure) {
 				std::cerr << "parse failure: " << failure.what << "\n";
 				std::cerr << name << "\n";
 				std::cerr << std::string(failure.where, ' ') << "^\n";

@@ -72,7 +72,7 @@ namespace simp {
     }
 
     //copies tree starting at src_ref into dst_store
-    template<bmath::intern::Reference R, bmath::intern::StoreLike S>
+    template<Reference R, StoreLike S>
     [[nodiscard]] NodeIndex copy_tree(const R src_ref, S& dst_store);
 
     //orders node types by their "specificity", meaning that types potentially matching more things are generally sorted to the back

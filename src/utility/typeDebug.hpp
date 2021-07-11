@@ -5,7 +5,7 @@
 #include <typeinfo>
 #include <iostream>
 
-namespace bmath::intern {
+namespace simp {
 
 	//dont wanna create a source file for this single function
 	inline std::string compact_type_name(std::string_view type_name, bool multiline = false, bool no_namespaces = true)
@@ -60,5 +60,5 @@ namespace bmath::intern {
 		return result;
 	} //compact_type_name
 
-} //namespace bmath::intern
+} //namespace simp
 

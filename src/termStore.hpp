@@ -9,7 +9,7 @@
 #include "typedIndex.hpp"
 
 
-namespace bmath::intern {
+namespace simp {
 
 	template<template <typename> class T>
 	concept Allocator = requires (T<int> a, std::size_t n, int* pos) {
@@ -610,4 +610,4 @@ namespace bmath::intern {
 	}; //class BasicMonotonicStore
 
 
-} //namespace bmath::intern
+} //namespace simp

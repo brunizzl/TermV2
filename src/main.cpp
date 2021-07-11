@@ -62,8 +62,6 @@ idea status:
 
 int main()
 {
-	//bmath::intern::debug::enumerate_type();
-	//bmath::intern::debug::test_rechner();
 	{
 		for (unsigned i = 0; i < (unsigned)simp::NodeType::COUNT; i++) {
 			const auto as_native = simp::nv::Native(simp::NodeType(i));
@@ -294,7 +292,7 @@ int main()
 
 				assert((simp::free_tree(term.mut_ref()), term.store.nr_used_slots() == 0u));
 			}
-			catch (bmath::ParseFailure failure) {
+			catch (simp::ParseFailure failure) {
 				std::cout << "parse failure: " << failure.what << '\n';
 				std::cout << name << '\n';
 				std::cout << std::string(failure.where, ' ') << "^\n\n";

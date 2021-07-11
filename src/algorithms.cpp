@@ -26,7 +26,7 @@ namespace simp {
     bool in_complex_subset(const Complex& nr, const nv::ComplexSubset subset)
     {
         using namespace nv;
-        constexpr double max_save_int = bmath::intern::nat_pow(2ull, 53) - 1; //largest integer explicitly stored in double
+        constexpr double max_save_int = nat_pow(2ull, 53) - 1; //largest integer explicitly stored in double
 
         const double re = nr.real();
         const double im = nr.imag();
@@ -61,7 +61,7 @@ namespace simp {
             case Native(Restr::boolean):
                 return ref.type == Literal::symbol && Symbol(ref.index).is<Bool>();
             case Native(Restr::applicable):
-                return bmath::intern::is_one_of<Literal::lambda, Literal::symbol>(ref.type);
+                return is_one_of<Literal::lambda, Literal::symbol>(ref.type);
             case Native(Restr::no_value):
                 return ref.type != Literal::complex;
             case Native(Restr::not_neg_1):
@@ -96,12 +96,12 @@ namespace simp {
 
     namespace normalize {
 
-        [[nodiscard]] NodeIndex replace_lambda_params(const MutRef ref, const bmath::intern::StupidBufferVector<NodeIndex, 16>& params
+        [[nodiscard]] NodeIndex replace_lambda_params(const MutRef ref, const StupidBufferVector<NodeIndex, 16>& params
             , const int max_depth, const bool transparent)
         {
             assert(ref.type != PatternFApp{});
             if (ref.type == Literal::f_app && max_depth > 0) {
-                bmath::intern::StupidBufferVector<NodeIndex, 16> res_application;
+                StupidBufferVector<NodeIndex, 16> res_application;
                 const auto stop = end(ref);
                 for (auto iter = begin(ref); iter != stop; ++iter) {
                     res_application.push_back(replace_lambda_params(ref.at(*iter), params, max_depth - 1, transparent));
@@ -138,7 +138,7 @@ namespace simp {
             assert(f_app.function().get_type() == Literal::lambda);
             const Lambda lambda = *ref.at(f_app.function());
             assert(!lambda.transparent);
-            bmath::intern::StupidBufferVector<NodeIndex, 16> params;
+            StupidBufferVector<NodeIndex, 16> params;
             for (const NodeIndex param : f_app.parameters()) {
                 params.push_back(param);
             }
@@ -157,7 +157,7 @@ namespace simp {
                 to_symbol(function).is<nv::Variadic>());
             bool found_nested = false;
             const FApp& f_app = *ref;
-            bmath::intern::StupidBufferVector<NodeIndex, 16> merged_apps = { function };
+            StupidBufferVector<NodeIndex, 16> merged_apps = { function };
             for (const NodeIndex param : f_app.parameters()) {
                 if (param.get_type() == Literal::f_app) {
                     const MutRef param_ref = ref.at(param);
@@ -262,7 +262,7 @@ namespace simp {
             }
             else if (in_complex_subset(expo, nv::ComplexSubset::integer)) {
                 const long long int_expo = expo.real();
-                const Complex res = bmath::intern::nat_pow(base, std::abs(int_expo));
+                const Complex res = nat_pow(base, std::abs(int_expo));
                 return int_expo < 0 ? 1.0 / res : res;
             }
             return std::pow(base, expo);
@@ -331,7 +331,7 @@ namespace simp {
                     assert(params[0].get_type() == Literal::complex && params[1].get_type() == Literal::complex);
                     const Complex& fst = *ref.at(params[0]);
                     const Complex& snd = *ref.at(params[1]);
-                    const bool res = bmath::intern::compare_complex(fst, snd) == ord;
+                    const bool res = compare_complex(fst, snd) == ord;
                     free_tree(ref);
                     return res;
                 };
@@ -679,7 +679,7 @@ namespace simp {
         ref.store->free_one(ref.index);
     } //free_tree
 
-    template<bmath::intern::Reference R, bmath::intern::StoreLike S>
+    template<Reference R, StoreLike S>
     NodeIndex copy_tree(const R src_ref, S& dst_store)
     {
         const auto insert_node = [&](const TermNode n, NodeType type) {
@@ -698,7 +698,7 @@ namespace simp {
         } break;
         case NodeType(Literal::f_app):
         case NodeType(PatternFApp{}): {
-            bmath::intern::StupidBufferVector<NodeIndex, 16> dst_subterms;
+            StupidBufferVector<NodeIndex, 16> dst_subterms;
             const auto stop = end(src_ref);
             for (auto iter = begin(src_ref); iter != stop; ++iter) {
                 dst_subterms.push_back(copy_tree(src_ref.at(*iter), dst_store));
@@ -757,7 +757,7 @@ namespace simp {
         }
         switch (fst.type) {
         case NodeType(Literal::complex): 
-            return bmath::intern::compare_complex(*fst, *snd);
+            return compare_complex(*fst, *snd);
         case NodeType(PatternFApp{}):
         case NodeType(Literal::f_app): {
             const auto fst_end = fst->f_app.end();
@@ -815,7 +815,7 @@ namespace simp {
         }
         switch (fst.type) {
         case NodeType(Literal::complex):
-            return bmath::intern::compare_complex(*fst, *snd);
+            return compare_complex(*fst, *snd);
         case NodeType(PatternFApp{}):
         case NodeType(Literal::f_app): {
             auto fst_iter = fst->f_app.begin();
@@ -997,7 +997,7 @@ namespace simp {
         {
             const auto swap_app = [](const MutRef ref) {
                 if (ref.type == Literal::f_app) {
-                    bmath::intern::StupidBufferVector<NodeIndex, 16> subterms;
+                    StupidBufferVector<NodeIndex, 16> subterms;
                     for (const NodeIndex sub : ref) {
                         subterms.push_back(sub);
                     }
@@ -1379,7 +1379,7 @@ namespace simp {
 
     namespace match {
 
-        template<bmath::intern::Callable<NodeIndex> F>
+        template<Callable<NodeIndex> F>
         void for_each_multi(const MultiMatch multi, const match::State& state, F f)
         {
             const SharedFAppEntry& entry = state.f_app_entries[multi.match_state_index];
@@ -1432,12 +1432,12 @@ namespace simp {
 
         using RefMaker = decltype(make_ref_maker(std::declval<State>(), nullptr));
 
-        bmath::intern::OptionalDouble eval_condition(const UnsaveRef cond, const State& match_state)
+        OptionalDouble eval_condition(const UnsaveRef cond, const State& match_state)
         {
             if (cond.type == Literal::complex) {
                 return cond->complex.imag() == 0.0 ?
                     cond->complex.real() :
-                    bmath::intern::OptionalDouble{};
+                    OptionalDouble{};
             }
 
             if (cond.type != Literal::f_app) return {};
@@ -1450,7 +1450,7 @@ namespace simp {
             const auto make_ref = make_ref_maker(match_state, cond.store_data());
 
             if (f == Comm::sum) {
-                bmath::intern::OptionalDouble acc = 0.0;
+                OptionalDouble acc = 0.0;
                 for (const NodeIndex param : params) {
                     acc += eval_condition(make_ref(param), match_state);
                     if (!acc) break;
@@ -1458,7 +1458,7 @@ namespace simp {
                 return acc;
             }
             else if (f == Comm::prod) {
-                bmath::intern::OptionalDouble acc = 1.0;
+                OptionalDouble acc = 1.0;
                 for (const NodeIndex param : params) {
                     acc *= eval_condition(make_ref(param), match_state);
                     if (!acc) break;
@@ -1471,7 +1471,7 @@ namespace simp {
                     const auto param = eval_condition(make_ref(params[0]), match_state);
                     if (!param) return {};
                     const Complex res = normalize::eval_unary_complex(f.to<CtoC>(), param.val);
-                    return res.imag() == 0.0 ? res.real() : bmath::intern::OptionalDouble{};
+                    return res.imag() == 0.0 ? res.real() : OptionalDouble{};
                 }
                 if (arr == 2u) {
                     const auto param1 = eval_condition(make_ref(params[0]), match_state);
@@ -1479,7 +1479,7 @@ namespace simp {
                     const auto param2 = eval_condition(make_ref(params[1]), match_state);
                     if (!param2) return {};
                     const Complex res = normalize::eval_binary_complex(f.to<CtoC>(), param1.val, param2.val);
-                    return res.imag() == 0.0 ? res.real() : bmath::intern::OptionalDouble{};
+                    return res.imag() == 0.0 ? res.real() : OptionalDouble{};
                 }
             }
             return {};
@@ -1496,8 +1496,8 @@ namespace simp {
             const auto params = f_app.parameters();
 
             const auto compare_params = [&]() {
-                const bmath::intern::OptionalDouble fst = eval_condition(make_ref(params[0]), match_state);
-                const bmath::intern::OptionalDouble snd = eval_condition(make_ref(params[1]), match_state);
+                const OptionalDouble fst = eval_condition(make_ref(params[0]), match_state);
+                const OptionalDouble snd = eval_condition(make_ref(params[1]), match_state);
                 return fst.val <=> snd.val;
             };
 
@@ -1552,7 +1552,7 @@ namespace simp {
         } //test_condition
 
         //(transiently) evaluates .inverse of ValueMatch for a given start_val
-        bmath::intern::OptionalComplex eval_value_match(const UnsaveRef ref, const Complex& start_val)
+        OptionalComplex eval_value_match(const UnsaveRef ref, const Complex& start_val)
         {
             switch (ref.type) {
             case NodeType(Literal::f_app): {
@@ -1580,7 +1580,7 @@ namespace simp {
                 default:
                     assert(false);
                     BMATH_UNREACHABLE;
-                    return bmath::intern::OptionalComplex();
+                    return OptionalComplex();
                 }
             } break;
             case NodeType(Literal::complex):
@@ -1591,7 +1591,7 @@ namespace simp {
             default:
                 assert(false);
                 BMATH_UNREACHABLE;
-                return bmath::intern::OptionalComplex();
+                return OptionalComplex();
             }
         } //eval_value_match
 
@@ -1611,7 +1611,7 @@ namespace simp {
             const FAppInfo info = f_app_info(pn_ref);
             SharedFAppEntry& needles_data = match_state.f_app_entries[info.match_state_index];
             //keeps track of wether a param in haystack is currently associated with a param in needles or not
-            auto currently_matched = bmath::intern::BitVector(haystack.size()); 
+            auto currently_matched = BitVector(haystack.size()); 
 
             //if needles_data.match_positions[i] == assoc_match_indicator, then needle i has not matched exactly one parameter of haystack, 
             //  but an arbitrary ammount, as the needle i is a weak match variable currently associated with a function application of the same associative 
@@ -1619,7 +1619,7 @@ namespace simp {
             constexpr auto assoc_match_indicator = (SharedFAppEntry::MatchPos_T)-1u;
             const NodeIndex f = pn_ref->f_app.function();
 
-            const auto find_associatively_matched = [&](const UnsaveRef needle_matched_ref, bmath::intern::BitVector& matched_by_needle) {
+            const auto find_associatively_matched = [&](const UnsaveRef needle_matched_ref, BitVector& matched_by_needle) {
                 int k = 0;
                 for (const NodeIndex matched_param : needle_matched_ref->f_app.parameters()) {
                     const UnsaveRef matched_param_ref = hay_ref.at(matched_param);
@@ -1683,7 +1683,7 @@ namespace simp {
                         if (needle_matched_ref.type == Literal::f_app && needle_matched_ref->f_app.function() == f) [[unlikely]] {
                             //matched_by_needle buffers needle's matches until the whole needle is confirmed to lie within the haystack, 
                             //  to not require cumbersome resetting of currently_matched, if only parts of needle where found
-                            auto matched_by_needle = bmath::intern::BitVector(haystack.size());
+                            auto matched_by_needle = BitVector(haystack.size());
                             if (find_associatively_matched(needle_matched_ref, matched_by_needle)) {
                                 currently_matched |= matched_by_needle;
                                 //normally jump to prepare_next_needle, but this is too different from the usual
@@ -1849,7 +1849,7 @@ namespace simp {
 
             switch (pn_ref.type) {
             case NodeType(Literal::complex):
-                return bmath::intern::compare_complex(pn_ref->complex, ref->complex);
+                return compare_complex(pn_ref->complex, ref->complex);
             case NodeType(Literal::symbol):
             case NodeType(Literal::lambda_param):
                 return pn_ref.index <=> ref.index;
@@ -1935,7 +1935,7 @@ namespace simp {
                     return value_order <=> shallow_order(ref);
                 }
                 const ValueMatch& var = *pn_ref;
-                const bmath::intern::OptionalComplex this_value = eval_value_match(pn_ref.at(var.inverse), *ref);
+                const OptionalComplex this_value = eval_value_match(pn_ref.at(var.inverse), *ref);
                 if (!this_value || !in_complex_subset(*this_value, var.domain)) {
                     return std::partial_ordering::unordered;
                 }
@@ -1946,7 +1946,7 @@ namespace simp {
                         return std::partial_ordering::equivalent;
                     }
                     assert(match_info.is_set());
-                    return bmath::intern::compare_complex(*this_value, match_info.value);
+                    return compare_complex(*this_value, match_info.value);
                 }
             } break;
             case NodeType(SpecialMatch::multi): //multi is matched in PatternFApp, not here
@@ -2007,7 +2007,7 @@ namespace simp {
         case NodeType(Literal::lambda_param):
             return pn_ref.typed_idx();
         case NodeType(Literal::f_app): {
-            bmath::intern::StupidBufferVector<NodeIndex, 16> dst_subterms;
+            StupidBufferVector<NodeIndex, 16> dst_subterms;
             const auto stop = end(pn_ref);
             auto iter = begin(pn_ref);
             for (; iter != stop; ++iter) {

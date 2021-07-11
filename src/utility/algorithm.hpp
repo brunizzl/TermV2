@@ -9,7 +9,7 @@
 #include "meta.hpp"
 #include "vector.hpp"
 
-namespace bmath::intern {
+namespace simp {
 
 	namespace detail_sort {
 		template<typename T> //half open range [start, stop)
@@ -91,4 +91,4 @@ namespace bmath::intern {
 	}
 
 
-} //namespace bmath::intern
+} //namespace simp

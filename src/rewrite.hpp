@@ -163,7 +163,7 @@ namespace simp {
 
 
 	//helper for apply_ruleset
-	template<bmath::intern::CallableTo<NodeIndex, const RuleSet&, MutRef, Options> ShallowApply>
+	template<CallableTo<NodeIndex, const RuleSet&, MutRef, Options> ShallowApply>
 	NodeIndex recursive_apply(const RuleSet& rules, const MutRef ref, const Options options, ShallowApply shallow_apply)
 	{
 		{ //try replacing this
@@ -187,7 +187,7 @@ namespace simp {
 	} //recursive_apply
 
 	//lazyliy applies first rule applicable in depth first search in ref until no further rules can be applied
-	template<bmath::intern::CallableTo<NodeIndex, const RuleSet&, MutRef, Options> ShallowApply>
+	template<CallableTo<NodeIndex, const RuleSet&, MutRef, Options> ShallowApply>
 	[[nodiscard]] NodeIndex apply_ruleset(const RuleSet& rules, MutRef ref, const Options options, ShallowApply shallow_apply)
 	{
 	apply:

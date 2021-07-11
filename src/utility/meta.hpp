@@ -8,20 +8,20 @@
 #include <cassert>
 #include <utility>
 
-namespace bmath::intern::detail_print_type {
+namespace simp::detail_print_type {
 	template<typename T>
 	struct PrintType
 	{
 		static_assert(std::is_same_v<void, T>&& std::is_same_v<int, T>);
 		static constexpr bool value = true;
 	};
-} //namespace bmath::intern::detail_print_type
+} //namespace simp::detail_print_type
 
-#define BMATH_PRINT_TYPE(T) static_assert(bmath::intern::detail_print_type::PrintType<T>::value)
+#define BMATH_PRINT_TYPE(T) static_assert(detail_print_type::PrintType<T>::value)
 
 
 //general concepts
-namespace bmath::intern {
+namespace simp {
 	template<typename T>
 	concept Eq = requires (T a, T b) {
 		{a == b} -> std::same_as<bool>;
@@ -132,11 +132,11 @@ namespace bmath::intern {
 	constexpr double parse_double(const Iter start, const Iter stop) 
 	{
 		const Iter dot_pos = std::find(start, stop, '.');
-		const double integer_part = intern::parse_ull(start, dot_pos).first;
+		const double integer_part = parse_ull(start, dot_pos).first;
 
 		if (dot_pos < stop) {
 			const Iter decimal_start = dot_pos + 1;
-			const auto [upscaled_decimals, upscale_factor] = intern::parse_ull(decimal_start, stop);
+			const auto [upscaled_decimals, upscale_factor] = parse_ull(decimal_start, stop);
 			return integer_part + upscaled_decimals / (double)upscale_factor;
 		}
 		return integer_part;
@@ -144,9 +144,9 @@ namespace bmath::intern {
 
 	static_assert(parse_double(+_1234, _1234 + 8) == 12345.25);
 
-} //namespace bmath::intern
+} //namespace simp
 
-namespace bmath::intern::meta {
+namespace simp::meta {
 
 	template<auto Val>
 	struct Constant
@@ -765,4 +765,4 @@ namespace bmath::intern::meta {
 
 	static_assert(filter([](int i) { return i < 3; }, Seq<1, 2, 3, 4, 5, 6, 0>{}) == Seq<1, 2, 0>{});
 
-} //namespace bmath::intern::meta
+} //namespace simp::meta

@@ -5,7 +5,7 @@
 
 #include "meta.hpp"
 
-namespace bmath::intern {
+namespace simp {
     
     
 
@@ -263,4 +263,4 @@ namespace bmath::intern {
 
 
     
-} //namespace bmath::intern
+} //namespace simp

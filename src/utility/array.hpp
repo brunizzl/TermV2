@@ -7,7 +7,7 @@
 
 #include "meta.hpp"
 
-namespace bmath::intern::arr {
+namespace simp::arr {
 
 	/////////////////   concat
 	namespace detail_concat {
@@ -184,4 +184,4 @@ namespace bmath::intern::arr {
 
 	static_assert(arr::map([](auto x) { return x + 3; }, std::array{ 1, 2, 3 }) == std::array{ 4, 5, 6 });
 
-} //namespace bmath::intern::arr
+} //namespace simp::arr

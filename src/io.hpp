@@ -43,7 +43,7 @@ namespace simp {
 
 		//decides what type the outhermost element has
 		//offset is used to determine error position relative to begin of whole term
-		[[nodiscard]] Head find_head_type(const bmath::intern::ParseView view);
+		[[nodiscard]] Head find_head_type(const ParseView view);
 
 		namespace name_lookup {
 
@@ -71,17 +71,17 @@ namespace simp {
 
 			//looks up global function names and the names contained in info (expected to refer to lambda parameters)
 			//unknown names are returned as symbols
-			NodeIndex build_symbol(Store& store, const LiteralInfos& lambda_params, bmath::intern::ParseView view);
+			NodeIndex build_symbol(Store& store, const LiteralInfos& lambda_params, ParseView view);
 
 			//same as above, but unwraps unknown beginning and ending in single quotes
-			NodeIndex build_symbol(Store& store, PatternInfos& infos, bmath::intern::ParseView view);
+			NodeIndex build_symbol(Store& store, PatternInfos& infos, ParseView view);
 
 			//expects params_view to be argument list of lambda starting with '\\', adds names to lambda_params
 			//returns number of parameters added
-			unsigned add_lambda_params(std::vector<NameInfo>& lambda_params, bmath::intern::ParseView params_view);
+			unsigned add_lambda_params(std::vector<NameInfo>& lambda_params, ParseView params_view);
 		} //namespace name_lookup
 
-		template<bmath::intern::StoreLike Store_T>
+		template<StoreLike Store_T>
 		[[nodiscard]] NodeIndex build_value(Store_T& store, const std::complex<double> complex) noexcept
 		{
 			const std::size_t result_idx = store.allocate_one();
@@ -89,7 +89,7 @@ namespace simp {
 			return NodeIndex(result_idx, Literal::complex);
 		}
 
-		template<bmath::intern::StoreLike Store_T>
+		template<StoreLike Store_T>
 		[[nodiscard]] NodeIndex build_negated(Store_T& store, const NodeIndex to_negate) noexcept
 		{
 			const std::size_t result_idx = store.allocate_one();
@@ -98,7 +98,7 @@ namespace simp {
 			return NodeIndex(result_idx, Literal::f_app);
 		}
 
-		template<bmath::intern::StoreLike Store_T>
+		template<StoreLike Store_T>
 		[[nodiscard]] NodeIndex build_inverted(Store_T& store, const NodeIndex to_invert) noexcept
 		{
 			const std::size_t result_idx = store.allocate_one();
@@ -111,7 +111,7 @@ namespace simp {
 		//lambda_offset is the sum of all parameter counts of all parent lambdas 
 		//  (no outside lambdas -> lambda_offset == 0)
 		template<name_lookup::InfoLike Infos>
-		[[nodiscard]] NodeIndex build(Store& store, Infos& infos, bmath::intern::ParseView view);
+		[[nodiscard]] NodeIndex build(Store& store, Infos& infos, ParseView view);
 
 		struct IAmInformedThisRuleIsNotUsableYet {};
 		//has only activated SingleMatch!
@@ -139,10 +139,10 @@ namespace simp {
 
 		std::string to_simple_string(const UnsaveRef ref);
 
-		template<bmath::intern::StoreLike S, bmath::intern::ContainerOf<NodeIndex> C>
+		template<StoreLike S, ContainerOf<NodeIndex> C>
 		std::string [[nodiscard]] to_memory_layout(const S& store, const C& heads);
 
-		template<bmath::intern::StoreLike S>
+		template<StoreLike S>
 		std::string [[nodiscard]] to_memory_layout(const S& store, const std::initializer_list<NodeIndex> heads)
 		{	
 			return to_memory_layout<S, std::initializer_list<NodeIndex>>(store, heads);

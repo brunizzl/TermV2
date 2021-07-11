@@ -11,7 +11,7 @@
 #include "meta.hpp"
 #include "array.hpp"
 
-namespace bmath::intern {
+namespace simp {
     
     
 
@@ -484,4 +484,4 @@ namespace bmath::intern {
 	}; //class EnumSwitch
 
 
-} //namespace bmath::intern
+} //namespace simp

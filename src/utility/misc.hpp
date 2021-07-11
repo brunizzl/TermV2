@@ -36,7 +36,7 @@
 
 
 
-namespace bmath::intern {
+namespace simp {
     
     
 	constexpr BMATH_FORCE_INLINE void throw_if(bool cond, const char* const msg)
@@ -238,4 +238,4 @@ namespace bmath::intern {
 		constexpr bool operator!=(const OptionalComplex& snd) noexcept { return compare_complex(this->val, snd.val) != std::strong_ordering::equal; }
 	}; //struct OptionalComplex
     
-} //namespace bmath::intern
+} //namespace simp

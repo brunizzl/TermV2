@@ -17,11 +17,6 @@
 
 namespace simp {
 
-	using bmath::intern::SumEnum;
-	using bmath::intern::SingleSumEnumEntry;
-	using bmath::intern::StoredVector;
-	using bmath::intern::BasicTypedIdx;
-
 	//everything that is not exclusively affiliated with patterns
 	enum class Literal
 	{
@@ -272,7 +267,7 @@ namespace simp {
 	} //namespace nv
 
 	//if .value is larger than Native::COUNT, the Symbol was added at runtime
-	using Symbol = bmath::intern::FinalSumEnum<nv::Native>;
+	using Symbol = FinalSumEnum<nv::Native>;
 
 	inline constexpr NodeIndex from_native(const nv::Native n) noexcept
 	{
@@ -369,15 +364,15 @@ namespace simp {
 		//indexes in match::State::f_app_entries (used in both commutative and non-commutative)
 		std::uint32_t match_state_index = -1u;
 		//bit i dertermines whether parameter i is rematchable (used in both commutative and non-commutative)
-		bmath::intern::BitSet16 rematchable_params = (std::uint16_t)-1;
+		BitSet16 rematchable_params = (std::uint16_t)-1;
 		//bit i determines whether parameter i is guaranteed to never have a 
 		//  match at a higher haystack index than parameter i + 1 (used in commutative)
-		bmath::intern::BitSet16 always_preceeding_next = (std::uint16_t)0;
+		BitSet16 always_preceeding_next = (std::uint16_t)0;
 		//bit i determines, wether pattern parameter i comes after a multi match variable
 		// (because the multi match variables are not present in lhs as actual parameters)
 		//note: as a multi is also valid as last parameter, a pattern function application may only hold up to 15 non-multi parameters!
 		//(used in non-commutative as bitset and in commutative as bool)
-		bmath::intern::BitSet16 preceeded_by_multi = (std::uint16_t)0;
+		BitSet16 preceeded_by_multi = (std::uint16_t)0;
 
 		//TODO: think about who needs this (at least permutation and dilation)
 		bool associative = false;
@@ -430,40 +425,40 @@ namespace simp {
 	static_assert(sizeof(TermNode) == sizeof(Complex));
 
 	using Store = BasicCountingStore<TermNode, NodeIndex>;
-	using MonotonicStore = bmath::intern::BasicMonotonicStore<TermNode>;
+	using MonotonicStore = BasicMonotonicStore<TermNode>;
 
-	using Ref = bmath::intern::BasicSaveRef<NodeType, const Store>;
-	using UnsaveRef = bmath::intern::BasicUnsaveRef<NodeType, TermNode>;
-	using MutRef = bmath::intern::BasicSaveRef<NodeType, Store>;
+	using Ref = BasicSaveRef<NodeType, const Store>;
+	using UnsaveRef = BasicUnsaveRef<NodeType, TermNode>;
+	using MutRef = BasicSaveRef<NodeType, Store>;
 
 	//caution: can only be used as a range-based-for-loop, if there is no reallocation possible inside the loop body!
-	template<bmath::intern::Reference R> requires (requires { R::store; })
+	template<Reference R> requires (requires { R::store; })
 	constexpr auto begin(const R& ref) noexcept
 	{
 		assert(ref.type == Literal::f_app || ref.type == PatternFApp{});
 		using TypedIdx_T = std::conditional_t<R::is_const, const NodeIndex, NodeIndex>;
 		using Store_T = std::remove_reference_t<decltype(*ref.store)>;
 
-		return bmath::intern::detail_vector::SaveIterator<TypedIdx_T, sizeof(TermNode), Store_T>
+		return detail_vector::SaveIterator<TypedIdx_T, sizeof(TermNode), Store_T>
 			::build(*ref.store, ref.index, 0, ref->f_app.size());
 	}
 
 	//caution: can only be used as a range-based-for-loop, if there is no reallocation possible inside the loop body!
-	template<bmath::intern::Reference R> requires (requires { R::store; })
+	template<Reference R> requires (requires { R::store; })
 	constexpr auto end(const R& ref) noexcept
 	{
 		assert(ref.type == Literal::f_app || ref.type == PatternFApp{});
-		return bmath::intern::detail_vector::SaveEndIndicator{};
+		return detail_vector::SaveEndIndicator{};
 	}
 
-	template<bmath::intern::Reference R> requires (!requires { R::store; })
+	template<Reference R> requires (!requires { R::store; })
 	constexpr auto begin(const R& ref) noexcept
 	{
 		assert(ref.type == Literal::f_app || ref.type == PatternFApp{});
 		return ref->f_app.begin();
 	}
 
-	template<bmath::intern::Reference R> requires (!requires { R::store; })
+	template<Reference R> requires (!requires { R::store; })
 	constexpr auto end(const R& ref) noexcept
 	{
 		assert(ref.type == Literal::f_app || ref.type == PatternFApp{});
@@ -576,7 +571,7 @@ namespace simp {
 			{ PatternFn::of_type     , "of_type__"    , 2u, { Restr::any, Literal::symbol                                      }, Restr::boolean  },
 		});
 		static_assert(static_cast<unsigned>(fixed_arity_table.front().type) == 0u);
-		static_assert(bmath::intern::is_sorted_by(fixed_arity_table, &FixedArityProps::type));
+		static_assert(is_sorted_by(fixed_arity_table, &FixedArityProps::type));
 		static_assert(fixed_arity_table.size() == static_cast<unsigned>(FixedArity::COUNT));
 
 		constexpr std::size_t arity(const FixedArity f) noexcept
@@ -616,7 +611,7 @@ namespace simp {
 			{ Comm::max               , "max"         , true , ComplexSubset::real, ComplexSubset::real },
 		});
 		static_assert(static_cast<unsigned>(variadic_table.front().type) == 0u);
-		static_assert(bmath::intern::is_sorted_by(variadic_table, &VariadicProps::type));
+		static_assert(is_sorted_by(variadic_table, &VariadicProps::type));
 		static_assert(variadic_table.size() == static_cast<unsigned>(Variadic::COUNT));
 
 		constexpr bool is_associative(const Variadic f) noexcept
@@ -671,7 +666,7 @@ namespace simp {
 			{ SpecialMatch::value        , "value_match__" , Literal::symbol }, //can not be constructed from a string
 		});
 		static_assert(constant_table.size() == (unsigned)Constant::COUNT);
-		static_assert(bmath::intern::is_sorted_by(constant_table, &CommonProps::type));
+		static_assert(is_sorted_by(constant_table, &CommonProps::type));
 
 		constexpr auto common_table = [] {
 			std::array<CommonProps, (unsigned)Native::COUNT> res;
@@ -681,14 +676,14 @@ namespace simp {
 			for (const auto& elem : variadic_table)    { res[i++] = { elem.type, elem.name, elem.result_space }; }
 			return res;
 		}();
-		static_assert(bmath::intern::is_sorted_by(common_table, &CommonProps::type)
+		static_assert(is_sorted_by(common_table, &CommonProps::type)
 			, "order elements in table the same way as in native");
 		static_assert(common_table.size() == (unsigned)Native::COUNT);
 
 		//returns Native::COUNT if no name was found
 		constexpr Native type_of(std::string_view name_) noexcept
 		{
-			return bmath::intern::search(common_table, &CommonProps::name, name_).type;
+			return search(common_table, &CommonProps::name, name_).type;
 		}
 
 		constexpr std::string_view name_of(const Native f)

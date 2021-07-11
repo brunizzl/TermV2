@@ -79,10 +79,10 @@ namespace simp {
 	std::mutex Names::access = {};
 
 	namespace parse {
-		Head find_head_type(const bmath::intern::ParseView view)
+		Head find_head_type(const ParseView view)
 		{
-			using namespace bmath;
-			using namespace bmath::intern;
+			using namespace simp;
+			using namespace simp;
 			const std::size_t operator_pos = [](TokenView token_view) {
 				enum class SearchStrategy { front, left_right, right_left };
 				struct Operator { Token tok; SearchStrategy strat; };
@@ -179,10 +179,10 @@ namespace simp {
 
 		namespace name_lookup {
 			//returns false if name represents multi match or value match or is otherwise invalid
-			bool mundane_name(const bmath::intern::ParseView view) noexcept
+			bool mundane_name(const ParseView view) noexcept
 			{
 				const std::string_view name = view.to_string_view();
-				return view.tokens.find_first_not_of(bmath::intern::token::character) == std::string_view::npos &&
+				return view.tokens.find_first_not_of(token::character) == std::string_view::npos &&
 					name.find_first_of(".$ ") == std::string_view::npos &&
 					!name.starts_with('_');
 			}
@@ -196,19 +196,19 @@ namespace simp {
 					invalid_index;
 			}
 
-			NodeIndex build_symbol(Store& store, const LiteralInfos& infos, bmath::intern::ParseView view)
+			NodeIndex build_symbol(Store& store, const LiteralInfos& infos, ParseView view)
 			{
 				const std::string_view name = view.to_string_view();
 				if (const NodeIndex res = find_name_in_infos(infos.lambda_params, name); res != invalid_index) {
 					return res;
 				}
 				if (!mundane_name(view)) [[unlikely]] {
-					throw bmath::ParseFailure{ view.offset, "ellipses or the dollar symbol are only expected when building a pattern" };
+					throw ParseFailure{ view.offset, "ellipses or the dollar symbol are only expected when building a pattern" };
 				}
 				return NodeIndex(Names::id_of({name.data(), name.size()}), Literal::symbol);
 			}
 
-			NodeIndex build_symbol(Store& store, PatternInfos& infos, bmath::intern::ParseView view)
+			NodeIndex build_symbol(Store& store, PatternInfos& infos, ParseView view)
 			{
 				std::string_view name = view.to_string_view();
 				if (const NodeIndex res = find_name_in_infos(infos.lambda_params, name); res != invalid_index) {
@@ -219,7 +219,7 @@ namespace simp {
 				}
 				if (const NodeIndex res = find_name_in_infos(infos.multi_matches, name); res != invalid_index) {
 					if (infos.parse_match) [[unlikely]] {
-						throw bmath::ParseFailure{ view.offset, "multiple occurences of multi in lhs are forbidden" };
+						throw ParseFailure{ view.offset, "multiple occurences of multi in lhs are forbidden" };
 					}
 					return copy_tree(Ref(store, res), store);
 				}
@@ -227,7 +227,7 @@ namespace simp {
 					return copy_tree(Ref(store, res), store);
 				}
 				if (!infos.parse_match && !mundane_name(view)) [[unlikely]] {
-					throw bmath::ParseFailure{ view.offset, "match variables need to be introduced in lhs" };
+					throw ParseFailure{ view.offset, "match variables need to be introduced in lhs" };
 				}
 				if (name.ends_with('.')) {
 					const std::size_t res_index = store.allocate_one();
@@ -255,25 +255,25 @@ namespace simp {
 				return NodeIndex(Names::id_of({ name.data(), name.size() }), Literal::symbol);
 			}
 
-			unsigned add_lambda_params(std::vector<NameInfo>& lambda_params, bmath::intern::ParseView params_view)
+			unsigned add_lambda_params(std::vector<NameInfo>& lambda_params, ParseView params_view)
 			{
-				using namespace bmath::intern;
+				using namespace simp;
 				if (!params_view.tokens.starts_with(token::backslash)) [[unlikely]]
-					throw bmath::ParseFailure{ params_view.offset, "this is a weird looking lambda parameter declaration" };
+					throw ParseFailure{ params_view.offset, "this is a weird looking lambda parameter declaration" };
 				const unsigned old_size = lambda_params.size();
 				while (params_view.size()) {
 					params_view.remove_prefix(1u); //remove previous space (or '\\' for first parameter)
 					const std::size_t space = params_view.to_string_view().find_first_of(' ');
 					const ParseView param = params_view.steal_prefix(space);
 					if (!mundane_name(param)) 
-						throw bmath::ParseFailure{ params_view.offset, "we name lambda parameters less exiting around here" };
+						throw ParseFailure{ params_view.offset, "we name lambda parameters less exiting around here" };
 					if (!param.size()) 
-						throw bmath::ParseFailure{ params_view.offset, "there is little reason for nullary lambdas in a purely functional language" };
+						throw ParseFailure{ params_view.offset, "there is little reason for nullary lambdas in a purely functional language" };
 					const std::string_view param_name = param.to_string_view();
 					//runs in O(n^2), but lambdas are expected to behave in size. 
 					if (std::find_if(lambda_params.begin(), lambda_params.end(), 
 						[param_name](const NameInfo& i) { return i.name == param_name; }) != lambda_params.end()) 
-						throw bmath::ParseFailure{ params_view.offset, "name shadowing in lambdas is forbidden" };
+						throw ParseFailure{ params_view.offset, "name shadowing in lambdas is forbidden" };
 
 					lambda_params.push_back({ param_name, NodeIndex(lambda_params.size(), Literal::lambda_param) });
 				}
@@ -281,22 +281,22 @@ namespace simp {
 			}
 		} //namespace name_lookup
 
-		double parse_value(const bmath::intern::ParseView view)
+		double parse_value(const ParseView view)
 		{
 			double value;
 			const auto [ptr, error] = std::from_chars(view.chars, view.chars + view.size(), value);
 			if (error != std::errc()) [[unlikely]] 
-				throw bmath::ParseFailure{ view.offset, "value syntax is illformed or value out of bounds" };
+				throw ParseFailure{ view.offset, "value syntax is illformed or value out of bounds" };
 			if (ptr != view.chars + view.size()) [[unlikely]] 
-				throw bmath::ParseFailure{ std::size_t(view.offset + ptr - view.chars + 1u), "value syntax is illformed" };
+				throw ParseFailure{ std::size_t(view.offset + ptr - view.chars + 1u), "value syntax is illformed" };
 			return value;
 		} //parse_value
 
 		template<name_lookup::InfoLike Infos>
-		NodeIndex build(Store& store, Infos& infos, bmath::intern::ParseView view)
+		NodeIndex build(Store& store, Infos& infos, ParseView view)
 		{
-			using namespace bmath;
-			using namespace bmath::intern;
+			using namespace simp;
+			using namespace simp;
 
 			if (view.size() == 0u) [[unlikely]] throw ParseFailure{ view.offset, "recieved empty substring" };
 			Head head = parse::find_head_type(view);
@@ -362,7 +362,7 @@ namespace simp {
 				return name_lookup::build_symbol(store, infos, view);
 			} break;
 			case Head::Type::f_app: {
-				bmath::intern::StupidBufferVector<NodeIndex, 12> subterms;
+				StupidBufferVector<NodeIndex, 12> subterms;
 				subterms.push_back(parse::build(store, infos, view.steal_prefix(head.where)));
 				view.remove_prefix(1u); //remove '('
 				view.remove_suffix(1u); //remove ')'
@@ -401,13 +401,13 @@ namespace simp {
 				return invalid_index;
 			}
 		} //build
-		template NodeIndex build(Store&, name_lookup::LiteralInfos&, bmath::intern::ParseView);
-		template NodeIndex build(Store&, name_lookup::PatternInfos&, bmath::intern::ParseView);
+		template NodeIndex build(Store&, name_lookup::LiteralInfos&, ParseView);
+		template NodeIndex build(Store&, name_lookup::PatternInfos&, ParseView);
 
 		RuleHead raw_rule(Store& store, std::string& name, IAmInformedThisRuleIsNotUsableYet)
 		{
-			using namespace bmath;
-			using namespace bmath::intern;
+			using namespace simp;
+			using namespace simp;
 			auto parse_str = ParseString(name);
 			parse_str.allow_implicit_product(token::sticky_space, ' ');
 			parse_str.remove_space();
@@ -874,7 +874,7 @@ namespace simp {
 			current_str.append(subtree_as_string);
 		} //append_memory_row
 
-		template<bmath::intern::StoreLike S, bmath::intern::ContainerOf<NodeIndex> C>
+		template<StoreLike S, ContainerOf<NodeIndex> C>
 		std::string to_memory_layout(const S& store, const C& heads)
 		{
 			std::vector<std::string> rows(std::max(store.size(), match::State::max_pattern_f_app_count), "");
@@ -892,7 +892,7 @@ namespace simp {
 			}
 			{
 				std::vector<std::size_t> leaks;
-				const bmath::intern::BitVector used_positions = store.storage_occupancy();
+				const BitVector used_positions = store.storage_occupancy();
 				for (std::size_t i = 0; i < store.size(); i++) {
 					result += std::format("{:4} | ", i);
 					result += rows[i];

@@ -4,7 +4,7 @@
 #include <string_view>
 #include <utility>
 
-namespace bmath::intern {
+namespace simp {
     
 	template<typename T, std::size_t... Is>
 	constexpr auto array_from_ptr(std::index_sequence<Is...>, const T* init)
@@ -198,4 +198,4 @@ namespace bmath::intern {
 	template<template<auto...> class Res_T, StringLiteral S>
 	using ToCharSeq_t = typename ToCharSeq<Res_T, S>::type;
 
-} //namespace bmath::intern
+} //namespace simp
