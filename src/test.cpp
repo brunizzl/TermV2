@@ -1,6 +1,7 @@
 #include "test.hpp"
 
 #include <iostream>
+#include <functional>
 
 namespace simp::test {
 	void print_native_symbols()
@@ -121,55 +122,59 @@ namespace simp::test {
 
 	void read_eval_print_loop(RuleSet&& rules, bool exact, bool show_memory, bool show_tree)
 	{
-		while (true) {
+		struct Command
+		{
 			std::string name;
-			std::cout << "simp> ";
-			std::getline(std::cin, name);
-			if (name == "--not exact") {
-				exact = false;
-				std::cout << "set exact to false\n\n";
-				continue;
-			}
-			if (name == "--exact") {
-				exact = true;
-				std::cout << "set exact to true\n\n";
-				continue;
-			}
-			if (name == "--not show memory") {
-				show_memory = false;
-				std::cout << "set show_memory to false\n\n";
-				continue;
-			}
-			if (name == "--show memory") {
-				show_memory = true;
-				std::cout << "set show_memory to true\n\n";
-				continue;
-			}
-			if (name == "--not show tree") {
-				show_memory = false;
-				std::cout << "set show_tree to false\n\n";
-				continue;
-			}
-			if (name == "--show tree") {
-				show_memory = true;
-				std::cout << "set show_tree to true\n\n";
-				continue;
-			}
-			if (name.starts_with("--add")) {
+			std::string msg;
+			std::function<void(std::string&)> effect;
+		};
+		static const auto commands = std::to_array<Command>({ 
+			{ "not exact", "set exact to false", [&](std::string&) { exact = false; } },
+			{ "exact", "set exact to true", [&](std::string&) { exact = true; } },
+			{ "not show memory", "set show memory to false", [&](std::string&) { show_memory = false; } },
+			{ "show memory", "set show_memory to true", [&](std::string&) { show_memory = true; } },
+			{ "not show tree", "set show tree to false", [&](std::string&) { show_tree = false; } },
+			{ "show tree", "set show_tree to true", [&](std::string&) { show_tree = true; } },
+			{ "add", "", [&](std::string& input) {
 				try {
-					std::cout << "\n";
-					name.erase(0, std::strlen("--add"));
-					auto new_rule = RuleSet({ {name.data(), name.size()} });
+					const auto new_rule = RuleSet({ {input.data(), input.size()} });
 					rules.add({ &new_rule });
 					for (const simp::RuleRef ref : new_rule) { //a bit bulky, but easiest way to get a RuleRef
 						std::cout << "added\n" << ref.to_string() << "\n\n";
 					}
 				}
-				catch (...) {}
+				catch (...) {} //exception output done by RuleSet constructor
+			} },
+		});
+
+		while (true) {
+			std::string input;
+			std::cout << "simp> ";
+			std::getline(std::cin, input);
+			if (input.starts_with("--")) {
+				input.erase(0, std::strlen("--"));
+				bool found_command = false;
+				for (const Command& command : commands) {
+					if (input.starts_with(command.name)) {
+						input.erase(0, command.name.size());
+						command.effect(input);
+						std::cout << command.msg << "\n\n";
+						found_command = true;
+						break;
+					}
+				}
+				if (!found_command) {
+					std::cout << "could not decipher command! please try one of those instead:\n";
+					for (const Command& command : commands) {
+						assert(command.name.size() < 20);
+						std::cout << command.name << std::string(20 - command.name.size(), '.') << command.msg << "\n";
+					}
+					std::cout << "\n\n";
+				}
 				continue;
 			}
 			try {
-				auto term = simp::LiteralTerm(name);
+				auto term = simp::LiteralTerm(input);
 				if (show_memory) std::cout << term.to_memory_layout() << "\n\n\n";
 				term.normalize({ .exact = exact });
 				term.head = simp::greedy_apply_ruleset(rules, term.mut_ref(), { .exact = exact });
@@ -180,7 +185,7 @@ namespace simp::test {
 			}
 			catch (simp::ParseFailure failure) {
 				std::cout << "parse failure: " << failure.what << '\n';
-				std::cout << name << '\n';
+				std::cout << input << '\n';
 				std::cout << std::string(failure.where, ' ') << "^\n\n";
 			}
 			catch (simp::TypeError error) {

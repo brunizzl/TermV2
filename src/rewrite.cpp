@@ -57,12 +57,12 @@ namespace simp {
 				std::cerr << "parse failure: " << failure.what << "\n";
 				std::cerr << name << "\n";
 				std::cerr << std::string(failure.where, ' ') << "^\n";
-				throw std::exception();
+				throw;
 			}
 			catch (TypeError error) {
 				std::cerr << "type error: " << error.what << "\n";
 				std::cerr << print::to_string(error.occurence) << "\n";
-				throw std::exception();
+				throw;
 			}
 		}
 		this->migrate_rules(temp_store);
