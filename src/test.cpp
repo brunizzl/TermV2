@@ -68,7 +68,7 @@ namespace simp::test {
 
 	void test_stuff()
 	{
-		std::cout << "testing...\n";
+		std::cout << "running tests...\n";
 		
 		simp::test::assert_eqivalent_normal_forms({
 			{ "tup(conj(3-1i), conj(4+3i), conj(8), conj(-1i))", "tup(3+1i, 4-3i, 8, 1i)" }, 
@@ -117,7 +117,7 @@ namespace simp::test {
 		});
 
 
-		std::cout << "...done!\n\n";
+		std::cout << "...finished running tests!\n\n";
 	} //test_stuff
 
 	void read_eval_print_loop(RuleSet&& rules, bool exact, bool show_memory, bool show_tree)
@@ -140,7 +140,7 @@ namespace simp::test {
 					const auto new_rule = RuleSet({ {input.data(), input.size()} });
 					rules.add({ &new_rule });
 					for (const simp::RuleRef ref : new_rule) { //a bit bulky, but easiest way to get a RuleRef
-						std::cout << "added\n" << ref.to_string() << "\n\n";
+						std::cout << "added\n" << ref.to_string() << "\n";
 					}
 				}
 				catch (...) {} //exception output done by RuleSet constructor
