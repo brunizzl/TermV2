@@ -96,9 +96,9 @@ namespace simp {
 					{ token::sum,          SearchStrategy::right_left },
 					{ token::sticky_space, SearchStrategy::right_left }, //can also act as multiplication
 					{ token::product,      SearchStrategy::right_left },
+					{ token::unary_minus,  SearchStrategy::front      },
 					{ token::hat,          SearchStrategy::right_left },
 					{ token::bang,         SearchStrategy::front      },
-					{ token::unary_minus,  SearchStrategy::front      },
 				});
 				
 				for (std::size_t i = 0u; i < operators.size(); i++) {

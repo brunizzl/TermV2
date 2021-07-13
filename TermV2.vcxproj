@@ -128,6 +128,7 @@
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\parseTerm.cpp" />
     <ClCompile Include="src\rewrite.cpp" />
+    <ClCompile Include="src\test.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\algorithms.hpp" />
@@ -139,6 +140,7 @@
     <ClInclude Include="src\rewrite.hpp" />
     <ClInclude Include="src\termVector.hpp" />
     <ClInclude Include="src\termStore.hpp" />
+    <ClInclude Include="src\test.hpp" />
     <ClInclude Include="src\typedIndex.hpp" />
     <ClInclude Include="src\types.hpp" />
     <ClInclude Include="src\utility\algorithm.hpp" />
