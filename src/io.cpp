@@ -203,7 +203,8 @@ namespace simp {
 					return res;
 				}
 				if (!mundane_name(view)) [[unlikely]] {
-					throw ParseFailure{ view.offset, "ellipses or the dollar symbol are only expected when building a pattern" };
+					throw ParseFailure{ view.offset, 
+					"ellipses or the dollar symbol are only expected when building a pattern; only pattern variables may start with an underscore" };
 				}
 				return NodeIndex(Names::id_of({name.data(), name.size()}), Literal::symbol);
 			}

@@ -155,7 +155,7 @@ namespace simp::test {
 				parse_bool(exact, "exact")
 			},
 			{ 
-				"memory",
+				"memory ",
 				":memory = <true | false>",
 				"print memory layout of input both after parsing and after evaluating", 
 				parse_bool(show_memory, "memory") 
@@ -175,11 +175,22 @@ namespace simp::test {
 						const auto new_rule = RuleSet({ {input.data(), input.size()} });
 						rules.add({ &new_rule });
 						for (const simp::RuleRef ref : new_rule) { //a bit bulky, but easiest way to get a RuleRef
-							std::cout << "added\n" << ref.to_string() << "\n";
+							std::cout << "added\n" << ref.to_string() << "\n\n";
 						}
 					}
 					catch (...) {} //exception output done by RuleSet constructor
 				} 
+			},
+			{
+				"rules",
+				":rules",
+				"shows all current rules",
+				[&](std::string&) {
+					for (const auto& rule : rules) {
+						std::cout << "\n" << rule.to_string() << "\n";
+					}
+					std::cout << "\n";
+				}
 			},
 			{ //has to be last command in vector, see below
 				"help",
@@ -204,8 +215,9 @@ namespace simp::test {
 			if (input.starts_with(':')) { //a command is entered 
 				input.erase(0, std::strlen(":"));
 
-				assert(commands.back().name == "help"); //if an unknown command is entered, help info will be displayed.
-				const auto command = std::find_if(commands.begin(), std::prev(commands.end()), [&](const Command& c) { return input.starts_with(c.name); });
+				assert(commands.back().name == "help"); //if an unknown command is entered, help info will be displayed...
+				const auto command = std::find_if(commands.begin(), std::prev(commands.end()), //...as an unsuccessful search returns the second parameter
+					[&](const Command& c) { return input.starts_with(c.name); });
 
 				input.erase(0, command->name.size());
 				command->effect(input);
@@ -213,11 +225,16 @@ namespace simp::test {
 			else { //no command -> parse as term and try to simplify
 				try {
 					auto term = simp::LiteralTerm(input);
-					if (show_memory) std::cout << term.to_memory_layout() << "\n\n\n";
+					if (show_memory) 
+						std::cout << term.to_memory_layout() << "\n\n\n";
+
 					term.normalize({ .exact = exact });
-					term.head = simp::greedy_apply_ruleset(rules, term.mut_ref(), { .exact = exact });
+					if (rules.rules.size()) 
+						term.head = simp::greedy_apply_ruleset(rules, term.mut_ref(), { .exact = exact });
+
 					std::cout << " = " << term.to_string() << "\n\n";
-					if (show_memory) std::cout << term.to_memory_layout() << "\n\n\n";
+					if (show_memory) 
+						std::cout << term.to_memory_layout() << "\n\n\n";
 
 					assert((simp::free_tree(term.mut_ref()), term.store.nr_used_slots() == 0u));
 				}
