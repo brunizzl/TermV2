@@ -50,7 +50,7 @@ int main()
 {
 	simp::test::print_node_types();
 	simp::test::print_native_symbols();
-	simp::test::test_stuff();
+	simp::test::run_tests();
 		
 	simp::test::read_eval_print_loop({
 		{ "0 xs... = 0" },

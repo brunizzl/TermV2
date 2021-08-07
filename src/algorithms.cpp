@@ -462,7 +462,7 @@ namespace simp {
                         [](const NodeIndex i) { return i.get_type() != Literal::complex; });
 
                     if (auto iter = params.begin(); iter != end_complex) {
-                        const MutRef fst = ref.at(*iter);
+                        const MutRef fst = ref.at(*iter); //is guaranteed to point at complex number
                         Complex acc = *fst;
                         std::size_t remaining = params.size() - 1u; //already subtract fst
                         while (++iter != end_complex) {
@@ -489,7 +489,11 @@ namespace simp {
                             params = ref->f_app.parameters(); //update params to (possibly) new position
                             params.front() = new_val;
                         }
-                        remove_shallow_value(invalid_index);
+
+                        const std::size_t new_size = remove_shallow_value(invalid_index);
+                        if (new_size != params.size()) {
+                            std::sort(params.begin(), params.begin() + new_size, ordered_less(ref.store->data()));
+                        }
                     }
                 } break;
                 case Variadic(Comm::prod): {
@@ -516,7 +520,8 @@ namespace simp {
                                     app[1].get_type() == Literal::complex &&
                                     app[2].get_type() == Literal::complex;
                             };
-                            static_assert(shallow_order(UnsaveRef(nullptr, 0, Literal::complex)) < shallow_order(UnsaveRef(nullptr, 0, Literal::f_app)));
+                            static_assert(shallow_order(UnsaveRef(nullptr, 0, Literal::complex)) < shallow_order(UnsaveRef(nullptr, 0, Literal::f_app)), 
+                                "applications of pow are assumed to occur after complex numbers in product");
                             auto iter = std::find_if(end_complex, params.end(), is_value_pow_app);
                             const auto end_pow = std::find_if(iter, params.end(), [&](const NodeIndex n) { return !is_value_pow_app(n); });
 
@@ -550,7 +555,11 @@ namespace simp {
                             params = ref->f_app.parameters(); //update params to (possibly) new position
                             params.front() = new_val;
                         }
-                        remove_shallow_value(invalid_index);
+
+                        const std::size_t new_size = remove_shallow_value(invalid_index);
+                        if (new_size != params.size()) {
+                            std::sort(params.begin(), params.begin() + new_size, ordered_less(ref.store->data()));
+                        }
                     }
                 } break;
                 case Variadic(Comm::set): if (params.size() >= 2) { 
@@ -1603,6 +1612,7 @@ namespace simp {
             assert(pn_ref.type == PatternFApp{} && hay_ref.type == Literal::f_app);
             const std::span<const NodeIndex> needles = pn_ref->f_app.parameters();
             const std::span<const NodeIndex> haystack = hay_ref->f_app.parameters();
+
             assert(std::is_sorted(needles.begin(), needles.end(), ordered_less(pn_ref.store_data())));
             assert(std::is_sorted(haystack.begin(), haystack.end(), ordered_less(hay_ref.store_data())));
             std::int32_t needle_i = 0; //index in needles

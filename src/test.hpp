@@ -15,7 +15,7 @@ namespace simp::test {
 
 	void assert_eqivalent_normal_forms(const std::vector<std::pair<std::string, std::string>>& eq_pairs, const RuleSet& rules);
 
-	void test_stuff();
+	void run_tests();
 
 	void read_eval_print_loop(RuleSet&& rules, bool exact = true, bool show_memory = false, bool show_tree = false);
 

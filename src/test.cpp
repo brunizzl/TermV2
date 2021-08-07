@@ -66,7 +66,7 @@ namespace simp::test {
 		}
 	} //assert_eqivalent_normal_forms
 
-	void test_stuff()
+	void run_tests()
 	{
 		std::cout << "running tests...\n";
 		
@@ -118,79 +118,118 @@ namespace simp::test {
 
 
 		std::cout << "...finished running tests!\n\n";
-	} //test_stuff
+	} //run_tests
 
 	void read_eval_print_loop(RuleSet&& rules, bool exact, bool show_memory, bool show_tree)
 	{
 		struct Command
 		{
 			std::string name;
-			std::string msg;
+			std::string usage;
+			std::string description;
 			std::function<void(std::string&)> effect;
 		};
-		static const auto commands = std::to_array<Command>({ 
-			{ "not exact", "set exact to false", [&](std::string&) { exact = false; } },
-			{ "exact", "set exact to true", [&](std::string&) { exact = true; } },
-			{ "not show memory", "set show memory to false", [&](std::string&) { show_memory = false; } },
-			{ "show memory", "set show_memory to true", [&](std::string&) { show_memory = true; } },
-			{ "not show tree", "set show tree to false", [&](std::string&) { show_tree = false; } },
-			{ "show tree", "set show_tree to true", [&](std::string&) { show_tree = true; } },
-			{ "add", "", [&](std::string& input) {
-				try {
-					const auto new_rule = RuleSet({ {input.data(), input.size()} });
-					rules.add({ &new_rule });
-					for (const simp::RuleRef ref : new_rule) { //a bit bulky, but easiest way to get a RuleRef
-						std::cout << "added\n" << ref.to_string() << "\n";
-					}
+
+		const auto parse_bool = [](bool& dest, const std::string_view name) {
+			return [&dest, name](std::string& in) {
+				in.erase(0, in.find_first_not_of(" ="));
+				if (in == "true") {
+					dest = true;
+					std::cout << "set " << name << " to true\n\n";
+					return;
 				}
-				catch (...) {} //exception output done by RuleSet constructor
-			} },
-		});
+				if (in == "false") {
+					dest = false;
+					std::cout << "set " << name << " to false\n\n";
+					return;
+				}
+				std::cout << "could not interpret \"" << in << "\". expected eighter \"true\" or \"false\"!\n\n";
+			};
+		};
+
+		static const std::vector<Command> commands = { 
+			{ 
+				"exact", 
+				":exact = <true | false>",
+				"only evaluate an expression, when the result can be represented exactly as floating point number", 
+				parse_bool(exact, "exact")
+			},
+			{ 
+				"memory",
+				":memory = <true | false>",
+				"print memory layout of input both after parsing and after evaluating", 
+				parse_bool(show_memory, "memory") 
+			},
+			{ 
+				"tree",
+				":tree = <true | false>",
+				"print tree visualisation of input both after parsing and after evaluating", 
+				parse_bool(show_tree, "tree") 
+			},
+			{ 
+				"add",
+				":add = <rule>",
+				"adds rule to ruleset", 
+				[&](std::string& input) {
+					try {
+						const auto new_rule = RuleSet({ {input.data(), input.size()} });
+						rules.add({ &new_rule });
+						for (const simp::RuleRef ref : new_rule) { //a bit bulky, but easiest way to get a RuleRef
+							std::cout << "added\n" << ref.to_string() << "\n";
+						}
+					}
+					catch (...) {} //exception output done by RuleSet constructor
+				} 
+			},
+			{ //has to be last command in vector, see below
+				"help",
+				":<anything not interpreted as another command>",
+				"help info showing the avaliable commands", 
+				[](std::string&) {
+					std::cout << "could not interpret command. try one of these instead:\n\n";
+					for (const Command& c : commands) {
+						std::cout << c.name <<
+							"\n    usage      : " "\"" << c.usage << "\""
+							"\n    description: " << c.description << "\n\n";
+					}
+					std::cout << "\n";
+				} 
+			},
+		};
 
 		while (true) {
 			std::string input;
 			std::cout << "simp> ";
 			std::getline(std::cin, input);
-			if (input.starts_with("--")) {
-				input.erase(0, std::strlen("--"));
-				bool found_command = false;
-				for (const Command& command : commands) {
-					if (input.starts_with(command.name)) {
-						input.erase(0, command.name.size());
-						command.effect(input);
-						std::cout << command.msg << "\n\n";
-						found_command = true;
-						break;
-					}
-				}
-				if (!found_command) {
-					std::cout << "could not decipher command! please try one of those instead:\n";
-					for (const Command& command : commands) {
-						assert(command.name.size() < 20);
-						std::cout << command.name << std::string(20 - command.name.size(), '.') << command.msg << "\n";
-					}
-					std::cout << "\n\n";
-				}
-				continue;
-			}
-			try {
-				auto term = simp::LiteralTerm(input);
-				if (show_memory) std::cout << term.to_memory_layout() << "\n\n\n";
-				term.normalize({ .exact = exact });
-				term.head = simp::greedy_apply_ruleset(rules, term.mut_ref(), { .exact = exact });
-				std::cout << " = " << term.to_string() << "\n\n";
-				if (show_memory) std::cout << term.to_memory_layout() << "\n\n\n";
+			if (input.starts_with(':')) { //a command is entered 
+				input.erase(0, std::strlen(":"));
 
-				assert((simp::free_tree(term.mut_ref()), term.store.nr_used_slots() == 0u));
+				assert(commands.back().name == "help"); //if an unknown command is entered, help info will be displayed.
+				const auto command = std::find_if(commands.begin(), std::prev(commands.end()), [&](const Command& c) { return input.starts_with(c.name); });
+
+				input.erase(0, command->name.size());
+				command->effect(input);
 			}
-			catch (simp::ParseFailure failure) {
-				std::cout << "parse failure: " << failure.what << '\n';
-				std::cout << input << '\n';
-				std::cout << std::string(failure.where, ' ') << "^\n\n";
-			}
-			catch (simp::TypeError error) {
-				std::cout << "type error: " << error.what << "\n";
-				std::cout << simp::print::to_string(error.occurence) << "\n";
+			else { //no command -> parse as term and try to simplify
+				try {
+					auto term = simp::LiteralTerm(input);
+					if (show_memory) std::cout << term.to_memory_layout() << "\n\n\n";
+					term.normalize({ .exact = exact });
+					term.head = simp::greedy_apply_ruleset(rules, term.mut_ref(), { .exact = exact });
+					std::cout << " = " << term.to_string() << "\n\n";
+					if (show_memory) std::cout << term.to_memory_layout() << "\n\n\n";
+
+					assert((simp::free_tree(term.mut_ref()), term.store.nr_used_slots() == 0u));
+				}
+				catch (simp::ParseFailure failure) {
+					std::cout << "parse failure: " << failure.what << '\n';
+					std::cout << input << '\n';
+					std::cout << std::string(failure.where, ' ') << "^\n\n";
+				}
+				catch (simp::TypeError error) {
+					std::cout << "type error: " << error.what << "\n";
+					std::cout << simp::print::to_string(error.occurence) << "\n\n";
+				}
 			}
 		}
 	} //read_eval_print_loop
