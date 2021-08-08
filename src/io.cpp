@@ -12,6 +12,7 @@
 
 #include "utility/vector.hpp"
 #include "utility/misc.hpp"
+#include "utility/sumEnum.hpp"
 
 #include "algorithms.hpp"
 #include "control.hpp"
@@ -760,56 +761,116 @@ namespace simp {
 			}
 		} //append_to_string
 
-		std::string to_simple_string(const UnsaveRef ref)
+		std::string literal_to_string(const UnsaveRef head, const bool fancy)
 		{
-			struct StackInfo { std::size_t depth; bool fst; };
+			enum class Status { fst_app, later_app, tran_lam, intr_lam };
 
-			struct
+			struct StackFrame
 			{
-				std::string str;
-				std::size_t depth = 2;
+				ctrl::UnsaveRange range = { nullptr, nullptr };
+				char const* infix = ""; 
+				int precedence = 0;
+				Status status = {};
+			};
 
-				void consume(UnsaveRef ref, StackInfo& i) noexcept
-				{
-					this->str.append(std::string((i.depth - std::exchange(i.fst, false)) * 3ull , ' '));
+			StupidBufferVector<StackFrame, 32> stack;
+			std::string str;
+			NodeIndex next = invalid_index;
 
-					switch (ref.type) {
-					case NodeType(Literal::complex):
-						append_complex(*ref, this->str, 1000);
-						break;
-					case NodeType(Literal::symbol):
-						this->str.append(Names::name_of(ref.index));
-						break;
-					case NodeType(PatternFApp{}):
-					case NodeType(Literal::f_app):
-						break;
-					case NodeType(Literal::lambda): {
-						const Lambda& lambda = *ref;
-						this->str.append(lambda.transparent ? "(transparent) [" : "[");
-						this->str.append(std::to_string(lambda.param_count));
-						this->str.append("]\\");
-					} break;
-					case NodeType(Literal::lambda_param):
-						this->str.push_back('%');
-						this->str.append(std::to_string(ref.index));
-						break;
-					default:
-						this->str.append("(ERROR:");
-						this->str.append(std::to_string((unsigned)ref.type));
-						this->str.append(":");
-						this->str.append(std::to_string(ref.index));
-						this->str.append(")");
+			const auto add_ref = [&](const UnsaveRef ref) 
+			{
+				assert(stack.size());
+				switch (ref.type) {
+				case NodeType(Literal::complex):
+					append_complex(*ref, str, stack.back().precedence);
+					break;
+				case NodeType(Literal::symbol):
+					str.append(Names::name_of(ref.index));
+					break;
+				case NodeType(Literal::f_app): {
+					const FApp& f_app = *ref;
+					const auto [infix, precedence] = [&]() -> std::tuple<const char*, int> {
+						const NodeIndex fun = f_app.function();
+						if (fancy && fun.get_type() == Literal::symbol) {
+							using namespace nv;
+							switch (to_symbol(fun)) {
+							case Symbol(CtoC::pow):             return { "^"   , 30 };
+							case Symbol(Comm::prod):            return { " "   , 21 };
+							case Symbol(Comm::sum):             return { " + " , 20 }; static_assert(sum_precedence == 20);
+							case Symbol(ToBool::eq):            return { " == ", 10 };
+							case Symbol(ToBool::neq):           return { " != ", 10 };
+							case Symbol(ToBool::greater):       return { " > " , 10 };
+							case Symbol(ToBool::smaller):       return { " < " , 10 };
+							case Symbol(ToBool::greater_eq):    return { " >= ", 10 };
+							case Symbol(ToBool::smaller_eq):    return { " <= ", 10 };
+							case Symbol(Comm::and_):            return { " && ",  3 };
+							case Symbol(Comm::or_):             return { " || ",  2 };
+							case Symbol(PatternFn::of_type):    return { " :"  ,  1 };
+							case Symbol(MiscFn::cons):          return { " :: ",  1 };
+							}
+						}
+						next = fun; //print fun first (not needed, if output is as operator)
+						return { ", ", 0 };
+					}();
+					const ctrl::UnsaveRange range = { f_app.begin() + 1, f_app.end() }; // +1, because begin is applied function
+					stack.emplace_back(range, infix, precedence, Status::fst_app);
+				} break;
+				case NodeType(Literal::lambda): {
+					const Lambda& lambda = *ref;
+					str += lambda.transparent ? "(\\[" : "{\\[";
+					str += std::to_string(lambda.param_count);
+					str += "].";
+					const ctrl::UnsaveRange range = { &lambda.definition, &lambda.definition + 1 };
+					stack.emplace_back(range, "", 1000, lambda.transparent ? Status::tran_lam : Status::intr_lam);
+				} break;
+				case NodeType(Literal::lambda_param):
+					str.push_back('%');
+					str.append(std::to_string(ref.index));
+					break;
+				default:
+					str.append("(ERROR:");
+					str.append(std::to_string((unsigned)ref.type));
+					str.append(":");
+					str.append(std::to_string(ref.index));
+					str.append(")");
+				}
+			}; //lambda add_ref
+
+			stack.emplace_back(StackFrame{});
+			add_ref(head);
+
+			while (stack.size() >= 2) {
+				while (next != invalid_index) {
+					add_ref(head.at(std::exchange(next, invalid_index)));
+				}
+				StackFrame& frame = stack.back();
+				if (frame.range.size()) {
+					if (frame.status == Status::fst_app) {
+						if (frame.precedence <= stack[stack.size() - 2].precedence) {
+							str += "(";
+						}
+						frame.status = Status::later_app;
 					}
-					this->str.append("\n");
-				} //consume
+					else if (frame.status == Status::later_app) {
+						str += frame.infix;
+					}
+					next = *(frame.range.iter++);
+				}
+				else {
+					if (frame.status == Status::intr_lam) {
+						str += "}";
+					}
+					else if (frame.status == Status::tran_lam || 
+						frame.precedence <= stack[stack.size() - 2].precedence) 
+					{
+						str += frame.status == Status::fst_app ? "()" : ")";
+					}
+					stack.pop_back();
+				}
+			}
 
-				StackInfo make_info(const UnsaveRef ref) noexcept { return { this->depth++, true }; }
-				void finalize(StackInfo& i) { this->depth--; }
-
-			} consumer;
-			ctrl::traverse_preorder<true>(ref.store_data(), ref.typed_idx(), consumer, StackInfo{ false });
-			return consumer.str;
-		} //to_simple_string
+			return str;
+		} //literal_to_string
 
 
 		void append_memory_row(const Ref ref, std::vector<std::string>& rows)

@@ -26,9 +26,7 @@ namespace simp {
 
 	std::string LiteralTerm::to_string(const bool fancy) const noexcept
 	{
-		std::string res;
-		print::append_to_string(this->ref(), res, 0, fancy);
-		return res;
+		return print::literal_to_string(this->ref(), fancy);
 	}
 
 	std::string LiteralTerm::to_memory_layout() const noexcept
@@ -62,7 +60,7 @@ namespace simp {
 			}
 			catch (TypeError error) {
 				std::cerr << "type error: " << error.what << "\n";
-				std::cerr << print::to_string(error.occurence) << "\n";
+				std::cerr << print::term_to_string(error.occurence) << "\n";
 				throw;
 			}
 		}
@@ -136,13 +134,10 @@ namespace simp {
 		RuleSetIter iter = start_point(rules, ref);
 		const RuleSetIter stop = end_point(iter); 
 
-		static bool print = false;
-
 		for (; iter != stop; ++iter) {
 			const RuleRef rule = *iter;
 			if (match::find_match(rule.lhs, ref, state)) {
 				const NodeIndex res = pattern_interpretation(rule.rhs, state, *ref.store, options);
-				if (print) std::cout << print::to_string(ref.at(res)) << "\n";
 				return { res, iter };
 			}
 		}
@@ -193,9 +188,7 @@ namespace simp {
 			return false;
 		}; //add_frame
 
-		std::cout << "\n";
 	start_at_head:
-		std::cout << print::to_string(head_ref) << "\n";
 		head_ref.point_at_new_location(greedy_shallow_apply_ruleset(rules, head_ref, options));
 		Stack stack;
 		if (add_frame(stack, head_ref)) {
@@ -205,7 +198,6 @@ namespace simp {
 				do {
 					const NodeIndex sub_index = *frame.iter;
 					const MutRef sub_ref = head_ref.at(sub_index);
-					std::cout << std::string(2 * stack.size(), ' ') << print::to_string(sub_ref) << "\n";
 
 					if (const NodeIndex new_ = greedy_shallow_apply_ruleset(rules, sub_ref, options);
 						sub_index != new_)

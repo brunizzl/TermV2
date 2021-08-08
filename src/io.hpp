@@ -130,14 +130,14 @@ namespace simp {
 
 		void append_to_string(const UnsaveRef ref, std::string& str, const int parent_precedence, const bool fancy = true);
 
-		inline [[nodiscard]] std::string to_string(const UnsaveRef ref, const bool fancy = true)
+		inline [[nodiscard]] std::string term_to_string(const UnsaveRef ref, const bool fancy = true)
 		{
 			std::string name;
 			print::append_to_string(ref, name, 0, fancy);
 			return name;
 		}
 
-		std::string to_simple_string(const UnsaveRef ref);
+		[[nodiscard]] std::string literal_to_string(const UnsaveRef head, const bool fancy = true);
 
 		template<StoreLike S, ContainerOf<NodeIndex> C>
 		std::string [[nodiscard]] to_memory_layout(const S& store, const C& heads);

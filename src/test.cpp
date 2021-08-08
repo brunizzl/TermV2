@@ -247,7 +247,7 @@ namespace simp::test {
 				}
 				catch (simp::TypeError error) {
 					std::cout << "type error: " << error.what << "\n";
-					std::cout << simp::print::to_string(error.occurence) << "\n\n";
+					std::cout << simp::print::term_to_string(error.occurence) << "\n\n";
 				}
 			}
 		}

@@ -9,7 +9,7 @@ important:
  - test if combining match_ and rematch brings performance improvements
  - move callstack to heap in recursive functions iterating over terms
       - normalize::recursive (alterantively add depth limit for lambda normalisation)
-	  - print::append_to_string
+	  - free_tree
 	  - (perhaps) print::to_memory_layout
 
  - fix when match returns std::strong_ordering::unordered, by utilizing FAppInfo::always_preceeding_next as 
