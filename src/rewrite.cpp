@@ -10,6 +10,7 @@
 #include "algorithms.hpp"
 #include "parseTerm.hpp"
 #include "io.hpp"
+#include "control.hpp"
 
 namespace simp {
 
@@ -148,7 +149,7 @@ namespace simp {
 		return { invalid_index, stop };
 	} //raw_apply_ruleset
 
-	NodeIndex shallow_apply_ruleset(const RuleSet& rules, MutRef ref, const Options options)
+	NodeIndex greedy_shallow_apply_ruleset(const RuleSet& rules, MutRef ref, const Options options)
 	{
 	match::State state = *ref.store;
 	apply_ruleset:
@@ -160,49 +161,47 @@ namespace simp {
 			goto apply_ruleset;
 		}
 		return ref.typed_idx();
-	} //shallow_apply_ruleset
+	} //greedy_shallow_apply_ruleset
 
-	std::vector<NodeIndex> nondeterministic_shallow_apply_ruleset(const RuleSet& rules, const MutRef mother_ref, 
-		const Options options, const std::size_t max_size)
+	NodeIndex greedy_lazy_apply_ruleset(const RuleSet& rules, MutRef head_ref, const Options options)
 	{
-		std::vector<NodeIndex> normal_forms;
-		Queue<NodeIndex, 1006> todo;
-		todo.emplace_back(mother_ref.typed_idx());
+		std::cout << "\n";
+	start_at_head:
+		std::cout << print::to_string(head_ref) << "\n";
+		head_ref.point_at_new_location(greedy_shallow_apply_ruleset(rules, head_ref, options));
+		StupidBufferVector<ctrl::SaveRange, 16> stack;
+		if (ctrl::add_frame(stack, head_ref)) {
+		test_last_iter:
+			do {
+				ctrl::SaveRange& iter = stack.back();
+				do {
+					const NodeIndex sub_index = *iter;
+					const MutRef sub_ref = head_ref.at(sub_index);
 
-		match::State state = *mother_ref.store;
-		do {
-			const MutRef ref = mother_ref.at(todo.pop_front());
-
-			RuleSetIter iter = start_point(rules, ref);
-			const RuleSetIter stop = end_point(iter);
-			bool is_normal_form = true;
-			for (; iter != stop; ++iter) {
-				const RuleRef rule = *iter;
-				if (match::find_match(rule.lhs, ref, state)) {
-					do {
-						const NodeIndex res = pattern_interpretation(rule.rhs, state, *ref.store, options);
-						if (res.get_type().value == NodeType::COUNT) __debugbreak();
-						todo.emplace_back(res);
-						is_normal_form = false;
-					} while (match::rematch(rule.lhs, ref, state));
-				}
-			}
-			if (is_normal_form) {
-				normal_forms.push_back(ref.typed_idx());
-				if (normal_forms.size() == max_size) {
-					while (todo.size()) {
-						free_tree(mother_ref.at(todo.pop_front()));
+					if (const NodeIndex new_ = greedy_shallow_apply_ruleset(rules, sub_ref, options);
+						sub_index != new_)
+					{
+						*iter = new_;
+						stack.pop_back(); //pop iter
+						while (stack.size()) {
+							const ctrl::SaveRange last = stack.pop_back();
+							const auto normalized = normalize::outermost(head_ref.at(*last), options);
+							if (!normalized.change) goto start_at_head; //TODO: make this better, not always restart back at head
+							*last = normalized.res;
+						}
+						head_ref.point_at_new_location(normalize::outermost(head_ref, options).res);
+						goto start_at_head; //TODO: make this better, not always restart back at head
 					}
-					break;
-				}
-			}
-			else {
-				free_tree(ref);
-			}
-		} while (todo.size());
-		std::cout << print::to_memory_layout(*mother_ref.store, normal_forms) << "\n\n\n";
-		assert(normal_forms.size() > 0);
-		return normal_forms;
-	} //nondeterministic_shallow_apply_ruleset
+					else if (ctrl::add_frame(stack, sub_ref)) {
+						goto test_last_iter;
+					}
+				} while (!(++iter).at_end());
+				do { //found no redex -> go back up in tree until iter points at a yet untested subtree  
+					stack.pop_back();
+				} while (stack.size() && (++stack.back()).at_end()); //TODO: somehow mark subtrees as tested
+			} while (stack.size());
+		}
+		return head_ref.typed_idx();
+	} //greedy_lazy_apply_ruleset
 
 } //namespace simp

@@ -9,7 +9,7 @@ important:
  - test if combining match_ and rematch brings performance improvements
  - move callstack to heap in recursive functions iterating over terms
       - normalize::recursive (alterantively add depth limit for lambda normalisation)
-	  - greedy_apply_ruleset
+	  - greedy_lazy_apply_ruleset
 	  - print::append_to_string
 	  - (perhaps) print::to_memory_layout
 
@@ -52,7 +52,7 @@ int main()
 	simp::test::print_native_symbols();
 	simp::test::run_tests();
 
-	simp::test::read_eval_print_loop();
+	//simp::test::read_eval_print_loop();
 		
 	simp::test::read_eval_print_loop({
 		{ "0 xs... = 0" },

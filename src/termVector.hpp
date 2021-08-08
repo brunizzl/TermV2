@@ -155,19 +155,19 @@ namespace simp {
 
 			using Diff_T = const std::ptrdiff_t;	
 
-			constexpr Value_T* raw_pointer() noexcept
+			constexpr Value_T* raw_pointer() const noexcept
 			{
 				assert(this->index < this->stop);
-				return static_cast<StoredVector_T&>(*this->store.data()).unsave_data_no_start_offset() + this->index;
+				return static_cast<StoredVector_T&>(*this->store_ptr->data()).unsave_data_no_start_offset() + this->index;
 			}
 
 			static constexpr bool valid_interaction(const SaveIterator& fst, const SaveIterator& snd) noexcept 
 			{
-				return (&fst.store == &snd.store) && fst.stop == snd.stop;
+				return (fst.store_ptr == snd.store_ptr) && fst.stop == snd.stop;
 			}
 
 		public:
-			Store_T& store;
+			Store_T* store_ptr;
 			std::int32_t index; //imagines all entries in store to be StoredVector_T, stores offest of current Value_T to store.data()
 			std::int32_t stop; //first index counted as above no longer belonging to instance of StoredVector_T
 
@@ -182,7 +182,7 @@ namespace simp {
 				const std::int32_t stop_index) noexcept
 			{
 				const std::int32_t vec_start = StoredVector_T::values_per_node * store_index + StoredVector_T::values_per_info;
-				return SaveIterator{ store, vec_start + start_index, vec_start + stop_index };
+				return SaveIterator{ &store, vec_start + start_index, vec_start + stop_index };
 			}
 
 			constexpr SaveIterator& operator++() noexcept { ++this->index; return *this; }
@@ -195,12 +195,9 @@ namespace simp {
 			constexpr SaveIterator& operator-=(Diff_T n) noexcept { this->index -= n; return *this; }
 			constexpr SaveIterator operator-(Diff_T n) const noexcept { auto result = *this; result -= n; return result; }
 
-			constexpr const Value_T& operator*()  const noexcept { return *this->raw_pointer(); }
-			constexpr const Value_T* operator->() const noexcept { return this->raw_pointer(); }
-			constexpr const Value_T& operator[](Diff_T n) const noexcept { return *(this->raw_pointer() + n); }
-			constexpr Value_T& operator*()  noexcept { return *this->raw_pointer(); }
-			constexpr Value_T* operator->() noexcept { return this->raw_pointer(); }
-			constexpr Value_T& operator[](Diff_T n) noexcept { return *(this->raw_pointer() + n); }
+			constexpr Value_T& operator*()  const noexcept { return *this->raw_pointer(); }
+			constexpr Value_T* operator->() const noexcept { return this->raw_pointer(); }
+			constexpr Value_T& operator[](Diff_T n) const noexcept { return *(this->raw_pointer() + n); }
 
 			constexpr bool operator==(const SaveIterator& snd) const noexcept
 			{

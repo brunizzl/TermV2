@@ -60,6 +60,12 @@ namespace simp {
 		constexpr auto cast() const noexcept 
 		{	return BasicNodeRef<Own_T, Store_T>(*this->store, this->index); 
 		}
+
+		constexpr void point_at_new_location(const BasicTypedIdx<Type_T> new_) noexcept
+		{
+			this->index = new_.get_index();
+			this->type  = new_.get_type();
+		}
 	}; //struct BasicSaveRef
 
 

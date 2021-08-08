@@ -18,55 +18,15 @@ added
 diff[l](_X0, _X0')
    ->   1
 
-simp> :rules
-
-diff[b R:10](sum[p0 R:0 M:1 O:](_X0), _X1)
-   ->   sum(diff(sum(_M[0, -1]), _X1'), diff(_X0', _X1'))
-
-diff[b R:10](prod[p0 R:0 M:1 O:](_X0), _X1)
-   ->   sum(prod(diff(prod(_M[0, -1]), _X1'), _X0'), prod(diff(_X0', _X1'), _M[0, -1]))
-
-diff[l](_X0, _X1[not(contains(_X0', _X1'))])
-   ->   0
-
-diff[l](_X0, _X0')
-   ->   1
-
-simp> diff(4 t + 3 t t t, t)
- = 4 + 0 t + 0 t t t + 3 (t t + t (t + t))
-
 simp> :add 0 xs... = 0
 added
 prod[p0 R:0 M:1 O:](0)
    ->   0
 
-simp> :rules
-
-diff[b R:10](sum[p0 R:0 M:1 O:](_X0), _X1)
-   ->   sum(diff(sum(_M[0, -1]), _X1'), diff(_X0', _X1'))
-
-diff[b R:10](prod[p0 R:0 M:1 O:](_X0), _X1)
-   ->   sum(prod(diff(prod(_M[0, -1]), _X1'), _X0'), prod(diff(_X0', _X1'), _M[0, -1]))
-
-diff[l](_X0, _X1[not(contains(_X0', _X1'))])
-   ->   0
-
-diff[l](_X0, _X0')
-   ->   1
-
-prod[p0 R:0 M:1 O:](0)
-   ->   0
-
-simp> diff(4 t + 3 t t t, t)
- = 4 + 3 (t t + t (t + t))
-
 simp> :add _x _x = _x^2
 added
 prod[p0 R:00 M:1 O:1](_X0, _X0')
    ->   prod(pow(_X0', 2), _M[0, -1])
-
-simp> diff(4 t + 3 t t t, t)
- = 4 + 3 (t^2 + t (t + t))
 
 simp> :add _x + _x = 2 _x
 added

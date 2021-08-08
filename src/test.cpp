@@ -41,8 +41,8 @@ namespace simp::test {
 			term_2.normalize({});
 
 			if (rules.rules.size()) {
-				term_1.head = greedy_apply_ruleset(rules, term_1.mut_ref(), {});
-				term_2.head = greedy_apply_ruleset(rules, term_2.mut_ref(), {});
+				term_1.head = greedy_lazy_apply_ruleset(rules, term_1.mut_ref(), {});
+				term_2.head = greedy_lazy_apply_ruleset(rules, term_2.mut_ref(), {});
 			}
 
 			if (compare_tree(term_1.ref(), term_2.ref()) != std::strong_ordering::equal) {
@@ -230,7 +230,7 @@ namespace simp::test {
 
 					term.normalize({ .exact = exact });
 					if (rules.rules.size()) 
-						term.head = simp::greedy_apply_ruleset(rules, term.mut_ref(), { .exact = exact });
+						term.head = simp::greedy_lazy_apply_ruleset(rules, term.mut_ref(), { .exact = exact });
 
 					std::cout << " = " << term.to_string() << "\n\n";
 					if (show_memory) 

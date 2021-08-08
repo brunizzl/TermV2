@@ -920,9 +920,9 @@ namespace simp {
             const auto optimize = [](const MutRef r) {
                 if (r.type == SingleMatch::restricted) {
                     r->single_match.condition =
-                        shallow_apply_ruleset(buildin_conditions, r.at(r->single_match.condition), { .eval_special = false });
+                        greedy_shallow_apply_ruleset(buildin_conditions, r.at(r->single_match.condition), { .eval_special = false });
                     r->single_match.condition =
-                        greedy_apply_ruleset(compute_optimisations, r.at(r->single_match.condition), { .eval_special = false });
+                        greedy_lazy_apply_ruleset(compute_optimisations, r.at(r->single_match.condition), { .eval_special = false });
                 }
                 return r.typed_idx();
             };
@@ -944,14 +944,14 @@ namespace simp {
                 { "     value_match__(_i, _dom, _inv) ^ 2                        = value_match__(_i, _dom, \\x ._inv(sqrt(x)))" },
                 { "sqrt(value_match__(_i, _dom, _inv))                           = value_match__(_i, _dom, \\x ._inv(x^2))" },
             }, build_basic_pattern);
-            heads.lhs = greedy_apply_ruleset(bubble_up, MutRef(store, heads.lhs), { .eval_special = false });
+            heads.lhs = greedy_lazy_apply_ruleset(bubble_up, MutRef(store, heads.lhs), { .eval_special = false });
 
             //change the function _inv to subtree using value_proxy
             static const auto inv_to_proxy = RuleSet({
                 { "value_match__(_i, _dom, _inv) | _inv :lambda = value_match__(_i, _dom, _inv(value_proxy__))" },
                 { "value_match__(_i, _dom, id)                  = value_match__(_i, _dom, value_proxy__)" },
             }, build_basic_pattern);
-            heads.lhs = greedy_apply_ruleset(inv_to_proxy, MutRef(store, heads.lhs), { .eval_special = false });
+            heads.lhs = greedy_lazy_apply_ruleset(inv_to_proxy, MutRef(store, heads.lhs), { .eval_special = false });
 
             static const auto to_domain = RuleSet({
                 { "_v :_t   = _t" },
@@ -966,7 +966,7 @@ namespace simp {
                     assert(f_app[1].get_type().is<PatternUnsigned>());
                     const std::uint32_t match_state_index = f_app[1].get_index();
                     const NodeIndex inverse = std::exchange(f_app[3], literal_null);
-                    const NodeIndex domain = shallow_apply_ruleset(to_domain, r.at(std::exchange(f_app[2], literal_null)), 
+                    const NodeIndex domain = greedy_shallow_apply_ruleset(to_domain, r.at(std::exchange(f_app[2], literal_null)), 
                         { .remove_unary_assoc = false, .eval_special = false });
                     if (domain.get_type() != Literal::symbol || !to_symbol(domain).is<nv::ComplexSubset>()) {
                         throw TypeError{ "value match restrictions may only be of form \"<value match> :<complex subset>\"", r };

@@ -14,7 +14,9 @@
 //control structures implemented without reursion, thus not limited by the callstack size
 namespace simp::ctrl {
 
-    constexpr auto iter_from_lambda(const MutRef ref)
+    using SaveRange = decltype(begin(std::declval<MutRef>()));
+
+    constexpr SaveRange iter_from_lambda(const MutRef ref)
     {
         assert(ref.type == Literal::lambda);
         constexpr std::size_t offset = offsetof(Lambda, definition);
@@ -24,6 +26,20 @@ namespace simp::ctrl {
 
         return decltype(begin(ref))::build(*ref.store, ref.index, start_index, start_index + 1);
     } //iter_from_lambda
+
+    template<VectorOf<SaveRange> Stack>
+    bool add_frame(Stack& stack, const MutRef ref) {
+        if (ref.type == Literal::f_app) {
+            stack.emplace_back(begin(ref));
+            return true;
+        }
+        else if (ref.type == Literal::lambda) {
+            stack.emplace_back(ctrl::iter_from_lambda(ref));
+            return true;
+        }
+        return false;
+    } //add_frame
+
 
     template<typename C, typename R, typename ElemInfo>
     concept Consumer = requires (C c, R ref, ElemInfo& info) {
@@ -87,7 +103,7 @@ namespace simp::ctrl {
         constexpr std::size_t size() const noexcept { return this->stop - this->iter; }
     };
 
-    using SearchQueue = Queue<UnsaveRange, 128>;
+    using SearchQueue = Queue<UnsaveRange, 64>;
 
     //returns first subterm where pred is true, subterms are tested in unspecified order
     //enqueue adds range over subterms of curr_ref to queue
@@ -137,7 +153,6 @@ namespace simp::ctrl {
         return search(store_data, head, pred, enqueue);
     } //search
 
-    using SaveRange = decltype(begin(std::declval<MutRef>()));
     using TransformQueue = Queue<SaveRange, 128>;
       
     //applies f to every subterm in postorder, result is new subterm
