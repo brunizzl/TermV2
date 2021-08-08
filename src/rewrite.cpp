@@ -165,40 +165,67 @@ namespace simp {
 
 	NodeIndex greedy_lazy_apply_ruleset(const RuleSet& rules, MutRef head_ref, const Options options)
 	{
+		ctrl::transform(head_ref, [head_ref](const MutRef& r) 
+			{ if (is_stored_node(r.type)) head_ref.store->mark_final(r.index, false); });
+
+		struct StackFrame
+		{
+			ctrl::SaveRange iter;
+			std::uint32_t ref_index;
+		};
+		using Stack = StupidBufferVector<StackFrame, 16>;
+
+		constexpr auto add_frame = [](Stack& stack, const MutRef ref) {
+			switch (ref.type) {
+			case NodeType(Literal::f_app): 
+				if (!ref.store->is_final(ref.index)) {
+					stack.emplace_back(begin(ref), ref.index);
+					return true;
+				}
+				break;
+			case NodeType(Literal::lambda):
+				if (!ref.store->is_final(ref.index)) {
+					stack.emplace_back(ctrl::iter_from_lambda(ref), ref.index);
+					return true;
+				}
+				break;
+			}
+			return false;
+		}; //add_frame
+
 		std::cout << "\n";
 	start_at_head:
 		std::cout << print::to_string(head_ref) << "\n";
 		head_ref.point_at_new_location(greedy_shallow_apply_ruleset(rules, head_ref, options));
-		StupidBufferVector<ctrl::SaveRange, 16> stack;
-		if (ctrl::add_frame(stack, head_ref)) {
-		test_last_iter:
+		Stack stack;
+		if (add_frame(stack, head_ref)) {
+		test_last_frame:
 			do {
-				ctrl::SaveRange& iter = stack.back();
+				StackFrame& frame = stack.back();
 				do {
-					const NodeIndex sub_index = *iter;
+					const NodeIndex sub_index = *frame.iter;
 					const MutRef sub_ref = head_ref.at(sub_index);
+					std::cout << std::string(2 * stack.size(), ' ') << print::to_string(sub_ref) << "\n";
 
 					if (const NodeIndex new_ = greedy_shallow_apply_ruleset(rules, sub_ref, options);
 						sub_index != new_)
 					{
-						*iter = new_;
-						stack.pop_back(); //pop iter
+						*frame.iter = new_;
+						stack.pop_back(); //pop frame
 						while (stack.size()) {
-							const ctrl::SaveRange last = stack.pop_back();
-							const auto normalized = normalize::outermost(head_ref.at(*last), options);
-							if (!normalized.change) goto start_at_head; //TODO: make this better, not always restart back at head
-							*last = normalized.res;
+							const ctrl::SaveRange last = stack.pop_back().iter;
+							*last = normalize::outermost(head_ref.at(*last), options).res;
 						}
 						head_ref.point_at_new_location(normalize::outermost(head_ref, options).res);
 						goto start_at_head; //TODO: make this better, not always restart back at head
 					}
-					else if (ctrl::add_frame(stack, sub_ref)) {
-						goto test_last_iter;
+					else if (add_frame(stack, sub_ref)) {
+						goto test_last_frame;
 					}
-				} while (!(++iter).at_end());
-				do { //found no redex -> go back up in tree until iter points at a yet untested subtree  
-					stack.pop_back();
-				} while (stack.size() && (++stack.back()).at_end()); //TODO: somehow mark subtrees as tested
+				} while (!(++frame.iter).at_end());
+				do { //found no redex -> go back up in tree until frame points at a yet untested subtree  
+					head_ref.store->mark_final(stack.pop_back().ref_index);
+				} while (stack.size() && (++stack.back().iter).at_end()); 
 			} while (stack.size());
 		}
 		return head_ref.typed_idx();

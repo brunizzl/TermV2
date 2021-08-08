@@ -623,7 +623,7 @@ namespace simp {
                         }
                     }
                 } break;
-                case NodeType(Literal::lambda): {
+                case NodeType(Literal::lambda): if (options.eval_lambda) {
                     assert(!ref.at(function)->lambda.transparent);
                     const NodeIndex evaluated = eval_lambda(ref, options);
                     return { evaluated, true };
@@ -951,7 +951,7 @@ namespace simp {
                 { "value_match__(_i, _dom, _inv) | _inv :lambda = value_match__(_i, _dom, _inv(value_proxy__))" },
                 { "value_match__(_i, _dom, id)                  = value_match__(_i, _dom, value_proxy__)" },
             }, build_basic_pattern);
-            heads.lhs = greedy_lazy_apply_ruleset(inv_to_proxy, MutRef(store, heads.lhs), { .eval_special = false });
+            heads.lhs = greedy_lazy_apply_ruleset(inv_to_proxy, MutRef(store, heads.lhs), { .eval_special = false, });
 
             static const auto to_domain = RuleSet({
                 { "_v :_t   = _t" },

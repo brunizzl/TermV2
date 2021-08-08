@@ -27,19 +27,6 @@ namespace simp::ctrl {
         return decltype(begin(ref))::build(*ref.store, ref.index, start_index, start_index + 1);
     } //iter_from_lambda
 
-    template<VectorOf<SaveRange> Stack>
-    bool add_frame(Stack& stack, const MutRef ref) {
-        if (ref.type == Literal::f_app) {
-            stack.emplace_back(begin(ref));
-            return true;
-        }
-        else if (ref.type == Literal::lambda) {
-            stack.emplace_back(ctrl::iter_from_lambda(ref));
-            return true;
-        }
-        return false;
-    } //add_frame
-
 
     template<typename C, typename R, typename ElemInfo>
     concept Consumer = requires (C c, R ref, ElemInfo& info) {

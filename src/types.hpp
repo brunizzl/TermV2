@@ -93,7 +93,6 @@ namespace simp {
 	}
 
 
-
 	//short for native_symbol
 	namespace nv {
 		//matching algorithm will try to also match permutations

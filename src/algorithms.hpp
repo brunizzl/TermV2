@@ -26,6 +26,7 @@ namespace simp {
         bool exact = true; //true: only exact operations are permitted
         bool remove_unary_assoc = true; //true: "f(a) -> a" for all associative f (e.g. sum, product, and...)
         bool eval_special = true; //replace is evaluated
+        bool eval_lambda = true;
     };
 
     namespace normalize {

@@ -11,7 +11,9 @@
 
 namespace simp {
 
-
+	//unlike std::vector, this class can double in size if needed.
+	//also unlike std::vector, there is no difference between size and capacity.
+	//this in however an unsave operation, because the new elements are not initialized by enlarge
 	template<typename Payload_T, template<typename> class Alloc_T = std::allocator>
 	class ResizeableArray
 	{
@@ -77,8 +79,9 @@ namespace simp {
 	template<typename Index_T>
 	struct NodeManageEntry
 	{
-		std::int32_t ref_count = 0;
 		Index_T replacement_index = Index_T();
+		std::conditional_t<(sizeof(Index_T) > 4), std::int32_t, std::int16_t> ref_count = 0;
+		bool final_form = false; //true, if no more rules are applicabel to this node or any subnode
 	}; //struct NodeManageEntry
 
 
@@ -121,7 +124,7 @@ namespace simp {
 				this->management.enlarge(res + 1u);
 			}
 			assert(this->management[res].ref_count == 0);
-			this->management[res] = { 1, Index_T() };
+			this->management[res] = { Index_T(), 1, false };
 			return res;
 		} //allocate_one
 
@@ -132,7 +135,7 @@ namespace simp {
 				this->management.enlarge(res + n);
 			}
 			assert(this->management[res].ref_count == 0);
-			this->management[res] = { 1, Index_T() };
+			this->management[res] = { Index_T(), 1, false };
 			return res;
 		} //allocate_n
 
@@ -186,6 +189,18 @@ namespace simp {
 			assert(this->valid_idx(idx));
 			return this->management[idx].replacement_index;
 		} //new_index
+
+		constexpr void mark_final(const std::size_t idx, const bool val = true) noexcept 
+		{
+			assert(this->valid_idx(idx));
+			this->management[idx].final_form = val;
+		}
+
+		constexpr bool is_final(const std::size_t idx) noexcept
+		{
+			assert(this->valid_idx(idx));
+			return this->management[idx].final_form;
+		}
 
 	}; //class BasicCountingStore
 

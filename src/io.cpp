@@ -438,7 +438,7 @@ namespace simp {
 
 			heads.lhs = normalize::recursive(MutRef(store, heads.lhs), { .eval_special = false });
 			heads.rhs = normalize::recursive(MutRef(store, heads.rhs), 
-				{ .remove_unary_assoc = false, .eval_special = false });
+				{ .remove_unary_assoc = false, .eval_special = false, .eval_lambda = false });
 
 			//extra condition concerning single match variables (might set multiple in relation)
 			struct SingleCondition

@@ -1,5 +1,7 @@
 #include "test.hpp"
 
+#include <vector>
+
 #include <iostream>
 #include <functional>
 
