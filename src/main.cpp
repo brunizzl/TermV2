@@ -6,7 +6,7 @@ TODO:
 
 important:
  - is find_backtrack sufficient if associativity is respected by find_dilation?
- - test if combining match_ and rematch brings performance improvements
+ - test if combining match_ and rematch brings performance improvements (allows inlining of the different strategies)
  - move callstack to heap in recursive functions iterating over terms
       - normalize::recursive (alterantively add depth limit for lambda normalisation)
 	  - free_tree
@@ -20,29 +20,25 @@ important:
       - check PatternFApp to each not exceed maximal length and check numer of PatternFApp in pattern not more than allowed 
 	  - enable implicit outer multi
 	  - allow only function calls returning bool in test_condition 
+	  - don't allow the same name (minus the oligatory "_") as both match variable and constant in a pattern
  - add Literal::options to allow nondeterministic match 
 
 nice to have:
  - order the most general rule in a subset to the end of that subset
  - to_tree
  - implement fst, snd, filter, split, ...
- - add eval_native for min/max to remove values guaranteed to not be minimum / maximum without requiring full evaluation
  - add neutral element to associative functions
  - add "dont care" pattern
  - enable StupidBufferVector to handle non-trivial destructible types -> change name to BufferVector
- - automate error checking in stupidTests.hpp -> change name to tests.hpp
  - noexceptify everything
  - restructure everything to use modules (basically needed to constexprfy all the things)
  - allow to restrict a variables domain (add to Names vector?)
 
 idea status:
- - achieve feature parity between compile time pattern and run time pattern (add value match to ct)
  - introduce special condition "submatch" , where "submatch(x, ???, pat)" tries to match pat in parts of x, where the parts can be chosen using ??? in some way
  - allow PatternFApp in rhs to indicate, that a call of lhs can be "stolen" e.g. the parameter count in rhs is guaranteed to be lower than the one in lhs -> the old allocation can be reused
  - let each RewriteRule have a name in form of a constant c-string (not what pattern is constructed from, but name of rule, e.g. "differentiation: product rule" or something)
- - always keep -1 at some known index in store and never allocate new -1 in build_negated and build_inverted (problem: identify bevore copy, solution: you know the index)
- - change macros in meta_pn to create function objects, not functions 
- - build meta_pn::match not from pattern encoded as type, but pattern encoded as value by taking lamdas returning pattern part as template parameter
+ - always keep -1 (and maybe others) at some known index in store and never allocate new -1 in build_negated and build_inverted (problem: identify bevore copy, solution: you know the index)
 */
 
 
@@ -115,13 +111,11 @@ int main()
 		{ "intersection(set(_x, xs...), set(_x, ys...)) = union(set(_x), intersection(set(xs...), set(ys...)))" },
 		{ "intersection(_x, xs...)                      = set()" },
 
-		{ "min(_x, _y) | _x > _y = _y" },
-		{ "max(_x, _y) | _x > _y = _x" },
+		{ "min(_x, _y) | _x >= _y = _y" },
+		{ "max(_x, _y) | _x >= _y = _x" },
 
 		//test stuff
-		{ "make_ints(tup, _a, _b)              | _a <= _b = make_ints_tup_h(_b, tup(_a))" },
-		{ "make_ints_tup_h(_b, tup(xs..., _x)) | _x < _b  = make_ints_tup_h(_b, tup(xs..., _x, _x + 1))" },
-		{ "make_ints_tup_h(_b, _res)                      = _res" },
+		{ "make_ints(tup, _a, _b)              | _a <= _b = gen(_a, \\x .x + 1, _b - _a)" },
 
 		{ "make_ints(cons, _a, _b)      | _a <= _b  = make_ints_cons_h(_b - _a, _b :: null)" },
 		{ "make_ints_cons_h(_n, _y :: _ys) | _n > 0 = make_ints_cons_h(_n - 1, (_y - 1) :: _y :: _ys)" },
