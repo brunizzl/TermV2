@@ -164,9 +164,9 @@ namespace simp {
                     if (param_ref->f_app.function() == function) {
                         found_nested = true;
                         for (const NodeIndex param_param : param_ref->f_app.parameters()) {
-                            merged_apps.push_back(param_param);
+                            merged_apps.push_back(share(*ref.store, param_param));
                         }
-                        free_app_shallow(param_ref);
+                        free_tree(param_ref);
                         continue;
                     }
                 }
@@ -398,6 +398,7 @@ namespace simp {
                     assert(!is_stored_node(params[0].get_type())); //first parameter does not need to be freed
                     const NodeIndex converter = params[1];
                     const MutRef converter_ref = ref.at(params[1]);
+                    //TODO: store result in new application, not in convertee (as current behavoir is buggy for a shared convertee)
                     const MutRef convertee_ref = ref.at(params[2]);
                     assert(convertee_ref.type == Literal::f_app);
 
@@ -413,7 +414,27 @@ namespace simp {
                     free_app_shallow(ref); //free app of map
                     free_tree(converter_ref);
                     return outermost(convertee_ref, options).res;
-                } break; 
+                } break;
+                case FixedArity(HaskellFn::gen): {
+                    int n = ref.at(params[2])->complex.real();
+                    const NodeIndex f = params[1];
+                    StupidBufferVector<NodeIndex, 32> res_tup;
+                    res_tup.emplace_back(from_native(nv::NonComm::tup));
+                    if (n > 0) {
+                        share_with_n(ref.at(f), n - 1);
+                        MutRef current = ref.at(params[0]);
+                        res_tup.emplace_back(share(current));
+                        while (--n > 0) {
+                            const std::size_t app_index = ref.store->allocate_one();
+                            ref.store->at(app_index) = FApp({ f, share(current) });
+                            const NodeIndex new_ = outermost(ref.at(NodeIndex(app_index, Literal::f_app)), options).res;
+                            res_tup.push_back(new_);
+                            current.point_at_new_location(new_);
+                        }
+                    }
+                    free_tree(ref);
+                    return NodeIndex(FApp::build(*ref.store, res_tup), Literal::f_app);
+                } break;
                 }
             } //end fixed arity
             else {
@@ -2007,16 +2028,15 @@ namespace simp {
             return insert_node(*pn_ref, pn_ref.type);
         } break;
         case NodeType(Literal::symbol):
-            return pn_ref.typed_idx();
+        case NodeType(Literal::lambda_param):
+            return pn_ref.typed_idx(); //shallow -> no sharing necessairy
         case NodeType(Literal::lambda): {
             Lambda dst_lam = *pn_ref;
             dst_lam.definition = pattern_interpretation(
                 pn_ref.at(dst_lam.definition), match_state, store, options);
             return insert_node(dst_lam, pn_ref.type);
         } break;
-        case NodeType(Literal::lambda_param):
-            return pn_ref.typed_idx();
-        case NodeType(Literal::f_app): {
+        case NodeType(Literal::f_app): { //we are in rhs -> not expecting PatternFApp, but normal Literal::f_app
             StupidBufferVector<NodeIndex, 16> dst_subterms;
             const auto stop = end(pn_ref);
             auto iter = begin(pn_ref);

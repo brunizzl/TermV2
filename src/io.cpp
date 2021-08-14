@@ -873,11 +873,9 @@ namespace simp {
 		} //literal_to_string
 
 
-		void append_memory_row(const Ref ref, std::vector<std::string>& rows)
+		void append_memory_row(const UnsaveRef ref, std::vector<std::string>& rows)
 		{
-			if (!is_stored_node(ref.type)) {
-				return;
-			}
+			if (!is_stored_node(ref.type)) return;
 
 			std::string& current_str = rows[ref.index];
 			if (current_str.size()) return;
@@ -936,8 +934,8 @@ namespace simp {
 			current_str.append(subtree_as_string);
 		} //append_memory_row
 
-		template<StoreLike S, ContainerOf<NodeIndex> C>
-		std::string to_memory_layout(const S& store, const C& heads)
+		template<ContainerOf<NodeIndex> C>
+		std::string to_memory_layout(const Store& store, const C& heads)
 		{
 			std::vector<std::string> rows(std::max(store.size(), match::State::max_pattern_f_app_count), "");
 
@@ -956,7 +954,7 @@ namespace simp {
 				std::vector<std::size_t> leaks;
 				const BitVector used_positions = store.storage_occupancy();
 				for (std::size_t i = 0; i < store.size(); i++) {
-					result += std::format("{:4} | ", i);
+					result += std::format("{:4} | {:4} | ", i, store.ref_count_at(i));
 					result += rows[i];
 					if (!used_positions.test(i)) {
 						result += "-----free slot-----";

@@ -197,6 +197,7 @@ namespace simp {
 			split, //as ffilter, but returns both subsets (predicate true and else) as pair
 			foldl, //folds application from left
 			foldr, //folds application from right
+			gen, //gen(x, f, n) produces n-tuple "tup(x, f(x), f(f(x)), f(f(f(x))), ...)"
 			COUNT
 		};
 
@@ -566,6 +567,7 @@ namespace simp {
 			{ HaskellFn::split       , "split"        , 3u, { Restr::applicable, Restr::applicable, Literal::f_app             }, MiscFn::pair    },
 			{ HaskellFn::foldl       , "foldl"        , 4u, { Restr::applicable, Restr::applicable, Restr::any, Literal::f_app }, Restr::any      }, //foldl f z (x:xs) = foldl f (f z x) xs
 			{ HaskellFn::foldr       , "foldr"        , 4u, { Restr::applicable, Restr::applicable, Restr::any, Literal::f_app }, Restr::any      }, //foldr f z (x:xs) = f x (foldr f z xs) 
+			{ HaskellFn::gen         , "gen"          , 3u, { Restr::any, Restr::applicable, ComplexSubset::integer            }, Restr::any      }, 
 			{ PatternFn::value_match , "value_match__", 3u, { PatternUnsigned{}, Restr::any, Restr::any                        }, Restr::any      }, //layout as in ValueMatch (minus .owner)
 			{ PatternFn::of_type     , "of_type__"    , 2u, { Restr::any, Literal::symbol                                      }, Restr::boolean  },
 		});

@@ -124,7 +124,7 @@ namespace simp {
 				this->management.enlarge(res + 1u);
 			}
 			assert(this->management[res].ref_count == 0);
-			this->management[res] = { Index_T(), 1, false };
+			this->management[res] = { .replacement_index = Index_T(), .ref_count = 1, .final_form = false };
 			return res;
 		} //allocate_one
 
@@ -135,7 +135,7 @@ namespace simp {
 				this->management.enlarge(res + n);
 			}
 			assert(this->management[res].ref_count == 0);
-			this->management[res] = { Index_T(), 1, false };
+			this->management[res] = { .replacement_index = Index_T(), .ref_count = 1, .final_form = false };
 			return res;
 		} //allocate_n
 
@@ -177,6 +177,11 @@ namespace simp {
 			assert(this->management[idx].replacement_index == Index_T());
 			return this->management[idx].ref_count += by;
 		} //incr_at_by
+
+		constexpr std::int32_t ref_count_at(const std::size_t idx) const noexcept
+		{
+			return this->management[idx].ref_count;
+		} //ref_cout_at
 
 		constexpr const Index_T& replacement_index(const std::size_t idx) const noexcept
 		{

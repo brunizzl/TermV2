@@ -117,9 +117,9 @@ namespace simp {
 		const auto to_lhs_ref = [store_data = this->store.data()](const RevIter iter) {
 			return UnsaveRef(store_data, iter->lhs.get_index(), iter->lhs.get_type());
 		};
-		RevIter first_not_greater = this->rules.rbegin(); //first seen from the end, because reverse
 		const RevIter reverse_end = this->rules.rend();
 		for (RevIter iter = this->rules.rbegin(); iter != reverse_end; ++iter) {
+			RevIter first_not_greater = this->rules.rbegin(); //first seen from the end, because reverse
 			while (unsure_compare_tree(to_lhs_ref(first_not_greater), to_lhs_ref(iter)) == std::partial_ordering::greater) {
 				assert(first_not_greater < iter);
 				++first_not_greater;
@@ -145,16 +145,11 @@ namespace simp {
 		RuleSetIter iter = start_point(rules, ref);
 		const RuleSetIter stop = end_point(iter); 
 
-		const std::partial_ordering cmp = unsure_compare_tree((*iter).lhs, ref);
-		assert(cmp != std::partial_ordering::less || iter == rules.end() - 1);
-		if (cmp == std::partial_ordering::greater) {
-			return RuleApplicationRes{ invalid_index, stop };
-		}
-
 		for (; iter != stop; ++iter) {
 			const RuleRef rule = *iter;
 			if (debug_print_level >= DebugPrintLevel::test_rules) std::cout << "test    " << rule.to_string(false) << "\n";
 			if (match::find_match(rule.lhs, ref, state)) {
+				if (debug_print_level >= DebugPrintLevel::test_rules) std::cout << " ...success!\n";
 				const NodeIndex res = pattern_interpretation(rule.rhs, state, *ref.store, options);
 				return RuleApplicationRes{ res, iter };
 			}
@@ -169,12 +164,22 @@ namespace simp {
 		RuleApplicationRes result = raw_apply_ruleset(rules, ref, state, options);
 		if (result.result_term != invalid_index) {
 			free_tree(ref);
-			ref.index = result.result_term.get_index();
-			ref.type = result.result_term.get_type();
+			ref.point_at_new_location(result.result_term);
 			goto apply_ruleset;
 		}
 		return ref.typed_idx();
 	} //greedy_shallow_apply_ruleset
+
+	NodeIndex shallow_apply_ruleset(const RuleSet& rules, MutRef ref, const Options options)
+	{
+		match::State state = *ref.store;
+		RuleApplicationRes result = raw_apply_ruleset(rules, ref, state, options);
+		if (result.result_term != invalid_index) {
+			free_tree(ref);
+			return result.result_term;
+		}
+		return invalid_index;
+	} //shallow_apply_ruleset
 
 	NodeIndex greedy_lazy_apply_ruleset(const RuleSet& rules, MutRef head_ref, const Options options)
 	{
@@ -207,8 +212,11 @@ namespace simp {
 		}; //add_frame
 
 	start_at_head:
-		head_ref.point_at_new_location(greedy_shallow_apply_ruleset(rules, head_ref, options));
 		if (debug_print_level >= DebugPrintLevel::replacements) std::cout << print::literal_to_string(head_ref) << "\n";
+		if (const NodeIndex new_ = shallow_apply_ruleset(rules, head_ref, options); new_ != invalid_index) {
+			head_ref.point_at_new_location(new_);
+			goto start_at_head;
+		}
 
 		Stack stack;
 		if (add_frame(stack, head_ref)) {
@@ -218,10 +226,10 @@ namespace simp {
 				do {
 					const NodeIndex sub_index = *frame.iter;
 					const MutRef sub_ref = head_ref.at(sub_index);
-					if (debug_print_level >= DebugPrintLevel::search_redux) std::cout << repeat(".  ", stack.size()) << " " << print::literal_to_string(sub_ref) << "\n";
+					if (debug_print_level >= DebugPrintLevel::search_redex) std::cout << repeat(".  ", stack.size()) << print::literal_to_string(sub_ref) << "\n";
 
-					if (const NodeIndex new_ = greedy_shallow_apply_ruleset(rules, sub_ref, options);
-						sub_index != new_)
+					if (const NodeIndex new_ = shallow_apply_ruleset(rules, sub_ref, options);
+						new_ != invalid_index)
 					{
 						*frame.iter = new_;
 						stack.pop_back(); //pop frame

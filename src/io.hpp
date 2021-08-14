@@ -140,13 +140,12 @@ namespace simp {
 		//causes no stackoverflow for large literals
 		[[nodiscard]] std::string literal_to_string(const UnsaveRef head, const bool fancy = true);
 
-		template<StoreLike S, ContainerOf<NodeIndex> C>
-		std::string [[nodiscard]] to_memory_layout(const S& store, const C& heads);
+		template<ContainerOf<NodeIndex> C>
+		std::string [[nodiscard]] to_memory_layout(const Store& store, const C& heads);
 
-		template<StoreLike S>
-		std::string [[nodiscard]] to_memory_layout(const S& store, const std::initializer_list<NodeIndex> heads)
+		inline std::string [[nodiscard]] to_memory_layout(const Store& store, const std::initializer_list<NodeIndex> heads)
 		{	
-			return to_memory_layout<S, std::initializer_list<NodeIndex>>(store, heads);
+			return to_memory_layout<std::initializer_list<NodeIndex>>(store, heads);
 		}
 
 	} //namespace print

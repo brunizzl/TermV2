@@ -73,7 +73,7 @@ namespace simp::test {
 	{
 		std::cout << "running tests...\n";
 		
-		simp::test::assert_eqivalent_normal_forms({
+		assert_eqivalent_normal_forms({
 			{ "tup(conj(3-1i), conj(4+3i), conj(8), conj(-1i))", "tup(3+1i, 4-3i, 8, 1i)" }, 
 			{ "tup(3 == 4, 3 != 4, 3 < 4, 3 <= 4, 3 >= 4, 3 > 4)", "tup(false, true, true, true, false, false)" }, 
 			{ "tup(4 == 4, 4 != 4, 4 < 4, 4 <= 4, 4 >= 4, 4 > 4)", "tup(true, false, false, true, true, false)" }, 
@@ -97,7 +97,7 @@ namespace simp::test {
 			{ "(\\x .\\y .x(y))(\\x .\\y .x(y))(\\x .x)(jens)", "jens" }, 
 		}, {});
 
-		simp::test::assert_eqivalent_normal_forms({
+		assert_eqivalent_normal_forms({
 			{ "x^2 + y^2 + z^2 + 2 x z", "(x + z)^2 + y^2" },
 			{ "x^2 + y^2 + z^2 - 2 x z", "(x - z)^2 + y^2" },
 			{ "81 +18 sin(x) + sin(x)^2", "(9 + sin(x))^2" },
@@ -109,7 +109,7 @@ namespace simp::test {
 			{ "$a^2 - 2 $a _b + _b^2 = ($a - _b)^2" },
 		});
 			
-		simp::test::assert_eqivalent_normal_forms({
+		assert_eqivalent_normal_forms({
 			{ "cos(pi)", "-1" },
 			{ "cos((1e12 + 1/2) pi)", "0" },
 			{ "sin(9.5 pi)", "-1" },
@@ -117,6 +117,14 @@ namespace simp::test {
 			{ "cos(   pi)                     = -1" },
 			{ "cos(_a pi) | _a + 1/2     :int =  0" },
 			{ "sin((2 $k + 1.5) pi) | $k :int = -1" },
+		});
+
+		assert_eqivalent_normal_forms({
+			{ "diff(t t t, t)", "t t + t (t + t)" },
+		}, {
+			{ "diff(_u + vs..., _x) = diff(_u, _x) + diff(sum(vs...), _x)" },
+			{ "diff(_u vs..., _x) = diff(_u, _x) vs... + _u diff(prod(vs...), _x)" },
+			{ "diff(_x, _x) = 1" },
 		});
 
 
@@ -139,7 +147,7 @@ namespace simp::test {
 				unsigned val = 0;
 				const auto [read_end, err] = std::from_chars(in.data(), in.data() + in.size(), val);
 				if (err != std::errc{} || val >= range_end) { 
-					std::cout << "could not interpret \"" << in << "\" as int smaller than " << range_end << "!\n\n";
+					std::cout << "could not interpret \"" << in << "\" as unsigned int smaller than " << range_end << ".\n\n";
 				}
 				else {
 					std::cout << "set " << name << " to " << val << "\n\n";

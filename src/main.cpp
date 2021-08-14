@@ -52,7 +52,7 @@ int main()
 	simp::test::print_native_symbols();
 	simp::test::run_tests();
 
-	simp::test::read_eval_print_loop();
+	//simp::test::read_eval_print_loop();
 		
 	simp::test::read_eval_print_loop({
 		{ "0 xs... = 0" },
@@ -127,7 +127,15 @@ int main()
 		{ "make_ints_cons_h(_n, _y :: _ys) | _n > 0 = make_ints_cons_h(_n - 1, (_y - 1) :: _y :: _ys)" },
 		{ "make_ints_cons_h(_n, _res)               = _res" },
 
-		{ "change(_f, _g, _f(xs...)) = _g(xs...)" }
+		{ "change(_f, _g, _f(xs...)) = _g(xs...)" },
+
+		//solving an equation for _x (_x is only allowed once)
+		{ "solve(_a, _b, _x) = solve'(_a - _b, 0, _x)" },
+		{ "solve'(_x, _y, _x) = _y" },
+		{ "solve'(_a + bs..., _y, _x) | !contains(_a, _x) = solve'(sum(bs...), _y - _a, _x)" },
+		{ "solve'(_a bs..., _y, _x) | !contains(_a, _x) = solve'(prod(bs...), _y / _a, _x)" },
+		{ "solve'(_a^_b, _y, _x) | !contains(_a, _x) = solve'(_b, log(_a, _y), _x)" },
+		{ "solve'(_b^_a, _y, _x) | !contains(_a, _x) = solve'(_b, _y^(1 / _a), _x)" },
 	});
 }
 
