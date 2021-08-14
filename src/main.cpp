@@ -23,6 +23,7 @@ important:
  - add Literal::options to allow nondeterministic match 
 
 nice to have:
+ - order the most general rule in a subset to the end of that subset
  - to_tree
  - implement fst, snd, filter, split, ...
  - add eval_native for min/max to remove values guaranteed to not be minimum / maximum without requiring full evaluation
@@ -51,7 +52,7 @@ int main()
 	simp::test::print_native_symbols();
 	simp::test::run_tests();
 
-	//simp::test::read_eval_print_loop();
+	simp::test::read_eval_print_loop();
 		
 	simp::test::read_eval_print_loop({
 		{ "0 xs... = 0" },

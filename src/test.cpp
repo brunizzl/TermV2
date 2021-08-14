@@ -1,9 +1,10 @@
 #include "test.hpp"
 
 #include <vector>
-
 #include <iostream>
 #include <functional>
+#include <charconv>
+#include <type_traits>
 
 namespace simp::test {
 	void print_native_symbols()
@@ -132,41 +133,45 @@ namespace simp::test {
 			std::function<void(std::string&)> effect;
 		};
 
-		const auto parse_bool = [](bool& dest, const std::string_view name) {
-			return [&dest, name](std::string& in) {
+		const auto parse_int = [](auto& dest, const std::string_view name, unsigned range_end) {
+			return [&dest, name, range_end](std::string& in) {
 				in.erase(0, in.find_first_not_of(" ="));
-				if (in == "true") {
-					dest = true;
-					std::cout << "set " << name << " to true\n\n";
-					return;
+				unsigned val = 0;
+				const auto [read_end, err] = std::from_chars(in.data(), in.data() + in.size(), val);
+				if (err != std::errc{} || val >= range_end) { 
+					std::cout << "could not interpret \"" << in << "\" as int smaller than " << range_end << "!\n\n";
 				}
-				if (in == "false") {
-					dest = false;
-					std::cout << "set " << name << " to false\n\n";
-					return;
+				else {
+					std::cout << "set " << name << " to " << val << "\n\n";
+					dest = static_cast<std::remove_reference_t<decltype(dest)>>(val);
 				}
-				std::cout << "could not interpret \"" << in << "\". expected eighter \"true\" or \"false\"!\n\n";
 			};
 		};
 
 		static const std::vector<Command> commands = { 
 			{ 
 				"exact", 
-				":exact = <true | false>",
+				":exact = <0 | 1>",
 				"only evaluate an expression, when the result can be represented exactly as floating point number", 
-				parse_bool(exact, "exact")
+				parse_int(exact, "exact", 2)
 			},
 			{ 
-				"memory ",
-				":memory = <true | false>",
+				"memory",
+				":memory = <0 | 1>",
 				"print memory layout of input both after parsing and after evaluating", 
-				parse_bool(show_memory, "memory") 
+				parse_int(show_memory, "memory", 2) 
 			},
 			{ 
 				"tree",
-				":tree = <true | false>",
+				":tree = <0 | 1>",
 				"print tree visualisation of input both after parsing and after evaluating", 
-				parse_bool(show_tree, "tree") 
+				parse_int(show_tree, "tree", 2) 
+			},
+			{
+				"verb",
+				":verb = <0 | 1 | 2 | 3>",
+				"show intermediate results / + terms tested for rule applicability / + rules tested",
+				parse_int(debug_print_level, "verb", 4)
 			},
 			{ 
 				"add",
@@ -187,12 +192,7 @@ namespace simp::test {
 				"rules",
 				":rules",
 				"shows all current rules",
-				[&](std::string&) {
-					for (const auto& rule : rules) {
-						std::cout << "\n" << rule.to_string() << "\n";
-					}
-					std::cout << "\n";
-				}
+				[&](std::string&) { std::cout << rules.to_string() << "\n"; }
 			},
 			{ //has to be last command in vector, see below
 				"help",

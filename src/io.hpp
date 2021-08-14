@@ -137,6 +137,7 @@ namespace simp {
 			return name;
 		}
 
+		//causes no stackoverflow for large literals
 		[[nodiscard]] std::string literal_to_string(const UnsaveRef head, const bool fancy = true);
 
 		template<StoreLike S, ContainerOf<NodeIndex> C>

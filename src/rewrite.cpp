@@ -14,6 +14,8 @@
 
 namespace simp {
 
+	extern DebugPrintLevel debug_print_level = DebugPrintLevel::none;
+
 	simp::LiteralTerm::LiteralTerm(std::string name)
 	{
 		using namespace simp;
@@ -34,11 +36,11 @@ namespace simp {
 		return print::to_memory_layout(this->store, { this->head });
 	}
 
-	std::string RuleRef::to_string() const noexcept
+	std::string RuleRef::to_string(bool newline) const noexcept
 	{
 		std::string res;
 		print::append_to_string(this->lhs, res, 0, false);
-		res.append("\n   ->   ");
+		res.append(newline ? "\n   ->   " : "  ->  ");
 		print::append_to_string(this->rhs, res, 0, false);
 		return res;
 	}
@@ -85,6 +87,15 @@ namespace simp {
 		this->migrate_rules(temp_store);
 	} //RuleSet::add
 
+	std::string RuleSet::to_string() const
+	{
+		std::string res;
+		for (auto iter = this->begin(); iter != this->end(); ++iter) {
+			res += "(" + std::to_string(iter.iter->subset_size) + ")\n" + (*iter).to_string() + "\n";
+		}
+		return res;
+	} //RuleSet::to_string
+
 	void RuleSet::migrate_rules(const Store& temp_store)
 	{
 		std::stable_sort(this->rules.begin(), this->rules.end(),
@@ -108,7 +119,7 @@ namespace simp {
 		};
 		RevIter first_not_greater = this->rules.rbegin(); //first seen from the end, because reverse
 		const RevIter reverse_end = this->rules.rend();
-		for (RevIter iter = first_not_greater; iter != reverse_end; ++iter) {
+		for (RevIter iter = this->rules.rbegin(); iter != reverse_end; ++iter) {
 			while (unsure_compare_tree(to_lhs_ref(first_not_greater), to_lhs_ref(iter)) == std::partial_ordering::greater) {
 				assert(first_not_greater < iter);
 				++first_not_greater;
@@ -134,14 +145,21 @@ namespace simp {
 		RuleSetIter iter = start_point(rules, ref);
 		const RuleSetIter stop = end_point(iter); 
 
+		const std::partial_ordering cmp = unsure_compare_tree((*iter).lhs, ref);
+		assert(cmp != std::partial_ordering::less || iter == rules.end() - 1);
+		if (cmp == std::partial_ordering::greater) {
+			return RuleApplicationRes{ invalid_index, stop };
+		}
+
 		for (; iter != stop; ++iter) {
 			const RuleRef rule = *iter;
+			if (debug_print_level >= DebugPrintLevel::test_rules) std::cout << "test    " << rule.to_string(false) << "\n";
 			if (match::find_match(rule.lhs, ref, state)) {
 				const NodeIndex res = pattern_interpretation(rule.rhs, state, *ref.store, options);
-				return { res, iter };
+				return RuleApplicationRes{ res, iter };
 			}
 		}
-		return { invalid_index, stop };
+		return RuleApplicationRes{ invalid_index, stop };
 	} //raw_apply_ruleset
 
 	NodeIndex greedy_shallow_apply_ruleset(const RuleSet& rules, MutRef ref, const Options options)
@@ -190,6 +208,8 @@ namespace simp {
 
 	start_at_head:
 		head_ref.point_at_new_location(greedy_shallow_apply_ruleset(rules, head_ref, options));
+		if (debug_print_level >= DebugPrintLevel::replacements) std::cout << print::literal_to_string(head_ref) << "\n";
+
 		Stack stack;
 		if (add_frame(stack, head_ref)) {
 		test_last_frame:
@@ -198,6 +218,7 @@ namespace simp {
 				do {
 					const NodeIndex sub_index = *frame.iter;
 					const MutRef sub_ref = head_ref.at(sub_index);
+					if (debug_print_level >= DebugPrintLevel::search_redux) std::cout << repeat(".  ", stack.size()) << " " << print::literal_to_string(sub_ref) << "\n";
 
 					if (const NodeIndex new_ = greedy_shallow_apply_ruleset(rules, sub_ref, options);
 						sub_index != new_)

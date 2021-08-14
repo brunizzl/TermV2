@@ -6,6 +6,12 @@
 
 namespace simp {
 
+	enum class DebugPrintLevel
+	{
+		none, replacements, search_redux, test_rules
+	};
+	extern DebugPrintLevel debug_print_level;
+
 	//term without any pattern shenaniganz
 	struct LiteralTerm
 	{
@@ -32,7 +38,7 @@ namespace simp {
 		UnsaveRef lhs;
 		UnsaveRef rhs;
 
-		std::string to_string() const noexcept;
+		std::string to_string(bool newline = true) const noexcept;
 	};
 
 	struct RuleSetEntry
@@ -109,6 +115,8 @@ namespace simp {
 
 		RuleSetIter begin() const noexcept { return { this->rules.begin(), this->store.data() }; }
 		RuleSetIter end() const noexcept { return { this->rules.end(), this->store.data() }; }
+
+		std::string to_string() const;
 
 	private:
 		void migrate_rules(const Store& temp_store);

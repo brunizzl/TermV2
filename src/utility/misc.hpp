@@ -237,5 +237,13 @@ namespace simp {
 		constexpr bool operator==(const OptionalComplex& snd) noexcept { return compare_complex(this->val, snd.val) == std::strong_ordering::equal; }
 		constexpr bool operator!=(const OptionalComplex& snd) noexcept { return compare_complex(this->val, snd.val) != std::strong_ordering::equal; }
 	}; //struct OptionalComplex
+
+	constexpr std::string repeat(const std::string_view in, int times)
+	{
+		std::string res;
+		res.reserve(in.size() * times);
+		while (times-- > 0) res += in;
+		return res;
+	} //repeat
     
 } //namespace simp
