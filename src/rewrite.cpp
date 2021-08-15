@@ -145,6 +145,13 @@ namespace simp {
 		RuleSetIter iter = start_point(rules, ref);
 		const RuleSetIter stop = end_point(iter); 
 
+		if (const NodeType lhs_type = iter.iter->lhs.get_type(); 
+			shallow_order(lhs_type) != shallow_order(ref.type)) 
+		{
+			assert(lhs_type.is<Literal>() || lhs_type == PatternFApp{});
+			return RuleApplicationRes{ invalid_index, stop };
+		}
+
 		for (; iter != stop; ++iter) {
 			const RuleRef rule = *iter;
 			if (debug_print_level >= DebugPrintLevel::test_rules) std::cout << "test    " << rule.to_string(false) << "\n";

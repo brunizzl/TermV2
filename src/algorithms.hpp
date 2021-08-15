@@ -9,6 +9,7 @@
 
 #include "utility/meta.hpp"
 #include "utility/vector.hpp"
+#include "utility/array.hpp"
 
 #include "types.hpp"
 #include "io.hpp"
@@ -76,31 +77,28 @@ namespace simp {
     template<Reference R, StoreLike S>
     [[nodiscard]] NodeIndex copy_tree(const R src_ref, S& dst_store);
 
-    //orders node types by their "specificity", meaning that types potentially matching more things are generally sorted to the back
-    constexpr int shallow_order(const UnsaveRef ref) {
-        constexpr int after_symbol = std::numeric_limits<int>::max() - 10000;
-        switch (ref.type) {
-        case NodeType(Literal::complex):           return 0;
-        case NodeType(SpecialMatch::value):        return 2;
-        case NodeType(PatternUnsigned{}):          return 4;
-        case NodeType(Literal::lambda):            return 8;
-        case NodeType(Literal::lambda_param):      return 10;
-        case NodeType(Literal::symbol):
-            assert(ref.index < after_symbol); //overflow of typed index happens sooner anyway
-            switch (nv::Native(ref.index)) {
-            default:                               return ref.index + 1000;
-            }
-        case NodeType(Literal::f_app):             return after_symbol + 100;
-        case NodeType(PatternFApp{}):	           return after_symbol + 100;
-        case NodeType(SingleMatch::restricted):    return after_symbol + 200;  //caution: these will compare equal, despite having a different structure in store
-        case NodeType(SingleMatch::unrestricted):  return after_symbol + 200;  //caution: these will compare equal, despite having a different structure in store
-        case NodeType(SingleMatch::weak):          return after_symbol + 200;  //caution: these will compare equal, despite having a different structure in store
-        case NodeType(SpecialMatch::multi):        return after_symbol + 300;
-        default:
-            assert(false);
-            BMATH_UNREACHABLE;
-            return false;
-        }
+    //orders node types by their "specificity", meaning that types potentially matching 
+    //  more things are generally sorted to the back
+    constexpr inline char shallow_order(const NodeType type) {
+        constexpr auto table = arr::sort_first_keep_second(
+            std::to_array<std::pair<NodeType, char>>({
+                { Literal::complex         , 0  },
+                { SpecialMatch::value      , 2  },
+                { PatternUnsigned{}        , 4  },
+                { Literal::lambda          , 8  },
+                { Literal::lambda_param    , 10 },
+                { Literal::symbol          , 20 },
+                { Literal::f_app           , 30 },
+                { PatternFApp{}            , 30 },
+                { SingleMatch::restricted  , 50 },
+                { SingleMatch::unrestricted, 50 },
+                { SingleMatch::weak        , 50 },
+                { SpecialMatch::multi      , 60 },
+            }));
+        static_assert(table.size() == (unsigned)NodeType::COUNT);
+
+        assert(type < NodeType(NodeType::COUNT));
+        return table[(unsigned)type];
     } //shallow_order
 
     //lexicographic ordering extending shallow_order, not meaningful in a math context

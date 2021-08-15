@@ -123,7 +123,7 @@ int main()
 
 		{ "change(_f, _g, _f(xs...)) = _g(xs...)" },
 
-		//solving an equation for _x (_x is only allowed once)
+		//solving an equation for _x (no multiple occurences of _x are considered)
 		{ "solve(_a, _b, _x) = solve'(_a - _b, 0, _x)" },
 		{ "solve'(_x, _y, _x) = _y" },
 		{ "solve'(_a + bs..., _y, _x) | !contains(_a, _x) = solve'(sum(bs...), _y - _a, _x)" },

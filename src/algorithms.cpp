@@ -541,7 +541,7 @@ namespace simp {
                                     app[1].get_type() == Literal::complex &&
                                     app[2].get_type() == Literal::complex;
                             };
-                            static_assert(shallow_order(UnsaveRef(nullptr, 0, Literal::complex)) < shallow_order(UnsaveRef(nullptr, 0, Literal::f_app)), 
+                            static_assert(shallow_order(Literal::complex) < shallow_order(Literal::f_app), 
                                 "applications of pow are assumed to occur after complex numbers in product");
                             auto iter = std::find_if(end_complex, params.end(), is_value_pow_app);
                             const auto end_pow = std::find_if(iter, params.end(), [&](const NodeIndex n) { return !is_value_pow_app(n); });
@@ -779,8 +779,8 @@ namespace simp {
 
     std::strong_ordering compare_tree(const UnsaveRef fst, const UnsaveRef snd)
     {
-        if (const int fst_order = shallow_order(fst), 
-                      snd_order = shallow_order(snd); 
+        if (const char fst_order = shallow_order(fst.type), 
+                       snd_order = shallow_order(snd.type); 
             fst_order != snd_order) 
         {
             return fst_order <=> snd_order;
@@ -838,8 +838,8 @@ namespace simp {
         if (is_unordered(fst.type) || is_unordered(snd.type)) {
             return std::partial_ordering::unordered;
         }
-        if (const int fst_order = shallow_order(fst),
-                      snd_order = shallow_order(snd);
+        if (const char fst_order = shallow_order(fst.type),
+                       snd_order = shallow_order(snd.type);
             fst_order != snd_order)
         {   return fst_order <=> snd_order;
         }
@@ -1871,7 +1871,7 @@ namespace simp {
         {
             assert(pn_ref.type != Literal::f_app);
             if (pn_ref.type.is<Literal>() && pn_ref.type != ref.type) {
-                return shallow_order(pn_ref) <=> shallow_order(ref);
+                return shallow_order(pn_ref.type) <=> shallow_order(ref.type);
             }
 
             const auto to_order = [](const bool b) { return b ?
@@ -1897,8 +1897,8 @@ namespace simp {
             }
             case NodeType(PatternFApp{}): {
                 if (ref.type != Literal::f_app) {
-                    constexpr int app_order = shallow_order(UnsaveRef(nullptr, 0, Literal::f_app));
-                    return app_order <=> shallow_order(ref);
+                    constexpr char app_order = shallow_order(Literal::f_app);
+                    return app_order <=> shallow_order(ref.type);
                 }
                 if (const auto cmp = match_(pn_ref.at(pn_ref->f_app.function()), ref.at(ref->f_app.function()), match_state);
                     cmp != std::partial_ordering::equivalent)
@@ -1962,8 +1962,8 @@ namespace simp {
             }
             case NodeType(SpecialMatch::value): {
                 if (ref.type != Literal::complex) { //only this test allows us to pass *ref to evaluate this_value
-                    constexpr int value_order = shallow_order(UnsaveRef(nullptr, 0, Literal::complex));
-                    return value_order <=> shallow_order(ref);
+                    constexpr char value_order = shallow_order(Literal::complex);
+                    return value_order <=> shallow_order(ref.type);
                 }
                 const ValueMatch& var = *pn_ref;
                 const OptionalComplex this_value = eval_value_match(pn_ref.at(var.inverse), *ref);

@@ -184,4 +184,13 @@ namespace simp::arr {
 
 	static_assert(arr::map([](auto x) { return x + 3; }, std::array{ 1, 2, 3 }) == std::array{ 4, 5, 6 });
 
+
+	template<typename T1, typename T2, std::size_t N>
+	constexpr std::array<T2, N> sort_first_keep_second(std::array<std::pair<T1, T2>, N> data)
+	{
+		using P = const std::pair<T1, T2>&;
+		std::sort(data.begin(), data.end(), [](P x, P y) { return x.first < y.first; });
+		return arr::map([](P x) { return x.second; }, data);
+	}
+
 } //namespace simp::arr
