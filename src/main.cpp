@@ -13,7 +13,7 @@ important:
 	  - (perhaps) print::to_memory_layout
 
  - fix when match returns std::strong_ordering::unordered, by utilizing FAppInfo::always_preceeding_next as 
-		bool for MatchStrategy::backtracking and MatchStrategy::linear (perhaps rename accordingly?)
+		bool for MatchStrategy::identic and MatchStrategy::linear (perhaps rename accordingly?)
  - type checking (extended: keep track of what restrictions apply to match variable in lhs, use in rhs)
  - finnish building / verifying pattern:
       - (depends on type checking) verify whole patterns
@@ -44,11 +44,11 @@ idea status:
 
 int main()
 {
-	simp::test::print_node_types();
-	simp::test::print_native_symbols();
-	simp::test::run_tests();
+	//simp::test::print_node_types();
+	//simp::test::print_native_symbols();
+	//simp::test::run_tests();
 
-	//simp::test::read_eval_print_loop();
+	simp::test::read_eval_print_loop();
 		
 	simp::test::read_eval_print_loop({
 		{ "0 xs... = 0" },
@@ -124,12 +124,12 @@ int main()
 		{ "change(_f, _g, _f(xs...)) = _g(xs...)" },
 
 		//solving an equation for _x (no multiple occurences of _x are considered)
-		{ "solve(_a, _b, _x) = solve'(_a - _b, 0, _x)" },
-		{ "solve'(_x, _y, _x) = _y" },
-		{ "solve'(_a + bs..., _y, _x) | !contains(_a, _x) = solve'(sum(bs...), _y - _a, _x)" },
-		{ "solve'(_a bs..., _y, _x) | !contains(_a, _x) = solve'(prod(bs...), _y / _a, _x)" },
-		{ "solve'(_a^_b, _y, _x) | !contains(_a, _x) = solve'(_b, log(_a, _y), _x)" },
-		{ "solve'(_b^_a, _y, _x) | !contains(_a, _x) = solve'(_b, _y^(1 / _a), _x)" },
+		{ "solve(_a, _b, _x) = solve_helper(_a - _b, 0, _x)" },
+		{ "solve_helper(_x, _y, _x) = _y" },
+		{ "solve_helper(_a + bs..., _y, _x) | !contains(_a, _x) = solve_helper(sum(bs...) , _y - _a    , _x)" },
+		{ "solve_helper(_a bs...  , _y, _x) | !contains(_a, _x) = solve_helper(prod(bs...), _y / _a    , _x)" },
+		{ "solve_helper(_a^_b     , _y, _x) | !contains(_a, _x) = solve_helper(_b         , log(_a, _y), _x)" },
+		{ "solve_helper(_b^_a     , _y, _x) | !contains(_a, _x) = solve_helper(_b         , _y^(1 / _a), _x)" },
 	});
 }
 

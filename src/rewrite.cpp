@@ -166,7 +166,7 @@ namespace simp {
 
 	NodeIndex greedy_shallow_apply_ruleset(const RuleSet& rules, MutRef ref, const Options options)
 	{
-	match::State state = *ref.store;
+		match::State state = *ref.store;
 	apply_ruleset:
 		RuleApplicationRes result = raw_apply_ruleset(rules, ref, state, options);
 		if (result.result_term != invalid_index) {

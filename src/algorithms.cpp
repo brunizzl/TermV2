@@ -1085,7 +1085,7 @@ namespace simp {
                     } break;
                     case MatchStrategy::dilation:
                         return info.preceeded_by_multi.count() > 1;
-                    case MatchStrategy::backtracking:
+                    case MatchStrategy::identic:
                         return true;
                     case MatchStrategy::linear:
                         return false;
@@ -1278,7 +1278,7 @@ namespace simp {
                         return std::tuple{ true, false };
                     }
                     else if (is_rematchable(ref)) {
-                        info.strategy = MatchStrategy::backtracking;
+                        info.strategy = MatchStrategy::identic;
                     }
                     else {//required as default, as otherwise is_rematchable above will always return true
                         assert(info.strategy == MatchStrategy::linear);
@@ -1295,7 +1295,7 @@ namespace simp {
                         info.rematchable_params.set(i, is_rematchable(ref.at(params[i])));
                     }
                     assert(info.strategy != MatchStrategy::linear || info.rematchable_params.none());
-                    assert(info.strategy != MatchStrategy::backtracking || info.rematchable_params.any());
+                    assert(info.strategy != MatchStrategy::identic || info.rematchable_params.any());
                 }
                 if (prime) { //give current own match data index and change multis to final form
                     const unsigned this_pattern_index = pattern_app_index++;
@@ -1870,13 +1870,16 @@ namespace simp {
         std::partial_ordering match_(const UnsaveRef pn_ref, const UnsaveRef ref, State& match_state)
         {
             assert(pn_ref.type != Literal::f_app);
+
             if (pn_ref.type.is<Literal>() && pn_ref.type != ref.type) {
                 return shallow_order(pn_ref.type) <=> shallow_order(ref.type);
             }
 
-            const auto to_order = [](const bool b) { return b ?
-                std::partial_ordering::equivalent :
-                std::partial_ordering::unordered; };
+            const auto to_order = [](const bool b) { 
+                return b ?
+                    std::partial_ordering::equivalent :
+                    std::partial_ordering::unordered; 
+            };
 
             switch (pn_ref.type) {
             case NodeType(Literal::complex):
@@ -1902,15 +1905,16 @@ namespace simp {
                 }
                 if (const auto cmp = match_(pn_ref.at(pn_ref->f_app.function()), ref.at(ref->f_app.function()), match_state);
                     cmp != std::partial_ordering::equivalent)
-                {   return cmp;
+                {   
+                    return cmp;
                 }
                 switch (f_app_info(pn_ref).strategy) {
                 case MatchStrategy::permutation:
                     return to_order( find_permutation(pn_ref, ref, match_state, false));
                 case MatchStrategy::dilation:
                     return to_order(    find_dilation(pn_ref, ref, match_state, false));
-                case MatchStrategy::backtracking:
-                    return to_order(find_identic(pn_ref, ref, match_state, false));
+                case MatchStrategy::identic:
+                    return to_order(     find_identic(pn_ref, ref, match_state, false));
                 case MatchStrategy::linear: {
                     const std::span<const NodeIndex> pn_params = pn_ref->f_app.parameters();
                     const std::span<const NodeIndex> params = ref->f_app.parameters();
@@ -1998,8 +2002,8 @@ namespace simp {
                     return  find_permutation(pn_ref, ref, match_state, true);
                 case MatchStrategy::dilation:
                     return     find_dilation(pn_ref, ref, match_state, true);
-                case MatchStrategy::backtracking: 
-                    return find_identic(pn_ref, ref, match_state, true);
+                case MatchStrategy::identic: 
+                    return      find_identic(pn_ref, ref, match_state, true);
                 } //MatchStrategy::linear is not expected above (as it implies not beeing rematchable)
             }
             else if (pn_ref.type == Literal::lambda) {

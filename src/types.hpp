@@ -353,7 +353,7 @@ namespace simp {
 	{
 		permutation,
 		dilation,
-		backtracking,
+		identic,
 		linear,
 	};
 
@@ -380,7 +380,7 @@ namespace simp {
 		//determines what algorithm is choosen to match this application
 		//  permutation:  uses all later members, only preceeded_by_multi is degraded to a bool
 		//  dilation:     uses all later members except always_preceeding_next (because that is always true anyway)
-		//  backtracking: uses ONLY rematchable_params (not even uses match_state_index)
+		//  identic: uses ONLY rematchable_params (not even uses match_state_index)
 		//  linear:       uses nothing
 		MatchStrategy strategy = MatchStrategy::linear; //default required as linear in build_rume::build_lhs_multis_and_pattern_f_apps
 	}; //struct FAppInfo

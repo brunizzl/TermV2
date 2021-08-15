@@ -638,7 +638,7 @@ namespace simp {
 				str.append(" M:");
 				str.append(to_string(info.preceeded_by_multi, param_count + 1));
 				break;
-			case MatchStrategy::backtracking: 
+			case MatchStrategy::identic: 
 				str.append("b");
 				str.append(" R:");
 				str.append(to_string(info.rematchable_params, param_count));
