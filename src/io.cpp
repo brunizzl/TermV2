@@ -954,7 +954,8 @@ namespace simp {
 				std::vector<std::size_t> leaks;
 				const BitVector used_positions = store.storage_occupancy();
 				for (std::size_t i = 0; i < store.size(); i++) {
-					result += std::format("{:4} | {:4} | ", i, store.ref_count_at(i));
+					//result += std::format("{:4} | {:4} | ", i, store.ref_count_at(i));
+					result += std::format("{:4} | ", i, store.ref_count_at(i));
 					result += rows[i];
 					if (!used_positions.test(i)) {
 						result += "-----free slot-----";

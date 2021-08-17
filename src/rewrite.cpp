@@ -217,7 +217,10 @@ namespace simp {
 		}; //add_frame
 
 	start_at_head:
-		if (debug_print_level >= DebugPrintLevel::replacements) std::cout << print::literal_to_string(head_ref) << "\n";
+		if (debug_print_level >= DebugPrintLevel::replacements) {
+			std::cout << print::literal_to_string(head_ref) << "\n";
+		}
+
 		if (const NodeIndex new_ = shallow_apply_ruleset(rules, head_ref, options); new_ != invalid_index) {
 			head_ref.point_at_new_location(new_);
 			goto start_at_head;
@@ -227,18 +230,19 @@ namespace simp {
 		if (add_frame(stack, head_ref)) {
 		test_last_frame:
 			do {
-				StackFrame& frame = stack.back();
+				StackFrame& current = stack.back();
 				do {
-					const NodeIndex sub_index = *frame.iter;
+					const NodeIndex sub_index = *current.iter;
 					const MutRef sub_ref = head_ref.at(sub_index);
-					if (debug_print_level >= DebugPrintLevel::search_redex) 
+					if (debug_print_level >= DebugPrintLevel::search_redex) {
 						std::cout << repeat(".  ", stack.size()) << print::literal_to_string(sub_ref) << "\n";
+					}
 
 					if (const NodeIndex new_ = shallow_apply_ruleset(rules, sub_ref, options);
 						new_ != invalid_index)
 					{
-						*frame.iter = new_;
-						stack.pop_back(); //pop frame
+						*current.iter = new_;
+						stack.pop_back(); //pop current
 						while (stack.size()) {
 							const ctrl::SaveRange last = stack.pop_back().iter;
 							*last = normalize::outermost(head_ref.at(*last), options).res;
@@ -249,8 +253,8 @@ namespace simp {
 					else if (add_frame(stack, sub_ref)) {
 						goto test_last_frame;
 					}
-				} while (!(++frame.iter).at_end());
-				do { //found no redex -> go back up in tree until frame points at a yet untested subtree  
+				} while (!(++current.iter).at_end());
+				do { //found no redex -> go back up in tree until new last stackframe points at a yet untested subtree  
 					head_ref.store->mark_final(stack.pop_back().ref_index);
 				} while (stack.size() && (++stack.back().iter).at_end()); 
 			} while (stack.size());

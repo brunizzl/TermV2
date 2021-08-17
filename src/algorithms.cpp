@@ -417,16 +417,15 @@ namespace simp {
                 } break;
                 case FixedArity(HaskellFn::gen): {
                     int n = ref.at(params[2])->complex.real();
-                    const NodeIndex f = params[1];
+                    const MutRef f = ref.at(params[1]);
                     StupidBufferVector<NodeIndex, 32> res_tup;
                     res_tup.emplace_back(from_native(nv::NonComm::tup));
                     if (n > 0) {
-                        share_with_n(ref.at(f), n - 1);
                         MutRef current = ref.at(params[0]);
                         res_tup.emplace_back(share(current));
                         while (--n > 0) {
                             const std::size_t app_index = ref.store->allocate_one();
-                            ref.store->at(app_index) = FApp({ f, share(current) });
+                            ref.store->at(app_index) = FApp({ share(f), share(current) });
                             const NodeIndex new_ = outermost(ref.at(NodeIndex(app_index, Literal::f_app)), options).res;
                             res_tup.push_back(new_);
                             current.point_at_new_location(new_);

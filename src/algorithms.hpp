@@ -69,10 +69,6 @@ namespace simp {
         return ref.typed_idx();
     }
 
-    constexpr void share_with_n(const MutRef ref, const std::int32_t n) noexcept
-    {   if (is_stored_node(ref.type)) ref.store->incr_at_by(ref.index, n);
-    }
-
     //copies tree starting at src_ref into dst_store
     template<Reference R, StoreLike S>
     [[nodiscard]] NodeIndex copy_tree(const R src_ref, S& dst_store);

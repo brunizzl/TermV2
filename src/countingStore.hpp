@@ -171,13 +171,6 @@ namespace simp {
 			return ++this->management[idx].ref_count;
 		} //incr_at
 
-		constexpr std::int32_t incr_at_by(const std::size_t idx, const std::int32_t by) noexcept
-		{
-			assert(this->valid_idx(idx));
-			assert(this->management[idx].replacement_index == Index_T());
-			return this->management[idx].ref_count += by;
-		} //incr_at_by
-
 		constexpr std::int32_t ref_count_at(const std::size_t idx) const noexcept
 		{
 			return this->management[idx].ref_count;

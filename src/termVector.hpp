@@ -218,18 +218,4 @@ namespace simp {
 
 	} //namespace stored_vector
 
-	template<typename Value_T, std::size_t AllocNodeSize, StoreLike Store_T> 
-	constexpr auto begin(const BasicNodeRef<StoredVector<Value_T, AllocNodeSize>, Store_T>& ref)
-	{
-		using CV_Value_T = std::conditional_t<std::is_const_v<Store_T>, const Value_T, Value_T>;
-		using Iter = detail_vector::SaveIterator<CV_Value_T, AllocNodeSize, Store_T>;
-		return Iter::build(*ref.store, ref.index, 0, ref->size());
-	}
-
-	template<typename Value_T, std::size_t AllocNodeSize, StoreLike Store_T>
-	constexpr auto end(const BasicNodeRef<StoredVector<Value_T, AllocNodeSize>, Store_T>& ref)
-	{
-		return detail_vector::SaveEndIndicator{};
-	}
-
 } //namespace simp

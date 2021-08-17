@@ -104,26 +104,4 @@ namespace simp {
 	}; //struct BasicSaveRef
 
 
-
-
-	//in contrast to BasicSaveRef, this struct only stands for the single type Own_T in that Union_T thingy
-	template<typename Own_T, StoreLike Store_T>
-	struct BasicNodeRef
-	{
-		static_assert(!std::is_const_v<Own_T>, "a ref is const if its store is const");
-		static_assert(std::is_convertible_v<typename Store_T::value_type, Own_T>);
-		static constexpr bool is_const = std::is_const_v<Store_T>;
-		using value_type = Own_T;
-
-		Store_T* const store; //actual pointer to have shallow constness
-		std::uint32_t const index;
-
-		constexpr BasicNodeRef(Store_T& new_store, const std::uint32_t new_index) noexcept
-			:store(&new_store), index(new_index) {}
-
-		using Allowed_T = std::conditional_t<is_const, const Own_T, Own_T>;
-		constexpr auto& operator*() const { return static_cast<Allowed_T&>(store->at(index)); }
-		constexpr auto* operator->() const { return &static_cast<Allowed_T&>(store->at(index)); }
-	};
-
 } //namespace simp
