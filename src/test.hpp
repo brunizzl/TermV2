@@ -17,6 +17,14 @@ namespace simp::test {
 
 	void run_tests();
 
-	void read_eval_print_loop(RuleSet&& rules = {}, bool exact = true, bool show_memory = false, bool show_tree = false);
+	struct REPL_Options
+	{
+		bool quit = false;
+		bool exact = true;
+		bool show_memory = false;
+		bool show_tree = false;
+	};
+
+	void read_eval_print_loop(RuleSet&& rules = {}, REPL_Options options = {});
 
 } //namespace simp::test

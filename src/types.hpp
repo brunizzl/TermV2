@@ -567,7 +567,7 @@ namespace simp {
 			{ HaskellFn::split       , "split"        , 3u, { Restr::applicable, Restr::applicable, Literal::f_app             }, MiscFn::pair    },
 			{ HaskellFn::foldl       , "foldl"        , 4u, { Restr::applicable, Restr::applicable, Restr::any, Literal::f_app }, Restr::any      }, //foldl f z (x:xs) = foldl f (f z x) xs
 			{ HaskellFn::foldr       , "foldr"        , 4u, { Restr::applicable, Restr::applicable, Restr::any, Literal::f_app }, Restr::any      }, //foldr f z (x:xs) = f x (foldr f z xs) 
-			{ HaskellFn::gen         , "gen"          , 3u, { Restr::any, Restr::applicable, ComplexSubset::natural_0          }, NonComm::tup    },
+			{ HaskellFn::gen         , "gen"          , 3u, { Restr::any, Restr::applicable, ComplexSubset::integer            }, NonComm::tup    },
 			{ PatternFn::value_match , "value_match__", 3u, { PatternUnsigned{}, Restr::any, Restr::any                        }, Restr::any      }, //layout as in ValueMatch (minus .owner)
 			{ PatternFn::of_type     , "of_type__"    , 2u, { Restr::any, Literal::symbol                                      }, Restr::boolean  },
 		});

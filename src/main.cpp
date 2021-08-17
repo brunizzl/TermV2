@@ -51,6 +51,12 @@ int main()
 	//simp::test::print_native_symbols();
 	//simp::test::run_tests();
 
+	//simp::test::read_eval_print_loop({
+	//	{ "diff(_u + vs..., _x) = diff(_u, _x) + diff(sum(vs...), _x)" },
+	//	{ "diff(_y, _x) | !contains(_y, _x) = 0" },
+	//	{ "diff(_x, _x) = 1" },
+	//});
+
 	simp::test::read_eval_print_loop();
 		
 	simp::test::read_eval_print_loop({
@@ -118,11 +124,10 @@ int main()
 		{ "max(_x, _y) | _x >= _y = _x" },
 
 		//test stuff
-		{ "make_ints(tup, _a, _b)              | _a <= _b = gen(_a, \\x .x + 1, _b - _a)" },
-
-		{ "make_ints(cons, _a, _b)      | _a <= _b  = make_ints_cons_h(_b - _a, _b :: null)" },
-		{ "make_ints_cons_h(_n, _y :: _ys) | _n > 0 = make_ints_cons_h(_n - 1, (_y - 1) :: _y :: _ys)" },
-		{ "make_ints_cons_h(_n, _res)               = _res" },
+		{ "make_int_tup(_a, _b)  | _a <= _b = gen(_a, \\x .x + 1, _b - _a)" },
+		{ "make_int_list(_a, _b) | _a <= _b  = make_int_list_helper(_b - _a, _b :: null)" },
+		{ "make_int_list_helper(_n, _y :: _ys) | _n > 0 = make_int_list_helper(_n - 1, (_y - 1) :: _y :: _ys)" },
+		{ "make_int_list_helper(_n, _res)               = _res" },
 
 		{ "change(_f, _g, _f(xs...)) = _g(xs...)" },
 

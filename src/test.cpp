@@ -131,8 +131,9 @@ namespace simp::test {
 		std::cout << "...finished running tests!\n\n";
 	} //run_tests
 
-	void read_eval_print_loop(RuleSet&& rules, bool exact, bool show_memory, bool show_tree)
+	void read_eval_print_loop(RuleSet&& rules, REPL_Options options)
 	{
+
 		struct Command
 		{
 			std::string name;
@@ -143,7 +144,7 @@ namespace simp::test {
 
 		const auto parse_int = [](auto& dest, const std::string_view name, unsigned range_end) {
 			return [&dest, name, range_end](std::string& in) {
-				in.erase(0, in.find_first_not_of(" ="));
+				in.erase(0, in.find_first_not_of(" \t"));
 				unsigned val = 0;
 				const auto [read_end, err] = std::from_chars(in.data(), in.data() + in.size(), val);
 				if (err != std::errc{} || val >= range_end) { 
@@ -156,24 +157,18 @@ namespace simp::test {
 			};
 		};
 
-		static const std::vector<Command> commands = { 
+		const std::vector<Command> commands = { 
 			{ 
 				"exact", 
 				":exact = <0 | 1>",
 				"only evaluate an expression, when the result can be represented exactly as floating point number", 
-				parse_int(exact, "exact", 2)
+				parse_int(options.exact, "exact", 2)
 			},
 			{ 
 				"memory",
 				":memory = <0 | 1>",
 				"print memory layout of input both after parsing and after evaluating", 
-				parse_int(show_memory, "memory", 2) 
-			},
-			{ 
-				"tree",
-				":tree = <0 | 1>",
-				"print tree visualisation of input both after parsing and after evaluating", 
-				parse_int(show_tree, "tree", 2) 
+				parse_int(options.show_memory, "memory", 2) 
 			},
 			{
 				"verb",
@@ -186,6 +181,7 @@ namespace simp::test {
 				":add = <rule>",
 				"adds rule to ruleset", 
 				[&](std::string& input) {
+					const DebugPrintLevel old = std::exchange(debug_print_level, DebugPrintLevel::none);
 					try {
 						const auto new_rule = RuleSet({ {input.data(), input.size()} });
 						rules.add({ &new_rule });
@@ -194,19 +190,26 @@ namespace simp::test {
 						}
 					}
 					catch (...) {} //exception output done by RuleSet constructor
+					debug_print_level = old;
 				} 
+			},
+			{
+				"quit",
+				":quit",
+				"quits the program",
+				[&](std::string&) { options.quit = true; }
 			},
 			{
 				"rules",
 				":rules",
-				"shows all current rules",
+				"shows all rules in use",
 				[&](std::string&) { std::cout << rules.to_string() << "\n"; }
 			},
 			{ //has to be last command in vector, see below
 				"help",
 				":<anything not interpreted as another command>",
 				"help info showing the avaliable commands", 
-				[](std::string&) {
+				[&](std::string&) {
 					std::cout << "could not interpret command. try one of these instead:\n\n";
 					for (const Command& c : commands) {
 						std::cout << c.name <<
@@ -218,7 +221,7 @@ namespace simp::test {
 			},
 		};
 
-		while (true) {
+		while (!options.quit) {
 			std::string input;
 			std::cout << "simp> ";
 			std::getline(std::cin, input);
@@ -235,16 +238,16 @@ namespace simp::test {
 			else { //no command -> parse as term and try to simplify
 				try {
 					auto term = simp::LiteralTerm(input);
-					if (show_memory) 
-						std::cout << term.to_memory_layout() << "\n\n\n";
+					if (options.show_memory) 
+						std::cout << term.to_memory_layout() << "\n\n";
 
-					term.normalize({ .exact = exact });
+					term.normalize({ .exact = options.exact });
 					if (rules.heads.size()) 
-						term.head = simp::greedy_lazy_apply_ruleset(rules, term.mut_ref(), { .exact = exact });
+						term.head = simp::greedy_lazy_apply_ruleset(rules, term.mut_ref(), { .exact = options.exact });
 
 					std::cout << " = " << term.to_string() << "\n\n";
-					if (show_memory) 
-						std::cout << term.to_memory_layout() << "\n\n\n";
+					if (options.show_memory) 
+						std::cout << term.to_memory_layout() << "\n\n";
 
 					assert((simp::free_tree(term.mut_ref()), term.store.nr_used_slots() == 0u));
 				}
@@ -259,6 +262,7 @@ namespace simp::test {
 				}
 			}
 		}
+		debug_print_level = DebugPrintLevel::none;
 	} //read_eval_print_loop
 
 } //namespace simp::test
