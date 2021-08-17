@@ -104,7 +104,7 @@ namespace simp {
     //lexicographic ordering extending shallow_order, not meaningful in a math context
     std::strong_ordering compare_tree(const UnsaveRef fst, const UnsaveRef snd);
 
-    //can not differentiate calls to same commutative function from each other
+    //can not differentiate calls to same function from each other
     //  and can not differentiate match variables from anything
     std::partial_ordering unsure_compare_tree(const UnsaveRef fst, const UnsaveRef snd);
 

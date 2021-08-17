@@ -201,7 +201,7 @@ namespace simp {
 			this->management[idx].final_form = val;
 		}
 
-		constexpr bool is_final(const std::size_t idx) noexcept
+		constexpr bool is_final(const std::size_t idx) const noexcept
 		{
 			assert(this->valid_idx(idx));
 			return this->management[idx].final_form;

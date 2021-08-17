@@ -5,6 +5,9 @@
 TODO:
 
 important:
+ - current strategy of ordering ruleset with stable sort, then binary searching is not sufficient: 
+		p1 = "pow[l](_X0, _X1)" can remain in order behind p2 = "pow[l](_X0, 1)", 
+		  despite cases, where literal is larger than p1, but would match p2.
  - is find_backtrack sufficient if associativity is respected by find_dilation?
  - test if combining match_ and rematch brings performance improvements (allows inlining of the different strategies)
  - move callstack to heap in recursive functions iterating over terms
@@ -44,11 +47,11 @@ idea status:
 
 int main()
 {
-	//simp::test::print_node_types();
-	//simp::test::print_native_symbols();
+	simp::test::print_node_types();
+	simp::test::print_native_symbols();
 	//simp::test::run_tests();
 
-	simp::test::read_eval_print_loop();
+	//simp::test::read_eval_print_loop();
 		
 	simp::test::read_eval_print_loop({
 		{ "0 xs... = 0" },

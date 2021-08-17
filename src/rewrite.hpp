@@ -106,33 +106,21 @@ namespace simp {
 	struct RuleSet
 	{
 		MonotonicStore store;
-		std::vector<RuleSetEntry> rules;
+		std::vector<RuleSetEntry> heads;
 
 		RuleSet(std::initializer_list<std::string_view> names_, 
 			RuleHead(*build)(Store&, std::string&) = build_rule::build_everything);
 
 		void add(std::initializer_list<const RuleSet*> sets);
 
-		RuleSetIter begin() const noexcept { return { this->rules.begin(), this->store.data() }; }
-		RuleSetIter end() const noexcept { return { this->rules.end(), this->store.data() }; }
+		RuleSetIter begin() const noexcept { return { this->heads.begin(), this->store.data() }; }
+		RuleSetIter end() const noexcept { return { this->heads.end(), this->store.data() }; }
 
 		std::string to_string() const;
 
 	private:
 		void migrate_rules(const Store& temp_store);
 	};
-
-	struct RuleApplicationRes
-	{
-		NodeIndex result_term;
-		RuleSetIter rule;
-	};
-	//tries to match every maybe applicable rule, returns first succesfull rule application,
-	//the old ref is not deleted.
-	//if no match was found, { invalid_index, undefined } is returned
-	//assumes ref to be normalized via options
-	[[nodiscard]] RuleApplicationRes raw_apply_ruleset(const RuleSet& rules, const MutRef ref,
-		match::State& state, const Options options);
 
 	//if ref is a redex, the first possible rule application is retuned, old ref is deleted.
 	//assumes ref to be normalized via options

@@ -52,7 +52,7 @@ namespace simp {
 			std::string name = std::string(name_view.data(), name_view.size());
 			try {
 				const RuleHead rule = build(temp_store, name);
-				this->rules.emplace_back(rule.lhs, rule.rhs, 0);
+				this->heads.emplace_back(rule.lhs, rule.rhs, 0);
 			}
 			catch (ParseFailure failure) {
 				std::cerr << "parse failure: " << failure.what << "\n";
@@ -72,13 +72,13 @@ namespace simp {
 	void RuleSet::add(std::initializer_list<const RuleSet*> sets)
 	{
 		Store temp_store;
-		for (RuleSetEntry& rule : this->rules) {
+		for (RuleSetEntry& rule : this->heads) {
 			rule.lhs = copy_tree(UnsaveRef(this->store.data(), rule.lhs.get_index(), rule.lhs.get_type()), temp_store);
 			rule.rhs = copy_tree(UnsaveRef(this->store.data(), rule.rhs.get_index(), rule.rhs.get_type()), temp_store);
 		}
 		for (const RuleSet* set : sets) {
-			for (const RuleSetEntry rule : set->rules) {
-				this->rules.emplace_back(
+			for (const RuleSetEntry rule : set->heads) {
+				this->heads.emplace_back(
 					copy_tree(UnsaveRef(set->store.data(), rule.lhs.get_index(), rule.lhs.get_type()), temp_store),
 					copy_tree(UnsaveRef(set->store.data(), rule.rhs.get_index(), rule.rhs.get_type()), temp_store), 
 					0);
@@ -98,18 +98,18 @@ namespace simp {
 
 	void RuleSet::migrate_rules(const Store& temp_store)
 	{
-		std::stable_sort(this->rules.begin(), this->rules.end(),
+		std::stable_sort(this->heads.begin(), this->heads.end(),
 			[&temp_store](const RuleSetEntry fst, const RuleSetEntry snd) {
 				return unsure_compare_tree(Ref(temp_store, fst.lhs), Ref(temp_store, snd.lhs))
 					== std::partial_ordering::less;
 			});
 		this->store.free_all();
 		//first insert all match sides -> direct succession of those
-		for (std::size_t i = 0u; i < this->rules.size(); i++) {
-			this->rules[i].lhs = copy_tree(Ref(temp_store, this->rules[i].lhs), this->store);
+		for (std::size_t i = 0u; i < this->heads.size(); i++) {
+			this->heads[i].lhs = copy_tree(Ref(temp_store, this->heads[i].lhs), this->store);
 		}
-		for (std::size_t i = 0u; i < this->rules.size(); i++) {
-			this->rules[i].rhs = copy_tree(Ref(temp_store, this->rules[i].rhs), this->store);
+		for (std::size_t i = 0u; i < this->heads.size(); i++) {
+			this->heads[i].rhs = copy_tree(Ref(temp_store, this->heads[i].rhs), this->store);
 		}
 
 		//set RuleSetEntry::subset_size
@@ -117,9 +117,9 @@ namespace simp {
 		const auto to_lhs_ref = [store_data = this->store.data()](const RevIter iter) {
 			return UnsaveRef(store_data, iter->lhs.get_index(), iter->lhs.get_type());
 		};
-		const RevIter reverse_end = this->rules.rend();
-		for (RevIter iter = this->rules.rbegin(); iter != reverse_end; ++iter) {
-			RevIter first_not_greater = this->rules.rbegin(); //first seen from the end, because reverse
+		const RevIter reverse_end = this->heads.rend();
+		for (RevIter iter = this->heads.rbegin(); iter != reverse_end; ++iter) {
+			RevIter first_not_greater = this->heads.rbegin(); //first seen from the end, because reverse
 			while (unsure_compare_tree(to_lhs_ref(first_not_greater), to_lhs_ref(iter)) == std::partial_ordering::greater) {
 				assert(first_not_greater < iter);
 				++first_not_greater;
@@ -129,12 +129,20 @@ namespace simp {
 		}
 	} //RuleSet::migrate_rules
 
+
+
+	struct RuleApplicationRes
+	{
+		NodeIndex term;
+		RuleSetIter rule;
+	};
+
 	RuleSetIter start_point(const RuleSet& rules, const UnsaveRef ref)
 	{
 		const auto less = [](const RuleRef& rule, const UnsaveRef& r) {
 			return unsure_compare_tree(rule.lhs, r) == std::partial_ordering::less;
 		};
-		assert(rules.rules.size()); //else rules.end() - 1 is illegal
+		assert(rules.heads.size()); //else rules.end() - 1 is illegal
 		return std::lower_bound(rules.begin(), rules.end() - 1, ref, less); //always valid
 	} //start_point
 
@@ -169,9 +177,9 @@ namespace simp {
 		match::State state = *ref.store;
 	apply_ruleset:
 		RuleApplicationRes result = raw_apply_ruleset(rules, ref, state, options);
-		if (result.result_term != invalid_index) {
+		if (result.term != invalid_index) {
 			free_tree(ref);
-			ref.point_at_new_location(result.result_term);
+			ref.point_at_new_location(result.term);
 			goto apply_ruleset;
 		}
 		return ref.typed_idx();
@@ -181,9 +189,9 @@ namespace simp {
 	{
 		match::State state = *ref.store;
 		RuleApplicationRes result = raw_apply_ruleset(rules, ref, state, options);
-		if (result.result_term != invalid_index) {
+		if (result.term != invalid_index) {
 			free_tree(ref);
-			return result.result_term;
+			return result.term;
 		}
 		return invalid_index;
 	} //shallow_apply_ruleset
@@ -201,20 +209,10 @@ namespace simp {
 		using Stack = StupidBufferVector<StackFrame, 16>;
 
 		constexpr auto add_frame = [](Stack& stack, const MutRef ref) {
-			switch (ref.type) {
-			case NodeType(Literal::f_app): 
-				if (!ref.store->is_final(ref.index)) {
-					stack.emplace_back(begin(ref), ref.index);
-					return true;
-				}
-				break;
-			case NodeType(Literal::lambda):
-				if (!ref.store->is_final(ref.index)) {
-					stack.emplace_back(ctrl::iter_from_lambda(ref), ref.index);
-					return true;
-				}
-				break;
-			}
+			if (ref.type == Literal::f_app && !ref.store->is_final(ref.index)) {
+				stack.emplace_back(begin(ref), ref.index);
+				return true;
+			};
 			return false;
 		}; //add_frame
 
@@ -233,7 +231,8 @@ namespace simp {
 				do {
 					const NodeIndex sub_index = *frame.iter;
 					const MutRef sub_ref = head_ref.at(sub_index);
-					if (debug_print_level >= DebugPrintLevel::search_redex) std::cout << repeat(".  ", stack.size()) << print::literal_to_string(sub_ref) << "\n";
+					if (debug_print_level >= DebugPrintLevel::search_redex) 
+						std::cout << repeat(".  ", stack.size()) << print::literal_to_string(sub_ref) << "\n";
 
 					if (const NodeIndex new_ = shallow_apply_ruleset(rules, sub_ref, options);
 						new_ != invalid_index)

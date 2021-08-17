@@ -43,7 +43,7 @@ namespace simp::test {
 			term_1.normalize({});
 			term_2.normalize({});
 
-			if (rules.rules.size()) {
+			if (rules.heads.size()) {
 				term_1.head = greedy_lazy_apply_ruleset(rules, term_1.mut_ref(), {});
 				term_2.head = greedy_lazy_apply_ruleset(rules, term_2.mut_ref(), {});
 			}
@@ -239,7 +239,7 @@ namespace simp::test {
 						std::cout << term.to_memory_layout() << "\n\n\n";
 
 					term.normalize({ .exact = exact });
-					if (rules.rules.size()) 
+					if (rules.heads.size()) 
 						term.head = simp::greedy_lazy_apply_ruleset(rules, term.mut_ref(), { .exact = exact });
 
 					std::cout << " = " << term.to_string() << "\n\n";

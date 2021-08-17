@@ -395,25 +395,25 @@ namespace simp {
                 case FixedArity(ToBool::smaller_eq):
                     return bool_to_typed_idx(!is_ordered_as(std::strong_ordering::greater));
                 case FixedArity(HaskellFn::map): if (allow_haskell_app(params[0], params[2])) {
-                    assert(!is_stored_node(params[0].get_type())); //first parameter does not need to be freed
-                    const NodeIndex converter = params[1];
-                    const MutRef converter_ref = ref.at(params[1]);
-                    //TODO: store result in new application, not in convertee (as current behavoir is buggy for a shared convertee)
-                    const MutRef convertee_ref = ref.at(params[2]);
-                    assert(convertee_ref.type == Literal::f_app);
 
-                    share_with_n(converter_ref, convertee_ref->f_app.parameters().size());
-                    const auto stop = end(convertee_ref);
-                    auto iter = begin(convertee_ref);
+                    const MutRef func_ref = ref.at(params[1]);
+                    const Ref    data_ref = ref.at(params[2]);
+
+                    StupidBufferVector<NodeIndex, 32> res_tup = { share(*ref.store, params[0]) };
+                    assert(data_ref.type == Literal::f_app); //guaranteed by aldready done "typeckecking" at start of this function
+                    const auto stop = end(data_ref);
+                    auto iter = begin(data_ref);
                     for (++iter; iter != stop; ++iter) {
-                        static_assert(FApp::min_capacity >= 2u, "assumes application to only use one store slot");
-                        const std::size_t app_index = ref.store->allocate_one();
-                        ref.store->at(app_index) = FApp({ converter, *iter });
-                        *iter = outermost(ref.at(NodeIndex(app_index, Literal::f_app)), options).res;
+                        const std::size_t app_index = ref.store->allocate_one(); //assumes application to only use one store slot
+                        ref.store->at(app_index) = FApp({ share(func_ref), share(*ref.store, *iter) });
+
+                        const NodeIndex sub_res = outermost(ref.at(NodeIndex(app_index, Literal::f_app)), options).res;
+                        res_tup.push_back(sub_res);
                     }
-                    free_app_shallow(ref); //free app of map
-                    free_tree(converter_ref);
-                    return outermost(convertee_ref, options).res;
+                    free_tree(ref);
+
+                    const NodeIndex unnormalized_res = NodeIndex(FApp::build(*ref.store, res_tup), Literal::f_app);
+                    return outermost(ref.at(unnormalized_res), options).res;
                 } break;
                 case FixedArity(HaskellFn::gen): {
                     int n = ref.at(params[2])->complex.real();
@@ -834,8 +834,7 @@ namespace simp {
 
     std::partial_ordering unsure_compare_tree(const UnsaveRef fst, const UnsaveRef snd)
     {
-        const auto is_unordered = [](const NodeType t) { return t.is<SingleMatch>() || t == SpecialMatch::multi; };
-        if (is_unordered(fst.type) || is_unordered(snd.type)) {
+        if (fst.type.is<MatchVariableType>() || snd.type.is<MatchVariableType>()) {
             return std::partial_ordering::unordered;
         }
         if (const char fst_order = shallow_order(fst.type),
@@ -843,36 +842,13 @@ namespace simp {
             fst_order != snd_order)
         {   return fst_order <=> snd_order;
         }
+
         switch (fst.type) {
         case NodeType(Literal::complex):
             return compare_complex(*fst, *snd);
         case NodeType(PatternFApp{}):
-        case NodeType(Literal::f_app): {
-            auto fst_iter = fst->f_app.begin();
-            auto snd_iter = snd->f_app.begin();     
-            const NodeIndex fst_f = *fst_iter;
-            const NodeIndex snd_f = *snd_iter;
-            if (const auto cmp_fs = unsure_compare_tree(fst.at(fst_f), snd.at(snd_f)); 
-                cmp_fs != std::partial_ordering::equivalent)
-            {   return cmp_fs;
-            }
-            else if (fst_f.get_type() == Literal::symbol && to_symbol(fst_f).is<nv::Variadic>()) {
-                return std::partial_ordering::unordered;
-            }
-            const auto fst_end = fst->f_app.end();
-            const auto snd_end = snd->f_app.end();
-            for (++fst_iter, ++snd_iter; fst_iter != fst_end && snd_iter != snd_end; ++fst_iter, ++snd_iter) {
-                const std::partial_ordering cmp =
-                    unsure_compare_tree(fst.at(*fst_iter), snd.at(*snd_iter));
-                if (cmp != std::partial_ordering::equivalent) {
-                    return cmp;
-                }
-            }
-            if (fst_iter != fst_end || snd_iter != snd_end) {
-                return fst->f_app.size() <=> snd->f_app.size();
-            }
-            return std::partial_ordering::equivalent;
-        } break;
+        case NodeType(Literal::f_app): 
+            return unsure_compare_tree(fst.at(fst->f_app.function()), snd.at(snd->f_app.function()));
         case NodeType(Literal::lambda): {
             const Lambda fst_lambda = *fst;
             const Lambda snd_lambda = *snd;
@@ -884,8 +860,6 @@ namespace simp {
             }
             return unsure_compare_tree(fst.at(fst_lambda.definition), snd.at(snd_lambda.definition));
         } break;
-        case NodeType(SpecialMatch::value):
-            return std::partial_ordering::unordered;
         default:
             assert(!is_stored_node(fst.type) && !is_stored_node(snd.type));
             return fst.index <=> snd.index;
