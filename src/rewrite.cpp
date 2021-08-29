@@ -198,9 +198,6 @@ namespace simp {
 
 	NodeIndex greedy_lazy_apply_ruleset(const RuleSet& rules, MutRef head_ref, const Options options)
 	{
-		ctrl::transform(head_ref, [head_ref](const MutRef& r) 
-			{ if (is_stored_node(r.type)) head_ref.store->mark_final(r.index, false); });
-
 		struct StackFrame
 		{
 			ctrl::SaveRange iter;
@@ -216,11 +213,14 @@ namespace simp {
 			return false;
 		}; //add_frame
 
+		//no subterm of head may already be marked final (as otherwise add_frame would not search that subterm)
+		assert(ctrl::search(head_ref.store->data(), head_ref.typed_idx(), 
+			[head_ref](const UnsaveRef r) { return is_stored_node(r.type) && head_ref.store->is_final(r.index); }) == invalid_index);
+
 	start_at_head:
 		if (debug_print_level >= DebugPrintLevel::replacements) {
 			std::cout << print::literal_to_string(head_ref) << "\n";
 		}
-
 		if (const NodeIndex new_ = shallow_apply_ruleset(rules, head_ref, options); new_ != invalid_index) {
 			head_ref.point_at_new_location(new_);
 			goto start_at_head;

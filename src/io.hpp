@@ -108,8 +108,6 @@ namespace simp {
 		}
 
 		//returns the tree representation of view in store
-		//lambda_offset is the sum of all parameter counts of all parent lambdas 
-		//  (no outside lambdas -> lambda_offset == 0)
 		template<name_lookup::InfoLike Infos>
 		[[nodiscard]] NodeIndex build(Store& store, Infos& infos, ParseView view);
 

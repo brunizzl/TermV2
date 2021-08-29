@@ -47,17 +47,9 @@ idea status:
 
 int main()
 {
-	//simp::test::print_node_types();
-	//simp::test::print_native_symbols();
-	//simp::test::run_tests();
-
-	//simp::test::read_eval_print_loop({
-	//	{ "diff(_u + vs..., _x) = diff(_u, _x) + diff(sum(vs...), _x)" },
-	//	{ "diff(_y, _x) | !contains(_y, _x) = 0" },
-	//	{ "diff(_x, _x) = 1" },
-	//});
-
-	simp::test::read_eval_print_loop();
+	simp::test::print_node_types();
+	simp::test::print_native_symbols();
+	simp::test::run_tests();
 		
 	simp::test::read_eval_print_loop({
 		{ "0 xs... = 0" },

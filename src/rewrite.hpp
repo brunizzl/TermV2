@@ -2,6 +2,7 @@
 
 #include "types.hpp"
 #include "algorithms.hpp"
+#include "control.hpp"
 
 
 namespace simp {
@@ -129,5 +130,13 @@ namespace simp {
 	//lazyliy applies first rule applicable in depth first search in ref until no further rules can be applied
 	//assumes ref to be normalized via options
 	[[nodiscard]] NodeIndex greedy_lazy_apply_ruleset(const RuleSet& rules, MutRef ref, const Options options);
+
+	//needs to be run between the application of two rulesets, 
+	// as nodes marked final will not be searched for redexes
+	inline void mark_not_final(const MutRef head) noexcept
+	{
+		ctrl::transform(head, [store = head.store](const MutRef& r)
+			{ if (is_stored_node(r.type)) store->mark_final(r.index, false); });
+	} //mark_not_final
 
 } //namespace simp

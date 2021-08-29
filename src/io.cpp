@@ -508,7 +508,7 @@ namespace simp {
 					FApp& value_app = *MutRef(store, value_app_idx);
 					value_conditions[value_app[1].get_index()] = condition_head;
 				}
-			}	
+			} //end while
 			{ //give value conditions to value match variables
 				const auto restrict_value = [&value_conditions](const MutRef r) {
 					if (r.type == Literal::f_app && 
@@ -521,9 +521,8 @@ namespace simp {
 						const std::size_t value_index = r->f_app[1].get_index();
 						r->f_app[2] = value_conditions[value_index];
 					}
-					return r.typed_idx();
 				};
-				heads.lhs = ctrl::transform(MutRef(store, heads.lhs), restrict_value);
+				ctrl::transform(MutRef(store, heads.lhs), restrict_value);
 			}
 			{
 				//go through lhs in preorder, adjust single match using single_conditions

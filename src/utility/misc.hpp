@@ -245,5 +245,22 @@ namespace simp {
 		while (times-- > 0) res += in;
 		return res;
 	} //repeat
+
+	template<typename T>
+	struct Range
+	{
+		T* iter;
+		T* stop;
+
+		//acts as range
+		constexpr T* begin() const noexcept { return this->iter; }
+		constexpr T* end() const noexcept { return this->stop; }
+		constexpr std::size_t size() const noexcept { return this->stop - this->iter; }
+
+		//acts as iterator
+		constexpr bool at_end() const noexcept { return this->iter == this->stop; }
+		constexpr Range& operator++() noexcept { ++this->iter;  return *this; }
+		constexpr T& operator*() const noexcept { return *this->iter; }
+	}; //struct Range
     
 } //namespace simp

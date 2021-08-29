@@ -204,7 +204,7 @@ namespace simp {
 		//helpers for pattern construction
 		enum class PatternFn
 		{
-			value_match, //used to represent all of ValueMatch during build process and final ValueMatch in rhs
+			value_match, //used to represent ValueMatch during build process
 			of_type, //returns true if fst is element of snd
 			COUNT
 		};
@@ -427,38 +427,37 @@ namespace simp {
 	using Store = BasicCountingStore<TermNode, NodeIndex>;
 	using MonotonicStore = BasicMonotonicStore<TermNode>;
 
-	using Ref = BasicSaveRef<NodeType, const Store>;
-	using UnsaveRef = BasicUnsaveRef<NodeType, TermNode>;
 	using MutRef = BasicSaveRef<NodeType, Store>;
+	using Ref = BasicSaveRef<NodeType, const Store>;
+	using UnsaveRef = BasicUnsaveRef<NodeType, const TermNode>;
 
 	//caution: can only be used as a range-based-for-loop, if there is no reallocation possible inside the loop body!
-	template<Reference R> requires (requires { R::store; })
-	constexpr auto begin(const R& ref) noexcept
+	template<StoreLike S>
+	constexpr auto begin(const BasicSaveRef<NodeType, S>& ref) noexcept
 	{
 		assert(ref.type == Literal::f_app || ref.type == PatternFApp{});
-		using TypedIdx_T = std::conditional_t<R::is_const, const NodeIndex, NodeIndex>;
-		using Store_T = std::remove_reference_t<decltype(*ref.store)>;
+		using TypedIdx_T = std::conditional_t<std::is_const_v<S>, const NodeIndex, NodeIndex>;
 
-		return detail_vector::SaveIterator<TypedIdx_T, sizeof(TermNode), Store_T>
+		return detail_vector::SaveIterator<TypedIdx_T, sizeof(TermNode), S>
 			::build(*ref.store, ref.index, 0, ref->f_app.size());
 	}
 
 	//caution: can only be used as a range-based-for-loop, if there is no reallocation possible inside the loop body!
-	template<Reference R> requires (requires { R::store; })
-	constexpr auto end(const R& ref) noexcept
+	template<StoreLike S>
+	constexpr auto end(const BasicSaveRef<NodeType, S>& ref) noexcept
 	{
 		assert(ref.type == Literal::f_app || ref.type == PatternFApp{});
 		return detail_vector::SaveEndIndicator{};
 	}
 
-	template<Reference R> requires (!requires { R::store; })
+	template<std::same_as<UnsaveRef> R>
 	constexpr auto begin(const R& ref) noexcept
 	{
 		assert(ref.type == Literal::f_app || ref.type == PatternFApp{});
 		return ref->f_app.begin();
 	}
 
-	template<Reference R> requires (!requires { R::store; })
+	template<std::same_as<UnsaveRef> R>
 	constexpr auto end(const R& ref) noexcept
 	{
 		assert(ref.type == Literal::f_app || ref.type == PatternFApp{});

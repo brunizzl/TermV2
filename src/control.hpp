@@ -2,7 +2,9 @@
 
 #include <cassert>
 #include <cstdlib>
+#include <iostream>
 
+#include "utility/misc.hpp"
 #include "utility/meta.hpp"
 #include "utility/queue.hpp"
 #include "utility/vector.hpp"
@@ -15,86 +17,64 @@
 namespace simp::ctrl {
 
     using SaveRange = decltype(begin(std::declval<MutRef>()));
+    using UnsaveRange = Range<NodeIndex const>;
 
-    constexpr SaveRange iter_from_lambda(const MutRef ref)
+    template<Reference R> struct ChooseRange;
+    template<typename R> using ChooseRange_t = typename ChooseRange<R>::type;
+
+    template<> struct ChooseRange<UnsaveRef> { using type = UnsaveRange; };
+    template<> struct ChooseRange<MutRef>    { using type = SaveRange; };
+
+    constexpr inline SaveRange iter_from_lambda(const MutRef ref)
     {
         assert(ref.type == Literal::lambda);
         constexpr std::size_t offset = offsetof(Lambda, definition);
-        static_assert(offset % sizeof(NodeIndex) == 0, 
+        static_assert(offset % sizeof(NodeIndex) == 0,
             "Lambda::definition has to be alligned as NodeIndex to allow iterating");
-        constexpr std::int32_t start_index = offset / sizeof(NodeIndex) -FApp::values_per_info;
+        constexpr std::int32_t start_index = offset / sizeof(NodeIndex) - FApp::values_per_info;
 
-        return decltype(begin(ref))::build(*ref.store, ref.index, start_index, start_index + 1);
+        return SaveRange::build(*ref.store, ref.index, start_index, start_index + 1);
     } //iter_from_lambda
 
-
-    template<typename C, typename R, typename ElemInfo>
-    concept Consumer = requires (C c, R ref, ElemInfo& info) {
-        { c.consume(ref, info) };
-        { c.make_info(ref) } -> std::convertible_to<ElemInfo>;
-        { c.finalize(info) };
-    };
-
-    template<typename C, typename R, typename ElemInfo>
-    concept ReturnEarly = requires (C c, R ref, ElemInfo& info) {
-        { c.consume(ref, info) } -> std::convertible_to<bool>;
-    };
-
-    template<bool traverse_lambdas = false, typename StackInfo, Consumer<UnsaveRef, StackInfo> C>
-    void traverse_preorder(TermNode const* const store_data, const NodeIndex head, C& c, StackInfo fst_info)
+    constexpr inline UnsaveRange iter_from_lambda(const UnsaveRef ref)
     {
-        struct StackFrame
-        {
-            NodeIndex const* iter;
-            NodeIndex const* stop;
-            StackInfo info;
-        };
-        StupidBufferVector<StackFrame, 64> stack;
-        //c.make_info(...) only expects applications (and perhaps lambdas), which is not guaranteed to hold for head -> use fst_info
-        stack.emplace_back(&head, &head + 1, fst_info); 
-        do {
-            StackFrame& top = stack.back();
-            bool top_done = false; 
-            do { //emmiting check at beginning relies on never encounterig an empty range as top
-                const UnsaveRef ref = UnsaveRef(store_data, top.iter->get_index(), top.iter->get_type());
+        assert(ref.type == Literal::lambda);
+        NodeIndex const* const def = &ref->lambda.definition;
+        return UnsaveRange{ def, def + 1 };
+    } //iter_from_lambda
 
-                if constexpr (ReturnEarly<C, UnsaveRef, StackInfo>) { if (c.consume(ref, top.info)) return; }
-                else c.consume(ref, top.info);
+    constexpr inline SaveRange iter_from_application(const MutRef ref) { return begin(ref); }
+    constexpr inline UnsaveRange iter_from_application(const UnsaveRef ref) { return { begin(ref), end(ref) }; }
 
-                //functions recursive in only the last parameter (looking at you, cons) will not grow the stack
-                if (++top.iter == top.stop) {
-                    c.finalize(top.info);
-                    stack.pop_back();
-                    top_done = true;
-                }
-                if (ref.type == Literal::f_app || ref.type == PatternFApp{}) {
-                    stack.emplace_back(ref->f_app.begin(), ref->f_app.end(), c.make_info(ref));
-                    break;
-                }
-                if constexpr (traverse_lambdas) if (ref.type == Literal::lambda) {
-                    NodeIndex const* const def_ptr = &ref->lambda.definition;
-                    stack.emplace_back(def_ptr, def_ptr + 1, c.make_info(ref));
-                    break;
-                }
-            } while (!top_done);
-        } while (stack.size());
-    } //traverse_preorder
+    constexpr inline SaveRange empty_range(const MutRef ref) { return SaveRange::build(*ref.store, 0, 0, 0); }
+    constexpr inline UnsaveRange empty_range(const UnsaveRef ref) { return { nullptr, nullptr }; }
 
-    struct UnsaveRange
+    template<bool search_lambdas = false, NodeType f_app = Literal::f_app, typename Container, Reference R>
+    constexpr inline bool add_range(Container& container, const R ref)
     {
-        NodeIndex const* iter;
-        NodeIndex const* stop;
+        static_assert(f_app == Literal::f_app || f_app == PatternFApp{});
+        assert(ref.type != Literal::f_app || f_app == Literal::f_app);
+        assert(ref.type != PatternFApp{} || f_app == PatternFApp{});
 
-        constexpr NodeIndex const* begin() const noexcept { return this->iter; }
-        constexpr NodeIndex const* end() const noexcept { return this->stop; }
-        constexpr std::size_t size() const noexcept { return this->stop - this->iter; }
-    };
+        if (ref.type == f_app) {
+            container.emplace_back(iter_from_application(ref));
+            return true;
+        }
+        if constexpr (search_lambdas) if (ref.type == Literal::lambda) {
+            container.emplace_back(iter_from_lambda(ref));
+            return true;
+        }
+        return false;
+    } //add_range
+
+
+
 
     using SearchQueue = Queue<UnsaveRange, 64>;
 
     //returns first subterm where pred is true, subterms are tested in unspecified order
     //enqueue adds range over subterms of curr_ref to queue
-    template<std::predicate<UnsaveRef> Pred, Procedure<UnsaveRef, SearchQueue&> Enqueue>
+    template<std::predicate<UnsaveRef> Pred, Callable<SearchQueue&, UnsaveRef> Enqueue>
     NodeIndex search(const TermNode* const store_data, const NodeIndex head, Pred pred, Enqueue enqueue)
     {
         SearchQueue queue;
@@ -117,31 +97,88 @@ namespace simp::ctrl {
                 if (pred(curr_ref)) {
                     return curr_idx;
                 }
-                enqueue(curr_ref, queue);
+                enqueue(queue, curr_ref);
             } while (++range.iter != range.stop);
         } while (queue.size());
         return invalid_index;
     } //search
 
     template<bool search_lambdas = false, NodeType f_app = Literal::f_app, std::predicate<UnsaveRef> Pred>
-    NodeIndex search(const TermNode* const store_data, const NodeIndex head, Pred pred)
+    inline NodeIndex search(const TermNode* const store_data, const NodeIndex head, Pred pred)
     {
-        const auto enqueue = [](const UnsaveRef ref, SearchQueue& queue) {
-            static_assert(f_app == Literal::f_app || f_app == PatternFApp{});
-            assert(ref.type != Literal::f_app || f_app == Literal::f_app);
-            assert(ref.type != PatternFApp{} || f_app == PatternFApp{});
-            if (ref.type == f_app) {
-                queue.emplace_back(ref->f_app.begin(), ref->f_app.end());
-            }
-            if constexpr (search_lambdas) if (ref.type == Literal::lambda) {
-                queue.emplace_back(&ref->lambda.definition, &ref->lambda.definition + 1);
-            }
-        };
-        return search(store_data, head, pred, enqueue);
+        return search(store_data, head, pred, add_range<search_lambdas, f_app, SearchQueue, UnsaveRef>);
     } //search
 
-    using TransformQueue = Queue<SaveRange, 128>;
-      
+    ////applies f to every subterm in postorder 
+    //template<bool search_lambdas = true, NodeType f_app = Literal::f_app, Reference R, Procedure<R> F>
+    //void transform(const R head, F f)
+    //{
+    //    struct StackFrame
+    //    {
+    //        ChooseRange_t<R> iter;
+    //        R parent;
+    //    };
+    //
+    //    StupidBufferVector<StackFrame, 16> stack;
+    //
+    //    const auto add_frame = [&stack](const R ref) {
+    //        static_assert(f_app == Literal::f_app || f_app == PatternFApp{});
+    //        assert(ref.type != Literal::f_app || f_app == Literal::f_app);
+    //        assert(ref.type != PatternFApp{} || f_app == PatternFApp{});
+    //
+    //        const auto iter = [&] {
+    //            switch (ref.type) {
+    //            case f_app: return iter_from_application(ref);
+    //            case NodeType(Literal::lambda): if constexpr (search_lambdas) return iter_from_lambda(ref);
+    //            }
+    //            return empty_range(ref);
+    //        }();
+    //        stack.emplace_back(iter, ref);
+    //    };
+    //
+    //    add_frame(head);
+    //    do {
+    //    transform_current:
+    //        auto& current = stack.back();
+    //        if (!current.iter.at_end()) {
+    //            add_frame(head.at(*current.iter));
+    //            ++current.iter;
+    //            goto transform_current;
+    //        }
+    //        f(current.parent);
+    //        stack.pop_back();
+    //    } while (stack.size());
+    //} //transform
+    //
+    ////applies f to every subterm in preorder, result is new subterm
+    //template<bool search_lambdas = true, NodeType f_app = Literal::f_app, Reference R, CallableTo<NodeIndex, R> F>
+    //[[nodiscard]] NodeIndex transform(const R ref, F f)
+    //{
+    //    StupidBufferVector<ChooseRange_t<R>, 16> stack;
+    //    const NodeIndex result = f(ref);
+    //    if (add_range<search_lambdas, f_app>(stack, ref.at(result))) {
+    //    transform_current:
+    //        do {
+    //            auto& current = stack.back();
+    //            bool current_done = false;
+    //            do {
+    //                const NodeIndex sub_result = f(ref.at(*current));
+    //                *current = sub_result;
+    //                //functions recursive in only the last parameter 
+    //                //  (looking at you, cons) will not grow the stack
+    //                if ((++current).at_end()) {
+    //                    stack.pop_back(); 
+    //                    current_done = true;
+    //                }
+    //                if (add_range<search_lambdas, f_app>(stack, ref.at(sub_result))) {
+    //                    goto transform_current;
+    //                }
+    //            } while (!current_done);
+    //        } while (stack.size());
+    //    }
+    //    return result;
+    //} //transform
+
     //applies f to every subterm in postorder, result is new subterm
     template<Reference R, CallableTo<NodeIndex, R> F>
     [[nodiscard]] NodeIndex transform(const R ref, F f)

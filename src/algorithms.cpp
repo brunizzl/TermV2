@@ -945,6 +945,7 @@ namespace simp {
                 { "value_match__(_i, _dom, _inv) | _inv :lambda = value_match__(_i, _dom, _inv(value_proxy__))" },
                 { "value_match__(_i, _dom, id)                  = value_match__(_i, _dom, value_proxy__)" },
             }, build_basic_pattern);
+            mark_not_final(MutRef(store, heads.lhs));
             heads.lhs = greedy_lazy_apply_ruleset(inv_to_proxy, MutRef(store, heads.lhs), { .eval_special = false, });
 
             static const auto to_domain = RuleSet({

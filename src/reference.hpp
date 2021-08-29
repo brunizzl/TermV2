@@ -12,7 +12,6 @@ namespace simp {
 		{ a.operator*() } -> std::convertible_to<const typename R::value_type>;
 		{ a.operator->() } -> std::convertible_to<const typename R::value_type*>;
 		{ a.at(typed_idx) } -> std::same_as<R>;
-		{ R::is_const };
 	};
 
 
@@ -20,21 +19,15 @@ namespace simp {
 
 
 
-
-	template<typename Own_T, StoreLike Store_T>
-	struct BasicNodeRef;
-
-
 	//as not a direct pointer to the data of the store is contained here, but a pointer to the store, 
 	//  it is allowed for the store to resize without letting the reference dangle.
 	template<typename Type_T, StoreLike Store_T>
 	struct BasicSaveRef
 	{
-		using value_type = typename Store_T::value_type;
 		using marker_type = Type_T;
-		static constexpr bool is_const = std::is_const_v<Store_T>;
+		using value_type = typename Store_T::value_type;
 
-		Store_T* const store; //actual pointer to have shallow constness
+		Store_T* store; //actual pointer to have shallow constness
 		std::uint32_t index;
 		Type_T type;
 
@@ -46,19 +39,16 @@ namespace simp {
 		constexpr BasicSaveRef(Store_T& new_store, const std::uint32_t new_index, const Type_T new_type) noexcept
 			:store(&new_store), index(new_index), type(new_type) {}
 
-		constexpr BasicSaveRef(const BasicSaveRef<Type_T, std::remove_const_t<Store_T>>& ref) noexcept 
-			:store(ref.store), index(ref.index), type(ref.type) {} //allow both const and mut to be initialized from mut
+		//allow both const and mut to be initialized from mut
+		constexpr operator BasicSaveRef<Type_T, const Store_T>() const noexcept requires (!std::is_const_v<Store_T>)
+		{	return BasicSaveRef<Type_T, const Store_T>(*this->store, this->index, this->type);
+		}
 
-		constexpr auto& operator*() const { return store->at(index); }
-		constexpr auto* operator->() const { return &store->at(index); }
+		constexpr auto& operator*() const { return this->store->at(index); }
+		constexpr auto* operator->() const { return &this->store->at(index); }
 
 		constexpr BasicSaveRef at(const BasicTypedIdx<Type_T> elem) const noexcept 
 		{	return BasicSaveRef(*this->store, elem); 
-		}
-
-		template<typename Own_T>
-		constexpr auto cast() const noexcept 
-		{	return BasicNodeRef<Own_T, Store_T>(*this->store, this->index); 
 		}
 
 		constexpr void point_at_new_location(const BasicTypedIdx<Type_T> new_) noexcept
@@ -76,32 +66,29 @@ namespace simp {
 	{
 		using marker_type = Type_T;
 		using value_type = Union_T;
-		static constexpr bool is_const = true;
 
-		const Union_T* ptr; //pointer to element 
+		Union_T* ptr; //pointer to element 
 		std::uint32_t index; //index of element in store
 		Type_T type;
 
 		constexpr auto typed_idx() const noexcept { return BasicTypedIdx<Type_T>(this->index, this->type); }
 
-		constexpr BasicUnsaveRef(const Union_T* const store_data, const std::uint32_t new_index, const Type_T new_type) noexcept
+		constexpr BasicUnsaveRef(Union_T* const store_data, const std::uint32_t new_index, const Type_T new_type) noexcept
 			:ptr(store_data + new_index), index(new_index), type(new_type) {}
 
-		template<StoreLike Store_T> requires (std::is_same_v<Union_T, typename Store_T::value_type>)
+		template<StoreLike Store_T> requires (std::is_same_v<std::remove_const_t<Union_T>, typename Store_T::value_type>)
 		constexpr BasicUnsaveRef(const BasicSaveRef<Type_T, Store_T> init) noexcept
 			:ptr(init.store->data() + init.index), index(init.index), type(init.type) {}
 
-		constexpr const Union_T& operator*() const { return *this->ptr; }
-		constexpr const Union_T* operator->() const { return this->ptr; }
+		constexpr Union_T& operator*() const { return *this->ptr; }
+		constexpr Union_T* operator->() const { return this->ptr; }
 
-		constexpr const Union_T* store_data() const noexcept { return this->ptr - this->index; }
-
-		constexpr const Union_T* raw_at(std::uint32_t idx) const noexcept { return this->store_data() + idx; }
+		constexpr Union_T* store_data() const noexcept { return this->ptr - this->index; }
 
 		constexpr BasicUnsaveRef at(const BasicTypedIdx<Type_T> elem) const noexcept
 		{	return BasicUnsaveRef(this->store_data(), elem.get_index(), elem.get_type());
 		}
-	}; //struct BasicSaveRef
+	}; //struct BasicUnsaveRef
 
 
 } //namespace simp
