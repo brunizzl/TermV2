@@ -69,6 +69,12 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LinkIncremental>true</LinkIncremental>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <IncludePath>$(ProjectDir)\..\utility;$(IncludePath)</IncludePath>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <IncludePath>$(ProjectDir)\..\utility;$(IncludePath)</IncludePath>
+  </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
       <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
@@ -143,16 +149,6 @@
     <ClInclude Include="src\test.hpp" />
     <ClInclude Include="src\typedIndex.hpp" />
     <ClInclude Include="src\types.hpp" />
-    <ClInclude Include="src\utility\algorithm.hpp" />
-    <ClInclude Include="src\utility\array.hpp" />
-    <ClInclude Include="src\utility\bit.hpp" />
-    <ClInclude Include="src\utility\meta.hpp" />
-    <ClInclude Include="src\utility\misc.hpp" />
-    <ClInclude Include="src\utility\queue.hpp" />
-    <ClInclude Include="src\utility\stringLiteral.hpp" />
-    <ClInclude Include="src\utility\sumEnum.hpp" />
-    <ClInclude Include="src\utility\typeDebug.hpp" />
-    <ClInclude Include="src\utility\vector.hpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

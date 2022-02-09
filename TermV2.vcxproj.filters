@@ -47,34 +47,7 @@
     <ClInclude Include="src\termVector.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\utility\bit.hpp">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="src\utility\misc.hpp">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="src\utility\stringLiteral.hpp">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="src\utility\sumEnum.hpp">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="src\utility\vector.hpp">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="src\utility\meta.hpp">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="src\utility\typeDebug.hpp">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="src\utility\array.hpp">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="src\reference.hpp">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="src\utility\algorithm.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\types.hpp">
@@ -90,9 +63,6 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\countingStore.hpp">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="src\utility\queue.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\control.hpp">
