@@ -121,10 +121,12 @@ namespace simp::test {
 
 		assert_eqivalent_normal_forms({
 			{ "diff(t t t, t)", "t t + t (t + t)" },
+			{ "fdiff(\\x.x x)(t)", "t + t" },
 		}, {
 			{ "diff(_u + vs..., _x) = diff(_u, _x) + diff(sum(vs...), _x)" },
 			{ "diff(_u vs..., _x) = diff(_u, _x) vs... + _u diff(prod(vs...), _x)" },
 			{ "diff(_x, _x) = 1" },
+			{ "fdiff(\\x ._y) = \\x .diff(_y, x)" },
 		});
 
 
@@ -172,9 +174,9 @@ namespace simp::test {
 			},
 			{
 				"verb",
-				":verb = <0 | 1 | 2 | 3>",
-				"show intermediate results / + terms tested for rule applicability / + rules tested",
-				parse_int(debug_print_level, "verb", 4)
+				":verb = <0 | 1 | 2 | 3 | 4>",
+				"show intermediate results / + applied rule / + terms tested for rule applicability / + rules tested",
+				parse_int(debug_print_level, "verb", 5)
 			},
 			{ 
 				"add",

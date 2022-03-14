@@ -880,6 +880,12 @@ namespace simp {
         else if (ref.type == Literal::lambda_param) {
             return 1;
         }
+        else if (ref.type.is<MatchVariableType>()) {
+            //if a patternvariable is matched inside a lambda body, 
+            //  the matched literal may contain lambda parameters in unknown depth.
+            //i am aware, that this is a botch. TODO: no longer botch
+            return std::numeric_limits<int>::max() / 2;
+        }
         return std::numeric_limits<int>::min();
     } //find_lambda_depth
 
@@ -1988,6 +1994,26 @@ namespace simp {
             BMATH_UNREACHABLE;
             return false;
         } //rematch
+
+        std::vector<std::string> print_state(const State& state)
+        {
+            std::vector<std::string> res;
+            for (std::size_t i = 0; i < State::max_single_match_count; i++) {
+                const SharedSingleMatchEntry var = state.single_vars[i];
+                if (var.is_set()) {
+                    res.push_back("_X" + std::to_string(i) + " = " + print::term_to_string(state.make_ref(var.match_idx)));
+                }
+            }
+            for (std::size_t i = 0; i < State::max_value_match_count; i++) {
+                const SharedValueMatchEntry var = state.value_vars[i];
+                if (var.is_set()) {
+                    std::string new_entry = "_X" + std::to_string(i) + " = ";
+                    print::append_complex(var.value, new_entry, 1000);
+                    res.push_back(new_entry);
+                }
+            }
+            return res;
+        } //print_state
 
     } //namespace match
 

@@ -164,6 +164,9 @@ namespace simp {
         //  in all permutations
         bool rematch(const UnsaveRef pn_ref, const UnsaveRef ref, State & match_state);
 
+        //returns an entry for each (non-multi) match variable
+        std::vector<std::string> print_state(const State& state);
+
     } //namespace match
 
     //copies pn_ref like copy_tree, only match variables are replaced by their matched counterparts from src_store.

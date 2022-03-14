@@ -165,6 +165,17 @@ namespace simp {
 			if (debug_print_level >= DebugPrintLevel::test_rules) std::cout << "test    " << rule.to_string(false) << "\n";
 			if (match::find_match(rule.lhs, ref, state)) {
 				if (debug_print_level >= DebugPrintLevel::test_rules) std::cout << " ...success!\n";
+				if (debug_print_level >= DebugPrintLevel::matched_vars) {
+					std::cout << "\n\nmatched rule\n" << rule.to_string() << "\nin term\n" << print::term_to_string(ref) << "\n";
+					const auto matched_vars = match::print_state(state);
+					if (matched_vars.size()) {
+						std::cout << "with\n";
+						for (const std::string& var : matched_vars) {
+							std::cout << "\t" << var << "\n";
+						}
+					}
+					std::cout << "\n";
+				}
 				const NodeIndex res = pattern_interpretation(rule.rhs, state, *ref.store, options);
 				return RuleApplicationRes{ res, iter };
 			}

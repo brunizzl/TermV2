@@ -9,7 +9,7 @@ namespace simp {
 
 	enum class DebugPrintLevel
 	{
-		none, replacements, search_redex, test_rules
+		none, replacements, matched_vars, search_redex, test_rules
 	};
 	extern DebugPrintLevel debug_print_level;
 
