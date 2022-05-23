@@ -17,7 +17,7 @@ namespace simp {
 	template<typename Payload_T, template<typename> class Alloc_T = std::allocator>
 	class ResizeableArray
 	{
-		static_assert(Allocator<Alloc_T>);
+		static_assert(Allocator<Alloc_T<Payload_T>>);
 		static_assert(std::is_trivially_destructible_v<Payload_T>);
 
 		struct Memory :Alloc_T<Payload_T>

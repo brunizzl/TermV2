@@ -5,18 +5,12 @@
 #include <array>
 
 #include "utility/bit.hpp"
+#include "utility/meta.hpp"
 
 #include "typedIndex.hpp"
 
 
 namespace simp {
-
-	template<template <typename> class T>
-	concept Allocator = requires (T<int> a, std::size_t n, int* pos) {
-		{a.allocate(n)} -> std::convertible_to<int*>;
-		{a.deallocate(pos, n)};
-	};
-	static_assert(Allocator<std::allocator>);
 
 	//this is a the result, if an allocator had a child with std::vector
 	//a StoreLike behaves kinda like an allocator, only that the allocated space is not guaranteed to stay at the same memory address
@@ -45,7 +39,7 @@ namespace simp {
 
 
 	template <typename Payload_T, template <typename> class Alloc_T = std::allocator> 
-		requires Allocator<Alloc_T>
+		requires Allocator<Alloc_T<int>>
 	class [[nodiscard]] BasicStore
 	{
 		static_assert(std::is_trivially_destructible_v<Payload_T>, 
@@ -453,7 +447,7 @@ namespace simp {
 
 
 	template <typename Payload_T, std::size_t buffer_size = 0, template <typename> class Alloc_T = std::allocator>
-		requires Allocator<Alloc_T>
+		requires Allocator<Alloc_T<int>>
 	class [[nodiscard]] BasicMonotonicStore 
 	{
 		static_assert(std::is_trivially_copyable_v<Payload_T>);
