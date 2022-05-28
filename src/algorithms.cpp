@@ -47,7 +47,7 @@ namespace simp {
         case ComplexSubset::not_positive:  return re <= 0.0 && im == 0.0;
         default:
             assert(false);
-            BMATH_UNREACHABLE;
+            SIMP_UNREACHABLE;
         }
     } //in_complex_subset
 
@@ -70,7 +70,7 @@ namespace simp {
                 return ref.type != Literal::complex || ref->complex != 0.0;
             default:
                 assert(false);
-                BMATH_UNREACHABLE;
+                SIMP_UNREACHABLE;
             }
         }
         else if (restr.is<NodeType>()) {
@@ -150,7 +150,7 @@ namespace simp {
             return normalize::recursive(ref.at(replaced), options);
         } //eval_lambda
 
-        bool BMATH_FORCE_INLINE merge_associative_apps(MutRef& ref, const NodeIndex function)
+        bool SIMP_FORCE_INLINE merge_associative_apps(MutRef& ref, const NodeIndex function)
         {
             assert(ref.type == Literal::f_app && //PatternFApp is not wanted here!
                 function.get_type() == Literal::symbol &&
@@ -290,7 +290,7 @@ namespace simp {
             return {};
         } //eval_binary_complex
 
-        NodeIndex BMATH_FORCE_INLINE eval_native(const MutRef ref, const Options options, const NodeIndex function)
+        NodeIndex SIMP_FORCE_INLINE eval_native(const MutRef ref, const Options options, const NodeIndex function)
         {
             using namespace nv;
             assert(function.get_type() == Literal::symbol);
@@ -600,7 +600,7 @@ namespace simp {
             return invalid_index;
         } //eval_native
 
-        void BMATH_FORCE_INLINE sort(MutRef ref)
+        void SIMP_FORCE_INLINE sort(MutRef ref)
         {
             assert((ref.type == Literal::f_app || ref.type == PatternFApp{}) &&
                 ref->f_app.function().get_type() == Literal::symbol && 
@@ -702,7 +702,7 @@ namespace simp {
             break;
         default:
             assert(false);
-            BMATH_UNREACHABLE;
+            SIMP_UNREACHABLE;
             return;
         }
         ref.store->free_one(ref.index);
@@ -1557,7 +1557,7 @@ namespace simp {
                 return false;
             }
             assert(false);
-            BMATH_UNREACHABLE;
+            SIMP_UNREACHABLE;
             return false;
         } //test_condition
 
@@ -1589,7 +1589,7 @@ namespace simp {
                     return std::sqrt(fst().val);
                 default:
                     assert(false);
-                    BMATH_UNREACHABLE;
+                    SIMP_UNREACHABLE;
                     return OptionalComplex();
                 }
             } break;
@@ -1600,7 +1600,7 @@ namespace simp {
                 return start_val;
             default:
                 assert(false);
-                BMATH_UNREACHABLE;
+                SIMP_UNREACHABLE;
                 return OptionalComplex();
             }
         } //eval_value_match
@@ -1915,7 +1915,7 @@ namespace simp {
                 } break;
                 default:
                     assert(false);
-                    BMATH_UNREACHABLE;
+                    SIMP_UNREACHABLE;
                     return std::partial_ordering::unordered;
                 }
             } break;
@@ -1967,7 +1967,7 @@ namespace simp {
             case NodeType(SpecialMatch::multi): //multi is matched in PatternFApp, not here
             default:
                 assert(false);
-                BMATH_UNREACHABLE;
+                SIMP_UNREACHABLE;
                 return std::partial_ordering::unordered;
             }
         } //match_
@@ -1991,7 +1991,7 @@ namespace simp {
                 return rematch(pn_ref.at(pn_ref->lambda.definition), ref.at(ref->lambda.definition), match_state);
             }
             assert(false); //why would one try to rematch something not rematchable?
-            BMATH_UNREACHABLE;
+            SIMP_UNREACHABLE;
             return false;
         } //rematch
 
@@ -2069,7 +2069,7 @@ namespace simp {
         } break;
         default:
             assert(false);
-            BMATH_UNREACHABLE;
+            SIMP_UNREACHABLE;
             return invalid_index;
         }
     } //pattern_interpretation

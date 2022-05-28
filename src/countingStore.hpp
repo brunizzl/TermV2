@@ -51,7 +51,7 @@ namespace simp {
 			assert(new_cap > this->size_);
 
 			Payload_T* const new_data = this->memory.allocate(std::bit_ceil(new_cap));
-			BMATH_IF_DEBUG(std::fill_n(new_data, std::bit_ceil(new_cap), Payload_T{}));
+			SIMP_IF_DEBUG(std::fill_n(new_data, std::bit_ceil(new_cap), Payload_T{}));
 			std::copy_n(this->memory.data_, this->size_, new_data);
 
 			if (this->memory.data_ != nullptr) {
@@ -154,7 +154,7 @@ namespace simp {
 		constexpr void free_all() noexcept 
 		{ 
 			this->store.free_all();
-			BMATH_IF_DEBUG(std::fill_n(this->management.data(), this->management.size(), NodeManageEntry<Index_T>{}));
+			SIMP_IF_DEBUG(std::fill_n(this->management.data(), this->management.size(), NodeManageEntry<Index_T>{}));
 		} //free_all
 
 

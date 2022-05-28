@@ -87,7 +87,7 @@ namespace simp {
 		case NodeType(SpecialMatch::value):        return true;
 		default:
 			assert(false);
-			BMATH_UNREACHABLE;
+			SIMP_UNREACHABLE;
 			return false;
 		}
 	}
