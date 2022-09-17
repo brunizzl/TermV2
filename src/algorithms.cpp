@@ -1337,49 +1337,12 @@ namespace simp {
             return head;
         } //prime_f_app
 
-        RuleHead add_implicit_multis(Store& store, RuleHead head)
-        {
-            const MutRef lhs_ref = MutRef(store, head.lhs);
-            if (lhs_ref.type != PatternFApp{})
-                return head;
-            if (!lhs_ref->f_app.parameters().size())
-                return head;
-            const NodeIndex f = lhs_ref->f_app.function();
-            if (f.get_type() != Literal::symbol)
-                return head;
-            const Symbol f_native = to_symbol(f);
-            if (!f_native.is<nv::Variadic>()) 
-                return head;
-            const nv::Variadic f_variadic = f_native.to<nv::Variadic>();
-            if (!nv::is_associative(f_variadic))
-                return head;
-
-            auto& info = f_app_info(lhs_ref);
-            if (f_variadic.is<nv::Comm>() && !info.preceeded_by_multi) {
-                info.preceeded_by_multi = 1;
-                const auto multi_parent = info.match_state_index;
-                const std::size_t rhs_multi_index = store.allocate_one();
-                store.at(rhs_multi_index) = MultiMatch{ .match_state_index = multi_parent, .index_in_params = -1u };
-                const std::size_t temp_head_rhs_index = 
-                    FApp::build(store, std::to_array({ f, head.rhs, NodeIndex(rhs_multi_index, SpecialMatch::multi) }));
-                head.rhs = normalize::outermost(
-                    MutRef(store, temp_head_rhs_index, Literal::f_app), 
-                    { .remove_unary_assoc = false }).res;
-                return head;
-            }
-            if (f_variadic.is<nv::NonComm>()) {
-                assert(false); //TODO
-            }
-            return head;
-        } //add_implicit_multis
-
         RuleHead build_everything(Store& store, std::string& name)
         {
             RuleHead head = parse::raw_rule(store, name, parse::IAmInformedThisRuleIsNotUsableYet{});
             head = build_rule::optimize_single_conditions(store, head);
             head = build_rule::prime_value(store, head);
             head = build_rule::prime_f_app(store, head);
-            head = build_rule::add_implicit_multis(store, head);
 
             return head;
         } //build_everything

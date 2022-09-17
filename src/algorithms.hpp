@@ -137,12 +137,6 @@ namespace simp {
         //note: as after this procedure there may be PatterCall instances present, this may be done as last real transformation
         [[nodiscard]] RuleHead prime_f_app(Store& store, RuleHead head);
 
-        //if the outermost node of lhs is associative and 
-        //  eighter commutative and does not contain a multi match variable
-        //  or non-commutative and multi match variables are not present in the front and back
-        //these missing multi match variables are added
-        [[nodiscard]] RuleHead add_implicit_multis(Store& store, RuleHead head);
-
         //returns a fully assembled rule
         [[nodiscard]] RuleHead build_everything(Store& store, std::string& name);
 

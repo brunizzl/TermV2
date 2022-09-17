@@ -58,26 +58,26 @@ int main()
 		{ "_x^1    = _x" },
 
 		{ "(_x^_a)^_b        = _x^(_a _b)" },
-		{ "_x _x             = _x^2" },
-		{ "_x _x^_a          = _x^(_a + 1)" },
-		{ "_x^_a _x^_b       = _x^(_a + _b)" },
+		{ "_x _x ys...       = _x^2 ys..." },
+		{ "_x _x^_a ys...    = _x^(_a + 1) ys..." },
+		{ "_x^_a _x^_b ys... = _x^(_a + _b) ys..." },
 		{ "exp(ln(_y) xs...) = _y^(prod(xs...))" },
 
-		{ "_a^2 + 2 _a _b + _b^2 = (_a + _b)^2" },
-		{ "_a^2 - 2 _a _b + _b^2 = (_a - _b)^2" },
-		{ "$a^2 + 2 $a _b + _b^2 = ($a + _b)^2" },
-		{ "$a^2 - 2 $a _b + _b^2 = ($a - _b)^2" },
+		{ "_a^2 + 2 _a _b + _b^2 + cs... = (_a + _b)^2 + cs..." },
+		{ "_a^2 - 2 _a _b + _b^2 + cs... = (_a - _b)^2 + cs..." },
+		{ "$a^2 + 2 $a _b + _b^2 + cs... = ($a + _b)^2 + cs..." },
+		{ "$a^2 - 2 $a _b + _b^2 + cs... = ($a - _b)^2 + cs..." },
 		//{ "_aPow2 + _2a _b + _b^2 | 4 _aPow2 == _2a^2 = (1/2 _2a + _b)^2" },
 
-		{ "_a bs... + _a cs... | !(_a :complex)         = _a (prod(bs...) + prod(cs...))" },
-		{ "_a bs... + _a       | !(_a :complex)         = _a (prod(bs...) + 1)" },
-		{ "_a       + _a       | !(_a :complex)         = 2 _a" },
-		{ "_a _b               |   _a :complex, _b :sum = map(sum, \\x ._a x, _b)" },
+		{ "_a bs... + _a cs... + ds... | !(_a :complex)         = _a (prod(bs...) + prod(cs...)) + ds..." },
+		{ "_a bs... + _a       + ds... | !(_a :complex)         = _a (prod(bs...) + 1) + ds..." },
+		{ "_a       + _a       + ds... | !(_a :complex)         = 2 _a + ds..." },
+		{ "_a _b               + ds... |   _a :complex, _b :sum = map(sum, \\x ._a x, _b) + ds..." },
 
 		{ "-_a     | _a :sum  = map(sum , \\x. -x    , _a)" },
 		{ "_a^(-1) | _a :prod = map(prod, \\x. x^(-1), _a)" },
 
-		{ "sin(_x)^2 + cos(_x)^2 = 1" },
+		{ "sin(_x)^2 + cos(_x)^2 + ys... = 1 + ys..." },
 
 		//roots and extreme points of sin and cos:
 		{ "cos(             pi)           = -1" },
@@ -107,13 +107,13 @@ int main()
 		{ "fdiff(tan)     = \\x .cos(x)^(-2)" },
 
 		//operations on sets:
-		{ "union(set(xs...), set(ys...)) = set(xs..., ys...)" },
+		{ "union(set(xs...), set(ys...), sets...) = union(set(xs..., ys...), sets...)" },
 		{ "union()                       = set()" },
-		{ "intersection(set(_x, xs...), set(_x, ys...)) = union(set(_x), intersection(set(xs...), set(ys...)))" },
-		{ "intersection(_x, xs...)                      = set()" },
+		{ "intersection(set(_x, xs...), set(_x, ys...), sets...) = intersection(union(set(_x), intersection(set(xs...), set(ys...))), sets...)" },
+		{ "intersection(_x, xs...)                               = set()" },
 
-		{ "min(_x, _y) | _x >= _y = _y" },
-		{ "max(_x, _y) | _x >= _y = _x" },
+		{ "min(_x, _y, zs...) | _x >= _y = min(_y, zs...)" },
+		{ "max(_x, _y, zs...) | _x >= _y = max(_x, zs...)" },
 
 		//test stuff
 		{ "make_int_tup(_a, _b)  | _a <= _b = gen(_a, \\x .x + 1, _b - _a)" },

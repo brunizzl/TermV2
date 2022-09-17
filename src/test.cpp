@@ -103,10 +103,10 @@ namespace simp::test {
 			{ "81 +18 sin(x) + sin(x)^2", "(9 + sin(x))^2" },
 			{ "(x y)^2 + z^2 + 2 x y z", "(x y + z)^2" },
 		}, {
-			{ "_a^2 + 2 _a _b + _b^2 = (_a + _b)^2" },
-			{ "_a^2 - 2 _a _b + _b^2 = (_a - _b)^2" },
-			{ "$a^2 + 2 $a _b + _b^2 = ($a + _b)^2" },
-			{ "$a^2 - 2 $a _b + _b^2 = ($a - _b)^2" },
+			{ "_a^2 + 2 _a _b + _b^2 + cs... = (_a + _b)^2 + cs..." },
+			{ "_a^2 - 2 _a _b + _b^2 + cs... = (_a - _b)^2 + cs..." },
+			{ "$a^2 + 2 $a _b + _b^2 + cs... = ($a + _b)^2 + cs..." },
+			{ "$a^2 - 2 $a _b + _b^2 + cs... = ($a - _b)^2 + cs..." },
 		});
 			
 		assert_eqivalent_normal_forms({
@@ -138,9 +138,9 @@ namespace simp::test {
 
 		struct Command
 		{
-			std::string name;
-			std::string usage;
-			std::string description;
+			std::string_view name;
+			std::string_view usage;
+			std::string_view description;
 			std::function<void(std::string&)> effect;
 		};
 
@@ -187,7 +187,7 @@ namespace simp::test {
 					try {
 						const auto new_rule = RuleSet({ {input.data(), input.size()} });
 						rules.add({ &new_rule });
-						for (const simp::RuleRef ref : new_rule) { //a bit bulky, but easiest way to get a RuleRef
+						for (const simp::RuleRef& ref : new_rule) { //a bit bulky, but easiest way to get a RuleRef
 							std::cout << "added\n" << ref.to_string() << "\n\n";
 						}
 					}
