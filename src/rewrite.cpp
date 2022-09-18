@@ -134,8 +134,9 @@ namespace simp {
 
 	struct RuleApplicationRes
 	{
-		NodeIndex term;
 		RuleSetIter rule;
+		NodeIndex term;
+		bool change;
 	};
 
 	RuleSetIter start_point(const RuleSet& rules, const UnsaveRef ref)
@@ -158,7 +159,7 @@ namespace simp {
 			shallow_order(lhs_type) != shallow_order(ref.type)) 
 		{
 			assert(lhs_type.is<Literal>() || lhs_type == PatternFApp{});
-			return RuleApplicationRes{ invalid_index, stop };
+			return RuleApplicationRes{ stop, ref.typed_idx(), false };
 		}
 
 		for (; iter != stop; ++iter) {
@@ -178,37 +179,39 @@ namespace simp {
 					std::cout << "\n";
 				}
 				const NodeIndex res = pattern_interpretation(rule.rhs, state, *ref.store, options);
-				return RuleApplicationRes{ res, iter };
+				return RuleApplicationRes{ iter, res, true };
 			}
 		}
-		return RuleApplicationRes{ invalid_index, stop };
+		return RuleApplicationRes{ stop, ref.typed_idx(), false };
 	} //raw_apply_ruleset
 
-	NodeIndex greedy_shallow_apply_ruleset(const RuleSet& rules, MutRef ref, const Options options)
+	AlteredTerm greedy_shallow_apply_ruleset(const RuleSet& rules, MutRef ref, const Options options)
 	{
+		bool change = false;
 		match::State state = *ref.store;
-	apply_ruleset:
-		RuleApplicationRes result = raw_apply_ruleset(rules, ref, state, options);
-		if (result.term != invalid_index) {
-			free_tree(ref);
-			ref.point_at_new_location(result.term);
-			goto apply_ruleset;
+		for (;;) {
+			RuleApplicationRes result = raw_apply_ruleset(rules, ref, state, options);
+			if (result.change) {
+				change = true;
+				free_tree(ref);
+				ref.point_at_new_location(result.term);
+			}
+			else break;
 		}
-		return ref.typed_idx();
+		return { ref.typed_idx(), change };
 	} //greedy_shallow_apply_ruleset
 
-	NodeIndex shallow_apply_ruleset(const RuleSet& rules, MutRef ref, const Options options)
+	AlteredTerm shallow_apply_ruleset(const RuleSet& rules, MutRef ref, const Options options)
 	{
 		match::State state = *ref.store;
-		RuleApplicationRes result = raw_apply_ruleset(rules, ref, state, options);
-		if (result.term != invalid_index) {
+		auto const [_rule, term, change] = raw_apply_ruleset(rules, ref, state, options);
+		if (change) {
 			free_tree(ref);
-			return result.term;
 		}
-		return invalid_index;
+		return { term, change };
 	} //shallow_apply_ruleset
 
-	NodeIndex greedy_lazy_apply_ruleset(const RuleSet& rules, MutRef head_ref, const Options options)
+	AlteredTerm greedy_lazy_apply_ruleset(const RuleSet& rules, MutRef head_ref, const Options options)
 	{
 		struct StackFrame
 		{
@@ -226,15 +229,18 @@ namespace simp {
 		}; //add_frame
 
 		//no subterm of head may already be marked final (as otherwise add_frame would not search that subterm)
-		assert(ctrl::search(head_ref.store->data(), head_ref.typed_idx(), 
+		assert(ctrl::search(head_ref.store->data(), head_ref.typed_idx(),
 			[head_ref](const UnsaveRef r) { return is_stored_node(r.type) && head_ref.store->is_final(r.index); }) == invalid_index);
+
+		bool change = false;
 
 	start_at_head:
 		if (debug_print_level >= DebugPrintLevel::replacements) {
 			std::cout << print::literal_to_string(head_ref) << "\n";
 		}
-		if (const NodeIndex new_ = shallow_apply_ruleset(rules, head_ref, options); new_ != invalid_index) {
-			head_ref.point_at_new_location(new_);
+		if (const AlteredTerm new_ = shallow_apply_ruleset(rules, head_ref, options); new_.change) {
+			head_ref.point_at_new_location(new_.term);
+			change = true;
 			goto start_at_head;
 		}
 
@@ -250,16 +256,17 @@ namespace simp {
 						std::cout << repeat(".  ", stack.size()) << print::literal_to_string(sub_ref) << "\n";
 					}
 
-					if (const NodeIndex new_ = shallow_apply_ruleset(rules, sub_ref, options);
-						new_ != invalid_index)
+					if (const AlteredTerm new_ = shallow_apply_ruleset(rules, sub_ref, options);
+						new_.change)
 					{
-						*current.iter = new_;
+						*current.iter = new_.term;
 						stack.pop_back(); //pop current
 						while (stack.size()) {
 							const ctrl::SaveRange last = stack.pop_back().iter;
-							*last = normalize::outermost(head_ref.at(*last), options).res;
+							*last = normalize::outermost(head_ref.at(*last), options).term;
 						}
-						head_ref.point_at_new_location(normalize::outermost(head_ref, options).res);
+						head_ref.point_at_new_location(normalize::outermost(head_ref, options).term);
+						change = true;
 						goto start_at_head; //TODO: make this better, not always restart back at head
 					}
 					else if (add_frame(stack, sub_ref)) {
@@ -268,10 +275,10 @@ namespace simp {
 				} while (!(++current.iter).at_end());
 				do { //found no redex -> go back up in tree until new last stackframe points at a yet untested subtree  
 					head_ref.store->mark_final(stack.pop_back().ref_index);
-				} while (stack.size() && (++stack.back().iter).at_end()); 
+				} while (stack.size() && (++stack.back().iter).at_end());
 			} while (stack.size());
 		}
-		return head_ref.typed_idx();
+		return { head_ref.typed_idx(), change };
 	} //greedy_lazy_apply_ruleset
 
 } //namespace simp

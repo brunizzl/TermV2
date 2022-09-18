@@ -30,15 +30,20 @@ namespace simp {
         bool eval_lambda = true;
     };
 
+    struct AlteredTerm 
+    { 
+        NodeIndex term; 
+        bool change; 
+    };
+
     namespace normalize {
 
-        struct Result { NodeIndex res; bool change; };
         //will always evaluate exact operations and merge nested calls of an associative operation
         //  (meaning "f(as..., f(bs...), cs...) -> f(as..., bs..., cs...)" for associative f)
         //  example: if subterm "a" would be combined in term "\x.\y z. (a + 7)", lambda_param_offset == 3
         //returns combined ref, might invalidate old one
         //may throw if: a lambda is called with to many parameters or something not applicable is called
-        [[nodiscard]] Result outermost(MutRef ref, const Options options);
+        [[nodiscard]] AlteredTerm outermost(MutRef ref, const Options options);
 
         //applies outermost first to children then to itself
         //as an exception, calls to fn if nv::is_lazy(fn) are lazily evaluated 

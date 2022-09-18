@@ -46,8 +46,8 @@ namespace simp::test {
 			term_2.normalize({});
 
 			if (rules.heads.size()) {
-				term_1.head = greedy_lazy_apply_ruleset(rules, term_1.mut_ref(), {});
-				term_2.head = greedy_lazy_apply_ruleset(rules, term_2.mut_ref(), {});
+				term_1.head = greedy_lazy_apply_ruleset(rules, term_1.mut_ref(), {}).term;
+				term_2.head = greedy_lazy_apply_ruleset(rules, term_2.mut_ref(), {}).term;
 			}
 
 			if (compare_tree(term_1.ref(), term_2.ref()) != std::strong_ordering::equal) {
@@ -55,12 +55,17 @@ namespace simp::test {
 				for (const simp::RuleRef& rule : rules) {
 					std::cout << rule.to_string() << "\n\n";
 				}
+				auto unnormalized_1 = LiteralTerm(name_1, store_1);
+				auto unnormalized_2 = LiteralTerm(name_2, store_2);
 				std::cout << "\ncould not reach equality for terms:\n";
-				std::cout << LiteralTerm(name_1, store_1).to_string() << "\n";
-				std::cout << LiteralTerm(name_2, store_2).to_string() << "\n";
+				std::cout << unnormalized_1.to_string() << "\n";
+				std::cout << unnormalized_2.to_string() << "\n";
 				std::cout << "\nnormalized to:\n";
 				std::cout << term_1.to_string() << "\n";
 				std::cout << term_2.to_string() << "\n";
+
+				simp::free_tree(unnormalized_1.mut_ref());
+				simp::free_tree(unnormalized_2.mut_ref());
 
 				std::string enter_container;
 				std::getline(std::cin, enter_container);
@@ -248,7 +253,7 @@ namespace simp::test {
 
 					term.normalize({ .exact = options.exact });
 					if (rules.heads.size()) 
-						term.head = simp::greedy_lazy_apply_ruleset(rules, term.mut_ref(), { .exact = options.exact });
+						term.head = simp::greedy_lazy_apply_ruleset(rules, term.mut_ref(), { .exact = options.exact }).term;
 
 					std::cout << " = " << term.to_string() << "\n\n";
 					if (options.show_memory) 

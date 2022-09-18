@@ -407,13 +407,13 @@ namespace simp {
                         const std::size_t app_index = ref.store->allocate_one(); //assumes application to only use one store slot
                         ref.store->at(app_index) = FApp({ share(func_ref), share(*ref.store, *iter) });
 
-                        const NodeIndex sub_res = outermost(ref.at(NodeIndex(app_index, Literal::f_app)), options).res;
+                        const NodeIndex sub_res = outermost(ref.at(NodeIndex(app_index, Literal::f_app)), options).term;
                         res_tup.push_back(sub_res);
                     }
                     free_tree(ref);
 
                     const NodeIndex unnormalized_res = NodeIndex(FApp::build(*ref.store, res_tup), Literal::f_app);
-                    return outermost(ref.at(unnormalized_res), options).res;
+                    return outermost(ref.at(unnormalized_res), options).term;
                 } break;
                 case FixedArity(HaskellFn::gen): {
                     int n = ref.at(params[2])->complex.real();
@@ -426,7 +426,7 @@ namespace simp {
                         while (--n > 0) {
                             const std::size_t app_index = ref.store->allocate_one();
                             ref.store->at(app_index) = FApp({ share(f), share(current) });
-                            const NodeIndex new_ = outermost(ref.at(NodeIndex(app_index, Literal::f_app)), options).res;
+                            const NodeIndex new_ = outermost(ref.at(NodeIndex(app_index, Literal::f_app)), options).term;
                             res_tup.push_back(new_);
                             current.point_at_new_location(new_);
                         }
@@ -609,7 +609,7 @@ namespace simp {
             std::sort(range.begin(), range.end(), ordered_less(ref.store->data()));
         } //sort
 
-        Result outermost(MutRef ref, const Options options)
+        AlteredTerm outermost(MutRef ref, const Options options)
         {
             assert(ref.type != PatternFApp{});
             if (ref.type == Literal::f_app) {  
@@ -661,7 +661,7 @@ namespace simp {
                 auto iter = begin(ref);
                 *iter = normalize::recursive(ref.at(*iter), options);
                 if (nv::is_lazy(*iter)) [[unlikely]] {
-                    const NodeIndex result = normalize::outermost(ref, options).res;
+                    const NodeIndex result = normalize::outermost(ref, options).term;
                     return normalize::recursive(ref.at(result), options);
                 }
                 else {
@@ -670,7 +670,7 @@ namespace simp {
                     }
                 }
             }
-            return normalize::outermost(ref, options).res;
+            return normalize::outermost(ref, options).term;
         } //recursive
 
     } //namespace normalize
@@ -919,10 +919,10 @@ namespace simp {
 
             const auto optimize = [](const MutRef r) {
                 if (r.type == SingleMatch::restricted) {
-                    r->single_match.condition =
-                        greedy_shallow_apply_ruleset(buildin_conditions, r.at(r->single_match.condition), { .eval_special = false });
-                    r->single_match.condition =
-                        greedy_lazy_apply_ruleset(compute_optimisations, r.at(r->single_match.condition), { .eval_special = false });
+                    r->single_match.condition = greedy_shallow_apply_ruleset(buildin_conditions, 
+                            r.at(r->single_match.condition), { .eval_special = false }).term;
+                    r->single_match.condition = greedy_lazy_apply_ruleset(compute_optimisations, 
+                            r.at(r->single_match.condition), { .eval_special = false }).term;
                 }
                 return r.typed_idx();
             };
@@ -944,7 +944,7 @@ namespace simp {
                 { "     value_match__(_i, _dom, _inv) ^ 2                        = value_match__(_i, _dom, \\x ._inv(sqrt(x)))" },
                 { "sqrt(value_match__(_i, _dom, _inv))                           = value_match__(_i, _dom, \\x ._inv(x^2))" },
             }, build_basic_pattern);
-            heads.lhs = greedy_lazy_apply_ruleset(bubble_up, MutRef(store, heads.lhs), { .eval_special = false });
+            heads.lhs = greedy_lazy_apply_ruleset(bubble_up, MutRef(store, heads.lhs), { .eval_special = false }).term;
 
             //change the function _inv to subtree using value_proxy
             static const auto inv_to_proxy = RuleSet({
@@ -952,7 +952,7 @@ namespace simp {
                 { "value_match__(_i, _dom, id)                  = value_match__(_i, _dom, value_proxy__)" },
             }, build_basic_pattern);
             mark_not_final(MutRef(store, heads.lhs));
-            heads.lhs = greedy_lazy_apply_ruleset(inv_to_proxy, MutRef(store, heads.lhs), { .eval_special = false, });
+            heads.lhs = greedy_lazy_apply_ruleset(inv_to_proxy, MutRef(store, heads.lhs), { .eval_special = false, }).term;
 
             static const auto to_domain = RuleSet({
                 { "_v :_t   = _t" },
@@ -968,7 +968,7 @@ namespace simp {
                     const std::uint32_t match_state_index = f_app[1].get_index();
                     const NodeIndex inverse = std::exchange(f_app[3], literal_null);
                     const NodeIndex domain = greedy_shallow_apply_ruleset(to_domain, r.at(std::exchange(f_app[2], literal_null)), 
-                        { .remove_unary_assoc = false, .eval_special = false });
+                        { .remove_unary_assoc = false, .eval_special = false }).term;
                     if (domain.get_type() != Literal::symbol || !to_symbol(domain).is<nv::ComplexSubset>()) {
                         throw TypeError{ "value match restrictions may only be of form \"<value match> :<complex subset>\"", r };
                     }
@@ -2036,7 +2036,7 @@ namespace simp {
                 }
             } //end for
             const std::size_t dst_index = FApp::build(store, dst_subterms);
-            return normalize::outermost(MutRef(store, dst_index, pn_ref.type), options).res;
+            return normalize::outermost(MutRef(store, dst_index, pn_ref.type), options).term;
         } break;
         case NodeType(SingleMatch::weak): {            
             const match::SharedSingleMatchEntry& entry = match_state.single_vars[pn_ref.index];

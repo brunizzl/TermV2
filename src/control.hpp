@@ -19,12 +19,6 @@ namespace simp::ctrl {
     using SaveRange = decltype(begin(std::declval<MutRef>()));
     using UnsaveRange = Range<NodeIndex const>;
 
-    template<Reference R> struct ChooseRange;
-    template<typename R> using ChooseRange_t = typename ChooseRange<R>::type;
-
-    template<> struct ChooseRange<UnsaveRef> { using type = UnsaveRange; };
-    template<> struct ChooseRange<MutRef>    { using type = SaveRange; };
-
     constexpr inline SaveRange iter_from_lambda(const MutRef ref)
     {
         assert(ref.type == Literal::lambda);
