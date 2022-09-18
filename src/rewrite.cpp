@@ -16,7 +16,8 @@ namespace simp {
 
 	extern DebugPrintLevel debug_print_level = DebugPrintLevel::none;
 
-	simp::LiteralTerm::LiteralTerm(std::string name)
+	simp::LiteralTerm::LiteralTerm(std::string name, Store& store_)
+		:store(store_)
 	{
 		using namespace simp;
 		auto parse_str = ParseString(name);

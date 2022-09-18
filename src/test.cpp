@@ -38,8 +38,10 @@ namespace simp::test {
 	void assert_eqivalent_normal_forms(const std::vector<std::pair<std::string, std::string>>& eq_pairs, const RuleSet& rules)
 	{
 		for (const auto& [name_1, name_2] : eq_pairs) {
-			auto term_1 = LiteralTerm(name_1);
-			auto term_2 = LiteralTerm(name_2);
+			Store store_1;
+			Store store_2;
+			auto term_1 = LiteralTerm(name_1, store_1);
+			auto term_2 = LiteralTerm(name_2, store_2);
 			term_1.normalize({});
 			term_2.normalize({});
 
@@ -50,12 +52,12 @@ namespace simp::test {
 
 			if (compare_tree(term_1.ref(), term_2.ref()) != std::strong_ordering::equal) {
 				std::cout << "ASSERTION FAILURE\nwith ruleset:\n\n";
-				for (const simp::RuleRef rule : rules) {
+				for (const simp::RuleRef& rule : rules) {
 					std::cout << rule.to_string() << "\n\n";
 				}
 				std::cout << "\ncould not reach equality for terms:\n";
-				std::cout << LiteralTerm(name_1).to_string() << "\n";
-				std::cout << LiteralTerm(name_2).to_string() << "\n";
+				std::cout << LiteralTerm(name_1, store_1).to_string() << "\n";
+				std::cout << LiteralTerm(name_2, store_2).to_string() << "\n";
 				std::cout << "\nnormalized to:\n";
 				std::cout << term_1.to_string() << "\n";
 				std::cout << term_2.to_string() << "\n";
@@ -238,8 +240,9 @@ namespace simp::test {
 				command->effect(input);
 			}
 			else { //no command -> parse as term and try to simplify
+				Store store;
 				try {
-					auto term = simp::LiteralTerm(input);
+					auto term = simp::LiteralTerm(input, store);
 					if (options.show_memory) 
 						std::cout << term.to_memory_layout() << "\n\n";
 

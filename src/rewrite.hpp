@@ -16,10 +16,10 @@ namespace simp {
 	//term without any pattern shenaniganz
 	struct LiteralTerm
 	{
-		Store store;
+		Store& store;
 		NodeIndex head;
 
-		LiteralTerm(std::string name);
+		LiteralTerm(std::string name, Store& store_);
 
 		std::string to_string(const bool fancy = true) const noexcept;
 
