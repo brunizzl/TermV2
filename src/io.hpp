@@ -4,6 +4,7 @@
 #include <string>
 #include <concepts>
 #include <tuple>
+#include <optional>
 
 #include "types.hpp"
 #include "parseTerm.hpp"
@@ -49,6 +50,7 @@ namespace simp {
 
 			struct NameInfo
 			{
+				//name of pattern stuff always contains the decorator symbols, e.g. "_x", "$x" or "xs..." not just "x" or "xs".
 				std::string_view name;
 				NodeIndex value;
 			};
@@ -120,9 +122,18 @@ namespace simp {
 		//note: conditions are incorporated into match_side
 		//returns (match side, repacement side)
 		//the last parameter is only there to make the function type different from that passed into RuleSet
-		RuleHead raw_rule(Store& store, std::string& name, IAmInformedThisRuleIsNotUsableYet);
+		std::tuple<RuleHead, name_lookup::PatternInfos> raw_rule(Store& store, std::string& name, IAmInformedThisRuleIsNotUsableYet);
 
 	} //namespace parse
+
+	namespace typecheck {
+
+		//a pattern may not contain a pattern variable and a literal symbol differing in name only by 
+		//  the '_' or '$' marking the pattern variable as such.
+		//the first such perpetrator is returned
+		std::optional<std::string_view> pattern_var_name_collision(UnsaveRef const ref, parse::name_lookup::PatternInfos const& infos);
+
+	} //namespace typecheck
 
 	namespace print {
 

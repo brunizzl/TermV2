@@ -22,7 +22,6 @@ important:
       - (depends on type checking) verify whole patterns
       - check PatternFApp to each not exceed maximal length and check numer of PatternFApp in pattern not more than allowed 
 	  - allow only function calls returning bool in test_condition 
-	  - don't allow the same name (minus the oligatory "_") as both match variable and constant in a pattern
  - add Literal::options to allow nondeterministic match 
 
 nice to have:

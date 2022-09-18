@@ -895,9 +895,9 @@ namespace simp {
         RuleHead optimize_single_conditions(Store& store, RuleHead head)
         {
             const auto build_very_basic_pattern = [](Store& s, std::string& name) {
-                RuleHead h = parse::raw_rule(s, name, parse::IAmInformedThisRuleIsNotUsableYet{});
-                h = build_rule::prime_f_app(s, h);
-                return h;
+                auto [head, infos] = parse::raw_rule(s, name, parse::IAmInformedThisRuleIsNotUsableYet{});
+                head = build_rule::prime_f_app(s, head);
+                return head;
             };
             static const auto buildin_conditions = RuleSet({
                 { "_x :_t         | _x :single_match__, _t :symbol = _t" },
@@ -933,10 +933,10 @@ namespace simp {
         RuleHead prime_value(Store& store, RuleHead heads)
         {
             const auto build_basic_pattern = [](Store& s, std::string& name) {
-                RuleHead h = parse::raw_rule(s, name, parse::IAmInformedThisRuleIsNotUsableYet{});
-                h = build_rule::optimize_single_conditions(s, h);
-                h = build_rule::prime_f_app(s, h);
-                return h;
+                auto [head, infos] = parse::raw_rule(s, name, parse::IAmInformedThisRuleIsNotUsableYet{});
+                head = build_rule::optimize_single_conditions(s, head);
+                head = build_rule::prime_f_app(s, head);
+                return head;
             };
             static const auto bubble_up = RuleSet({
                 { "     value_match__(_i, _dom, _inv) + _a + cs... | _a :complex = value_match__(_i, _dom, \\x ._inv(x - _a)) + cs..." },
@@ -1339,10 +1339,20 @@ namespace simp {
 
         RuleHead build_everything(Store& store, std::string& name)
         {
-            RuleHead head = parse::raw_rule(store, name, parse::IAmInformedThisRuleIsNotUsableYet{});
+            auto [head, infos] = parse::raw_rule(store, name, parse::IAmInformedThisRuleIsNotUsableYet{});
             head = build_rule::optimize_single_conditions(store, head);
             head = build_rule::prime_value(store, head);
             head = build_rule::prime_f_app(store, head);
+
+            //typechecking
+            UnsaveRef const lhs_ref = Ref(store, head.lhs);
+            UnsaveRef const rhs_ref = Ref(store, head.rhs);
+            if (typecheck::pattern_var_name_collision(lhs_ref, infos)) {
+                throw TypeError{ "the same name for both a literal symbol and a pattern variable in a pattern is forbidden", lhs_ref };
+            }
+            if (typecheck::pattern_var_name_collision(rhs_ref, infos)) {
+                throw TypeError{ "the same name for both a literal symbol and a pattern variable in a pattern is forbidden", rhs_ref };
+            }
 
             return head;
         } //build_everything

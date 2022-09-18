@@ -6,6 +6,7 @@
 #include <bitset>
 #include <array>
 #include <unordered_map>
+#include <unordered_set>
 #include <mutex>
 #include <tuple>
 #include <format>
@@ -406,7 +407,7 @@ namespace simp {
 		template NodeIndex build(Store&, name_lookup::LiteralInfos&, ParseView);
 		template NodeIndex build(Store&, name_lookup::PatternInfos&, ParseView);
 
-		RuleHead raw_rule(Store& store, std::string& name, IAmInformedThisRuleIsNotUsableYet)
+		std::tuple<RuleHead, name_lookup::PatternInfos> raw_rule(Store& store, std::string& name, IAmInformedThisRuleIsNotUsableYet)
 		{
 			using namespace simp;
 			using namespace simp;
@@ -463,14 +464,19 @@ namespace simp {
 				if (condition_head.get_type() != Literal::f_app) [[unlikely]] {
 					throw ParseFailure{ conditions_view.offset, "please make this condition look a bit more conditiony." };
 				}
+
 				const bool contains_single = ctrl::search<true>(store.data(), condition_head, 
 					[](const UnsaveRef r) { return r.type == SingleMatch::weak; }) != invalid_index;
+
 				const bool contains_value = ctrl::search<true>(store.data(), condition_head,
 					[](const UnsaveRef r) { return r.typed_idx() == from_native(nv::PatternFn::value_match); }) != invalid_index;
+
 				const bool contains_multi = ctrl::search<true>(store.data(), condition_head,
 					[](const UnsaveRef r) { return r.type == SpecialMatch::multi; }) != invalid_index; 
+
 				const bool contains_lambda = ctrl::search<true>(store.data(), condition_head,
 						[](const UnsaveRef r) { return r.type == Literal::lambda; }) != invalid_index; 
+
 				if (contains_multi || contains_lambda) [[unlikely]] {
 					throw ParseFailure{ conditions_view.offset, "sorry, but i am too lazy to check that" };
 				}
@@ -507,6 +513,9 @@ namespace simp {
 					assert(value_app_idx != invalid_index);
 					FApp& value_app = *MutRef(store, value_app_idx);
 					value_conditions[value_app[1].get_index()] = condition_head;
+				}
+				if (!contains_single && !contains_value) {
+					throw ParseFailure{ conditions_view.offset - condition_view.size(), "this constraint does not constrain anything"};
 				}
 			} //end while
 			{ //give value conditions to value match variables
@@ -561,10 +570,46 @@ namespace simp {
 				};
 				heads.lhs = ctrl::transform(MutRef(store, heads.lhs), empower_singles);
 			}
-			return heads;
+			return { heads, infos };
 		} //raw_rule
 
 	} //namespace parse
+
+	namespace typecheck {
+
+		std::optional<std::string_view> pattern_var_name_collision(UnsaveRef const ref, parse::name_lookup::PatternInfos const& infos)
+		{
+			std::unordered_set<std::string_view> contained_symbols;
+			ctrl::transform(ref, [&contained_symbols](UnsaveRef const r){
+				if (r.type == Literal::symbol) {
+					contained_symbols.insert(Names::name_of(r.index));
+				}
+			});
+			for (auto [name, _value] : infos.single_matches) {
+				assert(name.starts_with('_'));
+				name.remove_prefix(1);
+				if (contained_symbols.contains(name)) {
+					return { name };
+				}
+			}
+			for (auto [name, _value] : infos.value_matches) {
+				assert(name.starts_with('$'));
+				name.remove_prefix(1);
+				if (contained_symbols.contains(name)) {
+					return { name };
+				}
+			}
+			for (auto [name, _value] : infos.multi_matches) {
+				assert(name.ends_with("..."));
+				name.remove_suffix(3);
+				if (contained_symbols.contains(name)) {
+					return { name };
+				}
+			}
+			return std::optional<std::string_view>();
+		} //pattern_var_name_collision
+
+	} //namespace typecheck
 
 	namespace print {
 
