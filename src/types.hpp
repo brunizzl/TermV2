@@ -724,9 +724,10 @@ namespace simp {
 			bool is_set() const noexcept { return !std::isnan(this->value.real()); } //debugging
 		};
 
+		//used by a PatternFApp if its strategy is eigther MatchStrategy::permutation or MatchStrategy::dilation
 		struct SharedFAppEntry
 		{
-			//no PatternFApp may have more parameters than max_params_count many
+			//no PatternFApp using SharedFAppEntry may have more parameters than max_params_count many
 			static constexpr std::size_t max_params_count = 10u;
 			static_assert(max_params_count < 16u, "else larger bitsets are needed for PatternCallData");
 

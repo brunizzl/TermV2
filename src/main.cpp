@@ -20,7 +20,6 @@ important:
  - type checking (extended: keep track of what restrictions apply to match variable in lhs, use in rhs)
  - finnish building / verifying pattern:
       - (depends on type checking) verify whole patterns
-      - check PatternFApp to each not exceed maximal length and check numer of PatternFApp in pattern not more than allowed 
 	  - allow only function calls returning bool in test_condition 
  - add Literal::options to allow nondeterministic match 
 

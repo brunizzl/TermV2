@@ -1282,6 +1282,13 @@ namespace simp {
                     info.match_state_index = this_pattern_index;
                     std::uint32_t pos_mod_multis = 0; //only is incremented, when no multi is encountered
                     FApp& f_app = *ref;
+                    if (f_app.parameters().size() > match::SharedFAppEntry::max_params_count) {
+                        throw TypeError{
+                            "function application in pattern's match side using match strategy"
+                            " dilation or permutation contains too many parameters",
+                            ref
+                        };
+                    }
                     for (NodeIndex& param : f_app.parameters()) {
                         if (param.get_type() == SpecialMatch::multi) {
                             const unsigned identifier = ref.at(param)->multi_match.match_state_index;

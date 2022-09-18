@@ -63,7 +63,7 @@ namespace simp {
 			}
 			catch (TypeError error) {
 				std::cerr << "type error: " << error.what << "\n";
-				std::cerr << print::term_to_string(error.occurence) << "\n";
+				std::cerr << print::term_to_string(error.occurence) << "\n\n";
 				throw;
 			}
 		}
