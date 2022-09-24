@@ -609,7 +609,7 @@ namespace simp {
             std::sort(range.begin(), range.end(), ordered_less(ref.store->data()));
         } //sort
 
-        AlteredTerm outermost(MutRef ref, const Options options)
+        AlteredIndex outermost(MutRef ref, const Options options)
         {
             assert(ref.type != PatternFApp{});
             if (ref.type == Literal::f_app) {  
@@ -1347,6 +1347,12 @@ namespace simp {
         RuleHead build_everything(Store& store, std::string& name)
         {
             auto [head, infos] = parse::raw_rule(store, name, parse::IAmInformedThisRuleIsNotUsableYet{});
+
+            {
+                typecheck::MatchVariableProps props = {};
+                typecheck::consistent_pattern_vars(Ref(store, head.lhs), props, false); //throws on its own if trouble occurs
+                typecheck::consistent_pattern_vars(Ref(store, head.rhs), props, true);  //throws on its own if trouble occurs
+            }
             head = build_rule::optimize_single_conditions(store, head);
             head = build_rule::prime_value(store, head);
             head = build_rule::prime_f_app(store, head);

@@ -57,7 +57,7 @@ namespace simp {
 
 			struct PatternInfos
 			{
-				std::vector<NameInfo> lambda_params = {};  //only contains instances of Literal::lambda_param -> always shallow
+				std::vector<NameInfo> lambda_params = {};  //only contains instances of Literal::lambda_param -> always shallow (same as in LiteralInfos)
 				std::vector<NameInfo> single_matches = {}; //stored as SingleMatch::weak
 				std::vector<NameInfo> multi_matches = {};  //stored as MultiMatch node with .match_state_index currently holding the identification number
 				std::vector<NameInfo> value_matches = {};  //stored as call to nv::PatternFn::value_match
@@ -65,7 +65,9 @@ namespace simp {
 			};
 			struct LiteralInfos
 			{
-				std::vector<NameInfo> lambda_params = {}; //only contains instances of Literal::lambda_param -> always shallow
+				//only contains instances of Literal::lambda_param -> always shallow
+				//this vector acts as stack only storing the currently visible lambda parameters 
+				std::vector<NameInfo> lambda_params = {}; 
 			};
 			template<typename I>
 			concept InfoLike = requires (I i) { {i.lambda_params} -> std::same_as<std::vector<NameInfo>&>; };
@@ -128,10 +130,32 @@ namespace simp {
 
 	namespace typecheck {
 
-		//a pattern may not contain a pattern variable and a literal symbol differing in name only by 
+		//a pattern may not contain a pattern variable and a literal symbol / lambda parameter differing in name only by 
 		//  the '_' or '$' marking the pattern variable as such.
 		//the first such perpetrator is returned
 		std::optional<std::string_view> pattern_var_name_collision(UnsaveRef const ref, parse::name_lookup::PatternInfos const& infos);
+
+		struct MatchVariableProps
+		{
+			struct Prop 
+			{
+				//counts how many lambda parameters are in scope e.g.
+				// in "\x y . _x" the matchvariable "_x" has 2 in scope (namely "x" and "y")
+				// in "\x . \y . \z . _x" the matchvariable "_x" has 3 in scope (namely "x", "y" and "z")
+				int lambda_depth = -1;
+			};
+
+			//a lhs pattern variable nested inside a lambda may only occur in that same nesting level on the rhs
+			//this struct catalogs the occurences of pattern variables in the left hand side.
+			std::array<Prop, match::State::max_single_match_count> singles = {};
+			std::array<Prop, match::State::max_single_match_count> multis = {};
+		}; //struct MatchVariableProps
+
+		//if !in_rhs -> fills props (or thows if inconsistency is detected)
+		//if  in_rhs -> throws if inconsistency is detected
+		//currently tests for:
+
+		void consistent_pattern_vars(UnsaveRef const ref, MatchVariableProps& props, bool const in_rhs);
 
 	} //namespace typecheck
 

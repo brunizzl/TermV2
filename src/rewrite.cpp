@@ -185,7 +185,7 @@ namespace simp {
 		return RuleApplicationRes{ stop, ref.typed_idx(), false };
 	} //raw_apply_ruleset
 
-	AlteredTerm greedy_shallow_apply_ruleset(const RuleSet& rules, MutRef ref, const Options options)
+	AlteredIndex greedy_shallow_apply_ruleset(const RuleSet& rules, MutRef ref, const Options options)
 	{
 		bool change = false;
 		match::State state = *ref.store;
@@ -201,7 +201,7 @@ namespace simp {
 		return { ref.typed_idx(), change };
 	} //greedy_shallow_apply_ruleset
 
-	AlteredTerm shallow_apply_ruleset(const RuleSet& rules, MutRef ref, const Options options)
+	AlteredIndex shallow_apply_ruleset(const RuleSet& rules, MutRef ref, const Options options)
 	{
 		match::State state = *ref.store;
 		auto const [_rule, term, change] = raw_apply_ruleset(rules, ref, state, options);
@@ -211,7 +211,7 @@ namespace simp {
 		return { term, change };
 	} //shallow_apply_ruleset
 
-	AlteredTerm greedy_lazy_apply_ruleset(const RuleSet& rules, MutRef head_ref, const Options options)
+	AlteredIndex greedy_lazy_apply_ruleset(const RuleSet& rules, MutRef head_ref, const Options options)
 	{
 		struct StackFrame
 		{
@@ -238,7 +238,7 @@ namespace simp {
 		if (debug_print_level >= DebugPrintLevel::replacements) {
 			std::cout << print::literal_to_string(head_ref) << "\n";
 		}
-		if (const AlteredTerm new_ = shallow_apply_ruleset(rules, head_ref, options); new_.change) {
+		if (const AlteredIndex new_ = shallow_apply_ruleset(rules, head_ref, options); new_.change) {
 			head_ref.point_at_new_location(new_.term);
 			change = true;
 			goto start_at_head;
@@ -256,7 +256,7 @@ namespace simp {
 						std::cout << repeat(".  ", stack.size()) << print::literal_to_string(sub_ref) << "\n";
 					}
 
-					if (const AlteredTerm new_ = shallow_apply_ruleset(rules, sub_ref, options);
+					if (const AlteredIndex new_ = shallow_apply_ruleset(rules, sub_ref, options);
 						new_.change)
 					{
 						*current.iter = new_.term;

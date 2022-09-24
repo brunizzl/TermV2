@@ -53,7 +53,7 @@ namespace simp {
 
 	enum class SpecialMatch
 	{
-		multi, //only expected in rhs, lhs holds multi info in PatternCallData
+		multi, //only expected in rhs (in final pattern anyway), lhs holds multi info in PatternCallData
 		value, //ownership is decided in ValueMatch
 		COUNT
 	};

@@ -30,7 +30,8 @@ namespace simp {
         bool eval_lambda = true;
     };
 
-    struct AlteredTerm 
+    //return value of functions maybe changing a subterm, e.g. normalizing (directly below) or applying patterns
+    struct AlteredIndex 
     { 
         NodeIndex term; 
         bool change; 
@@ -43,7 +44,7 @@ namespace simp {
         //  example: if subterm "a" would be combined in term "\x.\y z. (a + 7)", lambda_param_offset == 3
         //returns combined ref, might invalidate old one
         //may throw if: a lambda is called with to many parameters or something not applicable is called
-        [[nodiscard]] AlteredTerm outermost(MutRef ref, const Options options);
+        [[nodiscard]] AlteredIndex outermost(MutRef ref, const Options options);
 
         //applies outermost first to children then to itself
         //as an exception, calls to fn if nv::is_lazy(fn) are lazily evaluated 
@@ -136,8 +137,7 @@ namespace simp {
         //intermediary is converted to final form and ownership is decided (thus sorts bevore that)
         [[nodiscard]] RuleHead prime_value(Store& store, RuleHead head);
 
-        // - every function call to nv::Comm in lhs is converted to PatternFApp
-        // - if a call in lhs contains at least one multi match, the call is converted to PatternFApp
+        // - every function call in lhs is converted to PatternFApp
         // - multi match variables are primed
         //note: as after this procedure there may be PatterCall instances present, this may be done as last real transformation
         [[nodiscard]] RuleHead prime_f_app(Store& store, RuleHead head);

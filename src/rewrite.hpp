@@ -125,11 +125,11 @@ namespace simp {
 
 	//if ref is a redex, the first possible rule application is retuned, old ref is deleted.
 	//assumes ref to be normalized via options
-	[[nodiscard]] AlteredTerm greedy_shallow_apply_ruleset(const RuleSet& rules, MutRef ref, const Options options);
+	[[nodiscard]] AlteredIndex greedy_shallow_apply_ruleset(const RuleSet& rules, MutRef ref, const Options options);
 
 	//lazyliy applies first rule applicable in depth first search in ref until no further rules can be applied
 	//assumes ref to be normalized via options
-	[[nodiscard]] AlteredTerm greedy_lazy_apply_ruleset(const RuleSet& rules, MutRef ref, const Options options);
+	[[nodiscard]] AlteredIndex greedy_lazy_apply_ruleset(const RuleSet& rules, MutRef ref, const Options options);
 
 	//needs to be run between the application of two rulesets, 
 	// as nodes marked final will not be searched for redexes

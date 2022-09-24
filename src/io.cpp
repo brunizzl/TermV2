@@ -263,6 +263,7 @@ namespace simp {
 				using namespace simp;
 				if (!params_view.tokens.starts_with(token::backslash)) [[unlikely]]
 					throw ParseFailure{ params_view.offset, "this is a weird looking lambda parameter declaration" };
+
 				const unsigned old_size = lambda_params.size();
 				while (params_view.size()) {
 					params_view.remove_prefix(1u); //remove previous space (or '\\' for first parameter)
@@ -270,8 +271,10 @@ namespace simp {
 					const ParseView param = params_view.steal_prefix(space);
 					if (!mundane_name(param)) 
 						throw ParseFailure{ params_view.offset, "we name lambda parameters less exiting around here" };
+
 					if (!param.size()) 
 						throw ParseFailure{ params_view.offset, "there is little reason for nullary lambdas in a purely functional language" };
+
 					const std::string_view param_name = param.to_string_view();
 					//runs in O(n^2), but lambdas are expected to behave in size. 
 					if (std::find_if(lambda_params.begin(), lambda_params.end(), 
@@ -585,29 +588,71 @@ namespace simp {
 					contained_symbols.insert(Names::name_of(r.index));
 				}
 			});
-			for (auto [name, _value] : infos.single_matches) {
-				assert(name.starts_with('_'));
-				name.remove_prefix(1);
-				if (contained_symbols.contains(name)) {
-					return { name };
-				}
-			}
-			for (auto [name, _value] : infos.value_matches) {
-				assert(name.starts_with('$'));
-				name.remove_prefix(1);
-				if (contained_symbols.contains(name)) {
-					return { name };
-				}
-			}
-			for (auto [name, _value] : infos.multi_matches) {
-				assert(name.ends_with("..."));
-				name.remove_suffix(3);
-				if (contained_symbols.contains(name)) {
-					return { name };
+
+			using namespace std::string_view_literals;
+			for (auto& [vector, prefix, suffix] : std::array{
+				std::tuple{ infos.single_matches, "_"sv, ""sv },
+				std::tuple{ infos.value_matches, "$"sv, ""sv },
+				std::tuple{ infos.multi_matches, ""sv, "..."sv } })
+			{
+				for (auto [name, _value] : vector) {
+					assert(name.starts_with(prefix));
+					assert(name.ends_with(suffix));
+					name.remove_prefix(prefix.size());
+					name.remove_suffix(suffix.size());
+					if (contained_symbols.contains(name)) {
+						return { name };
+					}
 				}
 			}
 			return std::optional<std::string_view>();
 		} //pattern_var_name_collision
+
+		//implementation of consistent_pattern_vars
+		void recursive_consistent_pattern_vars(UnsaveRef const ref, MatchVariableProps& props, 
+			unsigned const visible_lambda_params, bool const in_rhs)
+		{
+			auto const set_visible = [&](int& nr_visible) {
+				//one may not find a new variable in the rhs 
+				//(already guaranteed by preceeding part of building process)
+				assert(!in_rhs || nr_visible != -1); 
+
+				if (nr_visible == -1) { //-> uninitialized
+					nr_visible = visible_lambda_params;
+				}
+				else if (nr_visible > visible_lambda_params) {
+					throw TypeError{ "if pattern variable is bound inside lambda, it may only occur in lambda in rhs", ref };
+				}
+			};
+
+			switch (ref.type) {
+			case NodeType(Literal::lambda):
+				recursive_consistent_pattern_vars(ref.at(ref->lambda.definition), props, 
+					visible_lambda_params + ref->lambda.param_count, in_rhs);
+				break;
+			case NodeType(PatternFApp{}): assert(false); break; //not expected to be build this far
+			case NodeType(Literal::f_app):
+				for (NodeIndex sub : ref) {
+					recursive_consistent_pattern_vars(ref.at(sub), props, visible_lambda_params, in_rhs);
+				}
+				break;
+			case NodeType(SingleMatch::restricted): 
+				set_visible(props.singles[ref->single_match.match_state_index].lambda_depth);
+				break;
+			case NodeType(SingleMatch::unrestricted):
+			case NodeType(SingleMatch::weak):
+				set_visible(props.singles[ref.index].lambda_depth);
+				break;
+			case NodeType(SpecialMatch::multi): 
+				set_visible(props.singles[ref->multi_match.match_state_index].lambda_depth);
+				break;
+			}
+		} //recursive_gather_lhs_props
+
+		void consistent_pattern_vars(UnsaveRef const ref, MatchVariableProps& props, bool const in_rhs)
+		{
+			recursive_consistent_pattern_vars(ref, props, 0, in_rhs);
+		} //consistent_pattern_vars
 
 	} //namespace typecheck
 
