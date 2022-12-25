@@ -136,6 +136,34 @@ namespace simp::test {
 			{ "fdiff(\\x ._y) = \\x .diff(_y, x)" },
 		});
 
+		assert_eqivalent_normal_forms({
+			{ "fibonacci(0)", "0" },
+			{ "fibonacci(1)", "1" },
+			{ "fibonacci(2)", "1" },
+			{ "fibonacci(3)", "2" },
+			{ "fibonacci(4)", "3" },
+			{ "fibonacci(5)", "5" },
+			{ "fibonacci(6)", "8" },
+		}, {
+			{ "fibonacci(_n) = loop(0, 1, _n)" },
+			{ "loop(_curr, _next, 0) = _curr" },
+			{ "loop(_curr, _next, _left) | _left > 0 = loop(_next, _curr + _next, _left - 1)" },
+		});
+
+		assert_eqivalent_normal_forms({
+			{ "fibonacci(0)", "0" },
+			{ "fibonacci(1)", "1" },
+			{ "fibonacci(2)", "1" },
+			{ "fibonacci(3)", "2" },
+			{ "fibonacci(4)", "3" },
+			{ "fibonacci(5)", "5" },
+			{ "fibonacci(6)", "8" },
+		}, {
+			//some more elaborate lambda evaluation using a fix-point-operator.
+			//note: "loop" is no entity on its own, thus it needs to always carry itself with it.
+			{ "fibonacci = \\n . (\\f . f(f, 0, 1, n))(\\self curr next left . (left > 0)(self(self, next, curr + next, left - 1), curr))" },
+		});
+
 
 		std::cout << "...finished running tests!\n\n";
 	} //run_tests

@@ -643,11 +643,14 @@ namespace simp {
                         }
                     }
                 } break;
-                case NodeType(Literal::lambda): if (options.eval_lambda) {
-                    assert(!ref.at(function)->lambda.transparent);
-                    const NodeIndex evaluated = eval_lambda(ref, options);
-                    return { evaluated, true };
-                } break;
+                case NodeType(Literal::lambda): 
+                    //when constructing a literal from a pattern application, 
+                    //  this function may be called on an inner lambda, which may do nothing
+                    if (options.eval_lambda && !ref.at(function)->lambda.transparent) {
+                        const NodeIndex evaluated = eval_lambda(ref, options);
+                        return { evaluated, true };
+                    } 
+                    break;
                 }
                 return { ref.typed_idx(), change };
             }
