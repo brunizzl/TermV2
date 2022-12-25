@@ -46,8 +46,8 @@ namespace simp::test {
 			term_2.normalize({});
 
 			if (rules.heads.size()) {
+				//only apply rules to left term of pair
 				term_1.head = greedy_lazy_apply_ruleset(rules, term_1.mut_ref(), {}).term;
-				term_2.head = greedy_lazy_apply_ruleset(rules, term_2.mut_ref(), {}).term;
 			}
 
 			if (compare_tree(term_1.ref(), term_2.ref()) != std::strong_ordering::equal) {
@@ -120,6 +120,7 @@ namespace simp::test {
 			{ "cos(pi)", "-1" },
 			{ "cos((1e12 + 1/2) pi)", "0" },
 			{ "sin(9.5 pi)", "-1" },
+			{ "sin(9.4999 pi)", "sin(9.4999 pi)" },
 		}, {
 			{ "cos(   pi)                     = -1" },
 			{ "cos(_a pi) | _a + 1/2     :int =  0" },
@@ -145,9 +146,8 @@ namespace simp::test {
 			{ "fibonacci(5)", "5" },
 			{ "fibonacci(6)", "8" },
 		}, {
-			{ "fibonacci(_n) = loop(0, 1, _n)" },
-			{ "loop(_curr, _next, 0) = _curr" },
-			{ "loop(_curr, _next, _left) | _left > 0 = loop(_next, _curr + _next, _left - 1)" },
+			{ "fibonacci(_n) | _n : int  = loop(0, 1, _n)" },
+			{ "loop(_curr, _next, _left) = (_left > 0)(loop(_next, _curr + _next, _left - 1), _curr)" },
 		});
 
 		assert_eqivalent_normal_forms({
